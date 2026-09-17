@@ -157,16 +157,28 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
     }
 
     /**
+     * Extract usage data from a Converse usage payload.
+     */
+    protected function extractUsage(array $usage): Usage
+    {
+        $cacheReadTokens = $usage['cacheReadInputTokens'] ?? null;
+        $cacheWriteTokens = $usage['cacheWriteInputTokens'] ?? null;
+
+        return new Usage(
+            inputTokens: ($usage['inputTokens'] ?? 0) + ($cacheReadTokens ?? 0) + ($cacheWriteTokens ?? 0),
+            outputTokens: $usage['outputTokens'] ?? 0,
+            cacheReadInputTokens: $cacheReadTokens,
+            cacheWriteInputTokens: $cacheWriteTokens,
+            raw: $usage,
+        );
+    }
+
+    /**
      * Parse a single Converse response into a step response.
      */
     protected function parseTextResponse(array $result, TextProvider $provider, string $model, bool $structured): StepResponse
     {
-        $usage = new Usage(
-            promptTokens: $result['usage']['inputTokens'] ?? 0,
-            completionTokens: $result['usage']['outputTokens'] ?? 0,
-            cacheWriteInputTokens: $result['usage']['cacheWriteInputTokens'] ?? 0,
-            cacheReadInputTokens: $result['usage']['cacheReadInputTokens'] ?? 0,
-        );
+        $usage = $this->extractUsage($result['usage'] ?? []);
 
         $output = '';
         $toolCalls = [];
@@ -449,12 +461,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             }
 
             if (isset($event['metadata']['usage'])) {
-                $totalUsage = $totalUsage->add(new Usage(
-                    promptTokens: $event['metadata']['usage']['inputTokens'] ?? 0,
-                    completionTokens: $event['metadata']['usage']['outputTokens'] ?? 0,
-                    cacheWriteInputTokens: $event['metadata']['usage']['cacheWriteInputTokens'] ?? 0,
-                    cacheReadInputTokens: $event['metadata']['usage']['cacheReadInputTokens'] ?? 0,
-                ));
+                $totalUsage = $totalUsage->add($this->extractUsage($event['metadata']['usage']));
             }
         }
 

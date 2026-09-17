@@ -211,8 +211,8 @@ test('streaming tool loop emits a single stream end with accumulated usage', fun
 
     expect($streamEnds)->toHaveCount(1)
         ->and($streamEnds[0]->reason)->toBe(FinishReason::Stop->value)
-        ->and($streamEnds[0]->usage->promptTokens)->toBe(20)
-        ->and($streamEnds[0]->usage->completionTokens)->toBe(15)
+        ->and($streamEnds[0]->usage->inputTokens)->toBe(30)
+        ->and($streamEnds[0]->usage->outputTokens)->toBe(15)
         ->and($streamEnds[0]->usage->cacheReadInputTokens)->toBe(10);
 });
 
@@ -234,9 +234,9 @@ test('streaming captures usage', function (): void {
 
     $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
-    expect($streamEnd->usage->promptTokens)->toBe(8); // 10 - 2 cached
-    expect($streamEnd->usage->completionTokens)->toBe(5);
-    expect($streamEnd->usage->cacheReadInputTokens)->toBe(2)
+    expect($streamEnd->usage->inputTokens)->toBe(10)
+        ->and($streamEnd->usage->outputTokens)->toBe(5)
+        ->and($streamEnd->usage->cacheReadInputTokens)->toBe(2)
         ->and($streamEnd->usage->reasoningTokens)->toBe(3);
 });
 

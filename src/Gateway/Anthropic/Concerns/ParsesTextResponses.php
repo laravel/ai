@@ -173,13 +173,17 @@ trait ParsesTextResponses
     protected function extractUsage(array $data): Usage
     {
         $usage = $data['usage'] ?? [];
+        $cacheReadTokens = $usage['cache_read_input_tokens'] ?? null;
+        $cacheWriteTokens = $usage['cache_creation_input_tokens'] ?? null;
 
+        // Anthropic reports input tokens exclusive of the cache buckets...
         return new Usage(
-            $usage['input_tokens'] ?? 0,
-            $usage['output_tokens'] ?? 0,
-            $usage['cache_creation_input_tokens'] ?? 0,
-            $usage['cache_read_input_tokens'] ?? 0,
-            $usage['output_tokens_details']['thinking_tokens'] ?? 0,
+            inputTokens: ($usage['input_tokens'] ?? 0) + ($cacheReadTokens ?? 0) + ($cacheWriteTokens ?? 0),
+            outputTokens: $usage['output_tokens'] ?? 0,
+            cacheReadInputTokens: $cacheReadTokens,
+            cacheWriteInputTokens: $cacheWriteTokens,
+            reasoningTokens: $usage['output_tokens_details']['thinking_tokens'] ?? null,
+            raw: $usage,
         );
     }
 

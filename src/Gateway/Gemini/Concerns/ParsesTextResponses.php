@@ -204,16 +204,15 @@ trait ParsesTextResponses
     protected function extractUsage(array $data): Usage
     {
         $usage = $data['usageMetadata'] ?? [];
+        $reasoningTokens = $usage['thoughtsTokenCount'] ?? null;
 
-        $promptTokens = $usage['promptTokenCount'] ?? 0;
-        $cachedTokens = $usage['cachedContentTokenCount'] ?? 0;
-
+        // Gemini reports thought tokens outside the candidate token count...
         return new Usage(
-            $promptTokens - $cachedTokens,
-            $usage['candidatesTokenCount'] ?? 0,
-            0,
-            $cachedTokens,
-            $usage['thoughtsTokenCount'] ?? 0,
+            inputTokens: $usage['promptTokenCount'] ?? 0,
+            outputTokens: ($usage['candidatesTokenCount'] ?? 0) + ($reasoningTokens ?? 0),
+            cacheReadInputTokens: $usage['cachedContentTokenCount'] ?? null,
+            reasoningTokens: $reasoningTokens,
+            raw: $usage,
         );
     }
 

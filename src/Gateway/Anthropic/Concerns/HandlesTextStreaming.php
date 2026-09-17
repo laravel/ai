@@ -49,9 +49,7 @@ trait HandlesTextStreaming
         $pendingToolCalls = [];
         $responseContent = [];
 
-        $inputTokens = 0;
-        $cacheCreationTokens = 0;
-        $cacheReadTokens = 0;
+        $messageUsage = [];
         $usage = null;
         $stopReason = '';
 
@@ -102,10 +100,7 @@ trait HandlesTextStreaming
             if ($type === 'message_start' && ! $streamStartEmitted) {
                 $streamStartEmitted = true;
 
-                $messageStartUsage = $data['message']['usage'] ?? [];
-                $inputTokens = $messageStartUsage['input_tokens'] ?? 0;
-                $cacheCreationTokens = $messageStartUsage['cache_creation_input_tokens'] ?? 0;
-                $cacheReadTokens = $messageStartUsage['cache_read_input_tokens'] ?? 0;
+                $messageUsage = $data['message']['usage'] ?? [];
 
                 yield (new StreamStart(
                     $this->generateEventId(),
@@ -317,20 +312,9 @@ trait HandlesTextStreaming
 
             if ($type === 'message_delta') {
                 $stopReason = $data['delta']['stop_reason'] ?? '';
-                $deltaUsage = $data['usage'] ?? [];
 
                 // Usage on message_delta is cumulative for the whole message...
-                $inputTokens = $deltaUsage['input_tokens'] ?? $inputTokens;
-                $cacheCreationTokens = $deltaUsage['cache_creation_input_tokens'] ?? $cacheCreationTokens;
-                $cacheReadTokens = $deltaUsage['cache_read_input_tokens'] ?? $cacheReadTokens;
-
-                $usage = new Usage(
-                    $inputTokens,
-                    $deltaUsage['output_tokens'] ?? 0,
-                    $cacheCreationTokens,
-                    $cacheReadTokens,
-                    $deltaUsage['output_tokens_details']['thinking_tokens'] ?? 0,
-                );
+                $usage = $this->extractUsage(['usage' => array_merge($messageUsage, $data['usage'] ?? [])]);
             }
         }
 

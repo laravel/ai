@@ -365,8 +365,9 @@ describe('response parsing', function (): void {
         );
 
         expect($response->usage)
-            ->promptTokens->toBe(25)
-            ->completionTokens->toBe(15)
+            ->inputTokens->toBe(33)
+            ->uncachedInputTokens()->toBe(25)
+            ->outputTokens->toBe(15)
             ->cacheWriteInputTokens->toBe(5)
             ->cacheReadInputTokens->toBe(3)
             ->reasoningTokens->toBe(9);
@@ -394,8 +395,8 @@ describe('response parsing', function (): void {
         );
 
         expect($response->usage)
-            ->completionTokens->toBe(15)
-            ->reasoningTokens->toBe(0);
+            ->outputTokens->toBe(15)
+            ->reasoningTokens->toBeNull();
     });
 });
 

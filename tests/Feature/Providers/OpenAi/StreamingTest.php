@@ -158,8 +158,8 @@ test('streaming handles tool calls', function (): void {
         ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
         ->and($toolCallEvents[0]->toolCall->resultId)->toBe('call_1')
         ->and($streamEnd->reason)->toBe(FinishReason::Stop->value)
-        ->and($streamEnd->usage->promptTokens)->toBe(30)
-        ->and($streamEnd->usage->completionTokens)->toBe(15);
+        ->and($streamEnd->usage->inputTokens)->toBe(30)
+        ->and($streamEnd->usage->outputTokens)->toBe(15);
 });
 
 test('streaming handles reasoning events', function (string $eventType): void {
@@ -238,8 +238,8 @@ test('streaming captures usage from response completed', function (): void {
 
     $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
-    expect($streamEnd->usage->promptTokens)->toBe(37)
-        ->and($streamEnd->usage->completionTokens)->toBe(10)
+    expect($streamEnd->usage->inputTokens)->toBe(42)
+        ->and($streamEnd->usage->outputTokens)->toBe(10)
         ->and($streamEnd->usage->cacheReadInputTokens)->toBe(5);
 });
 
@@ -293,8 +293,8 @@ test('streaming captures cache write tokens from response completed', function (
 
     expect($streamEnd->usage->cacheWriteInputTokens)->toBe(8814)
         ->and($streamEnd->usage->cacheReadInputTokens)->toBe(0)
-        ->and($streamEnd->usage->promptTokens)->toBe(3)
-        ->and($streamEnd->usage->completionTokens)->toBe(120);
+        ->and($streamEnd->usage->inputTokens)->toBe(8817)
+        ->and($streamEnd->usage->outputTokens)->toBe(120);
 });
 
 test('streaming emits provider tool events for code interpreter code deltas', function (): void {

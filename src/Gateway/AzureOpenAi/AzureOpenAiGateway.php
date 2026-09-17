@@ -121,13 +121,12 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
     protected function extractImageUsage(array $data): Usage
     {
         $usage = $data['usage'] ?? [];
-        $inputTokens = $usage['input_tokens'] ?? 0;
-        $cachedTokens = $usage['input_tokens_details']['cached_tokens'] ?? 0;
 
         return new Usage(
-            promptTokens: $inputTokens - $cachedTokens,
-            completionTokens: $usage['output_tokens'] ?? 0,
-            cacheReadInputTokens: $cachedTokens,
+            inputTokens: $usage['input_tokens'] ?? 0,
+            outputTokens: $usage['output_tokens'] ?? 0,
+            cacheReadInputTokens: $usage['input_tokens_details']['cached_tokens'] ?? null,
+            raw: $usage,
         );
     }
 

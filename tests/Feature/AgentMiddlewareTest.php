@@ -101,7 +101,7 @@ test('agent middleware sees the provider, accumulated usage and final step flag'
         [new UserMessage('Hi')],
         [new FixedNumberGenerator],
         options: new TextGenerationOptions(maxSteps: 2, agent: (new AssistantAgent)->withMiddleware([function (PendingStep $step, Closure $next) use (&$seen) {
-            $seen[] = [$step->provider, $step->isFinalStep, $step->usage->promptTokens, $step->usage->completionTokens];
+            $seen[] = [$step->provider, $step->isFinalStep, $step->usage->inputTokens, $step->usage->outputTokens];
 
             return $next($step);
         }])),

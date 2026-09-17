@@ -55,8 +55,8 @@ describe('tool call loop', function (): void {
             ->and($response->steps)->toHaveCount(3)
             ->and($response->toolCalls)->toHaveCount(2)
             ->and($response->toolResults)->toHaveCount(2)
-            ->and($response->usage->promptTokens)->toBe(21)
-            ->and($response->usage->completionTokens)->toBe(11);
+            ->and($response->usage->inputTokens)->toBe(21)
+            ->and($response->usage->outputTokens)->toBe(11);
     });
 
     test('max steps limits tool call depth', function (): void {
@@ -121,8 +121,8 @@ describe('tool call loop', function (): void {
         expect($response)->toBeInstanceOf(StructuredTextResponse::class)
             ->and($response->structured)->toMatchArray(['symbol' => 'Fe'])
             ->and($response->steps)->toHaveCount(1)
-            ->and($response->usage->promptTokens)->toBe(8)
-            ->and($response->usage->completionTokens)->toBe(4);
+            ->and($response->usage->inputTokens)->toBe(8)
+            ->and($response->usage->outputTokens)->toBe(4);
     });
 
     test('streaming tool loop emits a single stream end with accumulated usage', function (): void {
@@ -161,8 +161,8 @@ describe('tool call loop', function (): void {
 
         expect($streamEnds)->toHaveCount(1)
             ->and($streamEnds[0]->reason)->toBe('stop')
-            ->and($streamEnds[0]->usage->promptTokens)->toBe(10)
-            ->and($streamEnds[0]->usage->completionTokens)->toBe(4)
+            ->and($streamEnds[0]->usage->inputTokens)->toBe(10)
+            ->and($streamEnds[0]->usage->outputTokens)->toBe(4)
             ->and($toolResults)->toHaveCount(1)
             ->and($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class);
     });

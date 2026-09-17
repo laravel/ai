@@ -2,66 +2,50 @@
 
 use Laravel\Ai\Responses\Data\Usage;
 
-test('usage defaults all tokens to zero', function (): void {
+test('usage defaults to zero tokens and unreported details', function (): void {
     $usage = new Usage;
 
-    expect($usage->promptTokens)->toBe(0)
-        ->and($usage->completionTokens)->toBe(0)
-        ->and($usage->cacheWriteInputTokens)->toBe(0)
-        ->and($usage->cacheReadInputTokens)->toBe(0)
-        ->and($usage->reasoningTokens)->toBe(0);
+    expect($usage->inputTokens)->toBe(0)
+        ->and($usage->outputTokens)->toBe(0)
+        ->and($usage->cacheReadInputTokens)->toBeNull()
+        ->and($usage->cacheWriteInputTokens)->toBeNull()
+        ->and($usage->reasoningTokens)->toBeNull()
+        ->and($usage->raw)->toBe([]);
 });
 
-test('usage accepts token values in constructor', function (): void {
-    $usage = new Usage(100, 50, 25, 10, 5);
+test('usage derives totals from the inclusive input and output counts', function (): void {
+    $usage = new Usage(100, 50, cacheReadInputTokens: 30, cacheWriteInputTokens: 20, reasoningTokens: 5);
 
-    expect($usage->promptTokens)->toBe(100)
-        ->and($usage->completionTokens)->toBe(50)
-        ->and($usage->cacheWriteInputTokens)->toBe(25)
-        ->and($usage->cacheReadInputTokens)->toBe(10)
-        ->and($usage->reasoningTokens)->toBe(5);
+    expect($usage->totalTokens())->toBe(150)
+        ->and($usage->uncachedInputTokens())->toBe(50);
 });
 
-test('usage add returns new instance with summed tokens', function (): void {
-    $usage1 = new Usage(100, 50, 25, 10, 5);
-    $usage2 = new Usage(50, 25, 10, 5, 0);
-
-    $combined = $usage1->add($usage2);
-
-    expect($combined->promptTokens)->toBe(150)
-        ->and($combined->completionTokens)->toBe(75)
-        ->and($combined->cacheWriteInputTokens)->toBe(35)
-        ->and($combined->cacheReadInputTokens)->toBe(15)
-        ->and($combined->reasoningTokens)->toBe(5);
+test('usage treats unreported cache counts as zero when deriving the uncached input', function (): void {
+    expect((new Usage(100, 50))->uncachedInputTokens())->toBe(100);
 });
 
-test('usage add does not mutate original', function (): void {
-    $usage1 = new Usage(100, 50, 25, 10, 5);
-    $usage2 = new Usage(50, 25, 10, 5, 0);
+test('usage add sums every count and drops the raw payload', function (): void {
+    $combined = (new Usage(100, 50, 10, 25, 5, ['a' => 1]))->add(new Usage(50, 25, 5, 10, 0, ['b' => 2]));
 
-    $usage1->add($usage2);
-
-    expect($usage1->promptTokens)->toBe(100)
-        ->and($usage1->completionTokens)->toBe(50);
+    expect($combined)->toEqual(new Usage(150, 75, 15, 35, 5));
 });
 
-test('usage to array includes all token fields', function (): void {
-    $usage = new Usage(100, 50, 25, 10, 5);
+test('usage add keeps a detail null only when neither side reported it', function (): void {
+    $combined = (new Usage(1, 1, cacheReadInputTokens: 7))->add(new Usage(1, 1, reasoningTokens: 3));
 
-    $array = $usage->toArray();
-
-    expect($array['prompt_tokens'])->toBe(100)
-        ->and($array['completion_tokens'])->toBe(50)
-        ->and($array['cache_write_input_tokens'])->toBe(25)
-        ->and($array['cache_read_input_tokens'])->toBe(10)
-        ->and($array['reasoning_tokens'])->toBe(5);
+    expect($combined->cacheReadInputTokens)->toBe(7)
+        ->and($combined->reasoningTokens)->toBe(3)
+        ->and($combined->cacheWriteInputTokens)->toBeNull();
 });
 
-test('usage json serialize returns to array', function (): void {
-    $usage = new Usage(200, 100, 50, 20, 10);
+test('usage to array serializes the counts without the raw payload', function (): void {
+    $usage = new Usage(100, 50, 10, 25, null, ['input_tokens' => 100]);
 
-    $json = $usage->jsonSerialize();
-
-    expect($json['prompt_tokens'])->toBe(200)
-        ->and($json['completion_tokens'])->toBe(100);
+    expect($usage->toArray())->toBe([
+        'input_tokens' => 100,
+        'output_tokens' => 50,
+        'cache_read_input_tokens' => 10,
+        'cache_write_input_tokens' => 25,
+        'reasoning_tokens' => null,
+    ])->and($usage->jsonSerialize())->toBe($usage->toArray());
 });

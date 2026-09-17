@@ -237,9 +237,9 @@ class AgentUserInteractionProtocol extends StreamProtocol
             ...($usage !== null ? ['usage' => [Arr::whereNotNull([
                 'provider' => $provider,
                 'model' => $model,
-                'inputTokens' => $usage->promptTokens,
-                'outputTokens' => $usage->completionTokens,
-                'totalTokens' => $usage->promptTokens + $usage->completionTokens,
+                'inputTokens' => $usage->inputTokens,
+                'outputTokens' => $usage->outputTokens,
+                'totalTokens' => $usage->totalTokens(),
                 'reasoningTokens' => $usage->reasoningTokens,
                 'cachedInputTokens' => $usage->cacheReadInputTokens,
             ])]] : []),

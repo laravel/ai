@@ -77,8 +77,6 @@ function agUiRunFinished(string $reason = 'stop'): array
             'inputTokens' => 0,
             'outputTokens' => 0,
             'totalTokens' => 0,
-            'reasoningTokens' => 0,
-            'cachedInputTokens' => 0,
         ]],
         'metadata' => ['finishReason' => $reason],
     ];
@@ -107,7 +105,7 @@ test('a text stream emits run, step, and text message events', function () {
 test('the run finished event carries the combined usage and finish reason', function () {
     $events = agUiProtocolEvents([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
-        new StreamEnd('event-1', 'length', new Usage(promptTokens: 10, completionTokens: 5, reasoningTokens: 2), time()),
+        new StreamEnd('event-1', 'length', new Usage(inputTokens: 10, outputTokens: 5, reasoningTokens: 2), time()),
     ]);
 
     expect(end($events))->toBe([
@@ -121,7 +119,6 @@ test('the run finished event carries the combined usage and finish reason', func
             'outputTokens' => 5,
             'totalTokens' => 15,
             'reasoningTokens' => 2,
-            'cachedInputTokens' => 0,
         ]],
         'metadata' => ['finishReason' => 'length'],
     ]);
@@ -130,9 +127,9 @@ test('the run finished event carries the combined usage and finish reason', func
 test('a multi step run combines the usage of every step', function () {
     $events = agUiProtocolEvents([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
-        new StreamEnd('event-1', 'tool_calls', new Usage(promptTokens: 10, completionTokens: 5), time()),
+        new StreamEnd('event-1', 'tool_calls', new Usage(inputTokens: 10, outputTokens: 5), time()),
         new StreamStart('msg-2', 'anthropic', 'claude-sonnet-4-6', time()),
-        new StreamEnd('event-2', 'stop', new Usage(promptTokens: 20, completionTokens: 7), time()),
+        new StreamEnd('event-2', 'stop', new Usage(inputTokens: 20, outputTokens: 7), time()),
     ]);
 
     expect(end($events)['usage'][0])->toBe([
@@ -141,8 +138,6 @@ test('a multi step run combines the usage of every step', function () {
         'inputTokens' => 30,
         'outputTokens' => 12,
         'totalTokens' => 42,
-        'reasoningTokens' => 0,
-        'cachedInputTokens' => 0,
     ])->and(end($events)['metadata'])->toBe(['finishReason' => 'stop']);
 });
 

@@ -119,8 +119,8 @@ test('streaming handles tool calls', function (): void {
         ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
         ->and($toolCallEvents[0]->toolCall->resultId)->toBe('call_1')
         ->and($streamEnd->reason)->toBe(FinishReason::Stop->value)
-        ->and($streamEnd->usage->promptTokens)->toBe(30)
-        ->and($streamEnd->usage->completionTokens)->toBe(15);
+        ->and($streamEnd->usage->inputTokens)->toBe(30)
+        ->and($streamEnd->usage->outputTokens)->toBe(15);
 });
 
 test('streaming error event stops stream', function (): void {
@@ -165,8 +165,8 @@ test('streaming captures usage from completed event', function (): void {
 
     $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
-    expect($streamEnd->usage->promptTokens)->toBe(42)
-        ->and($streamEnd->usage->completionTokens)->toBe(10);
+    expect($streamEnd->usage->inputTokens)->toBe(42)
+        ->and($streamEnd->usage->outputTokens)->toBe(10);
 });
 
 test('streaming finish reason maps correctly', function (array $output, $expected): void {

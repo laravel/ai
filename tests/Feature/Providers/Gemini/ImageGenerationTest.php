@@ -237,8 +237,8 @@ test('image response includes usage metadata when returned', function (): void {
 
     $response = Image::of('A red apple')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
 
-    expect($response->usage->promptTokens)->toBe(12)
-        ->and($response->usage->completionTokens)->toBe(1290);
+    expect($response->usage->inputTokens)->toBe(12)
+        ->and($response->usage->outputTokens)->toBe(1290);
 });
 
 test('image response defaults to zero usage when usage metadata absent', function (): void {
@@ -248,8 +248,8 @@ test('image response defaults to zero usage when usage metadata absent', functio
 
     $response = Image::of('A red apple')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
 
-    expect($response->usage->promptTokens)->toBe(0)
-        ->and($response->usage->completionTokens)->toBe(0);
+    expect($response->usage->inputTokens)->toBe(0)
+        ->and($response->usage->outputTokens)->toBe(0);
 });
 
 test('image rate limit response throws rate limited exception', function (): void {

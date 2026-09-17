@@ -101,8 +101,8 @@ test('transcription usage is correctly parsed', function (): void {
     $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'mistral');
 
-    expect($response->usage->promptTokens)->toBe(100)
-        ->and($response->usage->completionTokens)->toBe(50);
+    expect($response->usage->inputTokens)->toBe(100)
+        ->and($response->usage->outputTokens)->toBe(50);
 });
 
 test('transcription omits language and sends diarize flag when diarizing', function (): void {

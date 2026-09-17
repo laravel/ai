@@ -254,8 +254,8 @@ describe('tool calls', function (): void {
         expect($streamEnds)->toHaveCount(1)
             ->and($streamEnds[0]->reason)->toBe(FinishReason::Stop->value)
             ->and($streamEnds[0]->usage)
-            ->promptTokens->toBe(30)
-            ->completionTokens->toBe(15);
+            ->inputTokens->toBe(30)
+            ->outputTokens->toBe(15);
     });
 
     test('streaming thinking parts are excluded from tool call continuation', function (): void {
@@ -411,8 +411,8 @@ describe('usage tracking', function (): void {
         $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
         expect($streamEnd->usage)
-            ->promptTokens->toBe(37)
-            ->completionTokens->toBe(10)
+            ->inputTokens->toBe(42)
+            ->outputTokens->toBe(10)
             ->cacheReadInputTokens->toBe(5);
     });
 

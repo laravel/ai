@@ -354,8 +354,8 @@ describe('usage tracking', function (): void {
         $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
         expect($streamEnd->usage)
-            ->promptTokens->toBe(42)
-            ->completionTokens->toBe(10)
+            ->inputTokens->toBe(192)
+            ->outputTokens->toBe(10)
             ->cacheWriteInputTokens->toBe(100)
             ->cacheReadInputTokens->toBe(50)
             ->reasoningTokens->toBe(6);
@@ -404,8 +404,8 @@ describe('usage tracking', function (): void {
         $streamEnd = array_values(array_filter($events, fn ($e) => $e instanceof StreamEnd))[0];
 
         expect($streamEnd->usage)
-            ->promptTokens->toBe(10682)
-            ->completionTokens->toBe(510)
+            ->inputTokens->toBe(10782)
+            ->outputTokens->toBe(510)
             ->cacheWriteInputTokens->toBe(25)
             ->cacheReadInputTokens->toBe(75);
     });
@@ -473,8 +473,8 @@ describe('usage tracking', function (): void {
         expect($streamEnds)->toHaveCount(1)
             ->and($streamEnds[0]->reason)->toBe(FinishReason::Stop->value)
             ->and($streamEnds[0]->usage)
-            ->promptTokens->toBe(30)
-            ->completionTokens->toBe(15)
+            ->inputTokens->toBe(50)
+            ->outputTokens->toBe(15)
             ->cacheWriteInputTokens->toBe(10)
             ->cacheReadInputTokens->toBe(10);
     });

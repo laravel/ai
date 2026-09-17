@@ -242,8 +242,8 @@ describe('usage parsing', function (): void {
         );
 
         expect($response->usage)
-            ->promptTokens->toBe(20)
-            ->completionTokens->toBe(15)
+            ->inputTokens->toBe(25)
+            ->outputTokens->toBe(25)
             ->cacheReadInputTokens->toBe(5)
             ->reasoningTokens->toBe(10);
     });
@@ -265,8 +265,8 @@ describe('usage parsing', function (): void {
         $response = (new AssistantAgent)->prompt('Hi', provider: 'gemini');
 
         expect($response->usage)
-            ->promptTokens->toBe(100)
-            ->completionTokens->toBe(50);
+            ->inputTokens->toBe(100)
+            ->outputTokens->toBe(50);
     });
 
     test('thinking response parts are separated from text', function (): void {

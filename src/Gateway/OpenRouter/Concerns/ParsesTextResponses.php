@@ -94,16 +94,14 @@ trait ParsesTextResponses
     protected function extractUsage(array $data): Usage
     {
         $usage = $data['usage'] ?? [];
-        $promptDetails = $usage['prompt_tokens_details'] ?? [];
-        $cachedTokens = $promptDetails['cached_tokens'] ?? 0;
-        $cacheWriteTokens = $promptDetails['cache_write_tokens'] ?? 0;
 
         return new Usage(
-            ($usage['prompt_tokens'] ?? 0) - $cachedTokens - $cacheWriteTokens,
-            $usage['completion_tokens'] ?? 0,
-            cacheWriteInputTokens: $cacheWriteTokens,
-            cacheReadInputTokens: $cachedTokens,
-            reasoningTokens: $usage['completion_tokens_details']['reasoning_tokens'] ?? 0,
+            inputTokens: $usage['prompt_tokens'] ?? 0,
+            outputTokens: $usage['completion_tokens'] ?? 0,
+            cacheReadInputTokens: $usage['prompt_tokens_details']['cached_tokens'] ?? null,
+            cacheWriteInputTokens: $usage['prompt_tokens_details']['cache_write_tokens'] ?? null,
+            reasoningTokens: $usage['completion_tokens_details']['reasoning_tokens'] ?? null,
+            raw: $usage,
         );
     }
 

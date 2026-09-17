@@ -90,6 +90,7 @@ class GroqGateway implements StepTextGateway, TranscriptionGateway
             new Usage(
                 $data['usage']['prompt_tokens'] ?? 0,
                 $data['usage']['completion_tokens'] ?? 0,
+                raw: $data['usage'] ?? [],
             ),
             new Meta($provider->name(), $model),
         );

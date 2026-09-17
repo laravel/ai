@@ -632,8 +632,8 @@ test('it holds stream end until the streamed tool loop is complete', function ()
         ->and($streamEnds)->toHaveCount(1)
         ->and(collect($events)->whereInstanceOf(ToolResultEvent::class))->toHaveCount(1)
         ->and($streamEnds->first()->reason)->toBe(FinishReason::Stop->value)
-        ->and($streamEnds->first()->usage->promptTokens)->toBe(15)
-        ->and($streamEnds->first()->usage->completionTokens)->toBe(3);
+        ->and($streamEnds->first()->usage->inputTokens)->toBe(15)
+        ->and($streamEnds->first()->usage->outputTokens)->toBe(3);
 });
 
 test('it does not execute streamed tool calls on the final step', function (): void {
@@ -724,8 +724,8 @@ test('it accumulates streamed usage across multi-step turns', function (): void 
     $streamEnd = collect($events)->whereInstanceOf(StreamEnd::class)->first();
 
     expect($streamEnd)->toBeInstanceOf(StreamEnd::class)
-        ->and($streamEnd->usage->promptTokens)->toBe(15)
-        ->and($streamEnd->usage->completionTokens)->toBe(3)
+        ->and($streamEnd->usage->inputTokens)->toBe(15)
+        ->and($streamEnd->usage->outputTokens)->toBe(3)
         ->and($streamEnd->reason)->toBe(FinishReason::Stop->value);
 });
 

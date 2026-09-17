@@ -56,9 +56,9 @@ function vercelFinishPart(string $reason = 'stop', ?Usage $usage = null): array
         'finishReason' => $reason,
         'messageMetadata' => [
             'usage' => [
-                'inputTokens' => $usage->promptTokens,
-                'outputTokens' => $usage->completionTokens,
-                'totalTokens' => $usage->promptTokens + $usage->completionTokens,
+                'inputTokens' => $usage->inputTokens,
+                'outputTokens' => $usage->outputTokens,
+                'totalTokens' => $usage->inputTokens + $usage->outputTokens,
                 'reasoningTokens' => $usage->reasoningTokens,
                 'cachedInputTokens' => $usage->cacheReadInputTokens,
             ],
@@ -291,10 +291,10 @@ test('the finish part carries the stream usage and finish reason as message meta
     $parts = vercelProtocolParts([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new TextDelta('event-1', 'msg-1', 'Hello.', time()),
-        new StreamEnd('event-2', 'length', new Usage(promptTokens: 10, completionTokens: 20), time()),
+        new StreamEnd('event-2', 'length', new Usage(inputTokens: 10, outputTokens: 20), time()),
     ]);
 
-    expect($parts[count($parts) - 2])->toBe(vercelFinishPart('length', new Usage(promptTokens: 10, completionTokens: 20)));
+    expect($parts[count($parts) - 2])->toBe(vercelFinishPart('length', new Usage(inputTokens: 10, outputTokens: 20)));
 });
 
 test('finish reasons outside the Vercel enum emit as other', function () {
@@ -339,15 +339,15 @@ test('a multi-step stream emits one finish part with combined usage and the fina
     $parts = vercelProtocolParts([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new ToolCall('event-1', new Data\ToolCall('call-1', 'GetWeather', ['city' => 'Lisbon']), time()),
-        new StreamEnd('event-2', 'tool_calls', new Usage(promptTokens: 10, completionTokens: 5), time()),
+        new StreamEnd('event-2', 'tool_calls', new Usage(inputTokens: 10, outputTokens: 5), time()),
         new ToolResult('event-3', new Data\ToolResult('call-1', 'GetWeather', ['city' => 'Lisbon'], 'sunny'), true, null, time()),
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new TextDelta('event-4', 'msg-1', 'Sunny.', time()),
-        new StreamEnd('event-5', 'stop', new Usage(promptTokens: 20, completionTokens: 15), time()),
+        new StreamEnd('event-5', 'stop', new Usage(inputTokens: 20, outputTokens: 15), time()),
     ]);
 
     expect(collect($parts)->where('type', 'finish')->values()->all())->toBe([
-        vercelFinishPart('stop', new Usage(promptTokens: 30, completionTokens: 20)),
+        vercelFinishPart('stop', new Usage(inputTokens: 30, outputTokens: 20)),
     ])->and(collect($parts)->pluck('type')->all())->toBe([
         'start', 'start-step',
         'tool-input-available', 'tool-output-available', 'finish-step',

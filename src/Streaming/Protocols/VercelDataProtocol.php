@@ -302,9 +302,9 @@ class VercelDataProtocol extends StreamProtocol
             },
             'messageMetadata' => [
                 'usage' => [
-                    'inputTokens' => $usage->promptTokens,
-                    'outputTokens' => $usage->completionTokens,
-                    'totalTokens' => $usage->promptTokens + $usage->completionTokens,
+                    'inputTokens' => $usage->inputTokens,
+                    'outputTokens' => $usage->outputTokens,
+                    'totalTokens' => $usage->totalTokens(),
                     'reasoningTokens' => $usage->reasoningTokens,
                     'cachedInputTokens' => $usage->cacheReadInputTokens,
                 ],

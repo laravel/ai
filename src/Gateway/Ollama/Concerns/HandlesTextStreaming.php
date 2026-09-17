@@ -130,10 +130,7 @@ trait HandlesTextStreaming
             }
 
             if (isset($data['prompt_eval_count']) || isset($data['eval_count'])) {
-                $usage = new Usage(
-                    $data['prompt_eval_count'] ?? 0,
-                    $data['eval_count'] ?? 0,
-                );
+                $usage = $this->extractUsage($data);
             }
 
             if ($data['done'] ?? false) {

@@ -131,11 +131,11 @@ test('image response includes usage tokens when returned by gpt-image', function
 
     $response = Image::of('A red apple')->generate(provider: 'openai', model: 'gpt-image-1');
 
-    expect($response->usage->promptTokens)->toBe(41)
-        ->and($response->usage->completionTokens)->toBe(1024);
+    expect($response->usage->inputTokens)->toBe(41)
+        ->and($response->usage->outputTokens)->toBe(1024);
 });
 
-test('image response subtracts cached tokens from prompt tokens', function (): void {
+test('image response reports cached tokens within the input tokens', function (): void {
     Http::fake([
         '*' => Http::response([
             'data' => [[
@@ -154,9 +154,9 @@ test('image response subtracts cached tokens from prompt tokens', function (): v
 
     $response = Image::of('A red apple')->generate(provider: 'openai', model: 'gpt-image-1');
 
-    expect($response->usage->promptTokens)->toBe(70)
+    expect($response->usage->inputTokens)->toBe(100)
         ->and($response->usage->cacheReadInputTokens)->toBe(30)
-        ->and($response->usage->completionTokens)->toBe(1024);
+        ->and($response->usage->outputTokens)->toBe(1024);
 });
 
 test('image response defaults to zero usage when not returned by dalle', function (): void {
@@ -166,8 +166,8 @@ test('image response defaults to zero usage when not returned by dalle', functio
 
     $response = Image::of('A red apple')->generate(provider: 'openai', model: 'dall-e-3');
 
-    expect($response->usage->promptTokens)->toBe(0)
-        ->and($response->usage->completionTokens)->toBe(0);
+    expect($response->usage->inputTokens)->toBe(0)
+        ->and($response->usage->outputTokens)->toBe(0);
 });
 
 test('image generation request adds response_format b64_json for dall-e models', function (): void {

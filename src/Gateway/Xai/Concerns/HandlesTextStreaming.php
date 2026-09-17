@@ -268,15 +268,7 @@ trait HandlesTextStreaming
                 $response = $data['response'] ?? [];
                 $responseData = $response;
                 $responseId = $response['id'] ?? $responseId;
-                $responseUsage = $response['usage'] ?? [];
-
-                $usage = new Usage(
-                    ($responseUsage['input_tokens'] ?? 0) - ($responseUsage['input_tokens_details']['cached_tokens'] ?? 0),
-                    $responseUsage['output_tokens'] ?? 0,
-                    0,
-                    $responseUsage['input_tokens_details']['cached_tokens'] ?? 0,
-                    $responseUsage['output_tokens_details']['reasoning_tokens'] ?? 0,
-                );
+                $usage = $this->extractUsage($response);
 
                 foreach ($this->extractCitations($response['output'] ?? []) as $citation) {
                     yield (new CitationEvent(

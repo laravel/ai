@@ -144,14 +144,14 @@ trait GeminiHelpers
         ];
     }
 
-    protected function geminiChunkWithUsage(array $parts, int $promptTokens, int $candidatesTokens, int $cachedTokens = 0, ?string $modelVersion = null, string $finishReason = 'STOP'): array
+    protected function geminiChunkWithUsage(array $parts, int $inputTokens, int $candidatesTokens, int $cachedTokens = 0, ?string $modelVersion = null, string $finishReason = 'STOP'): array
     {
         $chunk = $this->geminiChunk($parts, $modelVersion, $finishReason);
 
         $chunk['usageMetadata'] = array_filter([
-            'promptTokenCount' => $promptTokens,
+            'promptTokenCount' => $inputTokens,
             'candidatesTokenCount' => $candidatesTokens,
-            'totalTokenCount' => $promptTokens + $candidatesTokens,
+            'totalTokenCount' => $inputTokens + $candidatesTokens,
             'cachedContentTokenCount' => $cachedTokens ?: null,
         ]);
 

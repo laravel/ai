@@ -57,8 +57,8 @@ test('transcription response returns text with correct meta', function (): void 
         ->and($response->segments)->toHaveCount(0)
         ->and($response->meta->provider)->toBe('gemini')
         ->and($response->meta->model)->toBe('gemini-3.7-flash')
-        ->and($response->usage->promptTokens)->toBe(10)
-        ->and($response->usage->completionTokens)->toBe(5);
+        ->and($response->usage->inputTokens)->toBe(10)
+        ->and($response->usage->outputTokens)->toBe(5);
 });
 
 test('transcription uses default model when none specified', function (): void {
@@ -107,8 +107,8 @@ test('diarized transcription response returns text and segments', function (): v
         ->and($response->segments[1]->text)->toBe('world')
         ->and($response->segments[1]->startSeconds)->toBe(2.0)
         ->and($response->segments[1]->endSeconds)->toBe(4.0)
-        ->and($response->usage->promptTokens)->toBe(42)
-        ->and($response->usage->completionTokens)->toBe(20);
+        ->and($response->usage->inputTokens)->toBe(42)
+        ->and($response->usage->outputTokens)->toBe(20);
 });
 
 test('diarized transcription parses srt and hour timestamp formats', function (): void {
