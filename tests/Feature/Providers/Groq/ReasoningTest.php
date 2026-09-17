@@ -1,6 +1,10 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasProviderOptions;
+use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Promptable;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
@@ -38,10 +42,36 @@ test('prompt reads the parsed reasoning off the response', function (): void {
         ->and($response->text)->toBe('Hello');
 });
 
-test('a response without reasoning leaves the reasoning empty', function (): void {
+// Groq rejects reasoning_format on non-reasoning and GPT-OSS models, so the caller opts in per model...
+test('no reasoning format is sent unless the caller asks for one', function (): void {
     Http::fake(['*' => fakeGroqResponse('Hello')]);
 
-    expect((new AssistantAgent)->prompt('Hi', provider: 'groq')->reasoning)->toBe('');
+    (new AssistantAgent)->prompt('Hi', provider: 'groq');
+
+    Http::assertSent(fn ($request): bool => ! array_key_exists('reasoning_format', $request->data()));
+});
+
+test('the reasoning format can be set with provider options', function (): void {
+    Http::fake(['*' => fakeGroqResponse('Hello')]);
+
+    $agent = new class implements Agent, HasProviderOptions
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function providerOptions(Lab|string $provider): array
+        {
+            return ['reasoning_format' => 'hidden'];
+        }
+    };
+
+    $agent->prompt('Hi', provider: 'groq');
+
+    Http::assertSent(fn ($request): bool => $request->data()['reasoning_format'] === 'hidden');
 });
 
 test('streaming emits reasoning events before the text', function (): void {

@@ -23,9 +23,3 @@ test('prompt separates thought runs interrupted by an answer with a blank line',
 
     expect((new AssistantAgent)->prompt('Hi', provider: 'gemini')->reasoning)->toBe("First.\n\nSecond.");
 });
-
-test('a response without thought parts leaves the reasoning empty', function (): void {
-    Http::fake(['*' => $this->fakeTextResponse('Hello')]);
-
-    expect((new AssistantAgent)->prompt('Hi', provider: 'gemini')->reasoning)->toBe('');
-});

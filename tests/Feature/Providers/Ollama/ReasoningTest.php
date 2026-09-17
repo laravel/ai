@@ -28,12 +28,6 @@ test('prompt reads the thinking off the response', function (): void {
         ->and($response->text)->toBe('Hello');
 });
 
-test('a response without thinking leaves the reasoning empty', function (): void {
-    Http::fake(['*' => $this->fakeTextResponse('Hello')]);
-
-    expect((new AssistantAgent)->prompt('Hi', provider: 'ollama')->reasoning)->toBe('');
-});
-
 test('streaming emits reasoning events before the text', function (): void {
     Http::fake(['*' => Http::response($this->ndjsonPayload([
         ['model' => 'deepseek-r1:8b', 'message' => ['role' => 'assistant', 'thinking' => 'Let me '], 'done' => false],

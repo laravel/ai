@@ -1001,7 +1001,7 @@ test('it records every step of a paused turn into the message meta', function ()
         ]);
 });
 
-test('it omits provider content blocks when the assistant turn is not paused', function (): void {
+test('it records provider content blocks when the assistant turn completed without pausing', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
@@ -1017,6 +1017,31 @@ test('it omits provider content blocks when the assistant turn is not paused', f
         ->withMessages(collect([
             new AssistantMessage('Deleted the file.', null, [['type' => 'thinking', 'signature' => 'sig-1']]),
         ]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+
+    expect(json_decode((string) $record->meta, true))
+        ->toHaveKey('provider_steps', [
+            ['blocks' => [['type' => 'thinking', 'signature' => 'sig-1']], 'tool_call_ids' => []],
+        ]);
+});
+
+test('it omits provider steps when the assistant turn produced no provider blocks', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Quiet conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Say hello.',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = (new AgentResponse('invocation-id', 'Hello.', new Usage, new Meta))
+        ->withMessages(collect([new AssistantMessage('Hello.')]));
 
     $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
 

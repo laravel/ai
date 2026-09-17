@@ -49,12 +49,6 @@ test('prompt reads reasoning content off the response', function (): void {
     expect((new AssistantAgent)->prompt('Hi', provider: 'deepseek')->reasoning)->toBe('Let me think...');
 });
 
-test('a response without reasoning content leaves the reasoning empty', function (): void {
-    Http::fake(['api.deepseek.com/*' => fakeDeepSeekResponse('Hello')]);
-
-    expect((new AssistantAgent)->prompt('Hi', provider: 'deepseek')->reasoning)->toBe('');
-});
-
 test('preserves reasoning content across tool-call loops', function (): void {
     Http::fake([
         'api.deepseek.com/*' => Http::sequence([

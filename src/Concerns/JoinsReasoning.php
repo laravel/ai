@@ -1,6 +1,6 @@
 <?php
 
-namespace Laravel\Ai\Gateway\Concerns;
+namespace Laravel\Ai\Concerns;
 
 use Illuminate\Support\Collection;
 
@@ -11,7 +11,7 @@ trait JoinsReasoning
      *
      * @param  iterable<int, string>  $blocks
      */
-    protected function joinReasoning(iterable $blocks): string
+    protected static function joinReasoning(iterable $blocks): string
     {
         return Collection::wrap($blocks)
             ->filter(fn (string $block): bool => trim($block) !== '')

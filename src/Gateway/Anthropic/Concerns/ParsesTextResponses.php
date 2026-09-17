@@ -3,9 +3,9 @@
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
-use Laravel\Ai\Gateway\Concerns\JoinsReasoning;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -114,7 +114,7 @@ trait ParsesTextResponses
     {
         $thinkingBlocks = array_filter($content, fn (array $block): bool => ($block['type'] ?? '') === 'thinking');
 
-        return $this->joinReasoning(array_map(fn (array $block): string => $block['thinking'] ?? '', $thinkingBlocks));
+        return static::joinReasoning(array_map(fn (array $block): string => $block['thinking'] ?? '', $thinkingBlocks));
     }
 
     /**

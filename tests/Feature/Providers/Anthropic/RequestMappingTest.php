@@ -164,6 +164,11 @@ describe('request structure', function (): void {
     });
 
     test('request omits the api key header when no key is configured', function (): void {
+        config(['ai.providers.anthropic' => [
+            ...config('ai.providers.anthropic'),
+            'key' => null,
+        ]]);
+
         Http::fake([
             'api.anthropic.com/*' => $this->fakeTextResponse(),
         ]);

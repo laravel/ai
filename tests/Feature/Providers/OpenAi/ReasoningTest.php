@@ -78,15 +78,14 @@ test('prompt reads raw reasoning text exactly as a stream of the same reasoning 
         ->and($prompted->reasoning)->toBe($streamed->reasoning);
 });
 
-test('prompt drops blank reasoning blocks the way a stream does', function (): void {
+test('a summary and the raw reasoning of one item stay separate blocks', function (): void {
     Http::fake([
         'api.openai.com/*' => fakeOpenAiReasonedResponse([
-            openAiReasoningItem('rs_1', '   '),
-            openAiReasoningItem('rs_2', 'Real thinking.'),
+            openAiReasoningItemWithBoth('rs_1', 'I weighed the options.', 'Raw thoughts.'),
         ], 'Answer'),
     ]);
 
-    expect((new OpenAiAgent)->prompt('Hello')->reasoning)->toBe('Real thinking.');
+    expect((new OpenAiAgent)->prompt('Hello')->reasoning)->toBe("I weighed the options.\n\nRaw thoughts.");
 });
 
 test('reasoning is joined across every step of a tool calling turn', function (): void {
@@ -99,15 +98,8 @@ test('reasoning is joined across every step of a tool calling turn', function ()
 
     $response = (new ToolUsingAgent(fixed: true))->prompt('Generate a number', provider: 'openai');
 
-    expect($response->reasoning)->toBe("I need a number.\n\nThe tool answered.");
-});
-
-test('a response without reasoning leaves the reasoning empty', function (): void {
-    Http::fake([
-        'api.openai.com/*' => fakeOpenAiResponse('Hello'),
-    ]);
-
-    expect((new OpenAiAgent)->prompt('Hello')->reasoning)->toBe('');
+    expect($response->reasoning)->toBe("I need a number.\n\nThe tool answered.")
+        ->and($response->steps->pluck('reasoning')->all())->toBe(['I need a number.', 'The tool answered.']);
 });
 
 test('a structured response carries the reasoning that produced it', function (): void {

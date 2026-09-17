@@ -10,6 +10,7 @@ use Laravel\Ai\Approvals\Approval;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Attributes\RepairToolCalls;
+use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\HasMiddleware;
@@ -21,7 +22,6 @@ use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Gateway\Concerns\HandlesToolApprovals;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
-use Laravel\Ai\Gateway\Concerns\JoinsReasoning;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -99,7 +99,6 @@ class TextGenerationLoop
         $continuationToken = null;
         $previous = null;
         $accumulatedUsage = new Usage;
-        $reasoning = new Collection;
         $lastResult = null;
 
         if ($approval !== null) {
@@ -170,7 +169,6 @@ class TextGenerationLoop
             [$toolResults, $pendingApprovals] = $this->stepToolResultsWithOptions($lastResult, $prepared->isFinalStep, $prepared->tools, $prepared->options, $context);
 
             $steps->push($this->buildStep($lastResult, $toolResults));
-            $reasoning->push($lastResult->reasoning);
 
             $assistantMessage = $this->buildAssistantMessage($lastResult);
             $allMessages[] = $assistantMessage;
@@ -183,7 +181,7 @@ class TextGenerationLoop
             }
 
             if ($pendingApprovals->isNotEmpty()) {
-                return $this->buildFinalResponse($steps, $newMessages, $lastResult, $reasoning)
+                return $this->buildFinalResponse($steps, $newMessages, $lastResult)
                     ->withPendingApprovals($pendingApprovals);
             }
 
@@ -195,7 +193,7 @@ class TextGenerationLoop
             $previous = $prepared;
         }
 
-        return $this->buildFinalResponse($steps, $newMessages, $lastResult, $reasoning);
+        return $this->buildFinalResponse($steps, $newMessages, $lastResult);
     }
 
     /**
@@ -376,7 +374,6 @@ class TextGenerationLoop
                     $pendingApprovals,
                     time(),
                     $providerSteps,
-                    $result->providerContentBlocks,
                 ))->withInvocationId($invocationId);
 
                 break;
@@ -396,6 +393,7 @@ class TextGenerationLoop
             ($finalReason ?? FinishReason::Stop)->value,
             $accumulatedUsage,
             time(),
+            $providerSteps,
         ))->withInvocationId($invocationId);
     }
 
@@ -989,6 +987,7 @@ class TextGenerationLoop
             $result->finishReason,
             $result->usage,
             $result->meta,
+            $result->reasoning,
         ))->withRawResponse($result->raw);
     }
 
@@ -999,11 +998,10 @@ class TextGenerationLoop
         Collection $steps,
         array $newMessages,
         ?StepResponse $lastResult,
-        Collection $reasoning,
     ): TextResponse {
         $finalStep = $steps->last();
 
-        $reasoningText = $this->joinReasoning($reasoning);
+        $reasoningText = static::joinReasoning($steps->pluck('reasoning'));
 
         $totalUsage = $steps->reduce(
             fn (Usage $carry, Step $step): Usage => $carry->add($step->usage),

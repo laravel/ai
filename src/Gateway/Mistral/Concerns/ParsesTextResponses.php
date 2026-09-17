@@ -2,9 +2,9 @@
 
 namespace Laravel\Ai\Gateway\Mistral\Concerns;
 
+use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
-use Laravel\Ai\Gateway\Concerns\JoinsReasoning;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -76,7 +76,7 @@ trait ParsesTextResponses
             return '';
         }
 
-        return $this->joinReasoning(array_map(
+        return static::joinReasoning(array_map(
             fn (array $chunk): string => $this->extractContentText($chunk['thinking'] ?? []),
             array_filter($content, fn (mixed $chunk): bool => is_array($chunk) && ($chunk['type'] ?? '') === 'thinking'),
         ));

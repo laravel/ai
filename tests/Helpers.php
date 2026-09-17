@@ -218,6 +218,16 @@ function openAiReasoningTextItem(string $id, string ...$texts): array
     ];
 }
 
+function openAiReasoningItemWithBoth(string $id, string $summary, string $text): array
+{
+    return [
+        'type' => 'reasoning',
+        'id' => $id,
+        'summary' => [['type' => 'summary_text', 'text' => $summary]],
+        'content' => [['type' => 'reasoning_text', 'text' => $text]],
+    ];
+}
+
 function fakeOpenAiReasonedResponse(array $reasoningItems, string $text = 'Hello'): PromiseInterface
 {
     return Http::response([

@@ -21,6 +21,7 @@ class Step implements Arrayable, JsonSerializable
         public FinishReason $finishReason,
         public Usage $usage,
         public Meta $meta,
+        public string $reasoning = '',
     ) {}
 
     /**
@@ -35,6 +36,7 @@ class Step implements Arrayable, JsonSerializable
             'finish_reason' => $this->finishReason->value,
             'usage' => $this->usage,
             'meta' => $this->meta,
+            'reasoning' => $this->reasoning,
         ];
     }
 

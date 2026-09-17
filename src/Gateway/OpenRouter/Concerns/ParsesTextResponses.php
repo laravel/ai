@@ -3,9 +3,9 @@
 namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
-use Laravel\Ai\Gateway\Concerns\JoinsReasoning;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -78,7 +78,7 @@ trait ParsesTextResponses
             return (string) $message['reasoning'];
         }
 
-        return $this->joinReasoning(
+        return static::joinReasoning(
             (new Collection($message['reasoning_details'] ?? []))
                 ->map(fn (array $detail): string => (string) ($detail['text'] ?? $detail['summary'] ?? ''))
         );

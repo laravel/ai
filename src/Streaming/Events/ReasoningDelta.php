@@ -3,9 +3,12 @@
 namespace Laravel\Ai\Streaming\Events;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Concerns\JoinsReasoning;
 
 class ReasoningDelta extends StreamEvent
 {
+    use JoinsReasoning;
+
     public function __construct(
         public string $id,
         public string $reasoningId,
@@ -21,12 +24,13 @@ class ReasoningDelta extends StreamEvent
      */
     public static function combine(Collection|array $events): string
     {
-        return Collection::wrap($events)
-            ->whereInstanceOf(ReasoningDelta::class)
-            ->groupBy(fn (ReasoningDelta $event) => $event->reasoningId)
-            ->map(fn (Collection $deltas) => $deltas->pluck('delta')->implode(''))
-            ->filter(fn (string $reasoning) => trim($reasoning) !== '')
-            ->implode("\n\n");
+        return static::joinReasoning(
+            Collection::wrap($events)
+                ->whereInstanceOf(ReasoningDelta::class)
+                ->groupBy(fn (ReasoningDelta $event) => $event->reasoningId)
+                ->map(fn (Collection $deltas) => $deltas->pluck('delta')->implode(''))
+                ->values()
+        );
     }
 
     /**

@@ -4,9 +4,9 @@ namespace Laravel\Ai\Gateway\Gemini\Concerns;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
-use Laravel\Ai\Gateway\Concerns\JoinsReasoning;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -85,7 +85,7 @@ trait ParsesTextResponses
             $current = '';
         }
 
-        return $this->joinReasoning([...$blocks, $current]);
+        return static::joinReasoning([...$blocks, $current]);
     }
 
     /**

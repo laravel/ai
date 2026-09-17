@@ -34,21 +34,23 @@ trait XaiHelpers
         ]);
     }
 
-    protected function fakeReasonedTextResponse(array $reasoningItems, string $text = 'Answer'): PromiseInterface
+    protected function fakeReasonedTextResponse(array $reasoningItems, string $text = 'Answer', bool $reasoningFirst = false): PromiseInterface
     {
+        $message = [
+            'type' => 'message',
+            'status' => 'completed',
+            'role' => 'assistant',
+            'content' => [
+                ['type' => 'output_text', 'text' => $text, 'annotations' => []],
+            ],
+        ];
+
         return Http::response([
             'id' => 'resp_123',
             'object' => 'response',
             'status' => 'completed',
             'model' => 'grok-4-1-fast-reasoning',
-            'output' => [[
-                'type' => 'message',
-                'status' => 'completed',
-                'role' => 'assistant',
-                'content' => [
-                    ['type' => 'output_text', 'text' => $text, 'annotations' => []],
-                ],
-            ], ...$reasoningItems],
+            'output' => $reasoningFirst ? [...$reasoningItems, $message] : [$message, ...$reasoningItems],
             'usage' => [
                 'input_tokens' => 10,
                 'output_tokens' => 5,

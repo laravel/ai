@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Attributes\CacheInstructions;
 use Laravel\Ai\Attributes\CacheToolDefinitions;
+use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -21,7 +22,6 @@ use Laravel\Ai\Gateway\Bedrock\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\Cohere\Concerns\ParsesEmbeddings;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
-use Laravel\Ai\Gateway\Concerns\JoinsReasoning;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -224,7 +224,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
      */
     protected function extractReasoning(array $content): string
     {
-        return $this->joinReasoning(array_map(
+        return static::joinReasoning(array_map(
             fn (array $block): string => $block['reasoningContent']['reasoningText']['text'] ?? '',
             $content,
         ));
