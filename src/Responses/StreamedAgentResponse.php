@@ -49,25 +49,9 @@ class StreamedAgentResponse extends AgentResponse
                 ->flatMap(fn (ToolApprovalRequest $event) => $event->pendingApprovals)
                 ->values()
         );
-    }
 
-    /**
-     * Get every assistant step of a paused turn with the raw provider state needed to replay it.
-     *
-     * @return array<int, array{blocks: array<int, array<string, mixed>>, tool_call_ids: array<int, string>}>
-     */
-    public function pausedSteps(): array
-    {
-        return $this->events->whereInstanceOf(ToolApprovalRequest::class)->last()?->steps ?? [];
-    }
-
-    /**
-     * Get the raw provider replay state for the paused assistant turn, if any.
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    public function pausedProviderContentBlocks(): array
-    {
-        return $this->events->whereInstanceOf(ToolApprovalRequest::class)->last()?->providerContentBlocks ?? [];
+        $this->withSteps(
+            $events->whereInstanceOf([StreamEnd::class, ToolApprovalRequest::class])->last()?->steps ?? new Collection
+        );
     }
 }

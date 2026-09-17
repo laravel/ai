@@ -2,6 +2,7 @@
 
 namespace Tests\Fixtures\Agents;
 
+use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
@@ -9,6 +10,7 @@ use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Promptable;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
+#[MaxSteps(4)]
 class RememberingToolUsingAgent implements Agent, Conversational, HasTools
 {
     use Promptable;
