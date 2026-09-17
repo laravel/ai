@@ -80,16 +80,6 @@ trait HandlesTextStreaming
 
             $reasoning = $delta['reasoning_content'] ?? $delta['reasoning'] ?? '';
 
-            if ($reasoningId !== null && ((isset($delta['content']) && $delta['content'] !== '') || isset($delta['tool_calls']))) {
-                yield (new ReasoningEnd(
-                    $this->generateEventId(),
-                    $reasoningId,
-                    time(),
-                ))->withInvocationId($invocationId);
-
-                $reasoningId = null;
-            }
-
             if ($reasoning !== '') {
                 if ($reasoningId === null) {
                     $reasoningId = $this->generateEventId();
@@ -107,6 +97,16 @@ trait HandlesTextStreaming
                     $reasoning,
                     time(),
                 ))->withInvocationId($invocationId);
+            }
+
+            if ($reasoningId !== null && ((isset($delta['content']) && $delta['content'] !== '') || isset($delta['tool_calls']))) {
+                yield (new ReasoningEnd(
+                    $this->generateEventId(),
+                    $reasoningId,
+                    time(),
+                ))->withInvocationId($invocationId);
+
+                $reasoningId = null;
             }
 
             if (isset($delta['content']) && $delta['content'] !== '') {

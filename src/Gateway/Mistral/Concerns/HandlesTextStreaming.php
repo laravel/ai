@@ -81,16 +81,6 @@ trait HandlesTextStreaming
             $thinking = $this->extractStreamedThinking($delta['content'] ?? '');
             $content = $this->extractContentText($delta['content'] ?? '');
 
-            if ($reasoningId !== null && ($content !== '' || isset($delta['tool_calls']))) {
-                yield (new ReasoningEnd(
-                    $this->generateEventId(),
-                    $reasoningId,
-                    time(),
-                ))->withInvocationId($invocationId);
-
-                $reasoningId = null;
-            }
-
             if ($thinking !== '') {
                 if ($reasoningId === null) {
                     $reasoningId = $this->generateEventId();
@@ -110,6 +100,16 @@ trait HandlesTextStreaming
                     $thinking,
                     time(),
                 ))->withInvocationId($invocationId);
+            }
+
+            if ($reasoningId !== null && ($content !== '' || isset($delta['tool_calls']))) {
+                yield (new ReasoningEnd(
+                    $this->generateEventId(),
+                    $reasoningId,
+                    time(),
+                ))->withInvocationId($invocationId);
+
+                $reasoningId = null;
             }
 
             if ($content !== '') {

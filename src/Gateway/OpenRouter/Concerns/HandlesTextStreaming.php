@@ -102,16 +102,6 @@ trait HandlesTextStreaming
                 );
             }
 
-            if ($reasoningId !== null && ((isset($delta['content']) && $delta['content'] !== '') || isset($delta['tool_calls']))) {
-                yield (new ReasoningEnd(
-                    $this->generateEventId(),
-                    $reasoningId,
-                    time(),
-                ))->withInvocationId($invocationId);
-
-                $reasoningId = null;
-            }
-
             if (isset($delta['reasoning']) && $delta['reasoning'] !== '') {
                 if ($reasoningId === null) {
                     $reasoningId = $this->generateEventId();
@@ -129,6 +119,16 @@ trait HandlesTextStreaming
                     $delta['reasoning'],
                     time(),
                 ))->withInvocationId($invocationId);
+            }
+
+            if ($reasoningId !== null && ((isset($delta['content']) && $delta['content'] !== '') || isset($delta['tool_calls']))) {
+                yield (new ReasoningEnd(
+                    $this->generateEventId(),
+                    $reasoningId,
+                    time(),
+                ))->withInvocationId($invocationId);
+
+                $reasoningId = null;
             }
 
             if (isset($delta['content']) && $delta['content'] !== '') {
@@ -233,6 +233,8 @@ trait HandlesTextStreaming
                 ))->withInvocationId($invocationId);
             }
         }
+
+        ksort($reasoningDetails);
 
         return new StepResponse(
             text: $currentText,

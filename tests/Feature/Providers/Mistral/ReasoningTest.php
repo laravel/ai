@@ -193,3 +193,28 @@ test('continuing a conversation replays the thinking chunks of a completed strea
         ['type' => 'text', 'text' => 'Hello'],
     ]);
 });
+
+test('a delta carrying both the last thinking and the first text closes one reasoning block', function (): void {
+    Http::fake(['*' => Http::response(
+        body: $this->ssePayload([
+            ['id' => 'c1', 'model' => 'magistral-medium-latest', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'content' => [['type' => 'thinking', 'thinking' => [['type' => 'text', 'text' => 'Let me ']]]]], 'finish_reason' => null]]],
+            ['id' => 'c1', 'model' => 'magistral-medium-latest', 'choices' => [['index' => 0, 'delta' => ['content' => [
+                ['type' => 'thinking', 'thinking' => [['type' => 'text', 'text' => 'think...']]],
+                ['type' => 'text', 'text' => 'Hello'],
+            ]], 'finish_reason' => null]]],
+            ['id' => 'c1', 'model' => 'magistral-medium-latest', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'stop']], 'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5]],
+        ]),
+        status: 200,
+        headers: ['Content-Type' => 'text/event-stream'],
+    )]);
+
+    $events = $this->collectStreamEvents();
+
+    expect(collect($events)->filter(fn ($event): bool => $event instanceof ReasoningStart))->toHaveCount(1)
+        ->and($events[1])->toBeInstanceOf(ReasoningStart::class)
+        ->and($events[2])->toBeInstanceOf(ReasoningDelta::class)->delta->toBe('Let me ')
+        ->and($events[3])->toBeInstanceOf(ReasoningDelta::class)->delta->toBe('think...')
+        ->and($events[4])->toBeInstanceOf(ReasoningEnd::class)
+        ->and($events[5])->toBeInstanceOf(TextStart::class)
+        ->and(ReasoningDelta::combine($events))->toBe('Let me think...');
+});

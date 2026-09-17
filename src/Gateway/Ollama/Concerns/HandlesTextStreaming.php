@@ -74,16 +74,6 @@ trait HandlesTextStreaming
             $thinking = $data['message']['thinking'] ?? '';
             $content = $data['message']['content'] ?? '';
 
-            if ($reasoningId !== null && ($content !== '' || ! empty($data['message']['tool_calls']))) {
-                yield (new ReasoningEnd(
-                    $this->generateEventId(),
-                    $reasoningId,
-                    time(),
-                ))->withInvocationId($invocationId);
-
-                $reasoningId = null;
-            }
-
             if ($thinking !== '') {
                 if ($reasoningId === null) {
                     $reasoningId = $this->generateEventId();
@@ -101,6 +91,16 @@ trait HandlesTextStreaming
                     $thinking,
                     time(),
                 ))->withInvocationId($invocationId);
+            }
+
+            if ($reasoningId !== null && ($content !== '' || ! empty($data['message']['tool_calls']))) {
+                yield (new ReasoningEnd(
+                    $this->generateEventId(),
+                    $reasoningId,
+                    time(),
+                ))->withInvocationId($invocationId);
+
+                $reasoningId = null;
             }
 
             if ($content !== '') {

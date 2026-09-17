@@ -305,13 +305,13 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                     $messages = [new ToolResultMessage($toolResults->map(ToolResult::fromArray(...)))];
 
                     if (filled($record->content)) {
-                        $messages[] = $this->reconstructAssistantTurn($record);
+                        $messages = array_merge($messages, $this->reconstructAssistantTurn($record));
                     }
 
                     return $messages;
                 }
 
-                return [$this->reconstructAssistantTurn($record)];
+                return $this->reconstructAssistantTurn($record);
             })
             ->skipWhile(fn (Message $message) => $message instanceof ToolResultMessage)
             ->values();
@@ -446,20 +446,19 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Rebuild a stored assistant turn that made no tool calls, keeping the raw provider blocks it produced.
+     * Rebuild a stored assistant turn that made no tool calls, keeping the raw provider blocks each step produced.
+     *
+     * @return array<int, Message>
      */
-    protected function reconstructAssistantTurn(object $record): AssistantMessage
+    protected function reconstructAssistantTurn(object $record): array
     {
         $meta = (array) json_decode($record->meta ?? '[]', true);
 
-        $providerSteps = $meta['provider_steps'] ?? [];
+        if (filled($providerSteps = $meta['provider_steps'] ?? [])) {
+            return $this->reconstructProviderTurn($record, $providerSteps, new Collection, new Collection, $meta['provider'] ?? null);
+        }
 
-        return new AssistantMessage(
-            $record->content,
-            null,
-            $providerSteps ? ($providerSteps[array_key_last($providerSteps)]['blocks'] ?? []) : [],
-            $meta['provider'] ?? null,
-        );
+        return [new AssistantMessage($record->content)];
     }
 
     /**
