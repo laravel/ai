@@ -53,7 +53,7 @@ describe('creating messages from AG-UI messages', function () {
             ['type' => 'text', 'text' => 'Second'],
         ]]);
 
-        expect($message->content)->toBe("First\n\nSecond");
+        expect($message->content)->toBe("First".PHP_EOL.PHP_EOL."Second");
     });
 
     test('url content sources become remote attachments', function () {
