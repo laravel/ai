@@ -71,6 +71,7 @@ trait ParsesTextResponses
             meta: new Meta($provider->name(), $model),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
             providerContentBlocks: $providerContentBlocks,
+            reasoning: (string) ($message['reasoning_content'] ?? ''),
         );
     }
 

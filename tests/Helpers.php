@@ -199,6 +199,64 @@ function fakeOpenAiResponse(string $text = 'Hello'): PromiseInterface
     ]);
 }
 
+function openAiReasoningItem(string $id, string ...$summaries): array
+{
+    return [
+        'type' => 'reasoning',
+        'id' => $id,
+        'summary' => array_map(fn (string $text): array => ['type' => 'summary_text', 'text' => $text], $summaries),
+    ];
+}
+
+function openAiReasoningTextItem(string $id, string ...$texts): array
+{
+    return [
+        'type' => 'reasoning',
+        'id' => $id,
+        'summary' => [],
+        'content' => array_map(fn (string $text): array => ['type' => 'reasoning_text', 'text' => $text], $texts),
+    ];
+}
+
+function fakeOpenAiReasonedResponse(array $reasoningItems, string $text = 'Hello'): PromiseInterface
+{
+    return Http::response([
+        'id' => 'resp_123',
+        'status' => 'completed',
+        'model' => 'gpt-5.4',
+        'output' => [...$reasoningItems, [
+            'type' => 'message',
+            'status' => 'completed',
+            'content' => [['type' => 'output_text', 'text' => $text]],
+        ]],
+        'usage' => [
+            'input_tokens' => 1,
+            'output_tokens' => 1,
+        ],
+    ]);
+}
+
+function fakeOpenAiReasonedToolCallResponse(array $reasoningItems): PromiseInterface
+{
+    return Http::response([
+        'id' => 'resp_tool_123',
+        'status' => 'completed',
+        'model' => 'gpt-5.4',
+        'output' => [...$reasoningItems, [
+            'type' => 'function_call',
+            'id' => 'fc_123',
+            'call_id' => 'call_123',
+            'name' => 'FixedNumberGenerator',
+            'arguments' => '{}',
+            'status' => 'completed',
+        ]],
+        'usage' => [
+            'input_tokens' => 10,
+            'output_tokens' => 5,
+        ],
+    ]);
+}
+
 function fakeOpenAiToolCallResponse(string $id = 'resp_tool_123', string $model = 'gpt-5.4'): PromiseInterface
 {
     return Http::response([

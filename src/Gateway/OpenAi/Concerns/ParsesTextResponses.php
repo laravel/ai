@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
+use Laravel\Ai\Gateway\Concerns\JoinsReasoning;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -15,7 +16,7 @@ use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
-    use DecodesStructuredOutput;
+    use DecodesStructuredOutput, JoinsReasoning;
 
     /**
      * Validate the OpenAI response data.
@@ -78,15 +79,15 @@ trait ParsesTextResponses
     }
 
     /**
-     * Extract the reasoning summary text from the output array.
+     * Extract the reasoning text from the output array.
      */
     protected function extractReasoning(array $output): string
     {
-        return (new Collection($output))
-            ->where('type', 'reasoning')
-            ->map(fn (array $item): string => (new Collection($item['summary'] ?? []))->pluck('text')->implode(''))
-            ->filter(fn (string $reasoning): bool => trim($reasoning) !== '')
-            ->implode("\n\n");
+        return $this->joinReasoning(
+            (new Collection($output))
+                ->where('type', 'reasoning')
+                ->map(fn (array $item): string => (new Collection([...$item['summary'] ?? [], ...$item['content'] ?? []]))->pluck('text')->implode(''))
+        );
     }
 
     /**

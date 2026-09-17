@@ -93,14 +93,10 @@ class TextResponse implements \Stringable
 
     /**
      * Provide the reasoning emitted across every step of the response.
-     *
-     * @param  Collection<int, string>|null  $reasoning
      */
-    public function withReasoning(?Collection $reasoning): self
+    public function withReasoning(string $reasoning): self
     {
-        $this->reasoning = ($reasoning ?? new Collection)
-            ->filter(fn (string $reasoning): bool => trim($reasoning) !== '')
-            ->implode("\n\n");
+        $this->reasoning = $reasoning;
 
         return $this;
     }

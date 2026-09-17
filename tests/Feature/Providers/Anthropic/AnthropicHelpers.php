@@ -21,6 +21,19 @@ trait AnthropicHelpers
         ]);
     }
 
+    protected function fakeThinkingResponse(array $content): PromiseInterface
+    {
+        return Http::response([
+            'id' => 'msg_123',
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-4-6',
+            'content' => $content,
+            'stop_reason' => 'end_turn',
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]);
+    }
+
     protected function fakeToolCallResponse(string $toolName = 'FixedNumberGenerator'): PromiseInterface
     {
         return Http::response([

@@ -21,6 +21,7 @@ use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Gateway\Concerns\HandlesToolApprovals;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
+use Laravel\Ai\Gateway\Concerns\JoinsReasoning;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -53,7 +54,7 @@ use Throwable;
 
 class TextGenerationLoop
 {
-    use HandlesToolApprovals, InvokesTools;
+    use HandlesToolApprovals, InvokesTools, JoinsReasoning;
 
     /**
      * The characters a tool must add before its unfinished output is reported again.
@@ -998,9 +999,11 @@ class TextGenerationLoop
         Collection $steps,
         array $newMessages,
         ?StepResponse $lastResult,
-        ?Collection $reasoning = null,
+        Collection $reasoning,
     ): TextResponse {
         $finalStep = $steps->last();
+
+        $reasoningText = $this->joinReasoning($reasoning);
 
         $totalUsage = $steps->reduce(
             fn (Usage $carry, Step $step): Usage => $carry->add($step->usage),
@@ -1020,14 +1023,14 @@ class TextGenerationLoop
                 toolResults: $newMessages
                     ->whereInstanceOf(ToolResultMessage::class)
                     ->flatMap(fn (ToolResultMessage $message): Collection => $message->toolResults),
-            )->withSteps($steps)->withReasoning($reasoning)->withRawResponse($lastResult->raw);
+            )->withSteps($steps)->withReasoning($reasoningText)->withRawResponse($lastResult->raw);
         }
 
         return (new TextResponse(
             $finalStep->text,
             $totalUsage,
             $finalStep->meta,
-        ))->withMessages($newMessages)->withSteps($steps)->withReasoning($reasoning)->withRawResponse($lastResult?->raw);
+        ))->withMessages($newMessages)->withSteps($steps)->withReasoning($reasoningText)->withRawResponse($lastResult?->raw);
     }
 
     /**

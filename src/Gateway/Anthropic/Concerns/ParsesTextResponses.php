@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
+use Laravel\Ai\Gateway\Concerns\JoinsReasoning;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -15,7 +16,7 @@ use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
-    use DecodesStructuredOutput;
+    use DecodesStructuredOutput, JoinsReasoning;
 
     /**
      * Validate the Anthropic response data.
@@ -92,6 +93,7 @@ trait ParsesTextResponses
             meta: new Meta($provider->name(), $model, $citations),
             structured: $structuredData,
             providerContentBlocks: $content,
+            reasoning: $this->extractReasoning($content),
         );
     }
 
@@ -103,6 +105,16 @@ trait ParsesTextResponses
         $textBlocks = array_filter($content, fn (array $block): bool => ($block['type'] ?? '') === 'text');
 
         return implode('', array_column($textBlocks, 'text'));
+    }
+
+    /**
+     * Extract the reasoning text from Anthropic content blocks.
+     */
+    protected function extractReasoning(array $content): string
+    {
+        $thinkingBlocks = array_filter($content, fn (array $block): bool => ($block['type'] ?? '') === 'thinking');
+
+        return $this->joinReasoning(array_map(fn (array $block): string => $block['thinking'] ?? '', $thinkingBlocks));
     }
 
     /**

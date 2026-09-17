@@ -21,6 +21,7 @@ use Laravel\Ai\Gateway\Bedrock\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\Cohere\Concerns\ParsesEmbeddings;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
+use Laravel\Ai\Gateway\Concerns\JoinsReasoning;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -54,6 +55,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
     use CreatesBedrockClient;
     use DecodesStructuredOutput;
     use HandlesFailoverErrors;
+    use JoinsReasoning;
     use MapsAttachments;
     use ParsesEmbeddings;
 
@@ -213,7 +215,19 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             meta: new Meta($provider->name(), $model),
             structured: $structuredOutput !== null ? $this->decodeStructuredOutput($structuredOutput) : null,
             providerContentBlocks: $providerContentBlocks,
+            reasoning: $this->extractReasoning($providerContentBlocks),
         );
+    }
+
+    /**
+     * Extract the reasoning text from Converse content blocks.
+     */
+    protected function extractReasoning(array $content): string
+    {
+        return $this->joinReasoning(array_map(
+            fn (array $block): string => $block['reasoningContent']['reasoningText']['text'] ?? '',
+            $content,
+        ));
     }
 
     /**

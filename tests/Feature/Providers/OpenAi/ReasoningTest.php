@@ -1,6 +1,5 @@
 <?php
 
-use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\OpenAiAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
@@ -8,48 +7,6 @@ use Tests\Fixtures\Agents\ToolUsingAgent;
 beforeEach(function (): void {
     config(['ai.providers.openai' => [...config('ai.providers.openai'), 'key' => 'test-key']]);
 });
-
-function openAiReasoningItem(string $id, string ...$summaries): array
-{
-    return [
-        'type' => 'reasoning',
-        'id' => $id,
-        'summary' => array_map(fn (string $text): array => ['type' => 'summary_text', 'text' => $text], $summaries),
-    ];
-}
-
-function fakeOpenAiReasonedResponse(array $reasoningItems, string $text): PromiseInterface
-{
-    return Http::response([
-        'id' => 'resp_123',
-        'status' => 'completed',
-        'model' => 'gpt-5.4',
-        'output' => [...$reasoningItems, [
-            'type' => 'message',
-            'status' => 'completed',
-            'content' => [['type' => 'output_text', 'text' => $text]],
-        ]],
-        'usage' => ['input_tokens' => 1, 'output_tokens' => 1],
-    ]);
-}
-
-function fakeOpenAiReasonedToolCallResponse(array $reasoningItems): PromiseInterface
-{
-    return Http::response([
-        'id' => 'resp_tool_123',
-        'status' => 'completed',
-        'model' => 'gpt-5.4',
-        'output' => [...$reasoningItems, [
-            'type' => 'function_call',
-            'id' => 'fc_123',
-            'call_id' => 'call_123',
-            'name' => 'FixedNumberGenerator',
-            'arguments' => '{}',
-            'status' => 'completed',
-        ]],
-        'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
-    ]);
-}
 
 test('prompt joins reasoning blocks exactly as a stream of the same reasoning does', function (): void {
     $items = [
@@ -84,6 +41,37 @@ test('prompt joins reasoning blocks exactly as a stream of the same reasoning do
     iterator_to_array($streamed);
 
     expect($prompted->reasoning)->toBe("Let me think...\n\nNow I am sure.")
+        ->and($prompted->reasoning)->toBe($streamed->reasoning);
+});
+
+test('prompt reads raw reasoning text exactly as a stream of the same reasoning does', function (): void {
+    $item = openAiReasoningTextItem('rs_1', 'Raw ', 'thoughts.');
+
+    Http::fake([
+        'api.openai.com/*' => Http::sequence([
+            fakeOpenAiReasonedResponse([$item], 'Answer'),
+            Http::response(
+                body: $this->ssePayload([
+                    $this->responseCreated(),
+                    ['type' => 'response.reasoning_text.delta', 'delta' => 'Raw ', 'item_id' => 'rs_1'],
+                    ['type' => 'response.reasoning_text.delta', 'delta' => 'thoughts.', 'item_id' => 'rs_1'],
+                    ['type' => 'response.output_item.done', 'item' => $item],
+                    $this->outputTextDelta('Answer'),
+                    $this->outputTextDone('Answer'),
+                    $this->responseCompleted(1, 1),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]),
+    ]);
+
+    $prompted = (new OpenAiAgent)->prompt('Hello');
+
+    $streamed = (new OpenAiAgent)->stream('Hello');
+    iterator_to_array($streamed);
+
+    expect($prompted->reasoning)->toBe('Raw thoughts.')
         ->and($prompted->reasoning)->toBe($streamed->reasoning);
 });
 

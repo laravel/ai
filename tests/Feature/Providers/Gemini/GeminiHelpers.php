@@ -27,6 +27,26 @@ trait GeminiHelpers
         ]);
     }
 
+    protected function fakeThinkingResponse(array $parts): PromiseInterface
+    {
+        return Http::response([
+            'candidates' => [[
+                'content' => [
+                    'parts' => $parts,
+                    'role' => 'model',
+                ],
+                'finishReason' => 'STOP',
+            ]],
+            'usageMetadata' => [
+                'promptTokenCount' => 10,
+                'candidatesTokenCount' => 5,
+                'thoughtsTokenCount' => 3,
+                'totalTokenCount' => 18,
+            ],
+            'modelVersion' => 'gemini-3.7-flash',
+        ]);
+    }
+
     protected function fakeToolCallResponse(string $toolName = 'FixedNumberGenerator', ?string $callId = null): PromiseInterface
     {
         return Http::response([

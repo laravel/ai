@@ -1543,6 +1543,28 @@ test('it records the reasoning a streamed turn produced into the message meta', 
         ->toHaveKey('reasoning', 'They want the temperature.');
 });
 
+test('it records the reasoning a prompted turn produced into the message meta', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'How cold is it?',
+        [],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    );
+
+    $response = AgentResponse::fakeWithReasoning('They want the temperature.', 'It is 12°C.');
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+
+    expect(json_decode((string) $record->meta, true))
+        ->toHaveKey('reasoning', 'They want the temperature.');
+});
+
 test('it omits reasoning from the message meta when the model did not reason', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Quiet conversation');

@@ -6,6 +6,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
+use Laravel\Ai\Gateway\Concerns\JoinsReasoning;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -16,7 +17,7 @@ use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
-    use DecodesStructuredOutput;
+    use DecodesStructuredOutput, JoinsReasoning;
 
     /**
      * Validate the Gemini response data.
@@ -57,7 +58,34 @@ trait ParsesTextResponses
             meta: new Meta($provider->name(), $model, $this->extractCitations($data)),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
             providerContentBlocks: $this->sanitizeRequestParts($this->excludeThinkingParts($parts)),
+            reasoning: $this->extractReasoning($parts),
         );
+    }
+
+    /**
+     * Extract the reasoning text from the response parts.
+     */
+    protected function extractReasoning(array $parts): string
+    {
+        $blocks = [];
+        $current = '';
+
+        foreach ($parts as $part) {
+            if (! isset($part['text'])) {
+                continue;
+            }
+
+            if ($this->isThinkingPart($part)) {
+                $current .= $part['text'];
+
+                continue;
+            }
+
+            $blocks[] = $current;
+            $current = '';
+        }
+
+        return $this->joinReasoning([...$blocks, $current]);
     }
 
     /**
