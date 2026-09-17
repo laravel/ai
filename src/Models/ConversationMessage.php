@@ -59,7 +59,7 @@ class ConversationMessage extends Model
      */
     protected function toolCalls(): Attribute
     {
-        return Attribute::get(fn (): array => array_merge([], ...array_column($this->steps ?? [], 'tool_calls')));
+        return Attribute::get(fn (): array => collect($this->steps)->pluck('tool_calls')->collapse()->all());
     }
 
     /**
@@ -67,7 +67,7 @@ class ConversationMessage extends Model
      */
     protected function toolResults(): Attribute
     {
-        return Attribute::get(fn (): array => array_merge([], ...array_column($this->steps ?? [], 'tool_results')));
+        return Attribute::get(fn (): array => collect($this->steps)->pluck('tool_results')->collapse()->all());
     }
 
     /**

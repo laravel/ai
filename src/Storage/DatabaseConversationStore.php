@@ -183,15 +183,43 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
+     * Decode a stored JSON column.
+     *
+     * @return array<array-key, mixed>
+     */
+    protected function decoded(?string $json): array
+    {
+        return is_array($decoded = json_decode($json ?? '', true)) ? $decoded : [];
+    }
+
+    /**
+     * The reasons a stored row is still awaiting a decision on, keyed by tool call ID.
+     *
+     * @return Collection<string, string>
+     */
+    protected function pendingReasons(object $record): Collection
+    {
+        $pending = $this->decoded($record->approval_state)['pending'] ?? [];
+
+        return collect(is_array($pending) ? $pending : []);
+    }
+
+    /**
+     * Determine whether a stored row is an assistant turn still awaiting a decision.
+     */
+    protected function awaitsDecision(?object $record): bool
+    {
+        return $record?->role === 'assistant' && $this->pausedCallIds($record) !== [];
+    }
+
+    /**
      * Get the tool-call IDs a stored row recorded as pending a decision.
      *
      * @return array<int, string>
      */
     protected function pausedCallIds(object $record): array
     {
-        $state = json_decode($record->approval_state ?? 'null', true);
-
-        return is_array($state) && is_array($state['pending'] ?? null) ? array_keys($state['pending']) : [];
+        return $this->pendingReasons($record)->keys()->all();
     }
 
     /**
@@ -201,7 +229,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     protected function pendingApprovalsIn(object $record): Collection
     {
-        $reasons = collect(((array) json_decode($record->approval_state ?? 'null', true))['pending'] ?? []);
+        $reasons = $this->pendingReasons($record);
 
         return $this->decodedSteps($record)->flatMap(fn (array $step) => $step['tool_calls'])
             ->filter(fn (array $toolCall) => $reasons->has($toolCall['id'] ?? ''))
@@ -286,14 +314,13 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     protected function rawBlocksReplayFrom(Collection $records): int
     {
-        // Providers bind replayed blocks to the prefix they were produced against, so only the turn still awaiting a decision replays them, back to its user message...
-        if ($records->last()?->role !== 'assistant' || $this->pausedCallIds($records->last()) === []) {
+        if (! $this->awaitsDecision($records->last())) {
             return $records->count();
         }
 
-        $lastUser = $records->reverse()->search(fn (object $record): bool => $record->role === 'user');
+        $turnStart = $records->reverse()->search(fn (object $record): bool => $record->role === 'user');
 
-        return $lastUser === false ? 0 : $lastUser + 1;
+        return $turnStart === false ? 0 : $turnStart + 1;
     }
 
     /**
@@ -316,7 +343,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     protected function assistantMessagesFrom(object $record, bool $replayRawBlocks): array
     {
         $pending = $this->pausedCallIds($record);
-        $provider = json_decode($record->meta ?? '{}', true)['provider'] ?? null;
+        $provider = $this->decoded($record->meta)['provider'] ?? null;
 
         return $this->decodedSteps($record)->flatMap(function (array $step) use ($pending, $provider, $replayRawBlocks): array {
             $answered = array_column($step['tool_results'], 'id');
@@ -347,7 +374,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     protected function decodedSteps(object $record): Collection
     {
-        return collect(json_decode($record->steps ?? '[]', true) ?: [])->map(fn (array $step): array => [
+        return collect($this->decoded($record->steps))->map(fn (array $step): array => [
             'content' => (string) ($step['content'] ?? ''),
             'tool_calls' => array_values($step['tool_calls'] ?? []),
             'tool_results' => array_values($step['tool_results'] ?? []),
@@ -379,9 +406,9 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         $newest = $this->table($this->messagesTable())
             ->where('conversation_id', $conversationId)
             ->orderByDesc('id')
-            ->first(['steps', 'approval_state']);
+            ->first(['role', 'steps', 'approval_state']);
 
-        if ($newest === null || $this->pausedCallIds($newest) === []) {
+        if (! $this->awaitsDecision($newest)) {
             return [];
         }
 
@@ -473,7 +500,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 return $step;
             });
 
-            $pending = collect(((array) json_decode($row->approval_state ?? 'null', true))['pending'] ?? [])->except($resultIds);
+            $pending = $this->pendingReasons($row)->except($resultIds);
 
             $this->table($this->messagesTable())
                 ->where('id', $row->id)
