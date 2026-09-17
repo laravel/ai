@@ -2,6 +2,7 @@
 
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
@@ -150,6 +151,62 @@ describe('file operations', function (): void {
         );
     });
 
+    test('direct-upload providers add storable files without storing a provider file', function (): void {
+        config(['ai.providers.mistral' => [
+            ...config('ai.providers.mistral'),
+            'key' => 'test-key',
+        ]]);
+
+        Stores::fake();
+
+        $store = Stores::create('My Store', provider: 'mistral');
+
+        $response = $store->add(Document::fromString('Hello, world!', 'text/plain')->as('hello.txt'));
+
+        expect($response->id)->toBe(Files::fakeId('hello.txt'))
+            ->and($response->fileId)->toBeNull();
+
+        $store->assertAdded('hello.txt');
+        $store->assertAdded(fn (StorableFile $file): bool => $file->content() === 'Hello, world!');
+
+        Files::assertNothingStored();
+    });
+
+    test('direct-upload providers add storable files matched by facade-level string id assertions', function (): void {
+        config(['ai.providers.mistral' => [
+            ...config('ai.providers.mistral'),
+            'key' => 'test-key',
+        ]]);
+
+        Stores::fake();
+
+        $store = Stores::create('My Store', provider: 'mistral');
+
+        $store->add(Document::fromString('Hello, world!', 'text/plain')->as('hello.txt'));
+
+        Ai::assertFileAddedToStore(Stores::fakeId('My Store'), 'hello.txt');
+    });
+
+    test('direct-upload providers do not delete a provider file when removing documents', function (): void {
+        config(['ai.providers.mistral' => [
+            ...config('ai.providers.mistral'),
+            'key' => 'test-key',
+        ]]);
+
+        Stores::fake();
+        Files::fake();
+
+        $store = Stores::create('My Store', provider: 'mistral');
+
+        $document = $store->add(Document::fromString('Hello, world!', 'text/plain')->as('hello.txt'));
+
+        expect($store->remove($document, deleteFile: true))->toBeTrue();
+
+        $store->assertRemoved('hello.txt');
+
+        Files::assertNothingDeleted();
+    });
+
     test('can add an uploaded file to store from its path', function (): void {
         Stores::fake();
 
@@ -219,6 +276,20 @@ describe('file assertions', function (): void {
         $store->add($file);
 
         $store->assertNotAdded(fn ($f): bool => $f instanceof ProviderDocument && $f->id() === 'file_456');
+    });
+
+    test('nameless storable files are distinguished by their contents', function (): void {
+        Stores::fake();
+
+        $store = Stores::create('My Store');
+
+        $store->add(Document::fromString('First document', 'text/plain'));
+        $store->add(Document::fromString('Second document', 'text/plain'));
+
+        // Distinct nameless documents no longer collide onto a single fake id...
+        $store->assertAdded('First document');
+        $store->assertAdded('Second document');
+        $store->assertNotAdded('Third document');
     });
 
     test('can assert file removed from store', function (): void {

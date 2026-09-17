@@ -9,6 +9,7 @@ use InvalidArgumentException;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\LocalImage;
+use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredImage;
@@ -50,13 +51,17 @@ trait MapsAttachments
                     'type' => 'image_url',
                     'image_url' => ['url' => 'data:'.$attachment->getClientMimeType().';base64,'.base64_encode($attachment->get())],
                 ],
+                $attachment instanceof ProviderDocument => [
+                    'type' => 'file',
+                    'file_id' => $attachment->id,
+                ],
                 $attachment instanceof RemoteDocument => [
                     'type' => 'document_url',
                     'document_url' => $attachment->url,
                     'document_name' => $attachment->name ?? basename($attachment->url),
                 ],
                 default => throw new InvalidArgumentException(
-                    'Mistral only supports image attachments and remote document URLs. Unsupported attachment type ['.$attachment::class.'].'
+                    'Mistral only supports image attachments, stored provider documents, and remote document URLs. Unsupported attachment type ['.$attachment::class.'].'
                 ),
             };
         })->all();

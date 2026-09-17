@@ -56,8 +56,9 @@ test('can store files from storage paths', function (string $provider, string $a
 test('can store files from remote paths', function (string $provider, string $apiKey): void {
     requiresApiKey($apiKey);
 
+    // Some providers sniff the MIME type from the contents, so the remote file must be plain text...
     $stored = Document::fromUrl(
-        'https://raw.githubusercontent.com/laravel/laravel/refs/heads/12.x/README.md'
+        'https://raw.githubusercontent.com/laravel/framework/refs/heads/12.x/LICENSE.md'
     )->put(
         provider: $provider,
     );

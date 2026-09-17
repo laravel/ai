@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Event;
+use Laravel\Ai\Ai;
+use Laravel\Ai\Contracts\Providers\UploadsDocumentsToStore;
 use Laravel\Ai\Events\CreatingStore;
 use Laravel\Ai\Events\StoreCreated;
 use Laravel\Ai\Events\StoreDeleted;
@@ -42,7 +44,7 @@ function createFileSearchStore(string $provider): array
         return $refreshed;
     }, 2000);
 
-    return [$store, $fileIds];
+    return [$store, array_values(array_filter($fileIds))];
 }
 
 test('can create get and delete store', function (string $provider, string $apiKey): void {
@@ -92,24 +94,35 @@ test('can add and remove file from store', function (string $provider, string $a
     // Create a store...
     $store = Stores::create('File Test Store', provider: $provider);
 
-    // Upload a file to the provider...
-    $file = Files::put(
-        Document::fromString('This is test content for the vector store.', 'text/plain')->as('test.txt'),
-        provider: $provider,
-    );
+    if (Ai::storeProvider($provider) instanceof UploadsDocumentsToStore) {
+        // Providers without file import upload document contents directly...
+        $documentId = $store->add(
+            Document::fromString('This is test content for the vector store.', 'text/plain')->as('test.txt'),
+        )->id;
 
-    // Add the file to the store...
-    $documentId = $store->add($file);
+        expect($documentId)->not->toBeEmpty();
 
-    expect($documentId)->not->toBeEmpty();
+        $removed = $store->remove($documentId);
+    } else {
+        // Upload a file to the provider...
+        $file = Files::put(
+            Document::fromString('This is test content for the vector store.', 'text/plain')->as('test.txt'),
+            provider: $provider,
+        );
 
-    // Refresh the store to see updated file counts...
-    $refreshed = $store->refresh();
+        // Add the file to the store...
+        $documentId = $store->add($file);
 
-    expect($refreshed->fileCounts->completed + $refreshed->fileCounts->pending)->toBeGreaterThanOrEqual(0);
+        expect($documentId)->not->toBeEmpty();
 
-    // Remove the file from the store....
-    $removed = $store->remove($documentId, deleteFile: true);
+        // Refresh the store to see updated file counts...
+        $refreshed = $store->refresh();
+
+        expect($refreshed->fileCounts->completed + $refreshed->fileCounts->pending)->toBeGreaterThanOrEqual(0);
+
+        // Remove the file from the store....
+        $removed = $store->remove($documentId, deleteFile: true);
+    }
 
     expect($removed)->toBeTrue();
 
@@ -128,7 +141,7 @@ describe('file search', function (): void {
         }
     });
 
-    test('can actually prompt an agent with file search data', function (string $provider, string $apiKey): void {
+    test('can actually prompt an agent with file search data', function (string $provider, string $apiKey, ?string $model = null): void {
         requiresApiKey($apiKey);
 
         $this->provider = $provider;
@@ -139,7 +152,7 @@ describe('file search', function (): void {
             tools: [
                 new FileSearch([$this->fileSearchStore->id]),
             ],
-        )->prompt('Is Valkey mentioned in the sixth month roadmap? Can you quote the section where it is mentioned?', provider: $provider);
+        )->prompt('Is Valkey mentioned in the sixth month roadmap? Can you quote the section where it is mentioned?', provider: $provider, model: $model);
 
         expect((string) $response)->toContain('Yes')->toContain('Valkey');
     })->with('file-search-providers');

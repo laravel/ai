@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Files\Base64Image;
+use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
@@ -159,6 +160,37 @@ test('remote document maps to document url', function (): void {
             && $docBlock['document_url'] === 'https://example.com/report.pdf';
     });
 });
+
+test('provider document maps to file chunk', function (): void {
+    Http::fake(['*' => $this->fakeTextResponse('I see a document')]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this document?',
+        attachments: [Document::fromId('file-123')],
+        provider: 'mistral',
+    );
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $content = $body['messages'][1]['content'] ?? $body['messages'][0]['content'];
+
+        if (! is_array($content)) {
+            return false;
+        }
+
+        return collect($content)->firstWhere('type', 'file') === ['type' => 'file', 'file_id' => 'file-123'];
+    });
+});
+
+test('unsupported document attachments throw an exception', function (): void {
+    Http::fake(['*' => $this->fakeTextResponse()]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this document?',
+        attachments: [Document::fromString('Hello, world!', 'text/plain')],
+        provider: 'mistral',
+    );
+})->throws(InvalidArgumentException::class, 'Mistral only supports image attachments, stored provider documents, and remote document URLs.');
 
 test('system instructions are in messages array', function (): void {
     Http::fake(['*' => $this->fakeTextResponse()]);
