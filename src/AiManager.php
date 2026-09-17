@@ -59,34 +59,6 @@ class AiManager extends MultipleInstanceManager
     protected $driverKey = 'driver';
 
     /**
-     * Get a classification provider instance by name.
-     *
-     * @throws LogicException
-     */
-    public function classificationProvider(?string $name = null): ClassificationProvider
-    {
-        return tap($this->instance($name), function ($instance): void {
-            if (! $instance instanceof ClassificationProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support classification.');
-            }
-        });
-    }
-
-    /**
-     * Get a classification provider instance, using a fake gateway if classification is faked.
-     *
-     * @throws LogicException
-     */
-    public function fakeableClassificationProvider(?string $name = null): ClassificationProvider
-    {
-        $provider = $this->classificationProvider($name);
-
-        return $this->classificationIsFaked()
-            ? (clone $provider)->useClassificationGateway($this->fakeClassificationGateway())
-            : $provider;
-    }
-
-    /**
      * Get a provider instance by name.
      *
      * @throws LogicException
@@ -111,6 +83,34 @@ class AiManager extends MultipleInstanceManager
 
         return $this->audioIsFaked()
             ? (clone $provider)->useAudioGateway($this->fakeAudioGateway())
+            : $provider;
+    }
+
+    /**
+     * Get a classification provider instance by name.
+     *
+     * @throws LogicException
+     */
+    public function classificationProvider(?string $name = null): ClassificationProvider
+    {
+        return tap($this->instance($name), function ($instance): void {
+            if (! $instance instanceof ClassificationProvider) {
+                throw new LogicException('Provider ['.$instance::class.'] does not support classification.');
+            }
+        });
+    }
+
+    /**
+     * Get a classification provider instance, using a fake gateway if classification is faked.
+     *
+     * @throws LogicException
+     */
+    public function fakeableClassificationProvider(?string $name = null): ClassificationProvider
+    {
+        $provider = $this->classificationProvider($name);
+
+        return $this->classificationIsFaked()
+            ? (clone $provider)->useClassificationGateway($this->fakeClassificationGateway())
             : $provider;
     }
 
