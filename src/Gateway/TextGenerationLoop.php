@@ -98,6 +98,7 @@ class TextGenerationLoop
         $continuationToken = null;
         $previous = null;
         $accumulatedUsage = new Usage;
+        $reasoning = new Collection;
         $lastResult = null;
 
         if ($approval !== null) {
@@ -168,6 +169,7 @@ class TextGenerationLoop
             [$toolResults, $pendingApprovals] = $this->stepToolResultsWithOptions($lastResult, $prepared->isFinalStep, $prepared->tools, $prepared->options, $context);
 
             $steps->push($this->buildStep($lastResult, $toolResults));
+            $reasoning->push($lastResult->reasoning);
 
             $assistantMessage = $this->buildAssistantMessage($lastResult);
             $allMessages[] = $assistantMessage;
@@ -180,7 +182,7 @@ class TextGenerationLoop
             }
 
             if ($pendingApprovals->isNotEmpty()) {
-                return $this->buildFinalResponse($steps, $newMessages, $lastResult)
+                return $this->buildFinalResponse($steps, $newMessages, $lastResult, $reasoning)
                     ->withPendingApprovals($pendingApprovals);
             }
 
@@ -192,7 +194,7 @@ class TextGenerationLoop
             $previous = $prepared;
         }
 
-        return $this->buildFinalResponse($steps, $newMessages, $lastResult);
+        return $this->buildFinalResponse($steps, $newMessages, $lastResult, $reasoning);
     }
 
     /**
@@ -996,6 +998,7 @@ class TextGenerationLoop
         Collection $steps,
         array $newMessages,
         ?StepResponse $lastResult,
+        ?Collection $reasoning = null,
     ): TextResponse {
         $finalStep = $steps->last();
 
@@ -1017,14 +1020,14 @@ class TextGenerationLoop
                 toolResults: $newMessages
                     ->whereInstanceOf(ToolResultMessage::class)
                     ->flatMap(fn (ToolResultMessage $message): Collection => $message->toolResults),
-            )->withSteps($steps)->withRawResponse($lastResult->raw);
+            )->withSteps($steps)->withReasoning($reasoning)->withRawResponse($lastResult->raw);
         }
 
         return (new TextResponse(
             $finalStep->text,
             $totalUsage,
             $finalStep->meta,
-        ))->withMessages($newMessages)->withSteps($steps)->withRawResponse($lastResult?->raw);
+        ))->withMessages($newMessages)->withSteps($steps)->withReasoning($reasoning)->withRawResponse($lastResult?->raw);
     }
 
     /**

@@ -20,8 +20,6 @@ class AgentResponse extends TextResponse
 
     public ?string $assistantMessageId = null;
 
-    public string $reasoning = '';
-
     public function __construct(string $invocationId, string $text, Usage $usage, Meta $meta)
     {
         $this->invocationId = $invocationId;

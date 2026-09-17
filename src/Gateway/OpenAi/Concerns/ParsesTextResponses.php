@@ -63,6 +63,7 @@ trait ParsesTextResponses
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
             continuationToken: $data['id'] ?? '',
             providerContentBlocks: $this->isStateless($provider) ? $this->extractReplayBlocks($output) : [],
+            reasoning: $this->extractReasoning($output),
         );
     }
 
@@ -74,6 +75,18 @@ trait ParsesTextResponses
         $lastOutput = last($output);
 
         return is_array($lastOutput) ? ($lastOutput['content'][0]['text'] ?? '') : '';
+    }
+
+    /**
+     * Extract the reasoning summary text from the output array.
+     */
+    protected function extractReasoning(array $output): string
+    {
+        return (new Collection($output))
+            ->where('type', 'reasoning')
+            ->map(fn (array $item): string => (new Collection($item['summary'] ?? []))->pluck('text')->implode(''))
+            ->filter(fn (string $reasoning): bool => trim($reasoning) !== '')
+            ->implode("\n\n");
     }
 
     /**

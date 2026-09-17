@@ -99,6 +99,8 @@ trait GeneratesText
                             ->withSteps($response->steps)
                             ->withRawResponse($response->raw);
 
+                    $agentResponse->reasoning = $response->reasoning;
+
                     $agentResponse->withPendingApprovals($response->pendingApprovals);
 
                     return $agentResponse;

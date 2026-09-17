@@ -33,6 +33,8 @@ class TextResponse implements \Stringable
     /** @var Collection<int, PendingApproval> */
     public Collection $pendingApprovals;
 
+    public string $reasoning = '';
+
     /**
      * Create a new text response instance.
      */
@@ -85,6 +87,20 @@ class TextResponse implements \Stringable
         )->values();
 
         $this->toolResults = $toolResults->values();
+
+        return $this;
+    }
+
+    /**
+     * Provide the reasoning emitted across every step of the response.
+     *
+     * @param  Collection<int, string>|null  $reasoning
+     */
+    public function withReasoning(?Collection $reasoning): self
+    {
+        $this->reasoning = ($reasoning ?? new Collection)
+            ->filter(fn (string $reasoning): bool => trim($reasoning) !== '')
+            ->implode("\n\n");
 
         return $this;
     }
