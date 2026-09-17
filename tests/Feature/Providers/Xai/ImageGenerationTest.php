@@ -97,9 +97,9 @@ test('all generated images are returned when n is greater than one', function ()
         ->withProviderOptions(['n' => 2])
         ->generate(provider: 'xai', model: 'grok-imagine-image');
 
-    expect($response)->toHaveCount(2)
-        ->and($response->images[0]->image)->toBe(base64_encode('image-1'))
-        ->and($response->images[1]->image)->toBe(base64_encode('image-2'));
+    expect($response->images)->toHaveCount(2)
+        ->and($response->images->first()->image)->toBe(base64_encode('image-1'))
+        ->and($response->images->last()->image)->toBe(base64_encode('image-2'));
 
     Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['n'] === 2);
 });
