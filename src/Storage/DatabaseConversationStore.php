@@ -124,7 +124,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         $steps = $this->stepsFor($prompt, $response);
 
-        if ($prompt->hasApprovalDecisions() && blank($response->text) && $steps->every(fn (array $step) => $step['invocations'] === [])) {
+        if ($prompt->hasApprovalDecisions() && blank($response->text) && $steps->every(fn (array $step) => $step['tool_calls'] === [])) {
             return null;
         }
 
@@ -147,20 +147,20 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     /**
      * Serialize the turn's steps, one entry per model round-trip.
      *
-     * @return Collection<int, array{invocations: array, provider_blocks: array}>
+     * @return Collection<int, array{tool_calls: array, provider_blocks: array}>
      */
     protected function stepsFor(AgentPrompt $prompt, AgentResponse $response): Collection
     {
         if ($response->steps->isNotEmpty()) {
             return $response->steps->values()->map(fn (Step $step): array => [
-                'invocations' => $this->invocations($step->toolCalls, $step->toolResults),
+                'tool_calls' => $this->toolCallsFor($step->toolCalls, $step->toolResults),
                 'provider_blocks' => $step->providerContentBlocks,
             ]);
         }
 
         // A resume that ran no step only carries the approval results storeApprovalResults() already wrote to the paused row...
         return collect([[
-            'invocations' => $this->invocations(
+            'tool_calls' => $this->toolCallsFor(
                 $response->toolCalls->all(),
                 $prompt->hasApprovalDecisions() ? [] : $response->toolResults->all(),
             ),
@@ -169,13 +169,13 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Pair a step's tool calls with the results they were answered by, one entry per invocation.
+     * Pair a step's tool calls with the results they were answered by, one entry per call.
      *
      * @param  iterable<int, ToolCall>  $toolCalls
      * @param  iterable<int, ToolResult>  $toolResults
      * @return list<array<string, mixed>>
      */
-    protected function invocations(iterable $toolCalls, iterable $toolResults): array
+    protected function toolCallsFor(iterable $toolCalls, iterable $toolResults): array
     {
         $results = collect($toolResults)->keyBy(fn (ToolResult $result): string => $result->id);
 
@@ -190,13 +190,13 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Determine whether a stored invocation has been answered by its tool.
+     * Determine whether a stored tool call has been answered by its tool.
      *
-     * @param  array<string, mixed>  $invocation
+     * @param  array<string, mixed>  $toolCall
      */
-    protected function isAnswered(array $invocation): bool
+    protected function isAnswered(array $toolCall): bool
     {
-        return array_key_exists('result', $invocation);
+        return array_key_exists('result', $toolCall);
     }
 
     /**
@@ -262,13 +262,13 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     {
         $reasons = $this->pendingReasons($record);
 
-        return $this->decodedSteps($record)->flatMap(fn (array $step) => $step['invocations'])
-            ->filter(fn (array $invocation) => $reasons->has($invocation['id'] ?? ''))
-            ->map(fn (array $invocation) => new PendingApproval(
-                $invocation['id'],
-                $invocation['name'],
-                $invocation['arguments'],
-                $reasons[$invocation['id']],
+        return $this->decodedSteps($record)->flatMap(fn (array $step) => $step['tool_calls'])
+            ->filter(fn (array $toolCall) => $reasons->has($toolCall['id'] ?? ''))
+            ->map(fn (array $toolCall) => new PendingApproval(
+                $toolCall['id'],
+                $toolCall['name'],
+                $toolCall['arguments'],
+                $reasons[$toolCall['id']],
             ))->values();
     }
 
@@ -381,8 +381,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         return $steps->flatMap(function (array $step, int $index) use ($pending, $provider, $replayRawBlocks, $lastStep, $record): array {
             $content = $index === $lastStep ? (string) $record->content : '';
 
-            $replayed = collect($step['invocations'])
-                ->filter(fn (array $invocation) => $this->isAnswered($invocation) || in_array($invocation['id'] ?? null, $pending, true))
+            $replayed = collect($step['tool_calls'])
+                ->filter(fn (array $toolCall) => $this->isAnswered($toolCall) || in_array($toolCall['id'] ?? null, $pending, true))
                 ->values();
 
             $toolCalls = $replayed->map(ToolCall::fromArray(...));
@@ -405,12 +405,12 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     /**
      * Decode a stored row's steps.
      *
-     * @return Collection<int, array{invocations: array, provider_blocks: array}>
+     * @return Collection<int, array{tool_calls: array, provider_blocks: array}>
      */
     protected function decodedSteps(object $record): Collection
     {
         return collect($this->decoded($record->steps))->map(fn (array $step): array => [
-            'invocations' => array_values($step['invocations'] ?? []),
+            'tool_calls' => array_values($step['tool_calls'] ?? []),
             'provider_blocks' => $step['provider_blocks'] ?? [],
         ])->values();
     }
@@ -446,7 +446,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         }
 
         $answered = $this->decodedSteps($newest)
-            ->flatMap(fn (array $step) => $step['invocations'])
+            ->flatMap(fn (array $step) => $step['tool_calls'])
             ->filter($this->isAnswered(...))
             ->pluck('id')
             ->all();
@@ -525,14 +525,14 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             $resolved = collect($toolResults)->keyBy(fn (ToolResult $result): string => $result->id);
 
             $steps = $this->decodedSteps($row)->map(function (array $step) use ($resolved): array {
-                $step['invocations'] = array_map(function (array $invocation) use ($resolved): array {
-                    $result = $resolved->get($invocation['id'] ?? '');
+                $step['tool_calls'] = array_map(function (array $toolCall) use ($resolved): array {
+                    $result = $resolved->get($toolCall['id'] ?? '');
 
-                    return $result === null || $this->isAnswered($invocation)
-                        ? $invocation
+                    return $result === null || $this->isAnswered($toolCall)
+                        ? $toolCall
                         // Arguments come along because an edited approval runs the tool with different ones than the call asked for...
-                        : [...$invocation, ...Arr::only($result->toArray(), ['arguments', 'result', 'denied', 'failed'])];
-                }, $step['invocations']);
+                        : [...$toolCall, ...Arr::only($result->toArray(), ['arguments', 'result', 'denied', 'failed'])];
+                }, $step['tool_calls']);
 
                 return $step;
             });

@@ -42,11 +42,11 @@ test('it moves a result recorded on a later row onto the step that made the call
     expect(Schema::hasColumns('agent_conversation_messages', ['tool_calls', 'tool_results']))->toBeFalse()
         ->and($rows['message-1']->steps)->toBe('[]')
         ->and($rows['message-2']->steps)->json()->toHaveCount(1)->{'0'}->toMatchArray([
-            'invocations' => [answeredInvocation('call-1')],
+            'tool_calls' => [answeredToolCall('call-1')],
             'provider_blocks' => [['type' => 'tool_use', 'id' => 'call-1']],
         ])
         ->and($rows['message-2']->meta)->json()->toBe(['provider' => 'anthropic'])
-        ->and($rows['message-3']->steps)->json()->toHaveCount(1)->{'0'}->toMatchArray(['invocations' => []]);
+        ->and($rows['message-3']->steps)->json()->toHaveCount(1)->{'0'}->toMatchArray(['tool_calls' => []]);
 
     $messages = (new DatabaseConversationStore)->getLatestConversationMessages('conversation-1', 10);
 
@@ -65,7 +65,7 @@ test('it keeps answered and pending calls and drops the call that never ran', fu
 
     $steps = DB::table('agent_conversation_messages')->value('steps');
 
-    expect($steps)->json()->{'0'}->invocations->toBe([answeredInvocation('call-1'), legacyCall('call-2')]);
+    expect($steps)->json()->{'0'}->tool_calls->toBe([answeredToolCall('call-1'), legacyCall('call-2')]);
 });
 
 test('it splits a row with provider step metadata into one step per provider step', function (): void {
@@ -83,8 +83,8 @@ test('it splits a row with provider step metadata into one step per provider ste
     $row = DB::table('agent_conversation_messages')->first();
 
     expect($row->steps)->json()->toBe([
-        ['invocations' => [answeredInvocation('call-1')], 'provider_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]],
-        ['invocations' => [legacyCall('call-2')], 'provider_blocks' => [['type' => 'thinking', 'signature' => 'sig-2']]],
+        ['tool_calls' => [answeredToolCall('call-1')], 'provider_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]],
+        ['tool_calls' => [legacyCall('call-2')], 'provider_blocks' => [['type' => 'thinking', 'signature' => 'sig-2']]],
     ])->and($row->meta)->json()->toBe(['provider' => 'anthropic', 'model' => 'claude-sonnet-4-6']);
 });
 
@@ -96,8 +96,8 @@ test('it records a result duplicated across rows once, on the row that made the 
 
     $rows = DB::table('agent_conversation_messages')->orderBy('id')->get();
 
-    expect($rows[0]->steps)->json()->{'0'}->invocations->toBe([answeredInvocation('call-1')])
-        ->and($rows[1]->steps)->json()->{'0'}->toMatchArray(['invocations' => []]);
+    expect($rows[0]->steps)->json()->{'0'}->tool_calls->toBe([answeredToolCall('call-1')])
+        ->and($rows[1]->steps)->json()->{'0'}->toMatchArray(['tool_calls' => []]);
 });
 
 /** @return array<string, mixed> */
@@ -113,7 +113,7 @@ function legacyResult(string $id): array
 }
 
 /** @return array<string, mixed> */
-function answeredInvocation(string $id): array
+function answeredToolCall(string $id): array
 {
     return [...legacyCall($id), 'result' => 'Deleted a'];
 }

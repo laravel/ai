@@ -397,7 +397,7 @@ describe('hydrating useChat from stored messages', function () {
                 'id' => 'msg-2',
                 'role' => 'assistant',
                 'content' => null,
-                'steps' => [['invocations' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon'], 'result' => 'Sunny']]]],
+                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon'], 'result' => 'Sunny']]]],
             ]),
         ]);
 
@@ -416,7 +416,7 @@ describe('hydrating useChat from stored messages', function () {
                 'id' => 'msg-2',
                 'role' => 'assistant',
                 'content' => null,
-                'steps' => [['invocations' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt']]]]],
+                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt']]]]],
                 'approval_state' => ['pending' => ['call-1' => 'Deletes a file.']],
             ]),
         ]);
@@ -431,7 +431,7 @@ describe('hydrating useChat from stored messages', function () {
                 'id' => 'msg-2',
                 'role' => 'assistant',
                 'content' => null,
-                'steps' => [['invocations' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt'], 'result' => null, 'denied' => true]]]],
+                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt'], 'result' => null, 'denied' => true]]]],
                 'approval_state' => ['pending' => []],
             ]),
         ]);

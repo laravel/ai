@@ -120,8 +120,8 @@ test('message tool calls and results flatten across steps in order and serialize
         'content' => 'Done',
         'attachments' => '[]',
         'steps' => json_encode([
-            ['invocations' => [['id' => 'call-1', 'name' => 'a', 'arguments' => [], 'result' => 'x']], 'provider_blocks' => []],
-            ['invocations' => [['id' => 'call-2', 'name' => 'b', 'arguments' => [], 'result' => 'y']], 'provider_blocks' => []],
+            ['tool_calls' => [['id' => 'call-1', 'name' => 'a', 'arguments' => [], 'result' => 'x']], 'provider_blocks' => []],
+            ['tool_calls' => [['id' => 'call-2', 'name' => 'b', 'arguments' => [], 'result' => 'y']], 'provider_blocks' => []],
         ]),
         'usage' => '[]',
         'meta' => '[]',

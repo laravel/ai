@@ -72,23 +72,23 @@ class BackfillConversationSteps extends AiMigration
             [$steps, $meta] = $this->stepsFrom($row);
 
             $steps = array_map(function (array $step) use ($results, $pending): array {
-                $invocations = [];
+                $toolCalls = [];
 
-                foreach ($step['invocations'] as $invocation) {
-                    $result = $results[$invocation['id'] ?? ''] ?? null;
+                foreach ($step['tool_calls'] as $toolCall) {
+                    $result = $results[$toolCall['id'] ?? ''] ?? null;
 
-                    if ($result === null && ! in_array($invocation['id'] ?? null, $pending, true)) {
+                    if ($result === null && ! in_array($toolCall['id'] ?? null, $pending, true)) {
                         continue;
                     }
 
-                    $invocations[] = $result === null ? $invocation : [
-                        ...$invocation,
+                    $toolCalls[] = $result === null ? $toolCall : [
+                        ...$toolCall,
                         'result' => $result['result'] ?? null,
                         ...array_filter(['denied' => $result['denied'] ?? false, 'failed' => $result['failed'] ?? false]),
                     ];
                 }
 
-                $step['invocations'] = $invocations;
+                $step['tool_calls'] = $toolCalls;
 
                 return $step;
             }, $steps);
@@ -101,7 +101,7 @@ class BackfillConversationSteps extends AiMigration
     }
 
     /**
-     * Split a flat assistant row into steps of unanswered invocations, moving any replay state out of its meta.
+     * Split a flat assistant row into steps of unanswered tool calls, moving any replay state out of its meta.
      *
      * @return array{0: list<array<string, mixed>>, 1: array<string, mixed>}
      */
@@ -119,13 +119,13 @@ class BackfillConversationSteps extends AiMigration
                 $ids = $providerStep['tool_call_ids'] ?? [];
 
                 $steps[] = [
-                    'invocations' => array_values(array_filter($calls, fn (array $call) => in_array($call['id'] ?? null, $ids, true))),
+                    'tool_calls' => array_values(array_filter($calls, fn (array $call) => in_array($call['id'] ?? null, $ids, true))),
                     'provider_blocks' => $providerStep['blocks'] ?? [],
                 ];
             }
         } else {
             $steps = [[
-                'invocations' => $calls,
+                'tool_calls' => $calls,
                 'provider_blocks' => $meta['provider_content_blocks'] ?? [],
             ]];
         }
