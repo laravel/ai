@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\WithoutIncrementing;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Arr;
 
 /**
  * @property string $id
@@ -59,7 +60,7 @@ class ConversationMessage extends Model
      */
     protected function toolCalls(): Attribute
     {
-        return Attribute::get(fn (): array => collect($this->steps)->pluck('tool_calls')->collapse()->all());
+        return Attribute::get(fn (): array => Arr::collapse(array_column($this->steps ?? [], 'tool_calls')));
     }
 
     /**
@@ -67,7 +68,7 @@ class ConversationMessage extends Model
      */
     protected function toolResults(): Attribute
     {
-        return Attribute::get(fn (): array => collect($this->steps)->pluck('tool_results')->collapse()->all());
+        return Attribute::get(fn (): array => Arr::collapse(array_column($this->steps ?? [], 'tool_results')));
     }
 
     /**
