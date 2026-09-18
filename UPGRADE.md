@@ -198,7 +198,7 @@ return new class extends AiMigration
 
 Rewrite any raw SQL against the old columns to read `steps`. On `Laravel\Ai\Models\ConversationMessage`, the `tool_calls` and `tool_results` attributes are now read-only and are built from `steps`, and a `provider_tool_calls` attribute has been added. To change a stored turn, write `steps`.
 
-`Laravel\Ai\Storage\StoredMessage` changed to match. Its constructor takes `steps` in place of `toolCalls` and `toolResults`, and `toArray()` emits `steps` in their place. The `$toolCalls` and `$toolResults` properties are now methods, alongside a new `providerToolCalls()` method:
+`Laravel\Ai\Storage\StoredMessage` has changed to match. Its constructor takes `steps` in place of `toolCalls` and `toolResults`, and `toArray()` emits `steps` in their place. The `$toolCalls` and `$toolResults` properties are now methods, alongside a new `providerToolCalls()` method:
 
 ```php
 // Before...
@@ -328,7 +328,7 @@ Reported values also changed in three places:
 
 **Likelihood Of Impact: Medium**
 
-`Usage` now holds only `inputTokens` and `outputTokens`. The cache and reasoning counts moved to a `Laravel\Ai\Responses\Data\TextUsage` subclass, which is what text, agent, step, and stream responses report:
+`Usage` now holds only `inputTokens` and `outputTokens`. The cache and reasoning counts have moved to a `Laravel\Ai\Responses\Data\TextUsage` subclass, which is what text, agent, step, and stream responses report:
 
 ```php
 // Before...
@@ -369,7 +369,7 @@ $response->usage->inputTokens;
 - `ImageResponse::$usage` is an `ImageUsage`, adding `imageInputTokens` and `imageOutputTokens`.
 - `TranscriptionResponse::$usage` is a `TranscriptionUsage`, adding `audioSeconds`.
 - `RerankingResponse::$usage` is a `RerankingUsage`, adding `searchUnits`.
-- `AudioResponse::$usage` and `EmbeddingsResponse::$usage` are a plain `Usage`.
+- `AudioResponse::$usage` and `EmbeddingsResponse::$usage` are plain `Usage` instances.
 
 The added counts are `null` when the provider reports nothing.
 
@@ -441,7 +441,7 @@ $response->steps;
 
 The raw provider state carried through a turn is now called replay blocks everywhere:
 
-- `Laravel\Ai\Messages\AssistantMessage::$providerContentBlocks` and `$providerContentBlocksProvider` are now `$replayBlocks` and `$replayBlocksProvider`, and the constructor arguments are renamed to match.
+- `Laravel\Ai\Messages\AssistantMessage::$providerContentBlocks` and `$providerContentBlocksProvider` are now `$replayBlocks` and `$replayBlocksProvider`, and the constructor arguments have been renamed to match.
 - `Laravel\Ai\Gateway\StepResponse` takes `replayBlocks:` in place of `providerContentBlocks:`, along with new `reasoning:` and `providerToolCalls:` arguments, and its `toArray()` emits `replay_blocks`.
 - `Laravel\Ai\Responses\Data\Step` and `StructuredStep` take two new required arguments after `$meta`: `string $reasoning` and `array $replayBlocks`. `Step` also accepts an optional trailing `array $providerToolCalls`. `Step::toArray()` gains `reasoning`, `replay_blocks`, and `provider_tool_calls` keys.
 
