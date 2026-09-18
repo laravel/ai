@@ -135,7 +135,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'attachments' => '[]',
             'steps' => $steps->toJson(),
             'usage' => json_encode($response->usage),
-            'meta' => json_encode($this->messageMeta($response)),
+            'meta' => json_encode($response->meta),
             'approval_state' => $this->approvalState($response),
         ]));
 
@@ -147,13 +147,14 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     /**
      * Serialize the turn's steps, one entry per model round-trip.
      *
-     * @return Collection<int, array{tool_calls: array, provider_blocks: array}>
+     * @return Collection<int, array{tool_calls: array, reasoning: string, provider_blocks: array}>
      */
     protected function stepsFor(AgentPrompt $prompt, AgentResponse $response): Collection
     {
         if ($response->steps->isNotEmpty()) {
             return $response->steps->values()->map(fn (Step $step): array => [
                 'tool_calls' => $this->toolCallsFor($step->toolCalls, $step->toolResults),
+                'reasoning' => $step->reasoning,
                 'provider_blocks' => $step->providerContentBlocks,
             ]);
         }
@@ -164,6 +165,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 $response->toolCalls->all(),
                 $prompt->hasApprovalDecisions() ? [] : $response->toolResults->all(),
             ),
+            'reasoning' => $response->reasoning,
             'provider_blocks' => [],
         ]]);
     }
@@ -301,22 +303,6 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Build the message meta payload from the response meta.
-     *
-     * @return array<string, mixed>
-     */
-    protected function messageMeta(AgentResponse $response): array
-    {
-        $meta = (array) json_decode(json_encode($response->meta), true);
-
-        if (filled($response->reasoning)) {
-            $meta['reasoning'] = $response->reasoning;
-        }
-
-        return $meta;
-    }
-
-    /**
      * Get the latest messages for the given conversation.
      *
      * @return Collection<int, Message>
@@ -405,12 +391,13 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     /**
      * Decode a stored row's steps.
      *
-     * @return Collection<int, array{tool_calls: array, provider_blocks: array}>
+     * @return Collection<int, array{tool_calls: array, reasoning: string, provider_blocks: array}>
      */
     protected function decodedSteps(object $record): Collection
     {
         return collect($this->decoded($record->steps))->map(fn (array $step): array => [
             'tool_calls' => array_values($step['tool_calls'] ?? []),
+            'reasoning' => (string) ($step['reasoning'] ?? ''),
             'provider_blocks' => $step['provider_blocks'] ?? [],
         ])->values();
     }

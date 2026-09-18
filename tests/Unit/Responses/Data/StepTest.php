@@ -28,7 +28,7 @@ test('step stores text tool calls and other properties', function (): void {
 test('step to array returns all properties including serialized usage and meta', function (): void {
     $usage = new TextUsage(10, 5);
     $meta = new Meta('openai', 'gpt-4o');
-    $step = new Step('test', [], [], FinishReason::Stop, $usage, $meta, [['type' => 'thinking', 'signature' => 'sig-1']]);
+    $step = new Step('test', [], [], FinishReason::Stop, $usage, $meta, providerContentBlocks: [['type' => 'thinking', 'signature' => 'sig-1']]);
 
     $array = $step->toArray();
 

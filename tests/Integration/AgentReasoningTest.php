@@ -121,7 +121,7 @@ test('reasoning conversation roundtrips through database storage', function (): 
 
     expect($record)->not->toBeNull();
 
-    $storedToolCalls = json_decode((string) $record->tool_calls, true);
+    $storedToolCalls = json_decode((string) $record->steps, true)[0]['tool_calls'];
 
     expect($storedToolCalls)->toHaveCount(1)
         ->and($storedToolCalls[0]['reasoning_id'] ?? null)->not->toBeNull();

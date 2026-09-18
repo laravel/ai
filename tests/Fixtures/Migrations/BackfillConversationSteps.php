@@ -101,7 +101,7 @@ class BackfillConversationSteps extends AiMigration
     }
 
     /**
-     * Split a flat assistant row into steps of unanswered tool calls, moving any replay state out of its meta.
+     * Split a flat assistant row into steps of unanswered tool calls, moving any replay and reasoning state out of its meta.
      *
      * @return array{0: list<array<string, mixed>>, 1: array<string, mixed>}
      */
@@ -120,17 +120,21 @@ class BackfillConversationSteps extends AiMigration
 
                 $steps[] = [
                     'tool_calls' => array_values(array_filter($calls, fn (array $call) => in_array($call['id'] ?? null, $ids, true))),
+                    'reasoning' => '',
                     'provider_blocks' => $providerStep['blocks'] ?? [],
                 ];
             }
         } else {
             $steps = [[
                 'tool_calls' => $calls,
+                'reasoning' => '',
                 'provider_blocks' => $meta['provider_content_blocks'] ?? [],
             ]];
         }
 
-        unset($meta['provider_steps'], $meta['provider_content_blocks']);
+        $steps[array_key_last($steps)]['reasoning'] = (string) ($meta['reasoning'] ?? '');
+
+        unset($meta['provider_steps'], $meta['provider_content_blocks'], $meta['reasoning']);
 
         return [$steps, $meta];
     }

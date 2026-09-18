@@ -381,7 +381,7 @@ describe('hydrating useChat from stored messages', function () {
                 'id' => 'msg-2',
                 'role' => 'assistant',
                 'content' => 'It is 12°C.',
-                'meta' => ['reasoning' => 'They want the temperature.'],
+                'steps' => [['tool_calls' => [], 'reasoning' => 'They want the temperature.']],
             ]),
         ]);
 

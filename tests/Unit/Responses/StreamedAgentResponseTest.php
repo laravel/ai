@@ -1,7 +1,9 @@
 <?php
 
 use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEnd;
@@ -12,20 +14,27 @@ function streamedResponseFor(array $events): StreamedAgentResponse
     return new StreamedAgentResponse('invocation-id', collect($events), new Meta);
 }
 
-test('a paused stream exposes the replay state carried by the approval request', function (): void {
-    $steps = [['blocks' => [['type' => 'thinking', 'signature' => 'sig-1']], 'tool_call_ids' => ['call-1']]];
+function streamedStep(string $text): Step
+{
+    return new Step($text, [], [], FinishReason::Stop, new TextUsage, new Meta, 'I thought about it.', [['type' => 'thinking', 'signature' => 'sig-1']]);
+}
 
+test('a paused stream exposes the steps carried by the approval request', function (): void {
     $response = streamedResponseFor([
-        new ToolApprovalRequest('e1', collect([new PendingApproval('call-1', 'DeleteFile', [], 'Deletes a file')]), 1, $steps, [['type' => 'thinking', 'signature' => 'sig-1']]),
+        new ToolApprovalRequest('e1', collect([new PendingApproval('call-1', 'DeleteFile', [], 'Deletes a file')]), 1, collect([streamedStep('')])),
     ]);
 
-    expect($response->pausedSteps())->toBe($steps)
-        ->and($response->pausedProviderContentBlocks())->toBe([['type' => 'thinking', 'signature' => 'sig-1']]);
+    expect($response->steps->first()->providerContentBlocks)->toBe([['type' => 'thinking', 'signature' => 'sig-1']]);
 });
 
-test('a stream that completed without pausing exposes no replay state', function (): void {
-    $response = streamedResponseFor([new StreamEnd('e1', 'stop', new TextUsage, 1)]);
+test('a completed stream exposes the steps carried by the stream end', function (): void {
+    $response = streamedResponseFor([new StreamEnd('e1', 'stop', new TextUsage, 1, collect([streamedStep('Done.')]))]);
 
-    expect($response->pausedSteps())->toBe([])
-        ->and($response->pausedProviderContentBlocks())->toBe([]);
+    expect($response->steps)->toHaveCount(1)
+        ->and($response->steps->first()->text)->toBe('Done.')
+        ->and($response->steps->first()->reasoning)->toBe('I thought about it.');
+});
+
+test('a stream carrying neither event exposes no steps', function (): void {
+    expect(streamedResponseFor([])->steps)->toBeEmpty();
 });
