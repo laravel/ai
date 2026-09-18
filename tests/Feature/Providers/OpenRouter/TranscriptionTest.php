@@ -80,6 +80,7 @@ test('transcription maps audio mime types to openrouter format values', function
     'ogg via audio/ogg' => ['audio/ogg', 'ogg'],
     'ogg via audio/ogg opus' => ['audio/ogg; codecs=opus', 'ogg'],
     'flac via audio/flac' => ['audio/flac', 'flac'],
+    'aiff via audio/aiff' => ['audio/aiff', 'aiff'],
     'flac via audio/x-flac' => ['audio/x-flac', 'flac'],
     'webm via audio/webm' => ['audio/webm', 'webm'],
     'aac via audio/aac' => ['audio/aac', 'aac'],
@@ -107,9 +108,9 @@ test('transcription wraps raw pcm audio in a wav header and sends as wav format'
 test('transcription throws invalid argument exception for unsupported mime type', function (): void {
     Http::fake();
 
-    expect(fn (): TranscriptionResponse => Transcription::fromBase64(base64_encode('fake-audio'), 'audio/x-aiff')
+    expect(fn (): TranscriptionResponse => Transcription::fromBase64(base64_encode('fake-audio'), 'audio/midi')
         ->generate(provider: 'openrouter'))
-        ->toThrow(InvalidArgumentException::class, 'Unsupported audio MIME type [audio/x-aiff]');
+        ->toThrow(InvalidArgumentException::class, 'Unsupported audio MIME type [audio/midi]');
 
     Http::assertNothingSent();
 });
@@ -165,8 +166,8 @@ test('transcription usage is correctly parsed', function (): void {
 
     $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openrouter');
 
-    expect($response->usage->promptTokens)->toBe(100)
-        ->and($response->usage->completionTokens)->toBe(50);
+    expect($response->usage->inputTokens)->toBe(100)
+        ->and($response->usage->outputTokens)->toBe(50);
 });
 
 test('transcription request sends bearer token', function (): void {

@@ -14,6 +14,7 @@ class ToolResult implements Arrayable, JsonSerializable
         public mixed $result,
         public ?string $resultId = null,
         public bool $denied = false,
+        public bool $failed = false,
     ) {}
 
     /**
@@ -28,11 +29,40 @@ class ToolResult implements Arrayable, JsonSerializable
             result: $data['result'],
             resultId: $data['result_id'] ?? null,
             denied: $data['denied'] ?? false,
+            failed: $data['failed'] ?? false,
         );
     }
 
     /**
-     * Get the instance as an array, only including the denied key when the result is a rejection.
+     * Determine if the tool call ran and produced its own result.
+     */
+    public function successful(): bool
+    {
+        return ! $this->denied && ! $this->failed;
+    }
+
+    /**
+     * Get the message explaining why the tool call did not succeed.
+     */
+    public function error(): ?string
+    {
+        return $this->successful() || ! is_string($this->result) ? null : $this->result;
+    }
+
+    /**
+     * Get the result as a string suitable for sending back to a provider.
+     */
+    public function text(): string
+    {
+        return match (true) {
+            is_string($this->result) => $this->result,
+            is_array($this->result) => (string) json_encode($this->result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            default => strval($this->result),
+        };
+    }
+
+    /**
+     * Get the instance as an array, only including the denied and failed keys when they apply.
      */
     public function toArray(): array
     {
@@ -43,6 +73,7 @@ class ToolResult implements Arrayable, JsonSerializable
             'result' => $this->result,
             'result_id' => $this->resultId,
             ...($this->denied ? ['denied' => true] : []),
+            ...($this->failed ? ['failed' => true] : []),
         ];
     }
 

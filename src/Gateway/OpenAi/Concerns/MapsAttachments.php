@@ -19,10 +19,13 @@ use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Files\StoredImage;
+use Laravel\Ai\Gateway\Concerns\ResolvesDocumentFilenames;
 use Laravel\Ai\Providers\Provider;
 
 trait MapsAttachments
 {
+    use ResolvesDocumentFilenames;
+
     /**
      * Map the given Laravel attachments to OpenAI content parts.
      */
@@ -116,18 +119,5 @@ trait MapsAttachments
             'image/webp',
         ],
             true);
-    }
-
-    protected function fallbackFilename(?string $mimeType): string
-    {
-        return 'document'.match ($mimeType) {
-            'text/plain' => '.txt',
-            'text/markdown' => '.md',
-            'text/csv' => '.csv',
-            'text/html' => '.html',
-            'application/pdf' => '.pdf',
-            'application/json' => '.json',
-            default => '',
-        };
     }
 }

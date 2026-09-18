@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
@@ -15,7 +16,7 @@ use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
-    use DecodesStructuredOutput;
+    use DecodesStructuredOutput, JoinsReasoning;
 
     /**
      * Validate the OpenRouter response data.
@@ -62,6 +63,22 @@ trait ParsesTextResponses
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model, $citations),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
+            reasoning: $this->extractReasoning($message),
+        );
+    }
+
+    /**
+     * Extract the reasoning text from an assistant message.
+     */
+    protected function extractReasoning(array $message): string
+    {
+        if (filled($message['reasoning'] ?? '')) {
+            return (string) $message['reasoning'];
+        }
+
+        return static::joinReasoning(
+            (new Collection($message['reasoning_details'] ?? []))
+                ->map(fn (array $detail): string => (string) ($detail['text'] ?? $detail['summary'] ?? ''))
         );
     }
 
@@ -96,11 +113,11 @@ trait ParsesTextResponses
         $usage = $data['usage'] ?? [];
 
         return new Usage(
-            $usage['prompt_tokens'] ?? 0,
-            $usage['completion_tokens'] ?? 0,
-            cacheWriteInputTokens: $usage['prompt_tokens_details']['cache_write_tokens'] ?? 0,
-            cacheReadInputTokens: $usage['prompt_tokens_details']['cached_tokens'] ?? 0,
-            reasoningTokens: $usage['completion_tokens_details']['reasoning_tokens'] ?? 0,
+            inputTokens: $usage['prompt_tokens'] ?? 0,
+            outputTokens: $usage['completion_tokens'] ?? 0,
+            cacheReadInputTokens: $usage['prompt_tokens_details']['cached_tokens'] ?? null,
+            cacheWriteInputTokens: $usage['prompt_tokens_details']['cache_write_tokens'] ?? null,
+            reasoningTokens: $usage['completion_tokens_details']['reasoning_tokens'] ?? null,
         );
     }
 

@@ -1,6 +1,107 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/ai/compare/v0.10.3...0.x)
+## [Unreleased](https://github.com/laravel/ai/compare/v0.11.2...0.x)
+
+## [v0.11.2](https://github.com/laravel/ai/compare/v0.11.1...v0.11.2) - 2026-09-03
+
+### What's Changed
+
+* Copy uploaded files to a managed temp path so their contents survive the request by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/959
+* Preserve tool result failure status across conversations by [@drewmt](https://github.com/drewmt) in https://github.com/laravel/ai/pull/812
+* Fix invalid Mistral cheapest text model default by [@kachelle](https://github.com/kachelle) in https://github.com/laravel/ai/pull/980
+
+### New Contributors
+
+* [@drewmt](https://github.com/drewmt) made their first contribution in https://github.com/laravel/ai/pull/812
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.11.1...v0.11.2
+
+## [v0.11.1](https://github.com/laravel/ai/compare/v0.11.0...v0.11.1) - 2026-09-02
+
+### What's Changed
+
+* Align the Vercel UI message stream with the data stream protocol by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/906
+* Allow caching embeddings individually by [@timacdonald](https://github.com/timacdonald) in https://github.com/laravel/ai/pull/905
+* Add v0.11 upgrade guide by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/897
+* Fix Vercel provider tool events and finish reasons by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/921
+* Emit citation events for Gemini grounding results while streaming by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/912
+* Emit citation events for xAI web search results while streaming by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/911
+* Add audio (TTS) support to the Mistral provider by [@SanderMuller](https://github.com/SanderMuller) in https://github.com/laravel/ai/pull/926
+* Fail over on Groq's flex tier capacity exceeded status code by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/925
+* Honor the Strict attribute for structured output on the Groq, Mistral, OpenAI-compatible, and OpenRouter providers by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/923
+* Add explicit prompt cache breakpoints for Anthropic and Bedrock by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/869
+* Exclude cached tokens from the reported prompt token count on the OpenRouter provider by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/924
+* Update default provider models by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/951
+* Store uploaded files from their path instead of base64 encoding them by [@lazerg](https://github.com/lazerg) in https://github.com/laravel/ai/pull/945
+* Fetch and inline remote image, document, and audio attachments for the Gemini provider by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/927
+* Return null for a remote file mime type when the response declares no content type by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/953
+* Send the ElevenLabs transcription language hint as the documented language_code field by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/954
+* Map the Mistral model_length and error finish reasons to Length and Error by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/955
+* Added Bedrock Reranking Gateway by [@F1nnG](https://github.com/F1nnG) in https://github.com/laravel/ai/pull/949
+* Emit citation events for OpenAI web search results while streaming by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/910
+* Document agents and provider tools in tools method docblocks by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/958
+* Support validating tool request arguments by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/968
+* Document attaching MCP servers to agents by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/971
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.11.0...v0.11.1
+
+## [v0.11.0](https://github.com/laravel/ai/compare/v0.10.3...v0.11.0) - 2026-08-19
+
+### What's Changed
+
+* Add coverage for persisting provider content blocks on paused turns by [@dfinchenko](https://github.com/dfinchenko) in https://github.com/laravel/ai/pull/861
+* Add coverage for storing generated audio on a filesystem disk by [@dfinchenko](https://github.com/dfinchenko) in https://github.com/laravel/ai/pull/863
+* Add coverage for storing a generated image on a filesystem disk by [@dfinchenko](https://github.com/dfinchenko) in https://github.com/laravel/ai/pull/862
+* Trigger failover when a provider connection fails by [@JVillator0](https://github.com/JVillator0) in https://github.com/laravel/ai/pull/781
+* Fail over on transient gateway and Cloudflare upstream errors, not only 503 by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/810
+* Execute `then(...)` callback when faking the queued generation of transcription/image/audio/embeddings by [@gdebrauwer](https://github.com/gdebrauwer) in https://github.com/laravel/ai/pull/797
+* Add web search support to the xAI provider by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/857
+* Add transcription support to the OpenAI-compatible provider by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/858
+* Add transcription support to the Groq provider by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/868
+* Fail over when Anthropic rejects a request for hitting a usage limit by [@oddvalue](https://github.com/oddvalue) in https://github.com/laravel/ai/pull/864
+* Reconstruct S3 document attachments in File::fromArray by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/878
+* Handle Mistral responses that return content as a list of blocks by [@lazerg](https://github.com/lazerg) in https://github.com/laravel/ai/pull/866
+* Reset text part state after TextEnd in Responses API streams by [@chrisnetonline](https://github.com/chrisnetonline) in https://github.com/laravel/ai/pull/854
+* Fix OpenAI gateway dropping cache write tokens from usage by [@aqu1les](https://github.com/aqu1les) in https://github.com/laravel/ai/pull/846
+* Add hosted tool search via ToolSearch tool and stateless output replay (OpenAI + Anthropic) by [@behzadsp](https://github.com/behzadsp) in https://github.com/laravel/ai/pull/697
+* Repair unknown local tool calls by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/859
+* Make stream errors throw instead of silently ending the run by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/870
+* Thread one invocation id through an entire agent run by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/871
+* Report tool invocations through a run context by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/872
+* Report each generation step through the run context by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/873
+* Report tool failures and how long a tool ran by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/874
+* Link an agent invoked as a tool back to its parent by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/875
+* Report a run's terminal failure by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/876
+* Filter partially-orphaned tool calls when replaying conversation history by [@filipposallemi](https://github.com/filipposallemi) in https://github.com/laravel/ai/pull/758
+* [BUG] [0.x] Sum streamed usage across tool-call steps in all provider gateways by [@mo-inkhan](https://github.com/mo-inkhan) in https://github.com/laravel/ai/pull/698
+* Map Anthropic refusal and model_context_window_exceeded stop reasons by [@egantz](https://github.com/egantz) in https://github.com/laravel/ai/pull/881
+* Update Gemini default text model to gemini-3.7-flash by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/887
+* Keep the MCP request bound while converting generator results by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/888
+* Add support for the OpenRouter web fetch server tool by [@CamilleScholtz](https://github.com/CamilleScholtz) in https://github.com/laravel/ai/pull/889
+* Send text/plain for all text document sources on Anthropic by [@calrloco](https://github.com/calrloco) in https://github.com/laravel/ai/pull/886
+* Fail over on Anthropic transient gateway and Cloudflare errors by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/884
+* Strip markdown code fences from OpenAI-compatible structured output by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/879
+* Add file search support to the xAI provider by [@timmcleod](https://github.com/timmcleod) in https://github.com/laravel/ai/pull/894
+* Added assertPromptedTimes test method by [@F1nnG](https://github.com/F1nnG) in https://github.com/laravel/ai/pull/891
+* Surface Anthropic web fetch citations on the response by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/892
+* Exclude DeepSeek cache-hit tokens from the reported prompt token count by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/896
+
+### New Contributors
+
+* [@gdebrauwer](https://github.com/gdebrauwer) made their first contribution in https://github.com/laravel/ai/pull/797
+* [@oddvalue](https://github.com/oddvalue) made their first contribution in https://github.com/laravel/ai/pull/864
+* [@lazerg](https://github.com/lazerg) made their first contribution in https://github.com/laravel/ai/pull/866
+* [@chrisnetonline](https://github.com/chrisnetonline) made their first contribution in https://github.com/laravel/ai/pull/854
+* [@aqu1les](https://github.com/aqu1les) made their first contribution in https://github.com/laravel/ai/pull/846
+* [@behzadsp](https://github.com/behzadsp) made their first contribution in https://github.com/laravel/ai/pull/697
+* [@filipposallemi](https://github.com/filipposallemi) made their first contribution in https://github.com/laravel/ai/pull/758
+* [@mo-inkhan](https://github.com/mo-inkhan) made their first contribution in https://github.com/laravel/ai/pull/698
+* [@egantz](https://github.com/egantz) made their first contribution in https://github.com/laravel/ai/pull/881
+* [@CamilleScholtz](https://github.com/CamilleScholtz) made their first contribution in https://github.com/laravel/ai/pull/889
+* [@calrloco](https://github.com/calrloco) made their first contribution in https://github.com/laravel/ai/pull/886
+* [@F1nnG](https://github.com/F1nnG) made their first contribution in https://github.com/laravel/ai/pull/891
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v0.10.3...v0.11.0
 
 ## [v0.10.3](https://github.com/laravel/ai/compare/v0.10.2...v0.10.3) - 2026-08-06
 

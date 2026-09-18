@@ -4,6 +4,8 @@ namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\Support\Arr;
 use InvalidArgumentException;
+use Laravel\Ai\Attributes\CacheInstructions;
+use Laravel\Ai\Attributes\CacheToolDefinitions;
 use Laravel\Ai\Gateway\Anthropic\AnthropicSchemaSanitizer;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
@@ -30,13 +32,13 @@ trait BuildsTextRequests
             'max_tokens' => $options?->maxTokens ?? 64_000,
         ];
 
+        $providerOptions = $options?->providerOptions($provider->driver()) ?? [];
+
         if (filled($instructions)) {
             $body['system'] = $instructions;
         }
 
         $mappedTools = filled($tools) ? $this->mapTools($tools, $provider) : [];
-
-        $providerOptions = $options?->providerOptions($provider->driver()) ?? [];
 
         if (filled($schema) && $this->supportsNativeStructuredOutput($provider)) {
             $body['output_config'] = [
@@ -68,7 +70,59 @@ trait BuildsTextRequests
             'top_p' => $options?->topP,
         ]));
 
-        return array_merge($body, $providerOptions);
+        return $this->applyPromptCacheBreakpoints(array_merge($body, $providerOptions), $options);
+    }
+
+    /**
+     * Stamp the requested cache breakpoints onto the final request body.
+     */
+    protected function applyPromptCacheBreakpoints(array $body, ?TextGenerationOptions $options): array
+    {
+        $this->ensureValidPromptCacheOrder($body, $options);
+
+        if (isset($body['system']) && $options?->cacheInstructions instanceof CacheInstructions) {
+            $system = is_string($body['system'])
+                ? [['type' => 'text', 'text' => $body['system']]]
+                : $body['system'];
+
+            $system[array_key_last($system)]['cache_control'] = $this->cacheControl($options->cacheInstructions->ttl);
+
+            $body['system'] = $system;
+        }
+
+        if (isset($body['tools']) && $options?->cacheToolDefinitions instanceof CacheToolDefinitions) {
+            $body['tools'][array_key_last($body['tools'])]['cache_control'] = $this->cacheControl($options->cacheToolDefinitions->ttl);
+        }
+
+        return $body;
+    }
+
+    /**
+     * Ensure longer-lived cache breakpoints precede shorter-lived breakpoints.
+     */
+    protected function ensureValidPromptCacheOrder(array $body, ?TextGenerationOptions $options): void
+    {
+        if ($options?->cacheInstructions?->ttl === '1h'
+            && $options->cacheToolDefinitions instanceof CacheToolDefinitions
+            && $options->cacheToolDefinitions->ttl !== '1h') {
+            throw new InvalidArgumentException('A one-hour instructions cache requires the tool definitions cache to also use a one-hour TTL.');
+        }
+
+        if (($body['cache_control']['ttl'] ?? null) === '1h'
+            && (($options?->cacheInstructions instanceof CacheInstructions && $options->cacheInstructions->ttl !== '1h')
+                || ($options?->cacheToolDefinitions instanceof CacheToolDefinitions && $options->cacheToolDefinitions->ttl !== '1h'))) {
+            throw new InvalidArgumentException('A one-hour automatic cache requires all explicit cache breakpoints to also use a one-hour TTL.');
+        }
+    }
+
+    /**
+     * Build the cache control block for the given TTL.
+     *
+     * @return array<string, string>
+     */
+    protected function cacheControl(?string $ttl): array
+    {
+        return array_filter(['type' => 'ephemeral', 'ttl' => $ttl]);
     }
 
     /**

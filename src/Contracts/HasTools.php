@@ -9,7 +9,7 @@ interface HasTools
     /**
      * Get the tools available to the agent.
      *
-     * @return array<Tool|ProviderTool>
+     * @return list<Agent|Tool|ProviderTool>
      */
     public function tools(): iterable;
 }

@@ -108,8 +108,8 @@ test('streaming tool call loop emits a single accumulated stream end', function 
 
     expect($streamEnds)->toHaveCount(1)
         ->and($streamEnds[0]->reason)->toBe(FinishReason::Stop->value)
-        ->and($streamEnds[0]->usage->promptTokens)->toBe(30)
-        ->and($streamEnds[0]->usage->completionTokens)->toBe(15);
+        ->and($streamEnds[0]->usage->inputTokens)->toBe(30)
+        ->and($streamEnds[0]->usage->outputTokens)->toBe(15);
 });
 
 test('streaming error event stops stream', function (): void {
@@ -153,8 +153,8 @@ test('streaming captures usage from final chunk', function (): void {
 
     $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
-    expect($streamEnd->usage->promptTokens)->toBe(42)
-        ->and($streamEnd->usage->completionTokens)->toBe(10);
+    expect($streamEnd->usage->inputTokens)->toBe(42)
+        ->and($streamEnd->usage->outputTokens)->toBe(10);
 });
 
 test('streaming captures reasoning tokens', function (): void {
@@ -181,8 +181,8 @@ test('streaming captures reasoning tokens', function (): void {
 
     $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
-    expect($streamEnd->usage->promptTokens)->toBe(100)
-        ->and($streamEnd->usage->completionTokens)->toBe(50)
+    expect($streamEnd->usage->inputTokens)->toBe(100)
+        ->and($streamEnd->usage->outputTokens)->toBe(50)
         ->and($streamEnd->usage->reasoningTokens)->toBe(20);
 });
 

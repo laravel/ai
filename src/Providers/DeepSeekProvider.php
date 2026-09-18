@@ -47,6 +47,6 @@ class DeepSeekProvider extends Provider implements TextProvider
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'deepseek-reasoner';
+        return $this->config['models']['text']['smartest'] ?? 'deepseek-v4-pro';
     }
 }

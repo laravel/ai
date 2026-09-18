@@ -27,6 +27,26 @@ trait GeminiHelpers
         ]);
     }
 
+    protected function fakeThinkingResponse(array $parts): PromiseInterface
+    {
+        return Http::response([
+            'candidates' => [[
+                'content' => [
+                    'parts' => $parts,
+                    'role' => 'model',
+                ],
+                'finishReason' => 'STOP',
+            ]],
+            'usageMetadata' => [
+                'promptTokenCount' => 10,
+                'candidatesTokenCount' => 5,
+                'thoughtsTokenCount' => 3,
+                'totalTokenCount' => 18,
+            ],
+            'modelVersion' => 'gemini-3.7-flash',
+        ]);
+    }
+
     protected function fakeToolCallResponse(string $toolName = 'FixedNumberGenerator', ?string $callId = null): PromiseInterface
     {
         return Http::response([
@@ -144,14 +164,14 @@ trait GeminiHelpers
         ];
     }
 
-    protected function geminiChunkWithUsage(array $parts, int $promptTokens, int $candidatesTokens, int $cachedTokens = 0, ?string $modelVersion = null, string $finishReason = 'STOP'): array
+    protected function geminiChunkWithUsage(array $parts, int $inputTokens, int $candidatesTokens, int $cachedTokens = 0, ?string $modelVersion = null, string $finishReason = 'STOP'): array
     {
         $chunk = $this->geminiChunk($parts, $modelVersion, $finishReason);
 
         $chunk['usageMetadata'] = array_filter([
-            'promptTokenCount' => $promptTokens,
+            'promptTokenCount' => $inputTokens,
             'candidatesTokenCount' => $candidatesTokens,
-            'totalTokenCount' => $promptTokens + $candidatesTokens,
+            'totalTokenCount' => $inputTokens + $candidatesTokens,
             'cachedContentTokenCount' => $cachedTokens ?: null,
         ]);
 

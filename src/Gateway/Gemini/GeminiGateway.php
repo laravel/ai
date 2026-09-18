@@ -25,7 +25,6 @@ use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
@@ -111,6 +110,7 @@ class GeminiGateway implements Gateway, StepTextGateway
      * @param  array<ImageFile>  $attachments
      * @param  '3:2'|'2:3'|'1:1'|null  $size
      * @param  'low'|'medium'|'high'|null  $quality
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateImage(
         ImageProvider $provider,
@@ -120,6 +120,7 @@ class GeminiGateway implements Gateway, StepTextGateway
         ?string $size = null,
         ?string $quality = null,
         ?int $timeout = null,
+        array $providerOptions = [],
     ): ImageResponse {
         $parts = [['text' => $prompt]];
 
@@ -129,16 +130,16 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         $imageOptions = $provider->defaultImageOptions($size, $quality);
 
-        $body = [
+        $body = array_merge($providerOptions, [
             'contents' => [['role' => 'user', 'parts' => $parts]],
-            'generationConfig' => array_filter([
+            'generationConfig' => array_replace_recursive($providerOptions['generationConfig'] ?? [], array_filter([
                 'responseModalities' => ['IMAGE', 'TEXT'],
                 'imageConfig' => array_filter([
                     'imageSize' => $imageOptions['image_size'] ?? null,
                     'aspectRatio' => $imageOptions['aspect_ratio'] ?? null,
                 ]),
-            ]),
-        ];
+            ])),
+        ]);
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -200,6 +201,8 @@ class GeminiGateway implements Gateway, StepTextGateway
     /**
      * Generate audio from the given text.
      *
+     * @param  array<string, mixed>  $providerOptions
+     *
      * @throws RuntimeException if Gemini returns no audio data or invalid base64 audio.
      */
     public function generateAudio(
@@ -209,33 +212,39 @@ class GeminiGateway implements Gateway, StepTextGateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $providerOptions = [],
     ): AudioResponse {
-        $response = $this->withErrorHandling(
-            $provider->name(),
-            fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", [
-                'contents' => [[
-                    'role' => 'user',
-                    'parts' => [[
-                        'text' => $instructions !== null && trim($instructions) !== ''
-                            ? trim($instructions)."\n\n".$text
-                            : $text,
-                    ]],
-                ]],
-                'generationConfig' => [
-                    'responseModalities' => ['AUDIO'],
-                    'speechConfig' => [
-                        'voiceConfig' => [
-                            'prebuiltVoiceConfig' => [
-                                'voiceName' => match ($voice) {
-                                    'default-female' => 'Kore',
-                                    'default-male' => 'Puck',
-                                    default => $voice,
-                                },
-                            ],
-                        ],
+        $generationConfig = array_replace_recursive($providerOptions['generationConfig'] ?? [], [
+            'speechConfig' => [
+                'voiceConfig' => [
+                    'prebuiltVoiceConfig' => [
+                        'voiceName' => match ($voice) {
+                            'default-female' => 'Kore',
+                            'default-male' => 'Puck',
+                            default => $voice,
+                        },
                     ],
                 ],
-            ]),
+            ],
+        ]);
+
+        $generationConfig['responseModalities'] = ['AUDIO'];
+
+        $body = array_merge($providerOptions, [
+            'contents' => [[
+                'role' => 'user',
+                'parts' => [[
+                    'text' => $instructions !== null && trim($instructions) !== ''
+                        ? trim($instructions)."\n\n".$text
+                        : $text,
+                ]],
+            ]],
+            'generationConfig' => $generationConfig,
+        ]);
+
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", $body),
         );
 
         $data = $response->json();
@@ -348,11 +357,7 @@ class GeminiGateway implements Gateway, StepTextGateway
         return new TranscriptionResponse(
             trim((string) $text),
             $segments,
-            new Usage(
-                promptTokens: $usageMeta['promptTokenCount'] ?? 0,
-                completionTokens: $usageMeta['candidatesTokenCount'] ?? 0,
-                reasoningTokens: $usageMeta['thoughtsTokenCount'] ?? 0,
-            ),
+            $this->extractUsage(['usageMetadata' => $usageMeta]),
             new Meta($provider->name(), $model),
         );
     }

@@ -18,6 +18,7 @@ enum Lab: string
     case OpenAI = 'openai';
     case OpenAICompatible = 'openai-compatible';
     case OpenRouter = 'openrouter';
+    case TypeSafe = 'typesafe';
     case VoyageAI = 'voyageai';
     case xAI = 'xai';
 }

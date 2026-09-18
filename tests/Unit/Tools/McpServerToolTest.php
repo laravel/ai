@@ -76,6 +76,13 @@ test('it serializes structured tool responses as json', function (): void {
         ]);
 });
 
+test('it does not escape slashes in structured content json', function (): void {
+    $tool = new McpServerTool(new FakeStructuredMcpServerTool);
+
+    expect($tool->handle(new Request(['city' => 'Paris'])))
+        ->toContain('"url":"https://example.com/report"');
+});
+
 test('it surfaces tool errors with the standard prefix', function (): void {
     $tool = new McpServerTool(new FakeErroringMcpServerTool);
 

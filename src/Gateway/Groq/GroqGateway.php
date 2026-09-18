@@ -36,6 +36,17 @@ class GroqGateway implements StepTextGateway, TranscriptionGateway
     public function __construct(protected Dispatcher $events) {}
 
     /**
+     * The status codes that indicate Groq is transiently unavailable and the request should fail over.
+     *
+     * @return list<int>
+     */
+    protected function overloadedStatusCodes(): array
+    {
+        // The status codes Groq documents as transient: 498 is "flex tier capacity exceeded", alongside 502 and 503.
+        return [498, 502, 503];
+    }
+
+    /**
      * Generate text from the given audio.
      *
      * @param  array<string, mixed>  $providerOptions

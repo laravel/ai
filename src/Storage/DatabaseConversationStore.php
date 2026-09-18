@@ -2,12 +2,19 @@
 
 namespace Laravel\Ai\Storage;
 
+use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Pagination\Cursor;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Contracts\PaginatesConversations;
+use Laravel\Ai\Contracts\ResolvesPendingApprovals;
+use Laravel\Ai\Contracts\VerifiesConversationOwnership;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -19,7 +26,7 @@ use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 
-class DatabaseConversationStore implements ConversationStore
+class DatabaseConversationStore implements ConversationStore, PaginatesConversations, ResolvesPendingApprovals, VerifiesConversationOwnership
 {
     /**
      * Create a new conversation store instance.
@@ -30,23 +37,40 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
-     * Get the most recent conversation ID for a given participant.
+     * Get the participant's most recent conversation ID with the given agent.
+     *
+     * @param  class-string<Agent>  $agent
      */
-    public function latestConversationId(string $participantType, string|int $participantId): ?string
+    public function latestConversationId(string $participantType, string|int $participantId, string $agent): ?string
     {
-        return $this->table($this->conversationsTable())
+        return $this->table($this->messagesTable())
             ->where('participant_type', $participantType)
             ->where('participant_id', $participantId)
-            ->orderBy('updated_at', 'desc')
-            ->first()?->id;
+            ->where('agent', $agent)
+            ->orderByDesc('id')
+            ->value('conversation_id');
+    }
+
+    /**
+     * Determine whether the given conversation was stored for the given participant.
+     */
+    public function conversationBelongsTo(string $conversationId, ?string $participantType, string|int|null $participantId): bool
+    {
+        $conversation = $this->table($this->conversationsTable())
+            ->where('id', $conversationId)
+            ->first(['participant_type', 'participant_id']);
+
+        return $conversation !== null
+            && $conversation->participant_type === $participantType
+            && (string) $conversation->participant_id === (string) $participantId;
     }
 
     /**
      * Store a new conversation and return its ID.
      */
-    public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string
+    public function storeConversation(?string $participantType, string|int|null $participantId, string $title, ?string $id = null): string
     {
-        $conversationId = (string) Str::uuid7();
+        $conversationId = $id ?? (string) Str::uuid7();
 
         $this->table($this->conversationsTable())->insert([
             'id' => $conversationId,
@@ -62,18 +86,20 @@ class DatabaseConversationStore implements ConversationStore
 
     /**
      * Store a new user message for the given conversation and return its ID.
+     *
+     * @param  class-string<Agent>  $agent
      */
-    public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt): string
+    public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, string $agent, UserMessage $message): string
     {
         $messageId = (string) Str::uuid7();
 
         $now = now();
 
         $this->table($this->messagesTable())->insert($this->messageAttributes($messageId, $conversationId, $participantType, $participantId, $now, [
-            'agent' => $prompt->agent::class,
+            'agent' => $agent,
             'role' => 'user',
-            'content' => $prompt->prompt,
-            'attachments' => $prompt->attachments->toJson(),
+            'content' => $message->content,
+            'attachments' => $message->attachments->toJson(),
             'tool_calls' => '[]',
             'tool_results' => '[]',
             'usage' => '[]',
@@ -169,6 +195,25 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
+     * Rebuild the approvals a stored row is still awaiting a decision on.
+     *
+     * @return Collection<int, PendingApproval>
+     */
+    protected function pendingApprovalsIn(object $record): Collection
+    {
+        $reasons = collect(((array) json_decode($record->approval_state ?? 'null', true))['pending'] ?? []);
+
+        return collect(json_decode($record->tool_calls ?? '[]', true) ?: [])
+            ->filter(fn (array $toolCall) => $reasons->has($toolCall['id'] ?? ''))
+            ->map(fn (array $toolCall) => new PendingApproval(
+                $toolCall['id'],
+                $toolCall['name'],
+                $toolCall['arguments'],
+                $reasons[$toolCall['id']],
+            ))->values();
+    }
+
+    /**
      * Update the conversation's activity timestamp.
      */
     protected function touchConversation(string $conversationId, mixed $timestamp): void
@@ -205,8 +250,12 @@ class DatabaseConversationStore implements ConversationStore
     {
         $meta = (array) json_decode(json_encode($response->meta), true);
 
-        if (filled($blocks = $response->pausedProviderContentBlocks())) {
-            $meta['provider_content_blocks'] = $blocks;
+        if (filled($response->pausedProviderContentBlocks())) {
+            $meta['provider_steps'] = $response->pausedSteps();
+        }
+
+        if (filled($response->reasoning)) {
+            $meta['reasoning'] = $response->reasoning;
         }
 
         return $meta;
@@ -269,6 +318,58 @@ class DatabaseConversationStore implements ConversationStore
     }
 
     /**
+     * Paginate the given conversation's messages, newest first.
+     *
+     * @return CursorPaginator<int, StoredMessage>
+     */
+    public function paginateConversationMessages(string $conversationId, int $perPage = 15, string $cursorName = 'cursor', Cursor|string|null $cursor = null): CursorPaginator
+    {
+        return $this->table($this->messagesTable())
+            ->where('conversation_id', $conversationId)
+            ->orderByDesc('id')
+            ->cursorPaginate($perPage, ['*'], $cursorName, $cursor)
+            ->through(fn (object $record): StoredMessage => StoredMessage::fromArray((array) $record));
+    }
+
+    /**
+     * Get the tool calls the given conversation's newest turn is still waiting on.
+     *
+     * @return list<PendingApproval>
+     */
+    public function pendingApprovalsFor(string $conversationId): array
+    {
+        /** @var object{tool_calls: string, tool_results: string, approval_state: ?string}|null $newest */
+        $newest = $this->table($this->messagesTable())
+            ->where('conversation_id', $conversationId)
+            ->orderByDesc('id')
+            ->first(['tool_calls', 'tool_results', 'approval_state']);
+
+        if ($newest === null) {
+            return [];
+        }
+
+        $reasons = collect(data_get(json_decode($newest->approval_state ?? '{}', true), 'pending'));
+
+        if ($reasons->isEmpty()) {
+            return [];
+        }
+
+        $answered = Collection::fromJson($newest->tool_results)->pluck('id');
+
+        return Collection::fromJson($newest->tool_calls)
+            ->map(ToolCall::fromArray(...))
+            ->filter(fn (ToolCall $toolCall) => $reasons->has($toolCall->id) && $answered->doesntContain($toolCall->id))
+            ->map(fn (ToolCall $toolCall) => new PendingApproval(
+                $toolCall->id,
+                $toolCall->name,
+                $toolCall->arguments,
+                $reasons->get($toolCall->id),
+            ))
+            ->values()
+            ->all();
+    }
+
+    /**
      * Rebuild the messages for a stored assistant turn that made tool calls, keeping a pause distinct from a completed turn.
      *
      * @param  Collection<int, array<string, mixed>>  $toolCalls
@@ -307,10 +408,15 @@ class DatabaseConversationStore implements ConversationStore
 
         $meta = (array) json_decode($record->meta ?? '[]', true);
 
-        $providerContentBlocks = $meta['provider_content_blocks'] ?? [];
+        $provider = $meta['provider'] ?? null;
 
-        if ($isPause && filled($providerContentBlocks)) {
-            $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $meta['provider'] ?? null);
+        if ($isPause && filled($providerSteps = $meta['provider_steps'] ?? [])) {
+            return array_merge($messages, $this->reconstructPausedTurn($record, $providerSteps, $toolCalls, $ownResults, $provider));
+        }
+
+        // Rows written before per-step replay state carry only the paused step's blocks, so the whole turn replays as one message...
+        if ($isPause && filled($providerContentBlocks = $meta['provider_content_blocks'] ?? [])) {
+            $messages[] = new AssistantMessage($record->content, $toolCalls->map(ToolCall::fromArray(...))->values(), $providerContentBlocks, $provider);
 
             if ($ownResults->isNotEmpty()) {
                 $messages[] = new ToolResultMessage($ownResults->map(ToolResult::fromArray(...))->values());
@@ -334,6 +440,42 @@ class DatabaseConversationStore implements ConversationStore
             $messages[] = new AssistantMessage($record->content, $keptCalls->map(ToolCall::fromArray(...))->values());
         } elseif (filled($record->content)) {
             $messages[] = new AssistantMessage($record->content);
+        }
+
+        return $messages;
+    }
+
+    /**
+     * Replay a paused turn one assistant step at a time, each carrying the raw provider blocks it produced.
+     *
+     * @param  array<int, array{blocks?: array<int, array<string, mixed>>, tool_call_ids?: array<int, string>}>  $providerSteps
+     * @param  Collection<int, array<string, mixed>>  $toolCalls
+     * @param  Collection<int, array<string, mixed>>  $ownResults
+     * @return array<int, Message>
+     */
+    protected function reconstructPausedTurn(object $record, array $providerSteps, Collection $toolCalls, Collection $ownResults, ?string $provider): array
+    {
+        $callsById = $toolCalls->keyBy('id');
+        $resultsById = $ownResults->keyBy('id');
+        $lastStep = array_key_last($providerSteps);
+
+        $messages = [];
+
+        foreach ($providerSteps as $index => $step) {
+            $stepCallIds = collect($step['tool_call_ids'] ?? []);
+
+            $messages[] = new AssistantMessage(
+                $index === $lastStep ? $record->content : '',
+                $stepCallIds->map(fn (string $id) => $callsById[$id] ?? null)->filter()->map(ToolCall::fromArray(...))->values(),
+                $step['blocks'] ?? [],
+                $provider,
+            );
+
+            $stepResults = $stepCallIds->map(fn (string $id) => $resultsById[$id] ?? null)->filter()->values();
+
+            if ($stepResults->isNotEmpty()) {
+                $messages[] = new ToolResultMessage($stepResults->map(ToolResult::fromArray(...))->values());
+            }
         }
 
         return $messages;
@@ -384,7 +526,7 @@ class DatabaseConversationStore implements ConversationStore
         $resultIds = array_map(fn (ToolResult $result) => $result->id, $toolResults);
 
         DB::connection($this->connection)->transaction(function () use ($conversationId, $participantType, $participantId, $toolResults, $resultIds) {
-            $row = $this->table($this->messagesTable())
+            $paused = $this->table($this->messagesTable())
                 ->where('conversation_id', $conversationId)
                 ->when($participantId === null,
                     fn ($query) => $query->whereNull('participant_type')->whereNull('participant_id'),
@@ -393,11 +535,15 @@ class DatabaseConversationStore implements ConversationStore
                 ->whereNotNull('approval_state')
                 ->orderByDesc('id')
                 ->lockForUpdate()
-                ->get()
-                ->first(fn ($record) => array_intersect($this->pausedCallIds($record), $resultIds) !== []);
+                ->get();
+
+            $row = $paused->first(fn ($record) => array_intersect($this->pausedCallIds($record), $resultIds) !== []);
 
             if ($row === null) {
-                throw new ApprovalMismatchException('The approval results do not match a paused conversation turn.', collect());
+                throw new ApprovalMismatchException(
+                    'The approval results do not match a paused conversation turn.',
+                    $paused->first() === null ? collect() : $this->pendingApprovalsIn($paused->first()),
+                );
             }
 
             $existing = collect(json_decode($row->tool_results, true) ?: []);

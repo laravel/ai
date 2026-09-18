@@ -34,6 +34,32 @@ trait XaiHelpers
         ]);
     }
 
+    protected function fakeReasonedTextResponse(array $reasoningItems, string $text = 'Answer', bool $reasoningFirst = false): PromiseInterface
+    {
+        $message = [
+            'type' => 'message',
+            'status' => 'completed',
+            'role' => 'assistant',
+            'content' => [
+                ['type' => 'output_text', 'text' => $text, 'annotations' => []],
+            ],
+        ];
+
+        return Http::response([
+            'id' => 'resp_123',
+            'object' => 'response',
+            'status' => 'completed',
+            'model' => 'grok-4-1-fast-reasoning',
+            'output' => $reasoningFirst ? [...$reasoningItems, $message] : [$message, ...$reasoningItems],
+            'usage' => [
+                'input_tokens' => 10,
+                'output_tokens' => 5,
+                'input_tokens_details' => ['cached_tokens' => 0],
+                'output_tokens_details' => ['reasoning_tokens' => 3],
+            ],
+        ]);
+    }
+
     protected function fakeToolCallResponse(string $toolName = 'FixedNumberGenerator', ?string $callId = null): PromiseInterface
     {
         $callId ??= 'call_123';

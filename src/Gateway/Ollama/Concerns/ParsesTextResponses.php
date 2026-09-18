@@ -63,6 +63,7 @@ trait ParsesTextResponses
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
+            reasoning: (string) ($message['thinking'] ?? ''),
         );
     }
 
@@ -84,8 +85,9 @@ trait ParsesTextResponses
     protected function extractUsage(array $data): Usage
     {
         return new Usage(
-            $data['prompt_eval_count'] ?? 0,
-            $data['eval_count'] ?? 0,
+            inputTokens: $data['prompt_eval_count'] ?? 0,
+            outputTokens: $data['eval_count'] ?? 0,
+            cacheReadInputTokens: $data['prompt_eval_cached_count'] ?? null,
         );
     }
 

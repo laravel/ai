@@ -25,6 +25,7 @@ class BedrockImageGateway implements ImageGateway
      * @param  array<Image>  $attachments
      * @param  '3:2'|'2:3'|'1:1'|null  $size
      * @param  'low'|'medium'|'high'|null  $quality
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateImage(
         ImageProvider $provider,
@@ -34,6 +35,7 @@ class BedrockImageGateway implements ImageGateway
         ?string $size = null,
         ?string $quality = null,
         ?int $timeout = null,
+        array $providerOptions = [],
     ): ImageResponse {
         $client = $this->createBedrockClient($provider, $timeout);
         $options = $provider->defaultImageOptions($size, $quality);
@@ -45,7 +47,7 @@ class BedrockImageGateway implements ImageGateway
                     'modelId' => $model,
                     'contentType' => 'application/json',
                     'accept' => 'application/json',
-                    'body' => json_encode($this->prepareImageRequestBody($model, $prompt, $size, $options)),
+                    'body' => json_encode(array_replace_recursive($providerOptions, $this->prepareImageRequestBody($model, $prompt, $size, $options))),
                 ]),
             );
         } catch (Throwable $throwable) {

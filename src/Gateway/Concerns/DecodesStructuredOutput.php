@@ -9,28 +9,30 @@ trait DecodesStructuredOutput
      */
     protected function decodeStructuredOutput(?string $text): array
     {
-        if ($text === null || trim($text) === '') {
+        $trimmed = trim((string) $text);
+
+        if ($trimmed === '') {
             return [];
         }
 
-        $payload = $this->stripJsonCodeFence($text);
+        $decoded = json_decode($trimmed, true);
 
-        $decoded = json_decode((string) $payload, true);
+        if (! is_array($decoded)) {
+            $decoded = json_decode($this->extractJsonCodeFence($trimmed) ?? '', true);
+        }
 
         return is_array($decoded) ? $decoded : [];
     }
 
     /**
-     * Strip a wrapping markdown code fence from the payload, if present.
+     * Extract the contents of a markdown code fence from the payload, if present.
      */
-    private function stripJsonCodeFence(string $text): string
+    private function extractJsonCodeFence(string $text): ?string
     {
-        $trimmed = trim($text);
-
-        if (preg_match('/^```(?:json)?\s*(.*?)\s*```$/si', $trimmed, $matches) === 1) {
+        if (preg_match('/```(?:json)?\s*(.*?)\s*```/si', $text, $matches) === 1) {
             return trim($matches[1]);
         }
 
-        return $trimmed;
+        return null;
     }
 }

@@ -68,7 +68,7 @@ trait BuildsTextRequests
             ->map(fn ($toolResult): array => [
                 'type' => 'function_call_output',
                 'call_id' => $toolResult->resultId,
-                'output' => $this->serializeToolResultOutput($toolResult->result),
+                'output' => $toolResult->text(),
             ])
             ->all();
     }

@@ -18,7 +18,7 @@ class StepResponse implements Arrayable, JsonSerializable
     /**
      * @param  ToolCall[]  $toolCalls
      * @param  array<string, mixed>|null  $structured
-     * @param  array<int, array<string, mixed>>  $providerContentBlocks
+     * @param  array<array-key, mixed>  $providerContentBlocks
      * @param  PendingApproval[]  $pendingApprovals
      */
     public function __construct(
@@ -31,6 +31,7 @@ class StepResponse implements Arrayable, JsonSerializable
         public ?string $continuationToken = null,
         public array $providerContentBlocks = [],
         public array $pendingApprovals = [],
+        public string $reasoning = '',
     ) {}
 
     /**

@@ -42,7 +42,9 @@ class OpenAiFileGateway implements FileGateway
     ): StoredFileResponse {
         [$content, $mime, $name] = $this->prepareStorableFile($file);
 
-        $providerOptions = $this->resolveProviderOptions($file, $this->providerOptionsKey());
+        [$providerOptions, $headers] = $this->resolveProviderOptionsAndHeaders($file, $this->providerOptionsKey());
+
+        $provider = $provider->withHeaders($headers);
 
         $response = $this->withErrorHandling(
             $provider->name(),

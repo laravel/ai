@@ -16,11 +16,25 @@ class AgentResponse extends TextResponse
 
     public ?object $conversationUser = null;
 
+    public ?string $userMessageId = null;
+
+    public ?string $assistantMessageId = null;
+
     public function __construct(string $invocationId, string $text, Usage $usage, Meta $meta)
     {
         $this->invocationId = $invocationId;
 
         parent::__construct($text, $usage, $meta);
+    }
+
+    /**
+     * Create a fake response that reasoned before answering.
+     */
+    public static function fakeWithReasoning(string $reasoning, string $text = ''): self
+    {
+        return tap(new self('fake-invocation', $text, new Usage, new Meta), function (self $response) use ($reasoning): void {
+            $response->reasoning = $reasoning;
+        });
     }
 
     /**
@@ -46,6 +60,17 @@ class AgentResponse extends TextResponse
     }
 
     /**
+     * Set the conversation message rows this turn wrote.
+     */
+    public function withStoredMessages(?string $userMessageId, ?string $assistantMessageId): self
+    {
+        $this->userMessageId = $userMessageId;
+        $this->assistantMessageId = $assistantMessageId;
+
+        return $this;
+    }
+
+    /**
      * Execute a callback with this response.
      */
     public function then(callable $callback): self
@@ -53,6 +78,27 @@ class AgentResponse extends TextResponse
         $callback($this);
 
         return $this;
+    }
+
+    /**
+     * Get every assistant step of a paused turn with the raw provider state needed to replay it.
+     *
+     * @return array<int, array{blocks: array<int, array<string, mixed>>, tool_call_ids: array<int, string>}>
+     */
+    public function pausedSteps(): array
+    {
+        if (! $this->hasPendingApprovals()) {
+            return [];
+        }
+
+        return $this->messages
+            ->whereInstanceOf(AssistantMessage::class)
+            ->map(fn (AssistantMessage $message): array => [
+                'blocks' => $message->providerContentBlocks,
+                'tool_call_ids' => $message->toolCalls->pluck('id')->all(),
+            ])
+            ->values()
+            ->all();
     }
 
     /**

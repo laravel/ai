@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
+use Tests\Fixtures\Agents\NestedStructuredAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\ToolChoiceAgent;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
@@ -152,6 +153,19 @@ test('structured output includes json schema text format', function (): void {
     });
 });
 
+test('structured output without Strict attribute sends strict false in text format', function (): void {
+    Http::fake(['*' => fakeXaiRequestMappingResponse('{"elements": []}')]);
+
+    (new NestedStructuredAgent)->prompt('List elements.', provider: 'xai');
+
+    Http::assertSent(function (Request $request): bool {
+        $format = data_get(json_decode($request->body(), true), 'text.format');
+
+        return $format['type'] === 'json_schema'
+            && $format['strict'] === false;
+    });
+});
+
 test('request without schema excludes text format', function (): void {
     Http::fake(['*' => fakeXaiRequestMappingResponse('Hello')]);
 
@@ -221,13 +235,17 @@ test('response usage is correctly parsed', function (): void {
         'usage' => [
             'input_tokens' => 10,
             'output_tokens' => 5,
+            'input_tokens_details' => ['cached_tokens' => 2],
+            'output_tokens_details' => ['reasoning_tokens' => 3],
         ],
     ])]);
 
     $response = agent()->prompt('Hello', provider: 'xai');
 
-    expect($response->usage->promptTokens)->toBe(10)
-        ->and($response->usage->completionTokens)->toBe(5);
+    expect($response->usage->inputTokens)->toBe(10)
+        ->and($response->usage->outputTokens)->toBe(8)
+        ->and($response->usage->cacheReadInputTokens)->toBe(2)
+        ->and($response->usage->reasoningTokens)->toBe(3);
 });
 
 test('structured response is correctly parsed', function (): void {

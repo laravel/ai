@@ -111,8 +111,8 @@ test('usage tokens are parsed from response', function (): void {
 
     $response = Image::of('A blue circle')->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
 
-    expect($response->usage->promptTokens)->toBe(10)
-        ->and($response->usage->completionTokens)->toBe(20);
+    expect($response->usage->inputTokens)->toBe(10)
+        ->and($response->usage->outputTokens)->toBe(20);
 });
 
 test('multiple images in response are all returned', function (): void {
@@ -234,3 +234,13 @@ test('image http error response throws request exception', function (): void {
 
     Image::of('A blue circle')->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
 })->throws(RequestException::class);
+
+test('falsy provider options are not filtered out of the image request', function (): void {
+    Http::fake(['openrouter.ai/*' => fakeOpenRouterImageResponse()]);
+
+    Image::of('A blue circle')
+        ->withProviderOptions(['stream' => false])
+        ->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['stream'] === false);
+});

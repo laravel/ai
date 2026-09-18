@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
@@ -15,7 +16,7 @@ use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
-    use DecodesStructuredOutput;
+    use DecodesStructuredOutput, JoinsReasoning;
 
     /**
      * Validate the OpenAI response data.
@@ -63,19 +64,8 @@ trait ParsesTextResponses
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
             continuationToken: $data['id'] ?? '',
             providerContentBlocks: $this->isStateless($provider) ? $this->extractReplayBlocks($output) : [],
+            reasoning: $this->extractReasoning($output),
         );
-    }
-
-    /**
-     * Serialize a tool result output value to a string.
-     */
-    protected function serializeToolResultOutput(mixed $output): string
-    {
-        return match (true) {
-            is_string($output) => $output,
-            is_array($output) => (string) json_encode($output),
-            default => (string) $output,
-        };
     }
 
     /**
@@ -86,6 +76,21 @@ trait ParsesTextResponses
         $lastOutput = last($output);
 
         return is_array($lastOutput) ? ($lastOutput['content'][0]['text'] ?? '') : '';
+    }
+
+    /**
+     * Extract the reasoning text from the output array.
+     */
+    protected function extractReasoning(array $output): string
+    {
+        return static::joinReasoning(
+            (new Collection($output))
+                ->where('type', 'reasoning')
+                ->flatMap(fn (array $item): array => [
+                    (new Collection($item['summary'] ?? []))->pluck('text')->implode(''),
+                    (new Collection($item['content'] ?? []))->pluck('text')->implode(''),
+                ])
+        );
     }
 
     /**
@@ -135,16 +140,13 @@ trait ParsesTextResponses
     protected function extractUsage(array $data): Usage
     {
         $usage = $data['usage'] ?? [];
-        $inputTokens = $usage['input_tokens'] ?? 0;
-        $cachedTokens = $usage['input_tokens_details']['cached_tokens'] ?? 0;
-        $cacheWriteTokens = $usage['input_tokens_details']['cache_write_tokens'] ?? 0;
 
         return new Usage(
-            $inputTokens - $cachedTokens - $cacheWriteTokens,
-            $usage['output_tokens'] ?? 0,
-            $cacheWriteTokens,
-            $cachedTokens,
-            $usage['output_tokens_details']['reasoning_tokens'] ?? 0,
+            inputTokens: $usage['input_tokens'] ?? 0,
+            outputTokens: $usage['output_tokens'] ?? 0,
+            cacheReadInputTokens: $usage['input_tokens_details']['cached_tokens'] ?? null,
+            cacheWriteInputTokens: $usage['input_tokens_details']['cache_write_tokens'] ?? null,
+            reasoningTokens: $usage['output_tokens_details']['reasoning_tokens'] ?? null,
         );
     }
 

@@ -7,6 +7,7 @@ use Illuminate\Support\MultipleInstanceManager;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
+use Laravel\Ai\Contracts\Providers\ClassificationProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
@@ -33,6 +34,7 @@ use Laravel\Ai\Providers\OpenAiCompatibleProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Providers\TypeSafeProvider;
 use Laravel\Ai\Providers\VoyageAiProvider;
 use Laravel\Ai\Providers\XaiProvider;
 use LogicException;
@@ -41,6 +43,7 @@ class AiManager extends MultipleInstanceManager
 {
     use Concerns\InteractsWithFakeAgents;
     use Concerns\InteractsWithFakeAudio;
+    use Concerns\InteractsWithFakeClassification;
     use Concerns\InteractsWithFakeEmbeddings;
     use Concerns\InteractsWithFakeFiles;
     use Concerns\InteractsWithFakeImages;
@@ -80,6 +83,34 @@ class AiManager extends MultipleInstanceManager
 
         return $this->audioIsFaked()
             ? (clone $provider)->useAudioGateway($this->fakeAudioGateway())
+            : $provider;
+    }
+
+    /**
+     * Get a classification provider instance by name.
+     *
+     * @throws LogicException
+     */
+    public function classificationProvider(?string $name = null): ClassificationProvider
+    {
+        return tap($this->instance($name), function ($instance): void {
+            if (! $instance instanceof ClassificationProvider) {
+                throw new LogicException('Provider ['.$instance::class.'] does not support classification.');
+            }
+        });
+    }
+
+    /**
+     * Get a classification provider instance, using a fake gateway if classification is faked.
+     *
+     * @throws LogicException
+     */
+    public function fakeableClassificationProvider(?string $name = null): ClassificationProvider
+    {
+        $provider = $this->classificationProvider($name);
+
+        return $this->classificationIsFaked()
+            ? (clone $provider)->useClassificationGateway($this->fakeClassificationGateway())
             : $provider;
     }
 
@@ -431,6 +462,17 @@ class AiManager extends MultipleInstanceManager
     public function createOpenrouterDriver(array $config): OpenRouterProvider
     {
         return new OpenRouterProvider(
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create a TypeSafe powered instance.
+     */
+    public function createTypesafeDriver(array $config): TypeSafeProvider
+    {
+        return new TypeSafeProvider(
             $config,
             $this->app->make(Dispatcher::class)
         );

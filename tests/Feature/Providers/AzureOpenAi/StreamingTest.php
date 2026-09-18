@@ -4,6 +4,9 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
+use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -46,6 +49,38 @@ test('streaming emits text events', function (): void {
         ->and($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class);
 });
 
+test('streaming handles reasoning text events', function (): void {
+    Http::fake([
+        'my-resource.cognitiveservices.azure.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->responseCreated(),
+                ['type' => 'response.reasoning_text.delta', 'delta' => 'Let me think...', 'item_id' => 'rs_1'],
+                [
+                    'type' => 'response.output_item.done',
+                    'item' => ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => []],
+                ],
+                $this->outputTextDelta('Answer'),
+                $this->outputTextDone('Answer'),
+                $this->responseCompleted(10, 15),
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents();
+
+    $types = array_map(fn ($event) => $event::class, $events);
+
+    expect($types)->toContain(ReasoningStart::class)
+        ->toContain(ReasoningDelta::class)
+        ->toContain(ReasoningEnd::class);
+
+    $reasoningDelta = collect($events)->first(fn ($event): bool => $event instanceof ReasoningDelta);
+
+    expect($reasoningDelta->delta)->toBe('Let me think...');
+});
+
 test('streaming handles tool calls', function (): void {
     Http::fake([
         'my-resource.cognitiveservices.azure.com/*' => Http::sequence([
@@ -84,8 +119,8 @@ test('streaming handles tool calls', function (): void {
         ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
         ->and($toolCallEvents[0]->toolCall->resultId)->toBe('call_1')
         ->and($streamEnd->reason)->toBe(FinishReason::Stop->value)
-        ->and($streamEnd->usage->promptTokens)->toBe(30)
-        ->and($streamEnd->usage->completionTokens)->toBe(15);
+        ->and($streamEnd->usage->inputTokens)->toBe(30)
+        ->and($streamEnd->usage->outputTokens)->toBe(15);
 });
 
 test('streaming error event stops stream', function (): void {
@@ -130,8 +165,8 @@ test('streaming captures usage from completed event', function (): void {
 
     $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
-    expect($streamEnd->usage->promptTokens)->toBe(42)
-        ->and($streamEnd->usage->completionTokens)->toBe(10);
+    expect($streamEnd->usage->inputTokens)->toBe(42)
+        ->and($streamEnd->usage->outputTokens)->toBe(10);
 });
 
 test('streaming finish reason maps correctly', function (array $output, $expected): void {

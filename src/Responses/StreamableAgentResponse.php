@@ -7,18 +7,23 @@ use Illuminate\Contracts\Support\Responsable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use IteratorAggregate;
+use Laravel\Ai\Responses\Data\Citation as CitationData;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Streaming\Events\Citation;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamEvent;
+use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\Streaming\Protocols\AgentUserInteractionProtocol;
+use Laravel\Ai\Streaming\Protocols\StreamProtocol;
+use Laravel\Ai\Streaming\Protocols\VercelDataProtocol;
 use Symfony\Component\HttpFoundation\Response;
 use Traversable;
 
 class StreamableAgentResponse implements IteratorAggregate, Responsable
 {
-    use Concerns\CanStreamUsingVercelProtocol;
-
     public ?string $text = null;
 
     public ?Usage $usage = null;
@@ -26,15 +31,22 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     /** @var Collection<int, StreamEvent> */
     public Collection $events;
 
+    /** @var Collection<int, CitationData> */
+    public Collection $citations;
+
     public ?string $conversationId = null;
 
     public ?object $conversationUser = null;
 
+    public ?string $userMessageId = null;
+
+    public ?string $assistantMessageId = null;
+
+    public string $reasoning = '';
+
     protected array $thenCallbacks = [];
 
-    protected bool $usesVercelProtocol = false;
-
-    protected ?string $vercelProtocolMessageId = null;
+    protected ?StreamProtocol $protocol = null;
 
     protected ?StreamedAgentResponse $streamedResponse = null;
 
@@ -49,6 +61,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         protected ?Meta $meta = null,
     ) {
         $this->events = new Collection;
+        $this->citations = new Collection;
     }
 
     /**
@@ -110,20 +123,36 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
             $this->withinConversation($response->conversationId, $response->conversationUser);
         }
 
+        $this->userMessageId = $response->userMessageId;
+        $this->assistantMessageId = $response->assistantMessageId;
+
         return $this;
     }
 
     /**
-     * Stream the response using Vercel's AI SDK stream protocol.
-     *
-     * See: https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol
+     * Stream the response using the given stream protocol.
      */
-    public function usingVercelDataProtocol(bool $value = true, ?string $messageId = null): self
+    public function usingProtocol(StreamProtocol $protocol): self
     {
-        $this->usesVercelProtocol = $value;
-        $this->vercelProtocolMessageId = $messageId;
+        $this->protocol = $protocol;
 
         return $this;
+    }
+
+    /**
+     * Stream the response using the Vercel AI SDK data stream protocol.
+     */
+    public function usingVercelDataProtocol(?string $messageId = null): self
+    {
+        return $this->usingProtocol(new VercelDataProtocol($messageId));
+    }
+
+    /**
+     * Stream the response using the Agent User Interaction protocol.
+     */
+    public function usingAgentUserInteractionProtocol(?string $threadId = null, ?string $runId = null): self
+    {
+        return $this->usingProtocol(new AgentUserInteractionProtocol($threadId, $runId));
     }
 
     /**
@@ -133,8 +162,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
      */
     public function toResponse($request): Response
     {
-        if ($this->usesVercelProtocol) {
-            return $this->toVercelProtocolResponse();
+        if ($this->protocol instanceof StreamProtocol) {
+            return $this->protocol->response($this);
         }
 
         return response()->stream(function () {
@@ -143,7 +172,12 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
             }
 
             yield "data: [DONE]\n\n";
-        }, headers: ['Content-Type' => 'text/event-stream']);
+        }, headers: [
+            // Without these a proxy may buffer or transcode the body, holding every event back until the run ends...
+            'Cache-Control' => 'no-cache, no-transform',
+            'Content-Type' => 'text/event-stream',
+            'X-Accel-Buffering' => 'no',
+        ]);
     }
 
     /**
@@ -175,7 +209,15 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
         $this->events = new Collection($events);
         $this->text = TextDelta::combine($events);
+        $this->reasoning = ReasoningDelta::combine($events);
+        $this->citations = Citation::combine($events);
         $this->usage = StreamEnd::combineUsage($events);
+
+        $start = $this->events->last(fn (StreamEvent $event): bool => $event instanceof StreamStart);
+
+        if ($start instanceof StreamStart && $this->meta instanceof Meta) {
+            $this->meta->model = $start->model;
+        }
 
         $this->streamedResponse = new StreamedAgentResponse(
             $this->invocationId,
@@ -190,6 +232,11 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
             );
         }
 
+        $this->streamedResponse->withStoredMessages(
+            $this->userMessageId,
+            $this->assistantMessageId,
+        );
+
         foreach ($this->thenCallbacks as $callback) {
             call_user_func($callback, $this->streamedResponse);
         }
@@ -202,12 +249,10 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
      */
     protected function syncConversationFromStreamedResponse(): void
     {
-        if ($this->streamedResponse->conversationId === null) {
-            return;
-        }
-
         $this->conversationId = $this->streamedResponse->conversationId;
         $this->conversationUser = $this->streamedResponse->conversationUser;
+        $this->userMessageId = $this->streamedResponse->userMessageId;
+        $this->assistantMessageId = $this->streamedResponse->assistantMessageId;
     }
 
     /**

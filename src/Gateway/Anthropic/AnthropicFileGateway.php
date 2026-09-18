@@ -44,7 +44,9 @@ class AnthropicFileGateway implements FileGateway
     ): StoredFileResponse {
         [$content, $mime, $name] = $this->prepareStorableFile($file);
 
-        $providerOptions = $this->resolveProviderOptions($file, Lab::Anthropic);
+        [$providerOptions, $headers] = $this->resolveProviderOptionsAndHeaders($file, Lab::Anthropic);
+
+        $provider = $provider->withHeaders($headers);
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -91,6 +93,7 @@ class AnthropicFileGateway implements FileGateway
      */
     protected function overloadedStatusCodes(): array
     {
-        return [529];
+        // 529 is Anthropic's own "overloaded" status, plus the shared transient gateway and Cloudflare codes.
+        return [529, 502, 503, 504, 520, 522, 524];
     }
 }

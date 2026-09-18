@@ -8,7 +8,9 @@ use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
@@ -97,6 +99,26 @@ trait HandlesTextGeneration
                 continue;
             }
 
+            if ($type === 'response.output_text.annotation.added') {
+                $annotation = $data['annotation'] ?? [];
+
+                if (($annotation['type'] ?? '') === 'url_citation') {
+                    yield (new CitationEvent(
+                        $this->generateEventId(),
+                        $messageId,
+                        new UrlCitation(
+                            $annotation['url'] ?? '',
+                            $annotation['title'] ?? null,
+                            isset($annotation['start_index']) ? (int) $annotation['start_index'] : null,
+                            isset($annotation['end_index']) ? (int) $annotation['end_index'] : null,
+                        ),
+                        time(),
+                    ))->withInvocationId($invocationId);
+                }
+
+                continue;
+            }
+
             if ($type === 'response.output_text.done' && $textStartEmitted) {
                 yield (new TextEnd(
                     $this->generateEventId(),
@@ -110,7 +132,7 @@ trait HandlesTextGeneration
                 continue;
             }
 
-            if ($type === 'response.reasoning_summary_text.delta') {
+            if (in_array($type, ['response.reasoning_summary_text.delta', 'response.reasoning_text.delta'], true)) {
                 $delta = (string) ($data['delta'] ?? '');
 
                 if ($delta !== '') {
@@ -166,27 +188,25 @@ trait HandlesTextGeneration
                         $data['item'] ?? [],
                         'completed',
                         time(),
+                        provider: $provider->name(),
                     ))->withInvocationId($invocationId);
 
                     continue;
                 }
             }
 
-            if (str_starts_with((string) $type, 'response.') && str_contains((string) $type, '_call.')) {
-                $parts = explode('.', (string) $type, 3);
+            if (preg_match('/^response\.([a-z_]+_call)(_code)?\.(.+)$/', (string) $type, $matches) === 1) {
+                yield (new ProviderToolEvent(
+                    $this->generateEventId(),
+                    $data['item_id'] ?? '',
+                    $matches[1],
+                    $data,
+                    $matches[2] === '' ? $matches[3] : 'code_'.$matches[3],
+                    time(),
+                    provider: $provider->name(),
+                ))->withInvocationId($invocationId);
 
-                if (count($parts) === 3 && str_ends_with($parts[1], '_call')) {
-                    yield (new ProviderToolEvent(
-                        $this->generateEventId(),
-                        $data['item_id'] ?? '',
-                        $parts[1],
-                        $data,
-                        $parts[2],
-                        time(),
-                    ))->withInvocationId($invocationId);
-
-                    continue;
-                }
+                continue;
             }
 
             if (($data['item']['type'] ?? '') === 'function_call' && $type === 'response.output_item.added') {

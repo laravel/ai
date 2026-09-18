@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
+use Tests\Fixtures\Agents\NestedStructuredAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\ToolChoiceAgent;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
@@ -150,6 +151,19 @@ test('structured output includes json schema response format', function (): void
     });
 });
 
+test('structured output without Strict attribute sends strict false in response format', function (): void {
+    Http::fake(['*' => $this->fakeStructuredResponse('{"elements": []}')]);
+
+    (new NestedStructuredAgent)->prompt('List elements.', provider: 'mistral');
+
+    Http::assertSent(function (Request $request): bool {
+        $format = data_get(json_decode($request->body(), true), 'response_format');
+
+        return $format['type'] === 'json_schema'
+            && $format['json_schema']['strict'] === false;
+    });
+});
+
 test('streaming request includes stream options', function (): void {
     Http::fake(['*' => Http::response("data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hi\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}\n\ndata: [DONE]\n\n")]);
 
@@ -202,8 +216,30 @@ test('response usage is correctly parsed', function (): void {
 
     $response = agent()->prompt('Hello', provider: 'mistral');
 
-    expect($response->usage->promptTokens)->toBe(10)
-        ->and($response->usage->completionTokens)->toBe(5);
+    expect($response->usage->inputTokens)->toBe(10)
+        ->and($response->usage->outputTokens)->toBe(5);
+});
+
+test('response usage reports cached prompt tokens', function (): void {
+    Http::fake(['*' => Http::response([
+        'model' => 'mistral-medium-latest',
+        'choices' => [[
+            'index' => 0,
+            'message' => ['role' => 'assistant', 'content' => 'Hello'],
+            'finish_reason' => 'stop',
+        ]],
+        'usage' => [
+            'prompt_tokens' => 1013,
+            'completion_tokens' => 30,
+            'prompt_tokens_details' => ['cached_tokens' => 1008],
+        ],
+    ])]);
+
+    $response = agent()->prompt('Hello', provider: 'mistral');
+
+    expect($response->usage->inputTokens)->toBe(1013)
+        ->and($response->usage->cacheReadInputTokens)->toBe(1008)
+        ->and($response->usage->uncachedInputTokens())->toBe(5);
 });
 
 test('structured response is correctly parsed', function (): void {

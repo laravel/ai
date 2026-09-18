@@ -14,10 +14,15 @@ use Laravel\Ai\QueuedAgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
+use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
@@ -47,6 +52,7 @@ describe('prompt responses', function (): void {
 
         // Assertion tests...
         AssistantAgent::assertPrompted('First prompt');
+        AssistantAgent::assertPromptedTimes(3);
         AssistantAgent::assertNotPrompted('Missing prompt');
 
         AssistantAgent::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->prompt === 'First prompt');
@@ -190,6 +196,54 @@ describe('stream responses', function (): void {
         $response->each(fn (): true => true);
         expect($response->text)->toEqual('Third response')
             ->and($response->events)->toHaveCount(6);
+    });
+
+    test('faked agents can stream the reasoning that preceded an answer', function (): void {
+        AssistantAgent::fake([
+            AgentResponse::fakeWithReasoning('They want the temperature.', 'It is 12°C.'),
+        ]);
+
+        $response = (new AssistantAgent)->stream('How cold is it?');
+        $response->each(fn (): true => true);
+
+        expect($response->reasoning)->toBe('They want the temperature.')
+            ->and($response->text)->toBe('It is 12°C.')
+            ->and($response->events->whereInstanceOf(ReasoningStart::class))->toHaveCount(1)
+            ->and($response->events->whereInstanceOf(ReasoningEnd::class))->toHaveCount(1);
+    });
+
+    test('a faked stream reports no reasoning when the model did not reason', function (): void {
+        AssistantAgent::fake(['It is 12°C.']);
+
+        $response = (new AssistantAgent)->stream('How cold is it?');
+        $response->each(fn (): true => true);
+
+        expect($response->reasoning)->toBe('')
+            ->and($response->events->whereInstanceOf(ReasoningDelta::class))->toBeEmpty();
+    });
+
+    test('faked agents can stream the sources an answer cited', function (): void {
+        AssistantAgent::fake([
+            new TextResponse('Laravel MCP ships an MCP server.', new Usage, new Meta('anthropic', 'test-model', collect([
+                new UrlCitation('https://laravel.com/docs/mcp', 'Laravel MCP'),
+            ]))),
+        ]);
+
+        $response = (new AssistantAgent)->stream('What does Laravel MCP do?');
+        $response->each(fn (): true => true);
+
+        expect($response->events->whereInstanceOf(CitationEvent::class))->toHaveCount(1)
+            ->and($response->citations->pluck('url')->all())->toBe(['https://laravel.com/docs/mcp']);
+    });
+
+    test('a faked stream reports no sources when the answer cited nothing', function (): void {
+        AssistantAgent::fake(['It is 12°C.']);
+
+        $response = (new AssistantAgent)->stream('How cold is it?');
+        $response->each(fn (): true => true);
+
+        expect($response->events->whereInstanceOf(CitationEvent::class))->toBeEmpty()
+            ->and($response->citations)->toBeEmpty();
     });
 
     test('faked stream events share the response invocation id', function (): void {

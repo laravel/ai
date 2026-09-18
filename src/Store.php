@@ -8,7 +8,7 @@ use Laravel\Ai\Contracts\Files\HasProviderId;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
-use Laravel\Ai\Files\Base64Document;
+use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Responses\AddedDocumentResponse;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
@@ -31,8 +31,7 @@ class Store
         array $metadata = [],
     ): AddedDocumentResponse {
         if ($file instanceof UploadedFile) {
-            $file = Base64Document::fromUpload($file)
-                ->as($file->getClientOriginalName());
+            $file = LocalDocument::fromUploadedFile($file);
         }
 
         $originalFile = $file;

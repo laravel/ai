@@ -10,6 +10,7 @@ use Aws\Sts\StsClient;
 use Closure;
 use Laravel\Ai\Providers\Provider;
 use Psr\Http\Message\RequestInterface;
+use RuntimeException;
 
 trait CreatesBedrockClient
 {
@@ -25,6 +26,10 @@ trait CreatesBedrockClient
      */
     protected function createBedrockClient(Provider $provider, ?int $timeout = null): BedrockRuntimeClient
     {
+        if (! class_exists(BedrockRuntimeClient::class)) {
+            throw new RuntimeException('The Bedrock provider requires the AWS SDK. Please install it via: composer require aws/aws-sdk-php');
+        }
+
         $credentials = $provider->providerCredentials();
 
         $config = $provider->additionalConfiguration();

@@ -21,12 +21,14 @@ test('can create a structured agent class', function (): void {
     expect(app_path('Ai/Agents/StructuredAgent.php'))->toBeFile();
 });
 
-test('may publish custom agent stubs', function (): void {
+test('may publish custom stubs', function (): void {
     $this->artisan('vendor:publish', [
         '--tag' => 'ai-stubs',
         '--force' => true,
     ])->assertExitCode(0)->run();
 
     expect(base_path('stubs/agent.stub'))->toBeFile()
-        ->and(base_path('stubs/structured-agent.stub'))->toBeFile();
+        ->and(base_path('stubs/structured-agent.stub'))->toBeFile()
+        ->and(base_path('stubs/tool.stub'))->toBeFile()
+        ->and(base_path('stubs/agent-middleware.stub'))->toBeFile();
 });

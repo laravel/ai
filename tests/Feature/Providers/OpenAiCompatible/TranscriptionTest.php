@@ -109,8 +109,8 @@ test('transcription reads chat completion style usage keys', function (): void {
 
     $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openai-compatible');
 
-    expect($response->usage->promptTokens)->toBe(12)
-        ->and($response->usage->completionTokens)->toBe(3);
+    expect($response->usage->inputTokens)->toBe(12)
+        ->and($response->usage->outputTokens)->toBe(3);
 });
 
 test('transcription reads openai style usage keys', function (): void {
@@ -121,8 +121,8 @@ test('transcription reads openai style usage keys', function (): void {
 
     $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openai-compatible');
 
-    expect($response->usage->promptTokens)->toBe(7)
-        ->and($response->usage->completionTokens)->toBe(2);
+    expect($response->usage->inputTokens)->toBe(7)
+        ->and($response->usage->outputTokens)->toBe(2);
 });
 
 test('transcription uses the audio name for the upload filename', function (): void {

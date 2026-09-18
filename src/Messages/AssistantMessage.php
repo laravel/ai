@@ -13,7 +13,7 @@ class AssistantMessage extends Message
     /**
      * Raw provider replay state populated by the SDK's response parser.
      *
-     * @var array<int, array<string, mixed>>
+     * @var array<array-key, mixed>
      */
     public array $providerContentBlocks = [];
 
@@ -26,7 +26,7 @@ class AssistantMessage extends Message
      * Create a new text conversation message instance.
      *
      * @param  Collection<int, ToolCall>|null  $toolCalls
-     * @param  array<int, array<string, mixed>>  $providerContentBlocks
+     * @param  array<array-key, mixed>  $providerContentBlocks
      */
     public function __construct(string $content, ?Collection $toolCalls = null, array $providerContentBlocks = [], ?string $providerContentBlocksProvider = null)
     {

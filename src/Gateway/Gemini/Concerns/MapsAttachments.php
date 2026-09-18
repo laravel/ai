@@ -60,10 +60,10 @@ trait MapsAttachments
                 ],
             ],
             $attachment instanceof RemoteImage => [
-                'fileData' => array_filter([
-                    'mimeType' => $attachment->mime,
-                    'fileUri' => $attachment->url,
-                ]),
+                'inlineData' => [
+                    'mimeType' => $attachment->mimeType() ?? 'image/png',
+                    'data' => base64_encode($attachment->content()),
+                ],
             ],
             $attachment instanceof LocalImage => [
                 'inlineData' => [
@@ -97,10 +97,10 @@ trait MapsAttachments
                 ],
             ],
             $attachment instanceof RemoteDocument => [
-                'fileData' => array_filter([
-                    'mimeType' => $attachment->mime,
-                    'fileUri' => $attachment->url,
-                ]),
+                'inlineData' => [
+                    'mimeType' => $attachment->mimeType() ?? 'application/octet-stream',
+                    'data' => base64_encode($attachment->content()),
+                ],
             ],
             $attachment instanceof StoredDocument => [
                 'inlineData' => [
@@ -131,10 +131,10 @@ trait MapsAttachments
                 ],
             ],
             $attachment instanceof RemoteAudio => [
-                'fileData' => array_filter([
-                    'mimeType' => $attachment->mime,
-                    'fileUri' => $attachment->url,
-                ]),
+                'inlineData' => [
+                    'mimeType' => $attachment->mimeType() ?? 'audio/mp3',
+                    'data' => base64_encode($attachment->content()),
+                ],
             ],
             $attachment instanceof Base64Video => [
                 'inlineData' => [
@@ -156,11 +156,16 @@ trait MapsAttachments
                     ),
                 ],
             ],
-            $attachment instanceof RemoteVideo => [
+            $attachment instanceof RemoteVideo => $this->isYouTubeUrl($attachment->url) ? [
                 'fileData' => array_filter([
                     'mimeType' => $attachment->mime,
                     'fileUri' => $attachment->url,
                 ]),
+            ] : [
+                'inlineData' => [
+                    'mimeType' => $attachment->mimeType() ?? 'video/mp4',
+                    'data' => base64_encode($attachment->content()),
+                ],
             ],
             $attachment instanceof UploadedFile => [
                 'inlineData' => [
@@ -170,5 +175,15 @@ trait MapsAttachments
             ],
             default => throw new InvalidArgumentException('Unsupported attachment type ['.get_debug_type($attachment).']'),
         };
+    }
+
+    /**
+     * Determine if the given URL is a YouTube URL, which Gemini accepts as a file URI.
+     */
+    protected function isYouTubeUrl(string $url): bool
+    {
+        return in_array(strtolower((string) parse_url($url, PHP_URL_HOST)), [
+            'youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be', 'www.youtu.be',
+        ], true);
     }
 }

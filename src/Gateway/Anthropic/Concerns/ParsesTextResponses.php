@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
@@ -15,7 +16,7 @@ use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
-    use DecodesStructuredOutput;
+    use DecodesStructuredOutput, JoinsReasoning;
 
     /**
      * Validate the Anthropic response data.
@@ -92,6 +93,7 @@ trait ParsesTextResponses
             meta: new Meta($provider->name(), $model, $citations),
             structured: $structuredData,
             providerContentBlocks: $content,
+            reasoning: $this->extractReasoning($content),
         );
     }
 
@@ -103,6 +105,16 @@ trait ParsesTextResponses
         $textBlocks = array_filter($content, fn (array $block): bool => ($block['type'] ?? '') === 'text');
 
         return implode('', array_column($textBlocks, 'text'));
+    }
+
+    /**
+     * Extract the reasoning text from Anthropic content blocks.
+     */
+    protected function extractReasoning(array $content): string
+    {
+        $thinkingBlocks = array_filter($content, fn (array $block): bool => ($block['type'] ?? '') === 'thinking');
+
+        return static::joinReasoning(array_map(fn (array $block): string => $block['thinking'] ?? '', $thinkingBlocks));
     }
 
     /**
@@ -141,6 +153,17 @@ trait ParsesTextResponses
                 }
             }
 
+            if ($blockType === 'web_fetch_tool_result') {
+                $result = $block['content'] ?? [];
+
+                if (($result['type'] ?? '') === 'web_fetch_result' && filled($result['url'] ?? null)) {
+                    $citations->push(new UrlCitation(
+                        $result['url'],
+                        $result['content']['title'] ?? null,
+                    ));
+                }
+            }
+
             if ($blockType === 'text') {
                 foreach ($block['citations'] ?? [] as $citation) {
                     if (($citation['type'] ?? '') === 'web_search_result_location') {
@@ -162,12 +185,16 @@ trait ParsesTextResponses
     protected function extractUsage(array $data): Usage
     {
         $usage = $data['usage'] ?? [];
+        $cacheReadTokens = $usage['cache_read_input_tokens'] ?? null;
+        $cacheWriteTokens = $usage['cache_creation_input_tokens'] ?? null;
 
+        // Anthropic reports input tokens exclusive of the cache buckets...
         return new Usage(
-            $usage['input_tokens'] ?? 0,
-            $usage['output_tokens'] ?? 0,
-            $usage['cache_creation_input_tokens'] ?? 0,
-            $usage['cache_read_input_tokens'] ?? 0,
+            inputTokens: ($usage['input_tokens'] ?? 0) + ($cacheReadTokens ?? 0) + ($cacheWriteTokens ?? 0),
+            outputTokens: $usage['output_tokens'] ?? 0,
+            cacheReadInputTokens: $cacheReadTokens,
+            cacheWriteInputTokens: $cacheWriteTokens,
+            reasoningTokens: $usage['output_tokens_details']['thinking_tokens'] ?? null,
         );
     }
 

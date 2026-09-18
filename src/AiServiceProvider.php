@@ -125,7 +125,8 @@ class AiServiceProvider extends ServiceProvider
             string $query,
             ?int $limit = null,
             Lab|array|string|null $provider = null,
-            ?string $model = null
+            ?string $model = null,
+            int $timeout = 30,
         ) {
             $resolver = match (true) {
                 $by instanceof Closure => $by,
@@ -137,6 +138,7 @@ class AiServiceProvider extends ServiceProvider
 
             $response = Reranking::of($this->map($resolver)->values()->all())
                 ->limit($limit)
+                ->timeout($timeout)
                 ->rerank($query, $provider, $model);
 
             return (new Collection($response->results))->map(

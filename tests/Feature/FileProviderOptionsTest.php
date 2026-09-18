@@ -29,3 +29,12 @@ test('closure provider options survive php serialization', function (): void {
 
     expect($restored->providerOptions(Lab::OpenAI))->toBe(['purpose' => 'assistants']);
 });
+
+test('headers resolve separately from provider options', function (): void {
+    $document = Document::fromString('Hello')
+        ->withHeaders(fn (Lab $provider): array => ['X-Provider' => $provider->value])
+        ->withProviderOptions(['purpose' => 'fine-tune']);
+
+    expect($document->providerOptions(Lab::OpenAI))->toBe(['purpose' => 'fine-tune'])
+        ->and($document->headers(Lab::OpenAI))->toBe(['X-Provider' => 'openai']);
+});

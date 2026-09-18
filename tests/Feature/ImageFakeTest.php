@@ -259,3 +259,13 @@ test('queued image size and quality are recorded', function (): void {
         && $prompt->size === '3:2'
         && $prompt->quality === 'low');
 });
+
+test('image timeout is recorded for generated and queued prompts', function (): void {
+    Image::fake();
+
+    Image::of('First prompt')->timeout(45)->generate();
+    Image::of('Second prompt')->timeout(90)->queue();
+
+    Image::assertGenerated(fn (ImagePrompt $prompt): bool => $prompt->timeout === 45);
+    Image::assertQueued(fn (QueuedImagePrompt $prompt): bool => $prompt->timeout === 90);
+});

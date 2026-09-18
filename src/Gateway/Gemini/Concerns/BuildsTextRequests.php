@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Gemini\Concerns;
 
 use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
@@ -67,8 +68,8 @@ trait BuildsTextRequests
             $body['tools'] = $this->mapTools($tools, $provider);
 
             if ($options?->toolChoice instanceof ToolChoice) {
-                $body['tool_config'] = [
-                    'function_calling_config' => $this->functionCallingConfig($options->toolChoice),
+                $body['toolConfig'] = [
+                    'functionCallingConfig' => $this->functionCallingConfig($options->toolChoice),
                 ];
             }
         }
@@ -91,11 +92,19 @@ trait BuildsTextRequests
 
         $providerOptions = $options?->providerOptions($provider->driver()) ?? [];
 
+        if (is_array($providerOptions['generationConfig'] ?? null)) {
+            $providerOptions = array_merge(
+                Arr::except($providerOptions, 'generationConfig'),
+                $providerOptions['generationConfig'],
+            );
+        }
+
         // Hoist keys that need to be passed at top level, as everything else is passed in generationConfig
-        $topLevelKeys = ['cachedContent'];
-        foreach ($topLevelKeys as $key) {
-            if (array_key_exists($key, $providerOptions)) {
-                $body[$key] = $providerOptions[$key];
+        $topLevelKeys = ['cachedContent', 'safetySettings', 'toolConfig', 'serviceTier', 'store'];
+
+        foreach ($providerOptions as $key => $value) {
+            if (in_array($camelKey = Str::camel($key), $topLevelKeys, true)) {
+                $body[$camelKey] = $value;
                 unset($providerOptions[$key]);
             }
         }
@@ -123,7 +132,7 @@ trait BuildsTextRequests
                 'name' => $result->name,
                 'response' => [
                     'name' => $result->name,
-                    'content' => $this->serializeToolResultOutput($result->result),
+                    'content' => $result->text(),
                 ],
             ];
 
@@ -144,7 +153,7 @@ trait BuildsTextRequests
     }
 
     /**
-     * Map a tool choice to the Gemini function_calling_config block.
+     * Map a tool choice to the Gemini functionCallingConfig block.
      *
      * @return array<string, mixed>
      */
@@ -156,7 +165,7 @@ trait BuildsTextRequests
             ToolChoice::required => ['mode' => 'ANY'],
             ToolChoice::tool => [
                 'mode' => 'ANY',
-                'allowed_function_names' => [$choice->toolName],
+                'allowedFunctionNames' => [$choice->toolName],
             ],
         };
     }

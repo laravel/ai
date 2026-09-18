@@ -71,6 +71,7 @@ trait ParsesTextResponses
             meta: new Meta($provider->name(), $model),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
             providerContentBlocks: $providerContentBlocks,
+            reasoning: (string) ($message['reasoning_content'] ?? ''),
         );
     }
 
@@ -80,13 +81,12 @@ trait ParsesTextResponses
     protected function extractUsage(array $data): Usage
     {
         $usage = $data['usage'] ?? [];
-        $details = $usage['completion_tokens_details'] ?? [];
 
         return new Usage(
-            promptTokens: $usage['prompt_tokens'] ?? 0,
-            completionTokens: $usage['completion_tokens'] ?? 0,
-            cacheReadInputTokens: $usage['prompt_cache_hit_tokens'] ?? 0,
-            reasoningTokens: $details['reasoning_tokens'] ?? 0,
+            inputTokens: $usage['prompt_tokens'] ?? 0,
+            outputTokens: $usage['completion_tokens'] ?? 0,
+            cacheReadInputTokens: $usage['prompt_cache_hit_tokens'] ?? null,
+            reasoningTokens: $usage['completion_tokens_details']['reasoning_tokens'] ?? null,
         );
     }
 

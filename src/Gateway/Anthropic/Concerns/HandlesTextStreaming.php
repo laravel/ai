@@ -49,13 +49,11 @@ trait HandlesTextStreaming
         $pendingToolCalls = [];
         $responseContent = [];
 
-        $inputTokens = 0;
-        $cacheCreationTokens = 0;
-        $cacheReadTokens = 0;
+        $messageUsage = [];
         $usage = null;
         $stopReason = '';
 
-        $emitTextStart = function () use (&$textStartEmitted, &$messageId, $invocationId): ?StreamEvent {
+        $emitTextStart = function () use (&$textStartEmitted, $messageId, $invocationId): ?StreamEvent {
             if ($textStartEmitted) {
                 return null;
             }
@@ -102,10 +100,7 @@ trait HandlesTextStreaming
             if ($type === 'message_start' && ! $streamStartEmitted) {
                 $streamStartEmitted = true;
 
-                $messageStartUsage = $data['message']['usage'] ?? [];
-                $inputTokens = $messageStartUsage['input_tokens'] ?? 0;
-                $cacheCreationTokens = $messageStartUsage['cache_creation_input_tokens'] ?? 0;
-                $cacheReadTokens = $messageStartUsage['cache_read_input_tokens'] ?? 0;
+                $messageUsage = $data['message']['usage'] ?? [];
 
                 yield (new StreamStart(
                     $this->generateEventId(),
@@ -153,8 +148,20 @@ trait HandlesTextStreaming
                         $data['content_block'] ?? [],
                         'started',
                         time(),
+                        provider: $provider->name(),
                     ))->withInvocationId($invocationId);
                 } elseif ($this->isProviderToolResultBlock($blockType)) {
+                    $fetchResult = $data['content_block']['content'] ?? [];
+
+                    if ($blockType === 'web_fetch_tool_result' && ($fetchResult['type'] ?? '') === 'web_fetch_result' && filled($fetchResult['url'] ?? null)) {
+                        yield (new CitationEvent(
+                            $this->generateEventId(),
+                            $messageId,
+                            new UrlCitation($fetchResult['url'], $fetchResult['content']['title'] ?? null),
+                            time(),
+                        ))->withInvocationId($invocationId);
+                    }
+
                     yield (new ProviderToolEvent(
                         $this->generateEventId(),
                         $data['content_block']['tool_use_id'] ?? $data['content_block']['id'] ?? '',
@@ -162,6 +169,7 @@ trait HandlesTextStreaming
                         $data['content_block'] ?? [],
                         'result_received',
                         time(),
+                        provider: $provider->name(),
                     ))->withInvocationId($invocationId);
                 }
 
@@ -238,19 +246,13 @@ trait HandlesTextStreaming
             }
 
             if ($type === 'content_block_stop') {
-                if ($currentBlockType === 'text' && $textStartEmitted) {
+                if ($currentBlockType === 'text') {
+                    // The block closes, the message does not. Anthropic opens a text block per
+                    // citable span, so one answer arrives as several; the replay content keeps
+                    // them apart while the stream reports the step as a single message...
                     if (isset($responseContent[$currentBlockIndex])) {
                         $responseContent[$currentBlockIndex]['text'] = $currentBlockText;
                     }
-
-                    yield (new TextEnd(
-                        $this->generateEventId(),
-                        $messageId,
-                        time(),
-                    ))->withInvocationId($invocationId);
-
-                    $textStartEmitted = false;
-                    $messageId = $this->generateEventId();
                 } elseif ($currentBlockType === 'thinking' && $reasoningStartEmitted) {
                     if (isset($responseContent[$currentBlockIndex])) {
                         $responseContent[$currentBlockIndex]['thinking'] = $currentThinkingText;
@@ -299,6 +301,7 @@ trait HandlesTextStreaming
                         $responseContent[$index] ?? [],
                         'completed',
                         time(),
+                        provider: $provider->name(),
                     ))->withInvocationId($invocationId);
                 }
 
@@ -309,15 +312,19 @@ trait HandlesTextStreaming
 
             if ($type === 'message_delta') {
                 $stopReason = $data['delta']['stop_reason'] ?? '';
-                $deltaUsage = $data['usage'] ?? [];
 
-                $usage = new Usage(
-                    $inputTokens,
-                    $deltaUsage['output_tokens'] ?? 0,
-                    $cacheCreationTokens,
-                    $cacheReadTokens,
-                );
+                // Usage on message_delta is cumulative for the whole message...
+                $usage = $this->extractUsage(['usage' => array_merge($messageUsage, $data['usage'] ?? [])]);
             }
+        }
+
+        // Closed once the step is over rather than once per block, so the step is one message...
+        if ($textStartEmitted) {
+            yield (new TextEnd(
+                $this->generateEventId(),
+                $messageId,
+                time(),
+            ))->withInvocationId($invocationId);
         }
 
         return $this->buildStepResponse(

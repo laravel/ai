@@ -1,9 +1,12 @@
 <?php
 
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
@@ -14,8 +17,135 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
+
+use function Laravel\Ai\agent;
 
 describe('text streaming', function (): void {
+    test('streaming emits provider tool events for code execution parts', function (): void {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->geminiChunk([['executableCode' => ['language' => 'PYTHON', 'code' => 'print(1)']]]),
+                    $this->geminiChunk([['codeExecutionResult' => ['outcome' => 'OUTCOME_OK', 'output' => '1']]]),
+                    $this->geminiChunkWithUsage([['text' => 'The answer is 1.']], 10, 5),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $providerEvents = array_values(array_filter($this->collectStreamEvents(), fn ($e): bool => $e instanceof ProviderToolEvent));
+
+        expect(array_map(fn (ProviderToolEvent $e): string => $e->status, $providerEvents))->toBe(['completed', 'result_received'])
+            ->and($providerEvents[0])->type->toBe('code_execution')->provider->toBe('gemini')
+            ->and($providerEvents[0]->data['executableCode']['code'])->toBe('print(1)')
+            ->and($providerEvents[1]->data['codeExecutionResult']['output'])->toBe('1');
+    });
+
+    test('streaming replays code execution parts when continuing after a function call', function (): void {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence()
+                ->push(
+                    body: $this->ssePayload([
+                        $this->geminiChunk([['executableCode' => ['language' => 'PYTHON', 'code' => 'print(1)']]]),
+                        $this->geminiChunk([['codeExecutionResult' => ['outcome' => 'OUTCOME_OK', 'output' => '1']]]),
+                        $this->geminiChunkWithUsage([['functionCall' => ['name' => 'FixedNumberGenerator', 'args' => []]]], 10, 5),
+                    ]),
+                    headers: ['Content-Type' => 'text/event-stream'],
+                )
+                ->push(
+                    body: $this->ssePayload([$this->geminiChunkWithUsage([['text' => 'Done.']], 10, 5)]),
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+        ]);
+
+        $this->collectStreamEvents(agent(tools: [new FixedNumberGenerator]));
+
+        Http::assertSentCount(2);
+
+        Http::assertSent(function (Request $request): bool {
+            $modelParts = collect(json_decode($request->body(), true)['contents'] ?? [])
+                ->firstWhere('role', 'model')['parts'] ?? [];
+
+            return array_column($modelParts, 'executableCode') !== []
+                && array_column($modelParts, 'codeExecutionResult') !== []
+                && array_column($modelParts, 'functionCall') !== [];
+        });
+    });
+
+    test('streaming emits citation events for grounding metadata', function (): void {
+        $finalChunk = [
+            'candidates' => [[
+                'content' => ['parts' => [['text' => '']], 'role' => 'model'],
+                'finishReason' => 'STOP',
+                'groundingMetadata' => [
+                    'groundingChunks' => [
+                        ['web' => ['uri' => 'https://example.com/euro', 'title' => 'Euro 2024']],
+                        ['web' => ['uri' => 'https://example.com/spain', 'title' => 'Spain Wins']],
+                    ],
+                    'groundingSupports' => [
+                        ['segment' => ['startIndex' => 0, 'endIndex' => 20, 'text' => 'Spain won Euro 2024.'], 'groundingChunkIndices' => [0, 1]],
+                    ],
+                ],
+            ]],
+            'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
+            'modelVersion' => 'gemini-3.7-flash',
+        ];
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->geminiChunk([['text' => 'Spain won Euro 2024.']]),
+                    $finalChunk,
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $citations = array_values(array_filter($this->collectStreamEvents(), fn ($e): bool => $e instanceof CitationEvent));
+
+        expect($citations)->toHaveCount(2)
+            ->and($citations[0]->citation->url)->toBe('https://example.com/euro')
+            ->and($citations[1]->citation->url)->toBe('https://example.com/spain');
+    });
+
+    test('streaming emits citation events when grounding metadata is followed by a candidate-less chunk', function (): void {
+        $groundedChunk = [
+            'candidates' => [[
+                'content' => ['parts' => [['text' => 'Spain won Euro 2024.']], 'role' => 'model'],
+                'finishReason' => 'STOP',
+                'groundingMetadata' => [
+                    'groundingChunks' => [
+                        ['web' => ['uri' => 'https://example.com/euro', 'title' => 'Euro 2024']],
+                    ],
+                    'groundingSupports' => [
+                        ['segment' => ['startIndex' => 0, 'endIndex' => 20, 'text' => 'Spain won Euro 2024.'], 'groundingChunkIndices' => [0]],
+                    ],
+                ],
+            ]],
+        ];
+
+        $usageOnlyChunk = [
+            'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
+            'modelVersion' => 'gemini-3.7-flash',
+        ];
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response(
+                body: $this->ssePayload([$groundedChunk, $usageOnlyChunk]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $citations = array_values(array_filter($this->collectStreamEvents(), fn ($e): bool => $e instanceof CitationEvent));
+
+        expect($citations)->toHaveCount(1)
+            ->and($citations[0]->citation->url)->toBe('https://example.com/euro');
+    });
+
     test('streaming emits text events', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::response(
@@ -124,8 +254,8 @@ describe('tool calls', function (): void {
         expect($streamEnds)->toHaveCount(1)
             ->and($streamEnds[0]->reason)->toBe(FinishReason::Stop->value)
             ->and($streamEnds[0]->usage)
-            ->promptTokens->toBe(30)
-            ->completionTokens->toBe(15);
+            ->inputTokens->toBe(30)
+            ->outputTokens->toBe(15);
     });
 
     test('streaming thinking parts are excluded from tool call continuation', function (): void {
@@ -313,8 +443,8 @@ describe('usage tracking', function (): void {
         $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
         expect($streamEnd->usage)
-            ->promptTokens->toBe(37)
-            ->completionTokens->toBe(10)
+            ->inputTokens->toBe(42)
+            ->outputTokens->toBe(10)
             ->cacheReadInputTokens->toBe(5);
     });
 

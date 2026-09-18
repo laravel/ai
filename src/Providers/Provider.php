@@ -50,6 +50,24 @@ abstract class Provider implements \Stringable, ProviderContract
     }
 
     /**
+     * Get a provider instance that sends the given HTTP headers with each request.
+     *
+     * @param  array<string, string>  $headers
+     *
+     * @internal
+     */
+    public function withHeaders(array $headers): static
+    {
+        if (! filled($headers)) {
+            return $this;
+        }
+
+        return tap(clone $this, function (self $provider) use ($headers): void {
+            $provider->config['headers'] = array_merge($provider->config['headers'] ?? [], $headers);
+        });
+    }
+
+    /**
      * Format the given provider / model list.
      */
     public static function formatProviderAndModelList(Lab|array|string $providers, ?string $model = null): array
