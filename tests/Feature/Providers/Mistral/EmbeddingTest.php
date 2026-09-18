@@ -35,7 +35,7 @@ test('embeddings response is correctly parsed', function (): void {
 
     expect($response->embeddings)->toHaveCount(1)
         ->and($response->embeddings[0])->toHaveCount(3)
-        ->and($response->tokens)->toBe(10)
+        ->and($response->usage->inputTokens)->toBe(10)
         ->and($response->meta->provider)->toBe('mistral');
 });
 
@@ -56,7 +56,7 @@ test('multiple inputs return multiple embeddings', function (): void {
             ['object' => 'embedding', 'index' => 0, 'embedding' => [0.1, 0.2, 0.3]],
             ['object' => 'embedding', 'index' => 1, 'embedding' => [0.4, 0.5, 0.6]],
         ],
-        'usage' => ['total_tokens' => 20],
+        'usage' => ['prompt_tokens' => 20, 'completion_tokens' => 0, 'total_tokens' => 20],
     ])]);
 
     $response = Embeddings::for(['Hello', 'World'])->generate(provider: 'mistral', model: 'mistral-embed');
@@ -125,6 +125,6 @@ function fakeEmbeddingsResponse()
         'data' => [
             ['object' => 'embedding', 'index' => 0, 'embedding' => [0.1, 0.2, 0.3]],
         ],
-        'usage' => ['total_tokens' => 10],
+        'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 0, 'total_tokens' => 10],
     ]);
 }

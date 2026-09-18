@@ -201,6 +201,7 @@ class OpenRouterGateway implements Gateway, RerankingGateway, StepTextGateway
 
         return new AudioResponse(
             base64_encode($response->body()),
+            new Usage,
             new Meta($provider->name(), $model),
             $this->audioResponseMimeType($format),
         );
@@ -358,7 +359,7 @@ class OpenRouterGateway implements Gateway, RerankingGateway, StepTextGateway
 
         return new EmbeddingsResponse(
             (new Collection($data['data'] ?? []))->pluck('embedding')->all(),
-            $data['usage']['prompt_tokens'] ?? 0,
+            new Usage($data['usage']['prompt_tokens'] ?? 0),
             new Meta($provider->name(), $model),
         );
     }

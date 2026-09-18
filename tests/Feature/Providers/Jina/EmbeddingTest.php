@@ -35,7 +35,7 @@ test('embeddings response is correctly parsed', function (): void {
 
     expect($response->embeddings)->toHaveCount(1)
         ->and($response->embeddings[0])->toBe([0.1, 0.2, 0.3])
-        ->and($response->tokens)->toBe(10)
+        ->and($response->usage->inputTokens)->toBe(10)
         ->and($response->meta->provider)->toBe('jina')
         ->and($response->meta->model)->toBe('jina-embeddings-v4');
 });

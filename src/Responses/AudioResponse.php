@@ -5,6 +5,7 @@ namespace Laravel\Ai\Responses;
 use Illuminate\Support\Str;
 use Laravel\Ai\Concerns\Storable;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 
 class AudioResponse implements \Stringable
 {
@@ -17,6 +18,7 @@ class AudioResponse implements \Stringable
      */
     public function __construct(
         public string $audio,
+        public Usage $usage,
         public Meta $meta,
         ?string $mimeType = null,
     ) {

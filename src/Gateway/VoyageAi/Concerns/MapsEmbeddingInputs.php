@@ -14,6 +14,7 @@ use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\RemoteVideo;
 use Laravel\Ai\Files\Video as VideoFile;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 
 trait MapsEmbeddingInputs
@@ -58,7 +59,7 @@ trait MapsEmbeddingInputs
 
         return new EmbeddingsResponse(
             (new Collection($data['data'] ?? []))->pluck('embedding')->all(),
-            $data['usage']['total_tokens'] ?? $data['total_tokens'] ?? 0,
+            new Usage($data['usage']['total_tokens'] ?? $data['total_tokens'] ?? 0),
             new Meta($provider->name(), $model),
         );
     }

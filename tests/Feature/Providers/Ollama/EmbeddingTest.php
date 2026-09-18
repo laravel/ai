@@ -36,7 +36,7 @@ test('embeddings response is correctly parsed', function (): void {
 
     expect($response->embeddings)->toHaveCount(1)
         ->and($response->embeddings[0])->toHaveCount(3)
-        ->and($response->tokens)->toBe(10)
+        ->and($response->usage->inputTokens)->toBe(10)
         ->and($response->meta->provider)->toBe('ollama');
 });
 

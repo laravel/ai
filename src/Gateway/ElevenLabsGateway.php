@@ -49,6 +49,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
 
         return new AudioResponse(
             base64_encode((string) $response),
+            new Usage,
             new Meta($provider->name(), $model),
             'audio/mpeg'
         );
