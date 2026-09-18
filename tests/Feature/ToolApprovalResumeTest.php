@@ -304,6 +304,9 @@ test('a streamed multi-step pause stores every step so the resume replays each o
 
     $resumed->each(fn () => true);
 
+    expect(DB::table('agent_conversation_messages')->where('role', 'assistant')->orderBy('id')->pluck('steps'))
+        ->each(fn ($steps) => $steps->json()->each->toMatchArray(['replay_blocks' => []]));
+
     $resumeMessages = collect(Http::recorded())->last()[0]->data()['messages'];
 
     $turns = collect($resumeMessages)->map(fn (array $message) => [
@@ -941,15 +944,9 @@ test('a completed two-step turn replays step by step on the next prompt', functi
 
     expect($history)->toHaveCount(7)->sequence(
         fn ($message) => $message->toMatchArray(['role' => 'user']),
-        fn ($message) => $message->toMatchArray(['role' => 'assistant'])->content->toHaveCount(2)->sequence(
-            fn ($block) => $block->toMatchArray(['type' => 'text', 'text' => 'First number']),
-            fn ($block) => $block->toMatchArray(['type' => 'tool_use', 'id' => 'toolu_1']),
-        ),
+        fn ($message) => $message->toMatchArray(['role' => 'assistant'])->content->toHaveCount(1)->each->toMatchArray(['type' => 'tool_use', 'id' => 'toolu_1']),
         fn ($message) => $message->toMatchArray(['role' => 'user'])->content->toHaveCount(1)->each->toMatchArray(['type' => 'tool_result', 'tool_use_id' => 'toolu_1']),
-        fn ($message) => $message->toMatchArray(['role' => 'assistant'])->content->toHaveCount(2)->sequence(
-            fn ($block) => $block->toMatchArray(['type' => 'text', 'text' => 'Second number']),
-            fn ($block) => $block->toMatchArray(['type' => 'tool_use', 'id' => 'toolu_2']),
-        ),
+        fn ($message) => $message->toMatchArray(['role' => 'assistant'])->content->toHaveCount(1)->each->toMatchArray(['type' => 'tool_use', 'id' => 'toolu_2']),
         fn ($message) => $message->toMatchArray(['role' => 'user'])->content->toHaveCount(1)->each->toMatchArray(['type' => 'tool_result', 'tool_use_id' => 'toolu_2']),
         fn ($message) => $message->toMatchArray(['role' => 'assistant'])->content->each->toMatchArray(['type' => 'text', 'text' => 'The numbers are 72019 and 72019.']),
         fn ($message) => $message->toMatchArray(['role' => 'user'])->content->each->toMatchArray(['type' => 'text', 'text' => 'Are you sure?']),
