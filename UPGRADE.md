@@ -42,7 +42,7 @@ class LogTheRun
 }
 ```
 
-A `PendingStep` may be copied with changes before it is passed on:
+You may modify a step by creating a copy before passing it to the next middleware:
 
 ```php
 public function handle(PendingStep $step, Closure $next)
@@ -55,11 +55,11 @@ public function handle(PendingStep $step, Closure $next)
 }
 ```
 
-The `withModel()`, `withInstructions()`, `withMessages()`, `withTools()`, `onlyTools()`, `withoutTools()`, `withToolChoice()`, `withMaxTokens()`, and `withProviderOptions()` methods are available, along with `isFirstStep()` and the `isFinalStep` property.
+The `withModel()`, `withInstructions()`, `withMessages()`, `withTools()`, `onlyTools()`, `withoutTools()`, `withToolChoice()`, `withMaxTokens()`, and `withProviderOptions()` methods are available, along with `isFirstStep()` and the `$isFinalStep` property.
 
-Return the `Laravel\Ai\Gateway\StepResult` given by `$next`, or a `StepResponse` to answer the step without calling the model. Anything else throws a `LogicException`.
+Return the `Laravel\Ai\Gateway\StepResult` returned by `$next($step)`, or return a `StepResponse` to answer the step without calling the model. Anything else throws a `LogicException`.
 
-The `AgentPrompted`, `AgentStreamed`, and `AgentFailed` events now always carry the prompt as it was given.
+The `AgentPrompted`, `AgentStreamed`, and `AgentFailed` events now carry the original `AgentPrompt` passed to the provider rather than a prompt modified by run middleware.
 
 ### Gemini Vector Store Imports Wait For Completion
 
@@ -103,7 +103,7 @@ $response->usage->uncachedInputTokens();
 $response->usage->totalTokens();
 ```
 
-Code that priced `promptTokens` at a single rate now needs three: `uncachedInputTokens()` at the base rate, `cacheReadInputTokens` at the cache read rate, and `cacheWriteInputTokens` at the cache write rate.
+If you previously calculated input token costs by applying a single rate to `promptTokens`, calculate each category separately: apply the base rate to `uncachedInputTokens()`, the cache read rate to `cacheReadInputTokens`, and the cache write rate to `cacheWriteInputTokens`.
 
 `toArray()` and the JSON stored in the `usage` column of `agent_conversation_messages` use the `input_tokens` and `output_tokens` keys. Rows written before the upgrade keep the old keys.
 
@@ -135,7 +135,7 @@ The cache read and cache write positions are swapped. `cacheReadInputTokens`, `c
 
 `add()` and `uncachedInputTokens()` are available on `TextUsage` only.
 
-No changes are needed if you only read usage from a response. If you construct a `TextResponse`, `StepResponse`, `Step`, or `StreamEnd` by hand, such as a fake in a test suite, pass a `TextUsage`.
+No changes are needed if you only read usage from a response. If you construct a `TextResponse`, `StepResponse`, `Step`, or `StreamEnd` by hand, such as a fake in a test suite, pass a `TextUsage` instance.
 
 ### Usage Is Reported On Every Response
 
@@ -153,7 +153,7 @@ $response->usage->inputTokens;
 
 `toArray()` and `jsonSerialize()` emit a `usage` object in place of the `tokens` integer.
 
-`AudioResponse` and `RerankingResponse` now carry a `$usage` property as well, and each capability reports a usage class that adds what its providers bill for:
+`AudioResponse` and `RerankingResponse` now carry a `$usage` property as well. Each capability reports its relevant billing metrics through its usage class:
 
 - `ImageResponse::$usage` is an `ImageUsage`, adding `imageInputTokens` and `imageOutputTokens`.
 - `TranscriptionResponse::$usage` is a `TranscriptionUsage`, adding `audioSeconds`.
@@ -162,7 +162,7 @@ $response->usage->inputTokens;
 
 The added counts are `null` when the provider reports nothing.
 
-No changes are needed unless you read `EmbeddingsResponse::$tokens` or construct these responses by hand. `EmbeddingsResponse`, `AudioResponse`, and `RerankingResponse` take the usage as their second constructor argument, before the `Meta`, and `ImageResponse` and `TranscriptionResponse` require their usage subclass.
+No changes are needed unless you read `EmbeddingsResponse::$tokens` or construct these responses by hand. `EmbeddingsResponse`, `AudioResponse`, and `RerankingResponse` take their respective usage object as the second constructor argument, before the `Meta`. `ImageResponse` takes an `ImageUsage` as its second argument, before the `Meta`, while `TranscriptionResponse` takes a `TranscriptionUsage` as its third argument, after the text and segments and before the `Meta`.
 
 ### Stream Protocols
 
@@ -198,13 +198,13 @@ foreach ($agent->stream('...') as $event) {
 }
 ```
 
-The completed response's `text`, `reasoning`, `citations`, and `usage` now include the sub-agent's. Review any cost calculation or text assertion made on a run that uses `AgentTool`.
+The completed response's `text`, `reasoning`, `citations`, and `usage` now include the corresponding values from the sub-agent response. Review any cost calculation or text assertion made on a run that uses `AgentTool`.
 
 ### Streamed Text Is Reported Per Step
 
 **Likelihood Of Impact: Medium**
 
-A streamed step now emits a single `TextStart` / `TextEnd` pair rather than one pair per content block, each with its own message ID. `TextDelta::combine()` separates text by step rather than by message ID to match, so an answer spanning several blocks is no longer split mid-sentence.
+A streamed step now emits a single `TextStart` / `TextEnd` pair. Previously, each content block emitted its own pair with a distinct message ID. `TextDelta::combine()` now separates text by step rather than by message ID, so an answer spanning several blocks is no longer split mid-sentence.
 
 Update any consumer that opens a UI block on `TextStart` and closes it on `TextEnd`, or that keys off a changing message ID.
 
@@ -214,13 +214,13 @@ Update any consumer that opens a UI block on `TextStart` and closes it on `TextE
 
 OpenAI and xAI models that stream raw reasoning text rather than a summary now emit `ReasoningStart`, `ReasoningDelta`, and `ReasoningEnd` events. Handle the new events in any stream consumer that renders reasoning.
 
-`$response->reasoning` moved from `AgentResponse` to `TextResponse` and is populated on non-streamed prompts as well, joining the reasoning of every step. It is also carried per step on `Laravel\Ai\Responses\Data\Step`.
+`$response->reasoning` moved from `AgentResponse` to `TextResponse` and is populated on non-streamed prompts as well. It contains the combined reasoning from every step, while each step's reasoning is available on `Laravel\Ai\Responses\Data\Step`.
 
 ### Protected Provider Hooks
 
 **Likelihood Of Impact: Low**
 
-Several protected methods changed on the classes a custom provider or gateway extends:
+Several protected methods used by custom providers and gateways have changed:
 
 - `Providers\Concerns\GeneratesText::resolveTools()` and `throwIfNotResumable()` receive an `AgentPrompt` instead of an `Agent`.
 - `Providers\Concerns\GeneratesText::recordAgentFailure()` dropped its `?AgentPrompt $processedPrompt` argument, so `bool $retryable` moved from the fifth position to the fourth.
@@ -298,14 +298,14 @@ The image, audio, and reranking methods accept provider options, and reranking a
 ```php
 public function image(string $prompt, array $attachments = [], ?string $size = null, ?string $quality = null, ?string $model = null, ?int $timeout = null, array $providerOptions = []): ImageResponse;
 
-public function audio(string $text, ?string $voice = null, ?string $instructions = null, ?string $model = null, int $timeout = 30, array $providerOptions = []): AudioResponse;
+public function audio(string $text, string $voice = 'default-female', ?string $instructions = null, ?string $model = null, int $timeout = 30, array $providerOptions = []): AudioResponse;
 
 public function rerank(array $documents, string $query, ?int $limit = null, ?string $model = null, int $timeout = 30, array $providerOptions = []): RerankingResponse;
 ```
 
-The matching `ImageGateway`, `AudioGateway`, and `RerankingGateway` methods gained the same arguments, and `Laravel\Ai\Contracts\Providers\Provider` gained a `withHeaders()` method used to send custom HTTP headers. Anything extending the base `Laravel\Ai\Providers\Provider` gets `withHeaders()` for free.
+The corresponding `ImageGateway`, `AudioGateway`, and `RerankingGateway` methods gained the applicable `$providerOptions` and `$timeout` arguments. In addition, `Laravel\Ai\Contracts\Providers\Provider` gained a `withHeaders()` method for sending custom HTTP headers. Anything extending the base `Laravel\Ai\Providers\Provider` gets `withHeaders()` for free.
 
-Reranking requests now use a 30 second timeout by default. Bedrock previously used the AWS SDK default, so a long reranking call may now time out. Raise it with the new `timeout()` method:
+Reranking requests now use a 30-second timeout by default. Bedrock previously used the AWS SDK default, so a long reranking call may now time out. Raise it with the new `timeout()` method:
 
 ```php
 Reranking::of($documents)->timeout(60)->rerank('...');
