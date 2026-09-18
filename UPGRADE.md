@@ -14,6 +14,53 @@ composer require aws/aws-sdk-php
 
 Resolving the Bedrock provider without the SDK installed throws a `RuntimeException`.
 
+### Token Usage Is Reported Inclusively
+
+**Likelihood Of Impact: High**
+
+`Usage::$promptTokens` and `Usage::$completionTokens` have been renamed to `Usage::$inputTokens` and `Usage::$outputTokens`, and now carry the provider's full counts. Cached, cache-written and reasoning tokens are subsets of them rather than separate additions, and are `null` when the provider reports nothing:
+
+```php
+// Before...
+$response->usage->promptTokens;     // excluded cached tokens
+$response->usage->completionTokens;
+
+// After...
+$response->usage->inputTokens;      // includes cached and cache-written tokens
+$response->usage->outputTokens;     // includes reasoning tokens
+$response->usage->uncachedInputTokens();
+```
+
+`cacheReadInputTokens`, `cacheWriteInputTokens` and `reasoningTokens` are now `?int`, and the constructor argument order is `inputTokens, outputTokens, cacheReadInputTokens, cacheWriteInputTokens, reasoningTokens`.
+
+Code that priced `promptTokens` at a single rate now needs three: `uncachedInputTokens()` at the base rate, `cacheReadInputTokens` at the cache-read rate, and `cacheWriteInputTokens` at the cache-write rate.
+
+`toArray()` and the JSON stored in the `usage` column of `agent_conversation_messages` now use the `input_tokens` and `output_tokens` keys. Rows written before the upgrade keep the old keys.
+
+### The `storeUserMessage` Conversation Store Method Signature Changed
+
+**Likelihood Of Impact: Medium**
+
+`Laravel\Ai\Contracts\ConversationStore::storeUserMessage()` no longer receives an `AgentPrompt`, so a user message may be stored before a provider has been resolved:
+
+```php
+// Before...
+public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt): string;
+
+// After...
+public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, string $agent, UserMessage $message): string;
+```
+
+Custom stores should read `$message->content` and `$message->attachments` in place of `$prompt->prompt` and `$prompt->attachments`, and `$agent` in place of `$prompt->agent::class`. `storeAssistantMessage()` is unchanged.
+
+### Gemini Top Level Request Fields Are No Longer Nested
+
+**Likelihood Of Impact: Low**
+
+Gemini provider options named `safetySettings`, `toolConfig`, `serviceTier` and `store` are now sent as top level request fields instead of inside `generationConfig`, in either snake_case or camelCase spelling. A `generationConfig` option is merged into the generation config rather than nested inside it.
+
+As a result, an explicit `toolConfig` provider option now replaces the block written by `toolChoice()` instead of colliding with it.
+
 ## Upgrading To 0.11 From 0.10
 
 ### Connection Failures Throw `ProviderConnectionException`
