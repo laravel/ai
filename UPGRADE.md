@@ -103,8 +103,6 @@ $response->usage->uncachedInputTokens();
 $response->usage->totalTokens();
 ```
 
-`cacheReadInputTokens`, `cacheWriteInputTokens`, and `reasoningTokens` are now `?int` and are `null` when the provider reports nothing, which is distinct from a reported `0`. The constructor argument order is now `inputTokens, outputTokens, cacheReadInputTokens, cacheWriteInputTokens, reasoningTokens`, swapping the cache read and cache write positions.
-
 Code that priced `promptTokens` at a single rate now needs three: `uncachedInputTokens()` at the base rate, `cacheReadInputTokens` at the cache read rate, and `cacheWriteInputTokens` at the cache write rate.
 
 `toArray()` and the JSON stored in the `usage` column of `agent_conversation_messages` use the `input_tokens` and `output_tokens` keys. Rows written before the upgrade keep the old keys.
@@ -114,6 +112,57 @@ Reported values also changed in three places:
 - Anthropic streams read the cumulative usage reported on `message_delta`, so a run using a server tool such as web search reports a higher input token count than before.
 - Anthropic populates `reasoningTokens` from the thinking token breakdown rather than always reporting `0`.
 - Cohere embeddings on Bedrock report the input token count returned by the API rather than always reporting `0`.
+
+### Text Usage Is A `TextUsage` Subclass
+
+**Likelihood Of Impact: Medium**
+
+`Usage` now holds only `inputTokens` and `outputTokens`. The cache and reasoning counts moved to a `Laravel\Ai\Responses\Data\TextUsage` subclass, which is what text, agent, step, and stream responses report:
+
+```php
+// Before...
+use Laravel\Ai\Responses\Data\Usage;
+
+new Usage($promptTokens, $completionTokens, $cacheWriteInputTokens, $cacheReadInputTokens, $reasoningTokens);
+
+// After...
+use Laravel\Ai\Responses\Data\TextUsage;
+
+new TextUsage($inputTokens, $outputTokens, $cacheReadInputTokens, $cacheWriteInputTokens, $reasoningTokens);
+```
+
+The cache read and cache write positions are swapped. `cacheReadInputTokens`, `cacheWriteInputTokens`, and `reasoningTokens` are now `?int` and are `null` when the provider reports nothing, which is distinct from a reported `0`.
+
+`add()` and `uncachedInputTokens()` are available on `TextUsage` only.
+
+No changes are needed if you only read usage from a response. If you construct a `TextResponse`, `StepResponse`, `Step`, or `StreamEnd` by hand, such as a fake in a test suite, pass a `TextUsage`.
+
+### Usage Is Reported On Every Response
+
+**Likelihood Of Impact: Medium**
+
+`EmbeddingsResponse::$tokens` has been removed in favor of a `$usage` object, matching the other responses:
+
+```php
+// Before...
+$response->tokens;
+
+// After...
+$response->usage->inputTokens;
+```
+
+`toArray()` and `jsonSerialize()` emit a `usage` object in place of the `tokens` integer.
+
+`AudioResponse` and `RerankingResponse` now carry a `$usage` property as well, and each capability reports a usage class that adds what its providers bill for:
+
+- `ImageResponse::$usage` is an `ImageUsage`, adding `imageInputTokens` and `imageOutputTokens`.
+- `TranscriptionResponse::$usage` is a `TranscriptionUsage`, adding `audioSeconds`.
+- `RerankingResponse::$usage` is a `RerankingUsage`, adding `searchUnits`.
+- `AudioResponse::$usage` and `EmbeddingsResponse::$usage` are a plain `Usage`.
+
+The added counts are `null` when the provider reports nothing.
+
+No changes are needed unless you read `EmbeddingsResponse::$tokens` or construct these responses by hand. `EmbeddingsResponse`, `AudioResponse`, and `RerankingResponse` take the usage as their second constructor argument, before the `Meta`, and `ImageResponse` and `TranscriptionResponse` require their usage subclass.
 
 ### Stream Protocols
 
