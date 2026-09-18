@@ -375,8 +375,8 @@ test('it preserves the gemini thought signature across a persisted tool conversa
     $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
     $storedCall = json_decode((string) $record->steps, true)[0]['tool_calls'][0];
 
-    expect($storedCall)->not->toHaveKey('thought_signature')
-        ->and(json_decode((string) $record->steps, true)[0]['replay_blocks'][0]['thoughtSignature'])->toBe('sig_persist_777');
+    expect($storedCall['thought_signature'])->toBe('sig_persist_777')
+        ->and(json_decode((string) $record->steps, true)[0]['replay_blocks'])->toBe([]);
 
     (new RememberingToolUsingAgent)->continue($conversationId, $user)->prompt('Generate another', provider: 'gemini');
 
@@ -639,55 +639,84 @@ test('it drops the unexecuted calls of a step-limited tail but keeps its text', 
     );
 });
 
-test('it replays a completed turn with its replay blocks tagged by the provider that made them', function (): void {
+test('it replays every step of a paused turn with its replay blocks tagged by the provider that made them', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
-    insertAssistantTurn($conversationId, 'message-1', 'Read a and b', [
+    insertAssistantTurn($conversationId, 'message-1', 'Read a, deleting b', [
         assistantStep(
             [['id' => 'call-1', 'name' => 'read_file', 'arguments' => ['path' => 'a']]],
             [['id' => 'call-1', 'name' => 'read_file', 'arguments' => ['path' => 'a'], 'result' => 'contents of a']],
             replayBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
         ),
-        assistantStep(replayBlocks: [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'text', 'text' => 'Read a and b']]),
-    ], meta: ['provider' => 'anthropic']);
+        assistantStep(
+            [['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b']]],
+            replayBlocks: [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'tool_use', 'id' => 'call-2']],
+        ),
+    ], ['pending' => ['call-2' => 'Destructive.']], ['provider' => 'anthropic']);
 
     $messages = $store->getLatestConversationMessages($conversationId, 10);
 
     expect($messages)->toHaveCount(3)->sequence(
         fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['replayBlocksProvider' => 'anthropic'])->replayBlocks->toHaveCount(2),
         fn ($message) => $message->toBeInstanceOf(ToolResultMessage::class)->toolResults->toHaveCount(1)->each->toMatchObject(['id' => 'call-1']),
-        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['content' => 'Read a and b', 'replayBlocksProvider' => 'anthropic'])->replayBlocks->toHaveCount(2),
+        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['content' => 'Read a, deleting b', 'replayBlocksProvider' => 'anthropic'])->replayBlocks->toHaveCount(2),
     );
 });
 
-test('it replays blocks from completed turns as well as the paused one', function (): void {
+test('completing a turn stores no replay blocks and drops those of the paused rows it resumed', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
-    insertAssistantTurn($conversationId, 'message-1', 'Read a', [
-        assistantStep(replayBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'text', 'text' => 'Read a']]),
-    ], meta: ['provider' => 'anthropic']);
-    DB::table('agent_conversation_messages')->insert(storedConversationMessageAttributes('message-2', $conversationId, 'Now delete b'));
-    insertAssistantTurn($conversationId, 'message-3', '', [
+    insertAssistantTurn($conversationId, 'message-1', '', [
         assistantStep(
-            [['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'b']]],
-            replayBlocks: [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'tool_use', 'id' => 'call-1']],
+            [['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'b'], 'result' => 'deleted']],
+            replayBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
         ),
-    ], ['pending' => ['call-1' => 'Destructive.']], ['provider' => 'anthropic']);
+    ], ['pending' => []], ['provider' => 'anthropic']);
 
-    $messages = $store->getLatestConversationMessages($conversationId, 10);
+    $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Mockery::mock(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
 
-    expect($messages)->toHaveCount(3)->sequence(
-        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->replayBlocks->toHaveCount(2),
-        fn ($message) => $message->toBeInstanceOf(Message::class)->toMatchObject(['content' => 'Now delete b']),
-        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->replayBlocks->toHaveCount(2),
-    );
+    $response = (new AgentResponse('invocation-id', 'Deleted b.', new TextUsage, new Meta('anthropic')))->withSteps(collect([
+        new Step('Deleted b.', [], [], FinishReason::Stop, new TextUsage, new Meta, '', [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'text', 'text' => 'Deleted b.']]),
+    ]));
 
-    $messages = $store->getLatestConversationMessages($conversationId, 1);
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
 
-    expect($messages)->toHaveCount(1)
-        ->and($messages->first()->replayBlocks)->toHaveCount(2);
+    $blocks = DB::table('agent_conversation_messages')->where('role', 'assistant')->pluck('steps')
+        ->flatMap(fn (string $steps) => collect(json_decode($steps, true))->pluck('replay_blocks'));
+
+    expect($blocks->all())->toBe([[], []]);
+});
+
+test('a turn that pauses again keeps the replay blocks of the rows it resumed', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    insertAssistantTurn($conversationId, 'message-1', '', [
+        assistantStep(
+            [['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'b'], 'result' => 'deleted']],
+            replayBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
+        ),
+    ], ['pending' => []], ['provider' => 'anthropic']);
+
+    $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Mockery::mock(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
+
+    $response = (new AgentResponse('invocation-id', '', new TextUsage, new Meta('anthropic')))
+        ->withSteps(collect([
+            new Step('', [new ToolCall('call-2', 'DeleteFile', ['path' => 'c'])], [], FinishReason::ToolCalls, new TextUsage, new Meta, '', [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'tool_use', 'id' => 'call-2']]),
+        ]))
+        ->withPendingApprovals(collect([new PendingApproval('call-2', 'DeleteFile', ['path' => 'c'], 'Deletes a file')]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $blocks = DB::table('agent_conversation_messages')->where('role', 'assistant')->pluck('steps')
+        ->flatMap(fn (string $steps) => collect(json_decode($steps, true))->pluck('replay_blocks'));
+
+    expect($blocks->all())->toEqualCanonicalizing([
+        [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
+        [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'tool_use', 'id' => 'call-2']],
+    ]);
 });
 
 test('it skips a step that has nothing left to say once its unexecuted calls are dropped', function (): void {
@@ -1504,13 +1533,13 @@ test('provider reasoning state is kept on the step replay blocks rather than cop
 
     $reasoningItem = ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => [], 'encrypted_content' => 'enc-blob-1'];
 
-    $response = (new AgentResponse('invocation-1', 'Found it.', new Usage, new Meta('openai', 'gpt-5')))
+    $response = (new AgentResponse('invocation-1', 'Found it.', new TextUsage, new Meta('openai', 'gpt-5')))
         ->withSteps(collect([new Step(
             'Found it.',
             [new ToolCall('fc_1', 'ReadFile', ['path' => 'a'], 'call_1', 'rs_1', [], 'enc-blob-1')],
             [new ToolResult('fc_1', 'ReadFile', ['path' => 'a'], 'contents', 'call_1')],
             FinishReason::Stop,
-            new Usage,
+            new TextUsage,
             new Meta('openai', 'gpt-5'),
             '',
             [$reasoningItem, ['type' => 'function_call', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'ReadFile', 'arguments' => '{"path":"a"}']],
@@ -1526,7 +1555,7 @@ test('provider reasoning state is kept on the step replay blocks rather than cop
         'arguments' => ['path' => 'a'],
         'result_id' => 'call_1',
         'result' => 'contents',
-    ])->and($step['replay_blocks'][0])->toBe($reasoningItem);
+    ])->and($step['replay_blocks'])->toBe([]);
 });
 
 test('a step that dropped an unanswered call replays generically so no raw block names a call without a result', function (): void {

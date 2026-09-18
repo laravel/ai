@@ -139,6 +139,10 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'approval_state' => $this->approvalState($response),
         ]));
 
+        if (! $response->hasPendingApprovals()) {
+            $this->forgetReplayBlocks($conversationId);
+        }
+
         $this->touchConversation($conversationId, $now);
 
         return $messageId;
@@ -186,11 +190,39 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         return collect($toolCalls)->map(function (ToolCall $toolCall) use ($results): array {
             $result = $results->get($toolCall->id);
 
+            $stored = Arr::except($toolCall->toArray(), ['reasoning_id', 'reasoning_summary', 'reasoning_encrypted_content']);
+
+            if ($toolCall->thoughtSignature === null) {
+                unset($stored['thought_signature']);
+            }
+
             return [
-                ...Arr::except($toolCall->toArray(), ['reasoning_id', 'reasoning_summary', 'reasoning_encrypted_content', 'thought_signature']),
+                ...$stored,
                 ...$result === null ? [] : Arr::only($result->toArray(), ['result', 'denied', 'failed']),
             ];
         })->values()->all();
+    }
+
+    /**
+     * Drop the raw provider blocks of the paused rows a now-completed turn resumed from.
+     */
+    protected function forgetReplayBlocks(string $conversationId): void
+    {
+        $this->table($this->messagesTable())
+            ->where('conversation_id', $conversationId)
+            ->whereNotNull('approval_state')
+            ->get(['id', 'steps'])
+            ->each(function (object $record): void {
+                $steps = $this->decodedSteps($record);
+
+                if ($steps->every(fn (array $step): bool => $step['replay_blocks'] === [])) {
+                    return;
+                }
+
+                $this->table($this->messagesTable())->where('id', $record->id)->update([
+                    'steps' => $steps->map(fn (array $step): array => [...$step, 'replay_blocks' => []])->toJson(),
+                ]);
+            });
     }
 
     /**
