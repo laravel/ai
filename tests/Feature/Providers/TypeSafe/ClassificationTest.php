@@ -136,8 +136,8 @@ test('classification response is parsed into typed answers', function (): void {
         ->and($response['frustration']->probabilities)->toBe([0 => 0.05, 1 => 0.3, 2 => 0.65])
         ->and($response['frustration']->label())->toBe('Very angry')
         ->and($response['frustration']->normalized())->toBe(0.8)
-        ->and($response->usage->promptTokens)->toBe(312)
-        ->and($response->usage->completionTokens)->toBe(48)
+        ->and($response->usage->inputTokens)->toBe(312)
+        ->and($response->usage->outputTokens)->toBe(48)
         ->and($response->meta->provider)->toBe('typesafe')
         ->and($response->meta->model)->toBe('jev-1.13.0');
 });
