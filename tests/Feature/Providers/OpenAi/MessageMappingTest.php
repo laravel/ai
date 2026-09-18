@@ -265,7 +265,7 @@ test('reasoning blocks are interleaved with associated tool calls on assistant r
             new UserMessage('search'),
             new AssistantMessage('Searching.', collect([
                 new ToolCall(
-                    id: 'call_1',
+                    id: 'fc_1',
                     name: 'FixedNumberGenerator',
                     arguments: ['q' => 'foo'],
                     resultId: 'call_1',
@@ -273,7 +273,7 @@ test('reasoning blocks are interleaved with associated tool calls on assistant r
                     reasoningSummary: [],
                 ),
                 new ToolCall(
-                    id: 'call_2',
+                    id: 'fc_2',
                     name: 'FixedNumberGenerator',
                     arguments: ['q' => 'bar'],
                     resultId: 'call_2',
@@ -281,7 +281,7 @@ test('reasoning blocks are interleaved with associated tool calls on assistant r
                     reasoningSummary: [],
                 ),
                 new ToolCall(
-                    id: 'call_3',
+                    id: 'fc_3',
                     name: 'FixedNumberGenerator',
                     arguments: ['q' => 'baz'],
                     resultId: 'call_3',
@@ -289,7 +289,7 @@ test('reasoning blocks are interleaved with associated tool calls on assistant r
             ])),
             new ToolResultMessage(collect([
                 new ToolResult(
-                    id: 'call_1',
+                    id: 'fc_1',
                     name: 'FixedNumberGenerator',
                     arguments: ['q' => 'foo'],
                     result: '42',
@@ -306,10 +306,10 @@ test('reasoning blocks are interleaved with associated tool calls on assistant r
         $input = $body['input'];
 
         $rs1Index = collect($input)->search(fn ($i): bool => ($i['type'] ?? '') === 'reasoning' && ($i['id'] ?? '') === 'rs_1');
-        $call1Index = collect($input)->search(fn ($i): bool => ($i['id'] ?? '') === 'call_1');
+        $call1Index = collect($input)->search(fn ($i): bool => ($i['id'] ?? '') === 'fc_1');
         $rs2Index = collect($input)->search(fn ($i): bool => ($i['type'] ?? '') === 'reasoning' && ($i['id'] ?? '') === 'rs_2');
-        $call2Index = collect($input)->search(fn ($i): bool => ($i['id'] ?? '') === 'call_2');
-        $call3Index = collect($input)->search(fn ($i): bool => ($i['id'] ?? '') === 'call_3');
+        $call2Index = collect($input)->search(fn ($i): bool => ($i['id'] ?? '') === 'fc_2');
+        $call3Index = collect($input)->search(fn ($i): bool => ($i['id'] ?? '') === 'fc_3');
 
         return $rs1Index !== false
             && $call1Index !== false
@@ -318,6 +318,27 @@ test('reasoning blocks are interleaved with associated tool calls on assistant r
             && $call2Index !== false
             && $rs2Index + 1 === $call2Index
             && $call3Index !== false;
+    });
+});
+
+test('a tool call another provider made replays without an item id openai would reject', function (): void {
+    Http::fake(['api.openai.com/*' => fakeOpenAiResponse('hi')]);
+
+    agent(
+        instructions: 'Hi.',
+        messages: [
+            new UserMessage('number'),
+            new AssistantMessage('', collect([new ToolCall('toolu_01ABC', 'FixedNumberGenerator', [], 'toolu_01ABC')])),
+            new ToolResultMessage(collect([new ToolResult('toolu_01ABC', 'FixedNumberGenerator', [], '72019', 'toolu_01ABC')])),
+            new UserMessage('again'),
+        ],
+        tools: [(new ToolUsingAgent(fixed: true))->tools()[0]],
+    )->prompt('', provider: 'openai');
+
+    Http::assertSent(function (Request $request): bool {
+        $call = collect(json_decode($request->body(), true)['input'])->firstWhere('type', 'function_call');
+
+        return ! array_key_exists('id', $call) && $call['call_id'] === 'toolu_01ABC';
     });
 });
 

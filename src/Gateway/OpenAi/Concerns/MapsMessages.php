@@ -9,6 +9,7 @@ use Laravel\Ai\Messages\MessageRole;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Responses\Data\ToolCall;
 
 trait MapsMessages
 {
@@ -88,24 +89,12 @@ trait MapsMessages
                 $input[] = $reasoningBlock;
 
                 foreach ($message->toolCalls->where('reasoningId', $reasoningBlock['id']) as $toolCall) {
-                    $input[] = [
-                        'id' => $toolCall->id,
-                        'call_id' => $toolCall->resultId,
-                        'type' => 'function_call',
-                        'name' => $toolCall->name,
-                        'arguments' => json_encode($toolCall->arguments ?: (object) []),
-                    ];
+                    $input[] = $this->functionCallItem($toolCall);
                 }
             }
 
             foreach ($message->toolCalls->whereNull('reasoningId') as $toolCall) {
-                $input[] = [
-                    'id' => $toolCall->id,
-                    'call_id' => $toolCall->resultId,
-                    'type' => 'function_call',
-                    'name' => $toolCall->name,
-                    'arguments' => json_encode($toolCall->arguments ?: (object) []),
-                ];
+                $input[] = $this->functionCallItem($toolCall);
             }
         }
 
@@ -120,6 +109,22 @@ trait MapsMessages
                 ],
             ];
         }
+    }
+
+    /**
+     * Map a tool call to a function_call input item, keeping the item id only when OpenAI issued it.
+     *
+     * @return array<string, mixed>
+     */
+    protected function functionCallItem(ToolCall $toolCall): array
+    {
+        return Arr::whereNotNull([
+            'id' => str_starts_with($toolCall->id, 'fc_') ? $toolCall->id : null,
+            'call_id' => $toolCall->resultId,
+            'type' => 'function_call',
+            'name' => $toolCall->name,
+            'arguments' => json_encode($toolCall->arguments ?: (object) []),
+        ]);
     }
 
     /**
