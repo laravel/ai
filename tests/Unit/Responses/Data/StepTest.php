@@ -14,7 +14,9 @@ test('step stores text tool calls and other properties', function (): void {
         toolResults: [],
         finishReason: FinishReason::Stop,
         usage: $usage,
-        meta: $meta
+        meta: $meta,
+        reasoning: 'I greeted them.',
+        providerContentBlocks: [],
     );
 
     expect($step->text)->toBe('Hello')
@@ -22,13 +24,14 @@ test('step stores text tool calls and other properties', function (): void {
         ->and($step->toolResults)->toBeEmpty()
         ->and($step->finishReason)->toBe(FinishReason::Stop)
         ->and($step->usage)->toBe($usage)
-        ->and($step->meta)->toBe($meta);
+        ->and($step->meta)->toBe($meta)
+        ->and($step->reasoning)->toBe('I greeted them.');
 });
 
 test('step to array returns all properties including serialized usage and meta', function (): void {
     $usage = new TextUsage(10, 5);
     $meta = new Meta('openai', 'gpt-4o');
-    $step = new Step('test', [], [], FinishReason::Stop, $usage, $meta, providerContentBlocks: [['type' => 'thinking', 'signature' => 'sig-1']]);
+    $step = new Step('test', [], [], FinishReason::Stop, $usage, $meta, 'Thinking.', [['type' => 'thinking', 'signature' => 'sig-1']]);
 
     $array = $step->toArray();
 
@@ -38,13 +41,14 @@ test('step to array returns all properties including serialized usage and meta',
         ->and($array['finish_reason'])->toBe('stop')
         ->and($array['usage'])->toBe($usage)
         ->and($array['meta'])->toBe($meta)
+        ->and($array['reasoning'])->toBe('Thinking.')
         ->and($array['provider_blocks'])->toBe([['type' => 'thinking', 'signature' => 'sig-1']]);
 });
 
 test('step json serialize returns to array', function (): void {
     $usage = new TextUsage(0, 0);
     $meta = new Meta;
-    $step = new Step('', [], [], FinishReason::Unknown, $usage, $meta);
+    $step = new Step('', [], [], FinishReason::Unknown, $usage, $meta, '', []);
 
     expect($step->jsonSerialize())->toBe($step->toArray());
 });

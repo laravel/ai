@@ -486,6 +486,8 @@ test('it stores a tool result without the arguments its call already carries', f
             FinishReason::Stop,
             new TextUsage,
             new Meta('openai', 'gpt-5'),
+            '',
+            [],
         )]));
 
     $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
@@ -759,8 +761,8 @@ test('it writes the steps of a paused turn with their provider blocks and keeps 
 
     $response = (new AgentResponse('invocation-id', 'Let me think about that', new TextUsage, new Meta('anthropic')))
         ->withSteps(collect([
-            new Step('', [new ToolCall('call-0', 'ReadFile', ['path' => 'a'])], [new ToolResult('call-0', 'ReadFile', ['path' => 'a'], 'contents')], FinishReason::ToolCalls, new TextUsage, new Meta, providerContentBlocks: [['type' => 'tool_use', 'id' => 'call-0']]),
-            new Step('Let me think about that', [new ToolCall('call-1', 'DeleteFile', ['path' => 'config/app.php'])], [], FinishReason::ToolCalls, new TextUsage, new Meta, providerContentBlocks: [['type' => 'thinking', 'signature' => 'sig-1']]),
+            new Step('', [new ToolCall('call-0', 'ReadFile', ['path' => 'a'])], [new ToolResult('call-0', 'ReadFile', ['path' => 'a'], 'contents')], FinishReason::ToolCalls, new TextUsage, new Meta, '', [['type' => 'tool_use', 'id' => 'call-0']]),
+            new Step('Let me think about that', [new ToolCall('call-1', 'DeleteFile', ['path' => 'config/app.php'])], [], FinishReason::ToolCalls, new TextUsage, new Meta, '', [['type' => 'thinking', 'signature' => 'sig-1']]),
         ]))
         ->withPendingApprovals(collect([
             new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file'),
@@ -797,7 +799,7 @@ test('it writes the steps a paused stream carried on its approval request', func
         new ToolApprovalRequest('event-1', collect([
             new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file'),
         ]), 0, collect([
-            new Step('', [new ToolCall('call-1', 'DeleteFile', ['path' => 'config/app.php'])], [], FinishReason::ToolCalls, new TextUsage, new Meta, providerContentBlocks: [['type' => 'thinking', 'signature' => 'sig-1']]),
+            new Step('', [new ToolCall('call-1', 'DeleteFile', ['path' => 'config/app.php'])], [], FinishReason::ToolCalls, new TextUsage, new Meta, '', [['type' => 'thinking', 'signature' => 'sig-1']]),
         ])),
     ]), new Meta);
 
@@ -826,8 +828,8 @@ test('it writes the steps a completed stream carried on its stream end', functio
     $response = new StreamedAgentResponse('invocation-id', collect([
         new TextDelta('event-1', 'message-1', 'Done.', 0),
         new StreamEnd('event-2', 'stop', new TextUsage, 0, collect([
-            new Step('', [$call], [new ToolResult('call-1', 'ReadFile', ['path' => 'config/app.php'], 'contents')], FinishReason::ToolCalls, new TextUsage, new Meta, providerContentBlocks: [['type' => 'tool_use', 'id' => 'call-1']]),
-            new Step('Done.', [], [], FinishReason::Stop, new TextUsage, new Meta, providerContentBlocks: [['type' => 'text', 'text' => 'Done.']]),
+            new Step('', [$call], [new ToolResult('call-1', 'ReadFile', ['path' => 'config/app.php'], 'contents')], FinishReason::ToolCalls, new TextUsage, new Meta, '', [['type' => 'tool_use', 'id' => 'call-1']]),
+            new Step('Done.', [], [], FinishReason::Stop, new TextUsage, new Meta, '', [['type' => 'text', 'text' => 'Done.']]),
         ])),
     ]), new Meta);
 

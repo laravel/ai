@@ -28,5 +28,5 @@ test('the replay state never reaches a serialized event', function (): void {
 
 function pausedStep(): Step
 {
-    return new Step('', [], [], FinishReason::ToolCalls, new Usage, new Meta, providerContentBlocks: [['type' => 'thinking', 'signature' => 'sig-1']]);
+    return new Step('', [], [], FinishReason::ToolCalls, new Usage, new Meta, '', [['type' => 'thinking', 'signature' => 'sig-1']]);
 }

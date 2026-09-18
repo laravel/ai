@@ -22,8 +22,8 @@ class Step implements Arrayable, JsonSerializable
         public FinishReason $finishReason,
         public TextUsage $usage,
         public Meta $meta,
-        public string $reasoning = '',
-        public array $providerContentBlocks = [],
+        public string $reasoning,
+        public array $providerContentBlocks,
     ) {}
 
     /**
