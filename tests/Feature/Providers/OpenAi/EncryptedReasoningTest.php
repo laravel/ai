@@ -284,7 +284,7 @@ test('stateless (store=false) responses capture replay blocks', function () {
         ->not->toBeEmpty();
 });
 
-test('stateful (store=true) responses do not capture replay blocks', function () {
+test('stateful (store=true) responses capture replay blocks too', function () {
     config(['ai.providers.openai' => [...config('ai.providers.openai'), 'store' => true]]);
 
     Http::fake(['api.openai.com/*' => fakeOpenAiResponse('Hi')]);
@@ -292,7 +292,7 @@ test('stateful (store=true) responses do not capture replay blocks', function ()
     $response = (new OpenAiAgent)->prompt('Hello', provider: 'openai');
 
     expect($response->messages->whereInstanceOf(AssistantMessage::class)->last()->replayBlocks)
-        ->toBeEmpty();
+        ->not->toBeEmpty();
 });
 
 function fakeOpenAiToolCallResponseWithEncryptedReasoning(string $reasoningId, string $encryptedContent, string $functionCallId, string $callId): PromiseInterface
