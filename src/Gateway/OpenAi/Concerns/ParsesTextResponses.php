@@ -63,7 +63,7 @@ trait ParsesTextResponses
             meta: new Meta($provider->name(), $data['model'] ?? '', $this->extractCitations($output)),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
             continuationToken: $data['id'] ?? '',
-            providerContentBlocks: $this->isStateless($provider) ? $this->extractReplayBlocks($output) : [],
+            providerContentBlocks: $this->extractReplayBlocks($output),
             reasoning: $this->extractReasoning($output),
         );
     }
@@ -125,7 +125,7 @@ trait ParsesTextResponses
     }
 
     /**
-     * Extract the ordered response output for stateless (store=false) replay.
+     * Extract the ordered response output for full-history replay.
      *
      * @return array<int, array<string, mixed>>
      */
