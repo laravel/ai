@@ -99,6 +99,7 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
 
         return new AudioResponse(
             $encodedAudio,
+            new Usage,
             new Meta($provider->name(), $model),
             'audio/mpeg',
         );

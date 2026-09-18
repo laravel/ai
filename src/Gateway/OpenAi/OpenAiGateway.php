@@ -184,6 +184,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
 
         return new AudioResponse(
             base64_encode($response->body()),
+            new Usage,
             new Meta($provider->name(), $model),
             'audio/mpeg',
         );

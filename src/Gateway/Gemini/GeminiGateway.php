@@ -263,6 +263,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         return new AudioResponse(
             base64_encode($this->pcmToWav($pcm)),
+            $this->extractUsage($data),
             new Meta($provider->name(), $model),
             'audio/wav',
         );

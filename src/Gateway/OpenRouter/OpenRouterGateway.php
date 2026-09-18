@@ -201,6 +201,7 @@ class OpenRouterGateway implements Gateway, RerankingGateway, StepTextGateway
 
         return new AudioResponse(
             base64_encode($response->body()),
+            new Usage,
             new Meta($provider->name(), $model),
             $this->audioResponseMimeType($format),
         );
