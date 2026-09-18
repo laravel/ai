@@ -58,6 +58,30 @@ test('it moves a result recorded on a later row onto the step that made the call
     ]);
 });
 
+test('a backfilled row replays its results and paused replay blocks back to the provider', function (): void {
+    insertLegacyRow('message-1', 'user', 'Delete a, then b');
+    insertLegacyRow('message-2', 'assistant', 'Now b.', toolCalls: [legacyCall('call-1'), legacyCall('call-2')], toolResults: [legacyResult('call-1')], approvalState: ['pending' => ['call-2' => 'Destructive.']], meta: [
+        'provider' => 'anthropic',
+        'provider_steps' => [
+            ['blocks' => [['type' => 'thinking', 'signature' => 'sig-1']], 'tool_call_ids' => ['call-1']],
+            ['blocks' => [['type' => 'thinking', 'signature' => 'sig-2']], 'tool_call_ids' => ['call-2']],
+        ],
+    ]);
+
+    (new BackfillConversationSteps)->up();
+
+    $messages = (new DatabaseConversationStore)->getLatestConversationMessages('conversation-1', 10);
+
+    $toolResult = $messages->whereInstanceOf(ToolResultMessage::class)->first()->toolResults->first();
+
+    expect($messages->whereInstanceOf(AssistantMessage::class)->map(fn ($message) => $message->replayBlocks)->values()->all())->toBe([
+        [['type' => 'thinking', 'signature' => 'sig-1']],
+        [['type' => 'thinking', 'signature' => 'sig-2']],
+    ])
+        ->and($toolResult->id)->toBe('call-1')
+        ->and($toolResult->result)->toBe('Deleted a');
+});
+
 test('it keeps answered and pending calls and drops the call that never ran', function (): void {
     insertLegacyRow('message-1', 'assistant', 'Waiting.', toolCalls: [legacyCall('call-1'), legacyCall('call-2'), legacyCall('call-3')], toolResults: [legacyResult('call-1')], approvalState: ['pending' => ['call-2' => 'Destructive.']]);
 

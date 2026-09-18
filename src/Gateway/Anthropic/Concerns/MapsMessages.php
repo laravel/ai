@@ -63,24 +63,9 @@ trait MapsMessages
             return;
         }
 
+        // Reasoning a step did not replay verbatim is dropped rather than rebuilt as a thinking block, which Anthropic rejects without the signature it issued...
         $content = [];
         $hasToolCalls = $message instanceof AssistantMessage && $message->toolCalls->isNotEmpty();
-
-        if ($hasToolCalls) {
-            $thinkingBlocks = $message->toolCalls
-                ->whereNotNull('reasoningId')
-                ->unique('reasoningId')
-                ->map(fn ($toolCall): array => [
-                    'type' => 'thinking',
-                    'thinking' => is_array($toolCall->reasoningSummary)
-                        ? implode("\n", array_column($toolCall->reasoningSummary, 'text'))
-                        : ($toolCall->reasoningSummary ?? ''),
-                ])
-                ->values()
-                ->all();
-
-            array_push($content, ...$thinkingBlocks);
-        }
 
         if (filled($message->content)) {
             $content[] = [
