@@ -33,6 +33,7 @@ use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\ImageUsage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
+use Laravel\Ai\Responses\Data\RerankingUsage;
 use Laravel\Ai\Responses\Data\TranscriptionUsage;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
@@ -401,6 +402,10 @@ class OpenRouterGateway implements Gateway, RerankingGateway, StepTextGateway
 
         return new RerankingResponse(
             $results,
+            new RerankingUsage(
+                inputTokens: $data['usage']['total_tokens'] ?? 0,
+                searchUnits: $data['usage']['search_units'] ?? null,
+            ),
             new Meta($provider->name(), $model),
         );
     }

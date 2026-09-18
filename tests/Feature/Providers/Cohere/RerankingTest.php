@@ -148,3 +148,29 @@ test('reranking request uses the configured timeout', function (): void {
 
     expect($spy->timeouts)->toBe([45]);
 });
+
+test('reranking response reports the billed units', function (): void {
+    Http::fake(['*' => Http::response([
+        'results' => [['index' => 0, 'relevance_score' => 0.95]],
+        'meta' => [
+            'billed_units' => ['input_tokens' => 320, 'search_units' => 2.0],
+            'tokens' => ['input_tokens' => 298],
+        ],
+    ])]);
+
+    $response = Reranking::of(['Laravel is a PHP framework'])
+        ->rerank('What is Laravel?', provider: 'cohere', model: 'rerank-v3.5');
+
+    expect($response->usage->inputTokens)->toBe(320)
+        ->and($response->usage->searchUnits)->toBe(2.0);
+});
+
+test('reranking response leaves the search units null when cohere omits the meta', function (): void {
+    Http::fake(['*' => fakeCohereRerankingResponse()]);
+
+    $response = Reranking::of(['Laravel is a PHP framework', 'React is a JS library'])
+        ->rerank('What is Laravel?', provider: 'cohere', model: 'rerank-v3.5');
+
+    expect($response->usage->inputTokens)->toBe(0)
+        ->and($response->usage->searchUnits)->toBeNull();
+});

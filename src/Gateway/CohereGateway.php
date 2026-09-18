@@ -12,6 +12,7 @@ use Laravel\Ai\Gateway\Cohere\Concerns\ParsesEmbeddings;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
+use Laravel\Ai\Responses\Data\RerankingUsage;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\RerankingResponse;
@@ -95,6 +96,10 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway
 
         return new RerankingResponse(
             $results,
+            new RerankingUsage(
+                inputTokens: $data['meta']['billed_units']['input_tokens'] ?? 0,
+                searchUnits: $data['meta']['billed_units']['search_units'] ?? null,
+            ),
             new Meta($provider->name(), $model),
         );
     }

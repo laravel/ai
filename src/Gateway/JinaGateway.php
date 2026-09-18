@@ -11,6 +11,7 @@ use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
+use Laravel\Ai\Responses\Data\RerankingUsage;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\RerankingResponse;
@@ -93,6 +94,7 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
 
         return new RerankingResponse(
             $results,
+            new RerankingUsage($data['usage']['total_tokens'] ?? 0),
             new Meta($provider->name(), $model),
         );
     }
