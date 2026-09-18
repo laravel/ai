@@ -119,6 +119,9 @@ trait ParsesTextResponses
         return implode('', $textParts);
     }
 
+    /**
+     * Extract the parts carrying function calls from the response parts.
+     */
     protected function extractFunctionCallParts(array $parts): array
     {
         return array_values(
@@ -127,6 +130,8 @@ trait ParsesTextResponses
     }
 
     /**
+     * Map function call parts to ToolCall DTOs.
+     *
      * @return array<ToolCall>
      */
     protected function mapToolCalls(array $functionCallParts): array

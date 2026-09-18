@@ -167,7 +167,7 @@ describe('tool calls', function (): void {
             }
         }
     });
-    // The continuation test above replays raw parts; this one pins the ToolCall the persisted path rebuilds from.
+
     test('streaming carries the sibling thought signature onto the tool call', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::sequence([
