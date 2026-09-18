@@ -68,9 +68,9 @@ class ConversationMessage extends Model
      */
     protected function toolResults(): Attribute
     {
-        return Attribute::get(fn (): array => array_values(array_filter(
-            $this->tool_calls,
-            fn (array $toolCall): bool => array_key_exists('result', $toolCall),
+        return Attribute::get(fn (): array => array_values(array_map(
+            fn (array $toolCall): array => Arr::only($toolCall, ['id', 'name', 'arguments', 'result', 'result_id', 'denied', 'failed']),
+            array_filter($this->tool_calls, fn (array $toolCall): bool => array_key_exists('result', $toolCall)),
         )));
     }
 

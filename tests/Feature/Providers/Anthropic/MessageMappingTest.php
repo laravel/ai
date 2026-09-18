@@ -670,3 +670,22 @@ test('system instructions are not in messages array', function (): void {
         return isset($body['system']) && is_string($body['system']);
     });
 });
+
+test('another provider reasoning on a replayed tool call is dropped rather than rebuilt as a thinking block', function (): void {
+    $assistant = new AssistantMessage('Checking.', collect([
+        new ToolCall(
+            id: 'toolu_1',
+            name: 'getWeather',
+            arguments: ['city' => 'Lisbon'],
+            reasoningId: 'rs_1',
+            reasoningSummary: [['type' => 'summary_text', 'text' => 'They want the weather.']],
+        ),
+    ]));
+
+    $gateway = app(AnthropicGateway::class);
+    $method = (new ReflectionClass($gateway))->getMethod('mapMessages');
+
+    $mapped = $method->invoke($gateway, [$assistant]);
+
+    expect(array_column($mapped[0]['content'], 'type'))->toBe(['text', 'tool_use']);
+});

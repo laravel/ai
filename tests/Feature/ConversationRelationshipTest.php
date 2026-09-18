@@ -120,7 +120,7 @@ test('message tool calls and results flatten across steps in order and serialize
         'content' => 'Done',
         'attachments' => '[]',
         'steps' => json_encode([
-            ['tool_calls' => [['id' => 'call-1', 'name' => 'a', 'arguments' => [], 'result' => 'x']], 'replay_blocks' => []],
+            ['tool_calls' => [['id' => 'call-1', 'name' => 'a', 'arguments' => [], 'result' => 'x', 'reasoning_encrypted_content' => 'gAAAAA']], 'replay_blocks' => []],
             ['tool_calls' => [['id' => 'call-2', 'name' => 'b', 'arguments' => [], 'result' => 'y']], 'replay_blocks' => []],
         ]),
         'usage' => '[]',
@@ -132,7 +132,10 @@ test('message tool calls and results flatten across steps in order and serialize
     $message = $conversation->messages->first();
 
     expect(array_column($message->tool_calls, 'id'))->toBe(['call-1', 'call-2'])
-        ->and(array_column($message->tool_results, 'id'))->toBe(['call-1', 'call-2'])
+        ->and($message->tool_results)->toBe([
+            ['id' => 'call-1', 'name' => 'a', 'arguments' => [], 'result' => 'x'],
+            ['id' => 'call-2', 'name' => 'b', 'arguments' => [], 'result' => 'y'],
+        ])
         ->and($message->toArray())->toHaveKeys(['tool_calls', 'tool_results']);
 });
 

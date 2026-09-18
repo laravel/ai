@@ -166,6 +166,26 @@ test('it decodes the stored JSON columns', function (): void {
         ->and($message->createdAt)->toBeInstanceOf(CarbonInterface::class);
 });
 
+test('a stored tool result is narrowed to its own keys so provider replay state stays out of a rendered transcript', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Transcript');
+
+    DB::table('agent_conversation_messages')->insert([
+        ...storedConversationMessageAttributes('message-001', $conversationId, 'Saved the note.'),
+        'role' => 'assistant',
+        'steps' => json_encode([assistantStep(
+            [['id' => 'call-1', 'name' => 'save_note', 'arguments' => ['a' => 1], 'reasoning_id' => 'rs_1', 'reasoning_encrypted_content' => 'gAAAAA']],
+            [['id' => 'call-1', 'result' => 'Saved']],
+        )]),
+    ]);
+
+    $message = $store->paginateConversationMessages($conversationId, 1)->items()[0];
+
+    expect($message->toolResults())->toBe([
+        ['id' => 'call-1', 'name' => 'save_note', 'arguments' => ['a' => 1], 'result' => 'Saved'],
+    ])->and($message->toolCalls()[0])->toHaveKey('reasoning_encrypted_content');
+});
+
 test('it advances to the next cursor page', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Transcript');
