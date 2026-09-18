@@ -185,7 +185,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             $result = $results->get($toolCall->id);
 
             return [
-                ...Arr::except($toolCall->toArray(), ['reasoning_id', 'reasoning_summary', 'reasoning_encrypted_content']),
+                ...Arr::except($toolCall->toArray(), ['reasoning_id', 'reasoning_summary', 'reasoning_encrypted_content', 'thought_signature']),
                 ...$result === null ? [] : Arr::only($result->toArray(), ['result', 'denied', 'failed']),
             ];
         })->values()->all();
@@ -317,27 +317,9 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             ->reverse()
             ->values();
 
-        $replayFrom = $this->pausedTurnStartIndex($records);
-
-        return $records->flatMap(fn (object $record, int $index): array => $record->role === 'user'
+        return $records->flatMap(fn (object $record): array => $record->role === 'user'
             ? [$this->userMessageFrom($record)]
-            : $this->assistantTurnFrom($record, withReplayBlocks: $index >= $replayFrom));
-    }
-
-    /**
-     * Get the index the turn awaiting a decision starts at, or a past-the-end index when no turn is paused.
-     *
-     * @param  Collection<int, object>  $records
-     */
-    protected function pausedTurnStartIndex(Collection $records): int
-    {
-        if (! $this->awaitsDecision($records->last())) {
-            return $records->count();
-        }
-
-        $turnStart = $records->reverse()->search(fn (object $record): bool => $record->role === 'user');
-
-        return $turnStart === false ? 0 : $turnStart + 1;
+            : $this->assistantTurnFrom($record));
     }
 
     /**
@@ -357,14 +339,14 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      *
      * @return array<int, Message>
      */
-    protected function assistantTurnFrom(object $record, bool $withReplayBlocks): array
+    protected function assistantTurnFrom(object $record): array
     {
         $pending = $this->pausedCallIds($record);
         $provider = $this->decoded($record->meta)['provider'] ?? null;
         $steps = $this->decodedSteps($record);
         $lastStep = $steps->count() - 1;
 
-        return $steps->flatMap(function (array $step, int $index) use ($pending, $provider, $withReplayBlocks, $lastStep, $record): array {
+        return $steps->flatMap(function (array $step, int $index) use ($pending, $provider, $lastStep, $record): array {
             $content = $index === $lastStep ? (string) $record->content : '';
 
             $replayed = collect($step['tool_calls'])
@@ -374,7 +356,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             $toolCalls = $replayed->map(ToolCall::fromArray(...));
             $toolResults = $replayed->filter($this->isAnswered(...))->map(ToolResult::fromArray(...))->values();
 
-            $replayBlocks = $withReplayBlocks ? $step['replay_blocks'] : [];
+            // Raw blocks still name a dropped call, so a step missing one rebuilds generically rather than replaying a call no result answers...
+            $replayBlocks = $replayed->count() === count($step['tool_calls']) ? $step['replay_blocks'] : [];
 
             $isBlank = $content === '' && $toolCalls->isEmpty() && $replayBlocks === [];
 
