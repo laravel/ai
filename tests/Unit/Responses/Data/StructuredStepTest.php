@@ -13,10 +13,13 @@ test('structured step stores structured data', function (): void {
         [],
         FinishReason::Stop,
         new Usage,
-        new Meta('openai', 'gpt-4o')
+        new Meta('openai', 'gpt-4o'),
+        'Structuring the answer.',
+        [],
     );
 
     expect($step->text)->toBe('test response')
+        ->and($step->reasoning)->toBe('Structuring the answer.')
         ->and($step->structured)->toBe(['key' => 'value']);
 });
 
@@ -28,7 +31,9 @@ test('structured step to array includes structured data', function (): void {
         [],
         FinishReason::Stop,
         new Usage,
-        new Meta('anthropic', 'claude-3')
+        new Meta('anthropic', 'claude-3'),
+        '',
+        [],
     );
 
     $array = $step->toArray();
@@ -45,7 +50,9 @@ test('structured step jsonSerialize includes structured data', function (): void
         [],
         FinishReason::Stop,
         new Usage,
-        new Meta('openai', 'gpt-4o')
+        new Meta('openai', 'gpt-4o'),
+        '',
+        [],
     );
 
     $json = json_decode(json_encode($step), true);

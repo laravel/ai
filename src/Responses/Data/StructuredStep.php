@@ -8,6 +8,7 @@ class StructuredStep extends Step
      * @param  array<string, mixed>  $structured
      * @param  array<int, ToolCall>  $toolCalls
      * @param  array<int, ToolResult>  $toolResults
+     * @param  array<int, array<string, mixed>>  $providerContentBlocks
      */
     public function __construct(
         string $text,
@@ -17,8 +18,10 @@ class StructuredStep extends Step
         FinishReason $finishReason,
         Usage $usage,
         Meta $meta,
+        string $reasoning,
+        array $providerContentBlocks,
     ) {
-        parent::__construct($text, $toolCalls, $toolResults, $finishReason, $usage, $meta);
+        parent::__construct($text, $toolCalls, $toolResults, $finishReason, $usage, $meta, $reasoning, $providerContentBlocks);
     }
 
     /**
