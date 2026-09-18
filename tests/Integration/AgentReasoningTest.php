@@ -121,10 +121,11 @@ test('reasoning conversation roundtrips through database storage', function (): 
 
     expect($record)->not->toBeNull();
 
-    $storedToolCalls = json_decode((string) $record->tool_calls, true);
+    $step = json_decode((string) $record->steps, true)[0];
 
-    expect($storedToolCalls)->toHaveCount(1)
-        ->and($storedToolCalls[0]['reasoning_id'] ?? null)->not->toBeNull();
+    expect($step['tool_calls'])->toHaveCount(1)
+        ->and($step['tool_calls'][0])->not->toHaveKey('reasoning_id')
+        ->and(collect($step['replay_blocks'])->firstWhere('type', 'reasoning'))->not->toBeNull();
 
     $secondResponse = (new RememberingToolAgent)
         ->continue($conversationId, $user)

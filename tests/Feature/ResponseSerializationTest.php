@@ -21,7 +21,7 @@ test('serialization preserves private properties declared on text response subcl
 });
 
 test('serialization preserves private properties declared on step subclasses', function (): void {
-    $step = new SubclassedStep('Hello', [], [], FinishReason::Stop, new TextUsage(1, 2), new Meta('anthropic', 'claude'));
+    $step = new SubclassedStep('Hello', [], [], FinishReason::Stop, new TextUsage(1, 2), new Meta('anthropic', 'claude'), '', []);
     $step->rememberSecret('changed');
     $step->withRawResponse(new Response(new Psr7Response(200, [], '{}')));
 

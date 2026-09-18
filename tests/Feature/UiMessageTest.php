@@ -381,7 +381,7 @@ describe('hydrating useChat from stored messages', function () {
                 'id' => 'msg-2',
                 'role' => 'assistant',
                 'content' => 'It is 12°C.',
-                'meta' => ['reasoning' => 'They want the temperature.'],
+                'steps' => [['tool_calls' => [], 'reasoning' => 'They want the temperature.']],
             ]),
         ]);
 
@@ -391,14 +391,53 @@ describe('hydrating useChat from stored messages', function () {
         ]);
     });
 
+    test('conversation message models hydrate the reasoning of every step', function () {
+        $ui = Vercel::toUiMessages([
+            new ConversationMessage([
+                'id' => 'msg-2',
+                'role' => 'assistant',
+                'content' => 'Done.',
+                'steps' => [
+                    ['tool_calls' => [['id' => 'call-1', 'name' => 'ReadFile', 'arguments' => [], 'result' => 'a']], 'reasoning' => 'Read a first.'],
+                    ['tool_calls' => [], 'reasoning' => 'Now answer.'],
+                ],
+            ]),
+        ]);
+
+        expect(array_slice($ui[0]['parts'], 0, 2))->toBe([
+            ['type' => 'reasoning', 'text' => 'Read a first.'],
+            ['type' => 'reasoning', 'text' => 'Now answer.'],
+        ]);
+    });
+
+    test('stored provider tool calls hydrate as the custom parts the stream emitted', function () {
+        $ui = Vercel::toUiMessages([
+            new ConversationMessage([
+                'id' => 'msg-2',
+                'role' => 'assistant',
+                'content' => 'Found it.',
+                'meta' => ['provider' => 'openai'],
+                'steps' => [['tool_calls' => [], 'provider_tool_calls' => [['id' => 'ws-1', 'type' => 'web_search_call', 'data' => ['query' => 'laravel']]]]],
+            ]),
+        ]);
+
+        expect($ui[0]['parts'])->toBe([
+            [
+                'type' => 'custom',
+                'kind' => 'openai.web_search_call',
+                'providerMetadata' => ['openai' => ['itemId' => 'ws-1', 'status' => 'completed', 'data' => ['query' => 'laravel']]],
+            ],
+            ['type' => 'text', 'text' => 'Found it.'],
+        ]);
+    });
+
     test('a completed tool turn hydrates as a settled tool part instead of a blank bubble', function () {
         $ui = Vercel::toUiMessages([
             new ConversationMessage([
                 'id' => 'msg-2',
                 'role' => 'assistant',
                 'content' => null,
-                'tool_calls' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon']]],
-                'tool_results' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon'], 'result' => 'Sunny']],
+                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon'], 'result' => 'Sunny']]]],
             ]),
         ]);
 
@@ -417,8 +456,7 @@ describe('hydrating useChat from stored messages', function () {
                 'id' => 'msg-2',
                 'role' => 'assistant',
                 'content' => null,
-                'tool_calls' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt']]],
-                'tool_results' => [],
+                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt']]]]],
                 'approval_state' => ['pending' => ['call-1' => 'Deletes a file.']],
             ]),
         ]);
@@ -433,8 +471,7 @@ describe('hydrating useChat from stored messages', function () {
                 'id' => 'msg-2',
                 'role' => 'assistant',
                 'content' => null,
-                'tool_calls' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt']]],
-                'tool_results' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt'], 'result' => null, 'denied' => true]],
+                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt'], 'result' => null, 'denied' => true]]]],
                 'approval_state' => ['pending' => []],
             ]),
         ]);

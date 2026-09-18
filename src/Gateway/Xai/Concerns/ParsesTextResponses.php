@@ -10,6 +10,7 @@ use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\ProviderToolCall;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
@@ -71,6 +72,7 @@ trait ParsesTextResponses
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
             continuationToken: $data['id'] ?? null,
             reasoning: $this->extractReasoning($output),
+            providerToolCalls: $this->extractProviderToolCalls($output),
         );
     }
 
@@ -111,6 +113,21 @@ trait ParsesTextResponses
         }
 
         return $citations->values();
+    }
+
+    /**
+     * Extract the provider-hosted tool items from the output array.
+     *
+     * @return array<int, ProviderToolCall>
+     */
+    protected function extractProviderToolCalls(array $output): array
+    {
+        return array_values(array_map(
+            fn (array $item): ProviderToolCall => new ProviderToolCall($item['id'] ?? '', $item['type'], $item),
+            array_filter($output, fn ($item): bool => is_array($item)
+                && ($item['type'] ?? '') !== 'function_call'
+                && str_ends_with((string) ($item['type'] ?? ''), '_call')),
+        ));
     }
 
     /**

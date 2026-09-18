@@ -280,7 +280,7 @@ test('stateless (store=false) responses capture replay blocks', function () {
 
     $response = (new OpenAiAgent)->prompt('Hello', provider: 'openai');
 
-    expect($response->messages->whereInstanceOf(AssistantMessage::class)->last()->providerContentBlocks)
+    expect($response->messages->whereInstanceOf(AssistantMessage::class)->last()->replayBlocks)
         ->not->toBeEmpty();
 });
 
@@ -328,7 +328,7 @@ test('default store true still retains replay blocks with encrypted reasoning', 
 
     $response = (new ToolUsingAgent(fixed: true))->prompt('Generate a number', provider: 'openai');
 
-    $blocks = $response->messages->whereInstanceOf(AssistantMessage::class)->first()->providerContentBlocks;
+    $blocks = $response->messages->whereInstanceOf(AssistantMessage::class)->first()->replayBlocks;
 
     expect(collect($blocks)->firstWhere('type', 'reasoning'))->toMatchArray(['id' => 'rs_1', 'encrypted_content' => 'enc-blob-1'])
         ->and(collect($blocks)->firstWhere('type', 'function_call')['call_id'] ?? null)->toBe('call_1');

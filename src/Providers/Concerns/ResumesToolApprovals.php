@@ -33,13 +33,13 @@ trait ResumesToolApprovals
      * @param  array<int, Message>  $messages
      * @return array<int, Message>
      */
-    protected function withoutForeignProviderContentBlocks(array $messages): array
+    protected function withoutForeignReplayBlocks(array $messages): array
     {
         return array_map(function (Message $message): Message {
             if ($message instanceof AssistantMessage
-                && filled($message->providerContentBlocks)
-                && $message->providerContentBlocksProvider !== null
-                && $message->providerContentBlocksProvider !== $this->name()) {
+                && filled($message->replayBlocks)
+                && $message->replayBlocksProvider !== null
+                && $message->replayBlocksProvider !== $this->name()) {
                 return new AssistantMessage($message->content, $message->toolCalls);
             }
 

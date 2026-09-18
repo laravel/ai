@@ -10,6 +10,7 @@ use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\ProviderToolCall;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
@@ -92,8 +93,9 @@ trait ParsesTextResponses
             usage: $usage,
             meta: new Meta($provider->name(), $model, $citations),
             structured: $structuredData,
-            providerContentBlocks: $content,
+            replayBlocks: $content,
             reasoning: $this->extractReasoning($content),
+            providerToolCalls: $this->extractProviderToolCalls($content),
         );
     }
 
@@ -115,6 +117,19 @@ trait ParsesTextResponses
         $thinkingBlocks = array_filter($content, fn (array $block): bool => ($block['type'] ?? '') === 'thinking');
 
         return static::joinReasoning(array_map(fn (array $block): string => $block['thinking'] ?? '', $thinkingBlocks));
+    }
+
+    /**
+     * Extract the server tool use and result blocks, each keyed by the tool use it belongs to.
+     *
+     * @return array<int, ProviderToolCall>
+     */
+    protected function extractProviderToolCalls(array $content): array
+    {
+        return array_values(array_map(
+            fn (array $block): ProviderToolCall => new ProviderToolCall($block['tool_use_id'] ?? $block['id'] ?? '', $block['type'], $block),
+            array_filter($content, fn (array $block): bool => ($block['type'] ?? '') === 'server_tool_use' || str_ends_with((string) ($block['type'] ?? ''), '_tool_result')),
+        ));
     }
 
     /**

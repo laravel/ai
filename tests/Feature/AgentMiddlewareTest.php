@@ -524,8 +524,8 @@ test('step middleware that compacts the history does not change what the convers
     expect($sent)->toBe([1, 1])
         ->and($response->text)->toBe('Fake response')
         ->and($assistant->content)->toBe('Fake response')
-        ->and(json_decode((string) $assistant->tool_calls, true))->toHaveCount(1)
-        ->and(json_decode((string) $assistant->tool_results, true)[0]['result'])->toBe('72019')
+        ->and(json_decode((string) $assistant->steps, true)[0]['tool_calls'])->toHaveCount(1)
+        ->and(json_decode((string) $assistant->steps, true)[0]['tool_calls'][0]['result'])->toBe('72019')
         ->and($remembered->map(fn ($message): string => $message::class)->all())->toBe([
             Message::class, AssistantMessage::class, ToolResultMessage::class, AssistantMessage::class,
         ]);

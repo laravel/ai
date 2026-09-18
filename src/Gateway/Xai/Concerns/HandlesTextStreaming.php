@@ -288,6 +288,7 @@ trait HandlesTextStreaming
             usage: $usage ?? new TextUsage(0, 0),
             meta: new Meta($provider->name(), $responseData['model'] ?? $model),
             continuationToken: $responseId,
+            providerToolCalls: $this->extractProviderToolCalls($responseData['output'] ?? []),
         );
     }
 

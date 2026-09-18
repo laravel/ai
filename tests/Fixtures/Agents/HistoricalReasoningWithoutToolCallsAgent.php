@@ -28,7 +28,7 @@ class HistoricalReasoningWithoutToolCallsAgent implements Agent, Conversational
             new UserMessage('What is 4+4?'),
             new AssistantMessage(
                 'The answer is 8.',
-                providerContentBlocks: ['reasoning_content' => 'Let me think... 4+4 = 8.']
+                replayBlocks: [['type' => 'reasoning', 'reasoning_content' => 'Let me think... 4+4 = 8.']]
             ),
         ];
     }

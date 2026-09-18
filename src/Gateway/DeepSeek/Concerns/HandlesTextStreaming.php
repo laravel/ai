@@ -194,11 +194,9 @@ trait HandlesTextStreaming
             }
         }
 
-        $providerContentBlocks = [];
-
-        if (filled($currentReasoning)) {
-            $providerContentBlocks['reasoning_content'] = $currentReasoning;
-        }
+        $replayBlocks = filled($currentReasoning)
+            ? [['type' => 'reasoning', 'reasoning_content' => $currentReasoning]]
+            : [];
 
         return new StepResponse(
             text: $currentText,
@@ -206,7 +204,7 @@ trait HandlesTextStreaming
             finishReason: $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
             usage: $usage ?? new TextUsage(0, 0),
             meta: new Meta($provider->name(), $responseModel),
-            providerContentBlocks: $providerContentBlocks,
+            replayBlocks: $replayBlocks,
         );
     }
 

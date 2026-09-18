@@ -25,7 +25,7 @@ class ToolResult implements Arrayable, JsonSerializable
         return new self(
             id: $data['id'],
             name: $data['name'],
-            arguments: $data['arguments'],
+            arguments: $data['arguments'] ?? [],
             result: $data['result'],
             resultId: $data['result_id'] ?? null,
             denied: $data['denied'] ?? false,

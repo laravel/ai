@@ -11,6 +11,7 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\ImageUsage;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\ProviderToolCall;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
@@ -64,8 +65,9 @@ trait ParsesTextResponses
             meta: new Meta($provider->name(), $data['model'] ?? '', $this->extractCitations($output)),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
             continuationToken: $data['id'] ?? '',
-            providerContentBlocks: $this->extractReplayBlocks($output),
+            replayBlocks: $this->extractReplayBlocks($output),
             reasoning: $this->extractReasoning($output),
+            providerToolCalls: $this->extractProviderToolCalls($output),
         );
     }
 
@@ -133,6 +135,21 @@ trait ParsesTextResponses
     protected function extractReplayBlocks(array $output): array
     {
         return array_values(array_filter($output, 'is_array'));
+    }
+
+    /**
+     * Extract the provider-hosted tool items from the output array.
+     *
+     * @return array<int, ProviderToolCall>
+     */
+    protected function extractProviderToolCalls(array $output): array
+    {
+        return array_values(array_map(
+            fn (array $item): ProviderToolCall => new ProviderToolCall($item['id'] ?? '', $item['type'], $item),
+            array_filter($output, fn ($item): bool => is_array($item)
+                && ($item['type'] ?? '') !== 'function_call'
+                && str_ends_with((string) ($item['type'] ?? ''), '_call')),
+        ));
     }
 
     /**

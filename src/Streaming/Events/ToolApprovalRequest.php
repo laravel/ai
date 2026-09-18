@@ -4,20 +4,19 @@ namespace Laravel\Ai\Streaming\Events;
 
 use Illuminate\Support\Collection;
 use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Responses\Data\Step;
 
 class ToolApprovalRequest extends StreamEvent
 {
     /**
      * @param  Collection<int, PendingApproval>  $pendingApprovals
-     * @param  array<int, array{blocks: array<int, array<string, mixed>>, tool_call_ids: array<int, string>}>  $steps  every assistant step of the paused turn, in order
-     * @param  array<int, array<string, mixed>>  $providerContentBlocks  raw provider replay state for the paused turn; never serialized to clients
+     * @param  Collection<int, Step>  $steps  replay state for the paused turn; never serialized to clients
      */
     public function __construct(
         public string $id,
         public Collection $pendingApprovals,
         public int $timestamp,
-        public array $steps = [],
-        public array $providerContentBlocks = [],
+        public Collection $steps = new Collection,
     ) {}
 
     /**

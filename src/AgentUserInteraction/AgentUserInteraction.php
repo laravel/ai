@@ -190,19 +190,7 @@ class AgentUserInteraction
             }
 
             $toolCalls = static::hydratedToolCalls($message);
-            $ownResults = new Collection;
-
-            if ($message instanceof ConversationMessage) {
-                $toolCallIds = array_column($toolCalls, 'id');
-
-                [$ownResults, $priorResults] = (new Collection($message->tool_results ?? []))->partition(
-                    fn (array $toolResult) => in_array($toolResult['id'] ?? null, $toolCallIds, true)
-                );
-
-                foreach ($priorResults as $toolResult) {
-                    $result[] = static::toolMessageFrom($toolResult, $id);
-                }
-            }
+            $ownResults = $message instanceof ConversationMessage ? $message->tool_results : [];
 
             if (filled($message->content) || $toolCalls !== []) {
                 $result[] = [
