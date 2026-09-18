@@ -233,6 +233,7 @@ trait ParsesTextResponses
     protected function extractUsage(array $data): TextUsage
     {
         $usage = $data['usageMetadata'] ?? [];
+
         $reasoningTokens = $usage['thoughtsTokenCount'] ?? null;
 
         // Gemini reports thought tokens outside the candidate token count...
