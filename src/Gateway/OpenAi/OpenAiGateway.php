@@ -22,6 +22,7 @@ use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
+use Laravel\Ai\Responses\Data\TranscriptionUsage;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
@@ -235,9 +236,10 @@ class OpenAiGateway implements Gateway, StepTextGateway
                 $segment['start'] ?? 0,
                 $segment['end'] ?? 0,
             )),
-            new Usage(
-                Arr::get($data, 'usage.input_tokens', 0),
-                Arr::get($data, 'usage.output_tokens', 0),
+            new TranscriptionUsage(
+                inputTokens: Arr::get($data, 'usage.input_tokens', 0),
+                outputTokens: Arr::get($data, 'usage.output_tokens', 0),
+                audioSeconds: Arr::get($data, 'usage.seconds') ?? Arr::get($data, 'duration'),
             ),
             new Meta($provider->name(), $model),
         );

@@ -219,3 +219,25 @@ test('transcription http error response throws request exception', function (): 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'openrouter', model: 'openai/whisper-1');
 })->throws(RequestException::class);
+
+test('transcription reports the audio duration returned in usage', function (): void {
+    Http::fake(['*' => Http::response([
+        'text' => 'Hello, world!',
+        'usage' => ['seconds' => 9.2, 'input_tokens' => 83, 'output_tokens' => 30],
+    ])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openrouter', model: 'openai/whisper-1');
+
+    expect($response->usage->audioSeconds)->toBe(9.2)
+        ->and($response->usage->inputTokens)->toBe(83);
+});
+
+test('transcription leaves the audio duration null when not returned', function (): void {
+    Http::fake(['*' => Http::response(['text' => 'Hello, world!'])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openrouter', model: 'openai/whisper-1');
+
+    expect($response->usage->audioSeconds)->toBeNull();
+});

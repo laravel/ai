@@ -15,7 +15,7 @@ use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\PerformsChatCompletionSteps;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TranscriptionUsage;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use LogicException;
 
@@ -73,7 +73,7 @@ class GroqGateway implements StepTextGateway, TranscriptionGateway
                 ->post('audio/transcriptions', array_merge($providerOptions, array_filter([
                     'model' => $model,
                     'language' => $language,
-                    'response_format' => $providerOptions['response_format'] ?? 'json',
+                    'response_format' => $providerOptions['response_format'] ?? 'verbose_json',
                 ]))),
         );
 
@@ -87,10 +87,7 @@ class GroqGateway implements StepTextGateway, TranscriptionGateway
                 $segment['start'] ?? 0,
                 $segment['end'] ?? 0,
             )),
-            new Usage(
-                $data['usage']['prompt_tokens'] ?? 0,
-                $data['usage']['completion_tokens'] ?? 0,
-            ),
+            new TranscriptionUsage(audioSeconds: $data['duration'] ?? null),
             new Meta($provider->name(), $model),
         );
     }

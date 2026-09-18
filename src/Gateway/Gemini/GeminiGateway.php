@@ -25,6 +25,7 @@ use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
+use Laravel\Ai\Responses\Data\TranscriptionUsage;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
@@ -354,12 +355,12 @@ class GeminiGateway implements Gateway, StepTextGateway
             $segments = new Collection;
         }
 
-        $usageMeta = $response->json('usageMetadata') ?? [];
-
         return new TranscriptionResponse(
             trim((string) $text),
             $segments,
-            $this->extractUsage(['usageMetadata' => $usageMeta]),
+            TranscriptionUsage::from(
+                $this->extractUsage(['usageMetadata' => $response->json('usageMetadata') ?? []]),
+            ),
             new Meta($provider->name(), $model),
         );
     }

@@ -186,3 +186,19 @@ test('transcription can be faked for the openai-compatible provider', function (
 
     expect($response->text)->toBe('Faked transcript');
 });
+
+test('transcription reports the whisper audio duration', function (): void {
+    Http::fake(['*' => Http::response(['text' => 'Hello, world!', 'duration' => 9.25])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openai-compatible');
+
+    expect($response->usage->audioSeconds)->toBe(9.25);
+});
+
+test('transcription prefers the usage seconds over the whisper duration', function (): void {
+    Http::fake(['*' => Http::response(['text' => 'Hello, world!', 'duration' => 9.25, 'usage' => ['seconds' => 3.5]])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openai-compatible');
+
+    expect($response->usage->audioSeconds)->toBe(3.5);
+});
