@@ -29,7 +29,7 @@ describe('reasoning capture', function (): void {
         expect($response->reasoning)->toBe("First.\n\nSecond.");
     });
 
-    test('captures reasoning content into providerContentBlocks', function (): void {
+    test('captures reasoning content into replayBlocks', function (): void {
         $client = $this->fakeBedrockConverse([
             'output' => [
                 'message' => [
@@ -53,7 +53,7 @@ describe('reasoning capture', function (): void {
 
         $assistant = $response->messages->first(fn ($m): bool => $m instanceof AssistantMessage);
 
-        expect($assistant->providerContentBlocks)->toEqual([
+        expect($assistant->replayBlocks)->toEqual([
             ['reasoningContent' => ['reasoningText' => ['text' => 'thinking...', 'signature' => 'sig-1']]],
             ['text' => 'Hello'],
         ]);

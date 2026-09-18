@@ -52,10 +52,10 @@ trait MapsMessages
      */
     protected function mapAssistantMessage(AssistantMessage|Message $message, array &$contents): void
     {
-        if ($message instanceof AssistantMessage && filled($message->providerContentBlocks)) {
+        if ($message instanceof AssistantMessage && filled($message->replayBlocks)) {
             $contents[] = [
                 'role' => 'model',
-                'parts' => $message->providerContentBlocks,
+                'parts' => $message->replayBlocks,
             ];
 
             return;

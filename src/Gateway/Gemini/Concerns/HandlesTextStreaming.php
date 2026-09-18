@@ -223,7 +223,7 @@ trait HandlesTextStreaming
             finishReason: $this->extractFinishReason($data, $pendingToolCalls),
             usage: $usage ?? new Usage(0, 0),
             meta: new Meta($provider->name(), $model),
-            providerContentBlocks: $this->sanitizeRequestParts($this->excludeThinkingParts($modelParts)),
+            replayBlocks: $this->sanitizeRequestParts($this->excludeThinkingParts($modelParts)),
         );
     }
 

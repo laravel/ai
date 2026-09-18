@@ -132,7 +132,7 @@ test('an ownerless remembered agent pauses for approval and resumes without a pa
         ->and($resumed->toolResults[0]->result)->toBe('72019');
 });
 
-test('a resumed approval replays the paused turn provider content blocks', function () {
+test('a resumed approval replays the paused turn replay blocks', function () {
     Config::set('ai.conversations.generate_title', false);
 
     Http::fake([
@@ -295,8 +295,8 @@ test('a streamed multi-step pause stores every step so the resume replays each o
         fn ($step) => $step->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'toolu_1']),
         fn ($step) => $step->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'toolu_2']),
     )
-        ->and($steps)->json()->{'0'}->provider_blocks->{'0'}->toMatchArray(['signature' => 'signature-1'])
-        ->and($steps)->json()->{'1'}->provider_blocks->{'0'}->toMatchArray(['signature' => 'signature-2']);
+        ->and($steps)->json()->{'0'}->replay_blocks->{'0'}->toMatchArray(['signature' => 'signature-1'])
+        ->and($steps)->json()->{'1'}->replay_blocks->{'0'}->toMatchArray(['signature' => 'signature-2']);
 
     $resumed = (new RememberingMultiStepApprovableAgent)
         ->continue($paused->conversationId, $user)
@@ -952,7 +952,7 @@ test('a completed two-step turn replays step by step on the next prompt', functi
     );
 });
 
-test('a turn that pauses twice replays every step of the turn with its raw blocks on the second resume', function () {
+test('a turn that pauses twice replays every step of the turn with its replay blocks on the second resume', function () {
     Config::set('ai.conversations.generate_title', false);
 
     $gated = fn (string $signature, string $id) => Http::response([

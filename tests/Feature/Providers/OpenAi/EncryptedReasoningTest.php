@@ -280,7 +280,7 @@ test('stateless (store=false) responses capture replay blocks', function () {
 
     $response = (new OpenAiAgent)->prompt('Hello', provider: 'openai');
 
-    expect($response->messages->whereInstanceOf(AssistantMessage::class)->last()->providerContentBlocks)
+    expect($response->messages->whereInstanceOf(AssistantMessage::class)->last()->replayBlocks)
         ->not->toBeEmpty();
 });
 
@@ -291,7 +291,7 @@ test('stateful (store=true) responses do not capture replay blocks', function ()
 
     $response = (new OpenAiAgent)->prompt('Hello', provider: 'openai');
 
-    expect($response->messages->whereInstanceOf(AssistantMessage::class)->last()->providerContentBlocks)
+    expect($response->messages->whereInstanceOf(AssistantMessage::class)->last()->replayBlocks)
         ->toBeEmpty();
 });
 

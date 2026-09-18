@@ -16,7 +16,7 @@ test('step stores text tool calls and other properties', function (): void {
         usage: $usage,
         meta: $meta,
         reasoning: 'I greeted them.',
-        providerContentBlocks: [],
+        replayBlocks: [],
     );
 
     expect($step->text)->toBe('Hello')
@@ -42,7 +42,7 @@ test('step to array returns all properties including serialized usage and meta',
         ->and($array['usage'])->toBe($usage)
         ->and($array['meta'])->toBe($meta)
         ->and($array['reasoning'])->toBe('Thinking.')
-        ->and($array['provider_blocks'])->toBe([['type' => 'thinking', 'signature' => 'sig-1']]);
+        ->and($array['replay_blocks'])->toBe([['type' => 'thinking', 'signature' => 'sig-1']]);
 });
 
 test('step json serialize returns to array', function (): void {

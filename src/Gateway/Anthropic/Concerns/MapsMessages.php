@@ -54,10 +54,10 @@ trait MapsMessages
      */
     protected function mapAssistantMessage(AssistantMessage|Message $message, array &$mapped): void
     {
-        if ($message instanceof AssistantMessage && filled($message->providerContentBlocks)) {
+        if ($message instanceof AssistantMessage && filled($message->replayBlocks)) {
             $mapped[] = [
                 'role' => 'assistant',
-                'content' => $this->ensureToolInputIsObject($message->providerContentBlocks),
+                'content' => $this->ensureToolInputIsObject($message->replayBlocks),
             ];
 
             return;

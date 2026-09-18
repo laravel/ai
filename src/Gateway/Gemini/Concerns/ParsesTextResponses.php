@@ -57,7 +57,7 @@ trait ParsesTextResponses
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model, $this->extractCitations($data)),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
-            providerContentBlocks: $this->sanitizeRequestParts($this->excludeThinkingParts($parts)),
+            replayBlocks: $this->sanitizeRequestParts($this->excludeThinkingParts($parts)),
             reasoning: $this->extractReasoning($parts),
         );
     }

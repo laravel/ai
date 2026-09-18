@@ -121,14 +121,14 @@ class BackfillConversationSteps extends AiMigration
                 $steps[] = [
                     'tool_calls' => array_values(array_filter($calls, fn (array $call) => in_array($call['id'] ?? null, $ids, true))),
                     'reasoning' => '',
-                    'provider_blocks' => $providerStep['blocks'] ?? [],
+                    'replay_blocks' => $providerStep['blocks'] ?? [],
                 ];
             }
         } else {
             $steps = [[
                 'tool_calls' => $calls,
                 'reasoning' => '',
-                'provider_blocks' => $meta['provider_content_blocks'] ?? [],
+                'replay_blocks' => $meta['provider_content_blocks'] ?? [],
             ]];
         }
 

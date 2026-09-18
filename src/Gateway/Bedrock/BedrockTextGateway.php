@@ -184,11 +184,11 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
 
         $output = '';
         $toolCalls = [];
-        $providerContentBlocks = [];
+        $replayBlocks = [];
         $structuredOutput = null;
 
         foreach ($result['output']['message']['content'] ?? [] as $block) {
-            $providerContentBlocks[] = $block;
+            $replayBlocks[] = $block;
 
             if (isset($block['text'])) {
                 $output .= $block['text'];
@@ -226,8 +226,8 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             usage: $usage,
             meta: new Meta($provider->name(), $model),
             structured: $structuredOutput !== null ? $this->decodeStructuredOutput($structuredOutput) : null,
-            providerContentBlocks: $providerContentBlocks,
-            reasoning: $this->extractReasoning($providerContentBlocks),
+            replayBlocks: $replayBlocks,
+            reasoning: $this->extractReasoning($replayBlocks),
         );
     }
 
@@ -494,11 +494,11 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             $finishReason = FinishReason::Stop;
         }
 
-        $providerContentBlocks = array_values($responseContent);
+        $replayBlocks = array_values($responseContent);
 
         if (! $hasReasoningBlocks) {
-            $providerContentBlocks = array_values(array_filter(
-                $providerContentBlocks,
+            $replayBlocks = array_values(array_filter(
+                $replayBlocks,
                 fn (array $block) => ! isset($block['text']) || $block['text'] !== '',
             ));
         }
@@ -510,7 +510,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             usage: $totalUsage,
             meta: new Meta($provider->name(), $model),
             structured: $structuredOutput !== null ? $this->decodeStructuredOutput($structuredOutput) : null,
-            providerContentBlocks: $providerContentBlocks,
+            replayBlocks: $replayBlocks,
         );
     }
 
@@ -742,12 +742,12 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
      * Build the assistant conversation message block combining text and tool calls.
      *
      * @param  array<ToolCall>  $toolCalls
-     * @param  array<int, array<string, mixed>>  $providerContentBlocks
+     * @param  array<int, array<string, mixed>>  $replayBlocks
      */
-    protected function buildAssistantConversationMessage(string $text, array $toolCalls, array $providerContentBlocks = []): array
+    protected function buildAssistantConversationMessage(string $text, array $toolCalls, array $replayBlocks = []): array
     {
         return $this->formatAssistantMessage(
-            new AssistantMessage($text, new Collection($toolCalls), $providerContentBlocks)
+            new AssistantMessage($text, new Collection($toolCalls), $replayBlocks)
         );
     }
 
@@ -851,10 +851,10 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
      */
     protected function formatAssistantMessage(AssistantMessage $message): array
     {
-        if (filled($message->providerContentBlocks)) {
+        if (filled($message->replayBlocks)) {
             return [
                 'role' => 'assistant',
-                'content' => $this->ensureToolInputIsObject($message->providerContentBlocks),
+                'content' => $this->ensureToolInputIsObject($message->replayBlocks),
             ];
         }
 
