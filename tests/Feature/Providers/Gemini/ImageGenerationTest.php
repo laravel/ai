@@ -336,3 +336,48 @@ test('nested generation config provider options are merged beneath the core conf
         return $config['temperature'] === 0.1 && $config['responseModalities'] === ['IMAGE', 'TEXT'];
     });
 });
+
+test('image response reports the image modality token counts', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'candidates' => [[
+                'content' => [
+                    'parts' => [[
+                        'inlineData' => [
+                            'mimeType' => 'image/png',
+                            'data' => base64_encode('fake-image'),
+                        ],
+                    ]],
+                ],
+            ]],
+            'usageMetadata' => [
+                'promptTokenCount' => 270,
+                'candidatesTokenCount' => 1290,
+                'totalTokenCount' => 1560,
+                'promptTokensDetails' => [
+                    ['modality' => 'TEXT', 'tokenCount' => 12],
+                    ['modality' => 'IMAGE', 'tokenCount' => 258],
+                ],
+                'candidatesTokensDetails' => [
+                    ['modality' => 'IMAGE', 'tokenCount' => 1290],
+                ],
+            ],
+        ]),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
+
+    expect($response->usage->imageInputTokens)->toBe(258)
+        ->and($response->usage->imageOutputTokens)->toBe(1290);
+});
+
+test('image response leaves the image modality counts null when no details are returned', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiImageResponse(),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
+
+    expect($response->usage->imageInputTokens)->toBeNull()
+        ->and($response->usage->imageOutputTokens)->toBeNull();
+});

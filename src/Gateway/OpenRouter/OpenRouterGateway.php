@@ -30,8 +30,11 @@ use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
+use Laravel\Ai\Responses\Data\ImageUsage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
+use Laravel\Ai\Responses\Data\RerankingUsage;
+use Laravel\Ai\Responses\Data\TranscriptionUsage;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
@@ -150,7 +153,7 @@ class OpenRouterGateway implements Gateway, RerankingGateway, StepTextGateway
 
         return new ImageResponse(
             $images,
-            new Usage($usage['prompt_tokens'] ?? 0, $usage['completion_tokens'] ?? 0),
+            new ImageUsage($usage['prompt_tokens'] ?? 0, $usage['completion_tokens'] ?? 0),
             new Meta($provider->name(), $data['model'] ?? $model),
         );
     }
@@ -201,6 +204,7 @@ class OpenRouterGateway implements Gateway, RerankingGateway, StepTextGateway
 
         return new AudioResponse(
             base64_encode($response->body()),
+            new Usage,
             new Meta($provider->name(), $model),
             $this->audioResponseMimeType($format),
         );
@@ -302,9 +306,10 @@ class OpenRouterGateway implements Gateway, RerankingGateway, StepTextGateway
         return new TranscriptionResponse(
             $data['text'] ?? '',
             collect(),
-            new Usage(
-                Arr::get($data, 'usage.input_tokens', 0),
-                Arr::get($data, 'usage.output_tokens', 0),
+            new TranscriptionUsage(
+                inputTokens: Arr::get($data, 'usage.input_tokens', 0),
+                outputTokens: Arr::get($data, 'usage.output_tokens', 0),
+                audioSeconds: Arr::get($data, 'usage.seconds'),
             ),
             new Meta($provider->name(), $model),
         );
@@ -358,7 +363,7 @@ class OpenRouterGateway implements Gateway, RerankingGateway, StepTextGateway
 
         return new EmbeddingsResponse(
             (new Collection($data['data'] ?? []))->pluck('embedding')->all(),
-            $data['usage']['prompt_tokens'] ?? 0,
+            new Usage($data['usage']['prompt_tokens'] ?? 0),
             new Meta($provider->name(), $model),
         );
     }
@@ -397,6 +402,10 @@ class OpenRouterGateway implements Gateway, RerankingGateway, StepTextGateway
 
         return new RerankingResponse(
             $results,
+            new RerankingUsage(
+                inputTokens: $data['usage']['total_tokens'] ?? 0,
+                searchUnits: $data['usage']['search_units'] ?? null,
+            ),
             new Meta($provider->name(), $model),
         );
     }

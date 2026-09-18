@@ -101,3 +101,13 @@ function fakeVoyageRerankingResponse()
         'usage' => ['total_tokens' => 25],
     ]);
 }
+
+test('reranking response reports the total tokens', function (): void {
+    Http::fake(['*' => fakeVoyageRerankingResponse()]);
+
+    $response = Reranking::of(['Laravel is a PHP framework', 'React is a JS library'])
+        ->rerank('What is Laravel?', provider: 'voyageai', model: 'rerank-2.5-lite');
+
+    expect($response->usage->inputTokens)->toBe(25)
+        ->and($response->usage->searchUnits)->toBeNull();
+});

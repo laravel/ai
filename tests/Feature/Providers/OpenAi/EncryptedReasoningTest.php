@@ -228,7 +228,7 @@ test('default store true preserves previous response id behaviour', function ():
     expect($followUp)->toHaveKey('previous_response_id')
         ->and($followUp['previous_response_id'])->toBe('resp_tool_1')
         ->and($followUp)->not->toHaveKey('store')
-        ->and($followUp)->not->toHaveKey('include');
+        ->and($followUp['include'] ?? [])->toContain('reasoning.encrypted_content');
 
     $input = collect($followUp['input']);
 
@@ -284,17 +284,6 @@ test('stateless (store=false) responses capture replay blocks', function () {
         ->not->toBeEmpty();
 });
 
-test('stateful (store=true) responses do not capture replay blocks', function () {
-    config(['ai.providers.openai' => [...config('ai.providers.openai'), 'store' => true]]);
-
-    Http::fake(['api.openai.com/*' => fakeOpenAiResponse('Hi')]);
-
-    $response = (new OpenAiAgent)->prompt('Hello', provider: 'openai');
-
-    expect($response->messages->whereInstanceOf(AssistantMessage::class)->last()->providerContentBlocks)
-        ->toBeEmpty();
-});
-
 function fakeOpenAiToolCallResponseWithEncryptedReasoning(string $reasoningId, string $encryptedContent, string $functionCallId, string $callId): PromiseInterface
 {
     return Http::response([
@@ -323,3 +312,24 @@ function fakeOpenAiToolCallResponseWithEncryptedReasoning(string $reasoningId, s
         ],
     ]);
 }
+
+test('default store true still retains replay blocks with encrypted reasoning', function (): void {
+    config(['ai.providers.openai' => [
+        ...config('ai.providers.openai'),
+        'store' => true,
+    ]]);
+
+    Http::fake([
+        'api.openai.com/*' => Http::sequence([
+            fakeOpenAiToolCallResponseWithEncryptedReasoning('rs_1', 'enc-blob-1', 'fc_1', 'call_1'),
+            fakeOpenAiResponse('Done'),
+        ]),
+    ]);
+
+    $response = (new ToolUsingAgent(fixed: true))->prompt('Generate a number', provider: 'openai');
+
+    $blocks = $response->messages->whereInstanceOf(AssistantMessage::class)->first()->providerContentBlocks;
+
+    expect(collect($blocks)->firstWhere('type', 'reasoning'))->toMatchArray(['id' => 'rs_1', 'encrypted_content' => 'enc-blob-1'])
+        ->and(collect($blocks)->firstWhere('type', 'function_call')['call_id'] ?? null)->toBe('call_1');
+});

@@ -163,3 +163,16 @@ function fakeTranscriptionResponse(string $text = 'Hello, world!')
         ],
     ]);
 }
+
+test('transcription reports the prompt audio seconds', function (): void {
+    Http::fake(['*' => Http::response([
+        'text' => 'Hello, world!',
+        'usage' => ['prompt_audio_seconds' => 203, 'prompt_tokens' => 12, 'completion_tokens' => 8],
+    ])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'mistral');
+
+    expect($response->usage->audioSeconds)->toBe(203.0)
+        ->and($response->usage->inputTokens)->toBe(12);
+});

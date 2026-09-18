@@ -9,8 +9,8 @@ use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
-use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
@@ -82,9 +82,9 @@ trait ParsesTextResponses
     /**
      * Extract usage data from the Ollama response.
      */
-    protected function extractUsage(array $data): Usage
+    protected function extractUsage(array $data): TextUsage
     {
-        return new Usage(
+        return new TextUsage(
             inputTokens: $data['prompt_eval_count'] ?? 0,
             outputTokens: $data['eval_count'] ?? 0,
             cacheReadInputTokens: $data['prompt_eval_cached_count'] ?? null,

@@ -143,3 +143,35 @@ function fakeGeminiAudioResponse(string $pcm = "\x00\x00"): PromiseInterface
         ]],
     ]);
 }
+
+test('audio response reports the usage metadata returned by gemini', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'candidates' => [[
+                'content' => [
+                    'parts' => [['inlineData' => ['data' => base64_encode("\x00\x00"), 'mimeType' => 'audio/pcm']]],
+                ],
+            ]],
+            'usageMetadata' => [
+                'promptTokenCount' => 9,
+                'candidatesTokenCount' => 480,
+                'totalTokenCount' => 489,
+            ],
+        ]),
+    ]);
+
+    $response = Audio::of('Hello world')->generate(provider: 'gemini', model: 'gemini-2.5-flash-preview-tts');
+
+    expect($response->usage->inputTokens)->toBe(9)
+        ->and($response->usage->outputTokens)->toBe(480);
+});
+
+test('audio response defaults to zero usage when gemini omits the metadata', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiAudioResponse(),
+    ]);
+
+    $response = Audio::of('Hello world')->generate(provider: 'gemini', model: 'gemini-2.5-flash-preview-tts');
+
+    expect($response->usage->totalTokens())->toBe(0);
+});

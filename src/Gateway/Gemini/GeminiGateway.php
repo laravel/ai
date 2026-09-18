@@ -25,6 +25,8 @@ use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
+use Laravel\Ai\Responses\Data\TranscriptionUsage;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
@@ -158,7 +160,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         return new ImageResponse(
             $images,
-            $this->extractUsage($data),
+            $this->extractImageUsage($data),
             new Meta($provider->name(), $model),
         );
     }
@@ -193,7 +195,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         return new EmbeddingsResponse(
             (new Collection($data['embeddings'] ?? []))->pluck('values')->all(),
-            $data['usageMetadata']['promptTokenCount'] ?? 0,
+            new Usage($data['usageMetadata']['promptTokenCount'] ?? 0),
             new Meta($provider->name(), $model),
         );
     }
@@ -263,6 +265,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         return new AudioResponse(
             base64_encode($this->pcmToWav($pcm)),
+            $this->extractUsage($data),
             new Meta($provider->name(), $model),
             'audio/wav',
         );
@@ -352,12 +355,12 @@ class GeminiGateway implements Gateway, StepTextGateway
             $segments = new Collection;
         }
 
-        $usageMeta = $response->json('usageMetadata') ?? [];
-
         return new TranscriptionResponse(
             trim((string) $text),
             $segments,
-            $this->extractUsage(['usageMetadata' => $usageMeta]),
+            TranscriptionUsage::from(
+                $this->extractUsage(['usageMetadata' => $response->json('usageMetadata') ?? []]),
+            ),
             new Meta($provider->name(), $model),
         );
     }

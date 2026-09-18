@@ -19,6 +19,7 @@ use Laravel\Ai\Gateway\Concerns\ResolvesAudioFilenames;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
+use Laravel\Ai\Responses\Data\TranscriptionUsage;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
@@ -74,7 +75,7 @@ class OpenAiCompatibleGateway implements EmbeddingGateway, StepTextGateway, Tran
 
         return new EmbeddingsResponse(
             $this->parseEmbeddings($data, count($inputs)),
-            $data['usage']['prompt_tokens'] ?? 0,
+            new Usage($data['usage']['prompt_tokens'] ?? 0),
             new Meta($provider->name(), $model),
         );
     }
@@ -134,9 +135,10 @@ class OpenAiCompatibleGateway implements EmbeddingGateway, StepTextGateway, Tran
                 $segment['start'] ?? 0,
                 $segment['end'] ?? 0,
             )),
-            new Usage(
-                Arr::get($data, 'usage.input_tokens') ?? Arr::get($data, 'usage.prompt_tokens', 0),
-                Arr::get($data, 'usage.output_tokens') ?? Arr::get($data, 'usage.completion_tokens', 0),
+            new TranscriptionUsage(
+                inputTokens: Arr::get($data, 'usage.input_tokens') ?? Arr::get($data, 'usage.prompt_tokens', 0),
+                outputTokens: Arr::get($data, 'usage.output_tokens') ?? Arr::get($data, 'usage.completion_tokens', 0),
+                audioSeconds: Arr::get($data, 'usage.seconds') ?? Arr::get($data, 'duration'),
             ),
             new Meta($provider->name(), $model),
         );

@@ -9,10 +9,11 @@ use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Responses\Data\ImageUsage;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
-use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
@@ -63,7 +64,7 @@ trait ParsesTextResponses
             meta: new Meta($provider->name(), $data['model'] ?? '', $this->extractCitations($output)),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
             continuationToken: $data['id'] ?? '',
-            providerContentBlocks: $this->isStateless($provider) ? $this->extractReplayBlocks($output) : [],
+            providerContentBlocks: $this->extractReplayBlocks($output),
             reasoning: $this->extractReasoning($output),
         );
     }
@@ -125,7 +126,7 @@ trait ParsesTextResponses
     }
 
     /**
-     * Extract the ordered response output for stateless (store=false) replay.
+     * Extract the ordered response output for full-history replay.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -137,16 +138,32 @@ trait ParsesTextResponses
     /**
      * Extract usage data from the response.
      */
-    protected function extractUsage(array $data): Usage
+    protected function extractUsage(array $data): TextUsage
     {
         $usage = $data['usage'] ?? [];
 
-        return new Usage(
+        return new TextUsage(
             inputTokens: $usage['input_tokens'] ?? 0,
             outputTokens: $usage['output_tokens'] ?? 0,
             cacheReadInputTokens: $usage['input_tokens_details']['cached_tokens'] ?? null,
             cacheWriteInputTokens: $usage['input_tokens_details']['cache_write_tokens'] ?? null,
             reasoningTokens: $usage['output_tokens_details']['reasoning_tokens'] ?? null,
+        );
+    }
+
+    /**
+     * Extract usage data from an image generation response.
+     */
+    protected function extractImageUsage(array $data): ImageUsage
+    {
+        $usage = $data['usage'] ?? [];
+
+        return new ImageUsage(
+            inputTokens: $usage['input_tokens'] ?? 0,
+            outputTokens: $usage['output_tokens'] ?? 0,
+            cacheReadInputTokens: $usage['input_tokens_details']['cached_tokens'] ?? null,
+            imageInputTokens: $usage['input_tokens_details']['image_tokens'] ?? null,
+            imageOutputTokens: $usage['output_tokens_details']['image_tokens'] ?? null,
         );
     }
 

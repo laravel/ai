@@ -25,10 +25,10 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\UrlCitation;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 use Laravel\Ai\Storage\StoredMessage;
@@ -306,6 +306,73 @@ test('it persists tool calls and results from a remembered agent prompt', functi
         ->and(json_decode((string) $record->tool_results, true))->toBeList();
 });
 
+test('it preserves the gemini thought signature across a persisted tool conversation', function (): void {
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response([
+                'candidates' => [[
+                    'content' => [
+                        'parts' => [[
+                            'functionCall' => ['id' => 'call_123', 'name' => 'FixedNumberGenerator', 'args' => (object) []],
+                            'thoughtSignature' => 'sig_persist_777',
+                        ]],
+                        'role' => 'model',
+                    ],
+                    'finishReason' => 'STOP',
+                ]],
+                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
+                'modelVersion' => 'gemini-3.6-flash',
+            ]),
+            Http::response([
+                'candidates' => [[
+                    'content' => ['parts' => [['text' => 'The number is 72019']], 'role' => 'model'],
+                    'finishReason' => 'STOP',
+                ]],
+                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
+                'modelVersion' => 'gemini-3.6-flash',
+            ]),
+            Http::response([
+                'candidates' => [[
+                    'content' => ['parts' => [['text' => 'The second number is 99']], 'role' => 'model'],
+                    'finishReason' => 'STOP',
+                ]],
+                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
+                'modelVersion' => 'gemini-3.6-flash',
+            ]),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+    $conversationId = (new DatabaseConversationStore)->storeConversation('user', $user->id, 'Tool conversation');
+
+    (new RememberingToolUsingAgent)->continue($conversationId, $user)->prompt('Generate a random number', provider: 'gemini');
+
+    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+    $storedCall = json_decode((string) $record->tool_calls, true)[0];
+
+    expect($storedCall['thought_signature'])->toBe('sig_persist_777');
+
+    (new RememberingToolUsingAgent)->continue($conversationId, $user)->prompt('Generate another', provider: 'gemini');
+
+    $recorded = Http::recorded();
+    $followUpContents = $recorded[count($recorded) - 1][0]->data()['contents'];
+
+    $signatures = [];
+
+    foreach ($followUpContents as $content) {
+        if (($content['role'] ?? null) === 'model') {
+            foreach ($content['parts'] as $part) {
+                if (isset($part['functionCall'])) {
+                    $signatures[] = $part['thoughtSignature'] ?? null;
+                }
+            }
+        }
+    }
+
+    // Replayed to Gemini on the second turn, without which the request 400s...
+    expect($signatures)->toBe(['sig_persist_777']);
+});
+
 test('it stores sparse keyed tool calls and results as JSON arrays', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
@@ -318,7 +385,7 @@ test('it stores sparse keyed tool calls and results as JSON arrays', function ()
         'test-model',
     );
 
-    $response = new AgentResponse('invocation-id', 'The order has shipped.', new Usage, new Meta);
+    $response = new AgentResponse('invocation-id', 'The order has shipped.', new TextUsage, new Meta);
     $response->toolCalls = collect([
         2 => new ToolCall('call-1', 'lookup_order', ['id' => 1]),
         8 => new ToolCall('call-2', 'lookup_carrier', ['id' => 1]),
@@ -386,7 +453,7 @@ test('it round trips tool result failure status through storage', function (): v
         'test-model',
     );
 
-    $response = new AgentResponse('invocation-id', '', new Usage, new Meta);
+    $response = new AgentResponse('invocation-id', '', new TextUsage, new Meta);
     $response->toolCalls = collect([new ToolCall('call-1', 'query-resources', [])]);
     $response->toolResults = collect([
         new ToolResult('call-1', 'query-resources', [], 'Tool not found', failed: true),
@@ -470,7 +537,7 @@ test('a bare rejection resume does not persist a blank assistant row', function 
         approvalDecisions: Decisions::from(['call-1' => Decision::reject()]),
     );
 
-    $response = new AgentResponse('invocation-id', '', new Usage, new Meta);
+    $response = new AgentResponse('invocation-id', '', new TextUsage, new Meta);
     $response->toolResults = collect([
         new ToolResult('call-1', 'DeleteFile', [], 'The user rejected this tool call.'),
     ]);
@@ -979,7 +1046,7 @@ test('it records every step of a paused turn into the message meta', function ()
         'test-model',
     );
 
-    $response = (new AgentResponse('invocation-id', '', new Usage, new Meta))
+    $response = (new AgentResponse('invocation-id', '', new TextUsage, new Meta))
         ->withMessages(collect([
             new AssistantMessage('', collect([new ToolCall('call-0', 'ReadFile', ['path' => 'config/app.php'])]), [['type' => 'thinking', 'signature' => 'sig-0']]),
             new ToolResultMessage(collect([new ToolResult('call-0', 'ReadFile', ['path' => 'config/app.php'], 'contents')])),
@@ -1013,7 +1080,7 @@ test('it omits provider content blocks when the assistant turn is not paused', f
         'test-model',
     );
 
-    $response = (new AgentResponse('invocation-id', 'Deleted the file.', new Usage, new Meta))
+    $response = (new AgentResponse('invocation-id', 'Deleted the file.', new TextUsage, new Meta))
         ->withMessages(collect([
             new AssistantMessage('Deleted the file.', null, [['type' => 'thinking', 'signature' => 'sig-1']]),
         ]));

@@ -9,8 +9,8 @@ use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\Data\GeneratedImage;
+use Laravel\Ai\Responses\Data\ImageUsage;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\ImageResponse;
 use Throwable;
 
@@ -58,7 +58,7 @@ class BedrockImageGateway implements ImageGateway
 
         return new ImageResponse(
             $this->parseImageResponse($model, $result),
-            new Usage,
+            new ImageUsage,
             new Meta($provider->name(), $model),
         );
     }

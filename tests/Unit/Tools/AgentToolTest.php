@@ -2,7 +2,7 @@
 
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -12,7 +12,7 @@ use Laravel\Ai\Tools\Request;
 test('an agent tool streams its events by default and returns its final text', function (): void {
     $stream = new StreamableAgentResponse('invocation-sub', fn (): Generator => yield from [
         new TextDelta('event-1', 'message-1', 'sub answer', time()),
-        new StreamEnd('event-2', 'stop', new Usage, time()),
+        new StreamEnd('event-2', 'stop', new TextUsage, time()),
     ], new Meta('fake', 'model'));
 
     $agent = Mockery::mock(Agent::class);

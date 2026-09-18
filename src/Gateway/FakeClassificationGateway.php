@@ -16,7 +16,7 @@ use Laravel\Ai\Responses\Data\BooleanAnswer;
 use Laravel\Ai\Responses\Data\ChoiceAnswer;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ScoreAnswer;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 use RuntimeException;
 
 class FakeClassificationGateway implements ClassificationGateway
@@ -99,7 +99,7 @@ class FakeClassificationGateway implements ClassificationGateway
 
         return new ClassificationResponse(
             array_combine(array_keys($prompt->questions), $answers),
-            new Usage,
+            new TextUsage,
             new Meta($provider->name(), $model),
         );
     }

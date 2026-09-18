@@ -16,7 +16,7 @@ use Laravel\Ai\Responses\Data\BooleanAnswer;
 use Laravel\Ai\Responses\Data\ChoiceAnswer;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ScoreAnswer;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 
 class TypeSafeGateway implements ClassificationGateway
 {
@@ -59,7 +59,7 @@ class TypeSafeGateway implements ClassificationGateway
 
         return new ClassificationResponse(
             $answers,
-            new Usage(
+            new TextUsage(
                 inputTokens: $data['usage']['input_tokens'] ?? 0,
                 outputTokens: $data['usage']['output_tokens'] ?? 0,
             ),

@@ -14,8 +14,8 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
@@ -153,7 +153,7 @@ class FakeTextGateway implements StepTextGateway
     {
         if ($response instanceof ToolCall) {
             return new StepResponse(
-                '', [$response], FinishReason::ToolCalls, new Usage, new Meta($provider->name(), $model)
+                '', [$response], FinishReason::ToolCalls, new TextUsage, new Meta($provider->name(), $model)
             );
         }
 
@@ -213,10 +213,10 @@ class FakeTextGateway implements StepTextGateway
 
         return match (true) {
             is_string($response) => new TextResponse(
-                $response, new Usage, new Meta($provider->name(), $model)
+                $response, new TextUsage, new Meta($provider->name(), $model)
             ),
             is_array($response) => new StructuredTextResponse(
-                $response, json_encode($response), new Usage, new Meta($provider->name(), $model)
+                $response, json_encode($response), new TextUsage, new Meta($provider->name(), $model)
             ),
             $response instanceof Closure => $this->marshalResponse(
                 $response($prompt, $attachments, $provider, $model),

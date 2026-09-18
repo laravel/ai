@@ -122,3 +122,19 @@ function fakeElevenTranscriptionResponse(bool $diarized = false)
 
     return Http::response($body);
 }
+
+test('transcription reports the transcribed audio duration', function (): void {
+    Http::fake(['*' => Http::response(['text' => 'Hello, world!', 'audio_duration_secs' => 41.2])]);
+
+    $response = Transcription::of(base64_encode('fake-audio'))->generate(provider: 'eleven');
+
+    expect($response->usage->audioSeconds)->toBe(41.2);
+});
+
+test('transcription leaves the audio duration null when not returned', function (): void {
+    Http::fake(['*' => Http::response(['text' => 'Hello, world!'])]);
+
+    $response = Transcription::of(base64_encode('fake-audio'))->generate(provider: 'eleven');
+
+    expect($response->usage->audioSeconds)->toBeNull();
+});

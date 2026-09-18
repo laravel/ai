@@ -9,6 +9,7 @@ use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Prompts\RerankingPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
+use Laravel\Ai\Responses\Data\RerankingUsage;
 use Laravel\Ai\Responses\RerankingResponse;
 use RuntimeException;
 
@@ -87,6 +88,7 @@ class FakeRerankingGateway implements RerankingGateway
         if (is_array($response) && isset($response[0]) && $response[0] instanceof RankedDocument) {
             return new RerankingResponse(
                 $response,
+                new RerankingUsage,
                 new Meta($provider->name(), $model),
             );
         }

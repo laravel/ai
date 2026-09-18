@@ -8,8 +8,8 @@ use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Responses\Concerns\HasRawResponse;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
-use Laravel\Ai\Responses\Data\Usage;
 
 class StepResponse implements Arrayable, JsonSerializable
 {
@@ -25,7 +25,7 @@ class StepResponse implements Arrayable, JsonSerializable
         public string $text,
         public array $toolCalls,
         public FinishReason $finishReason,
-        public Usage $usage,
+        public TextUsage $usage,
         public Meta $meta,
         public ?array $structured = null,
         public ?string $continuationToken = null,

@@ -10,6 +10,8 @@ use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
+use Laravel\Ai\Responses\Data\RerankingUsage;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\RerankingResponse;
 
@@ -45,7 +47,7 @@ class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
 
         return new EmbeddingsResponse(
             (new Collection($data['data']))->pluck('embedding')->all(),
-            $data['usage']['total_tokens'] ?? 0,
+            new Usage($data['usage']['total_tokens'] ?? 0),
             new Meta($provider->name(), $model),
         );
     }
@@ -81,6 +83,7 @@ class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
                 document: $documents[$result['index']],
                 score: $result['relevance_score'],
             ))->all(),
+            new RerankingUsage($data['usage']['total_tokens'] ?? 0),
             new Meta($provider->name(), $model),
         );
     }

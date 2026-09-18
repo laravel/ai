@@ -298,6 +298,72 @@ describe('tool calls', function (): void {
         }
     });
 
+    test('streaming carries the sibling thought signature onto the tool call', function (): void {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunk([[
+                            'functionCall' => ['id' => 'call_1', 'name' => 'FixedNumberGenerator', 'args' => (object) []],
+                            'thoughtSignature' => 'sig_stream_777',
+                        ]]),
+                        $this->geminiChunkWithUsage([], 10, 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunkWithUsage([['text' => 'Done']], 20, 10),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+            ]),
+        ]);
+
+        $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        $toolCalls = array_values(array_filter($events, fn ($event): bool => $event instanceof ToolCallEvent));
+
+        expect($toolCalls)->toHaveCount(1)
+            ->and($toolCalls[0]->toolCall->thoughtSignature)->toBe('sig_stream_777');
+    });
+
+    test('streaming keeps a signature only part in the replayed model parts', function (): void {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunk([['thoughtSignature' => 'sig_stream_888']]),
+                        $this->geminiChunk([[
+                            'functionCall' => ['id' => 'call_1', 'name' => 'FixedNumberGenerator', 'args' => (object) []],
+                        ]]),
+                        $this->geminiChunkWithUsage([], 10, 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->geminiChunkWithUsage([['text' => 'Done']], 20, 10),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+            ]),
+        ]);
+
+        $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        $modelParts = collect(Http::recorded()[1][0]->data()['contents'])
+            ->where('role', 'model')
+            ->flatMap(fn ($content) => $content['parts'] ?? [])
+            ->all();
+
+        expect($modelParts)->toContain(['thoughtSignature' => 'sig_stream_888']);
+    });
+
     test('streaming preserves the thought signature across the tool call continuation', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::sequence([

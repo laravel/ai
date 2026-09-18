@@ -4,12 +4,12 @@ use GuzzleHttp\Psr7\Response as Psr7Response;
 use Illuminate\Http\Client\Response;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Tests\Fixtures\Responses\SubclassedStep;
 use Tests\Fixtures\Responses\SubclassedTextResponse;
 
 test('serialization preserves private properties declared on text response subclasses', function (): void {
-    $response = new SubclassedTextResponse('Hello', new Usage(1, 2), new Meta('anthropic', 'claude'));
+    $response = new SubclassedTextResponse('Hello', new TextUsage(1, 2), new Meta('anthropic', 'claude'));
     $response->rememberSecret('changed');
     $response->withRawResponse(new Response(new Psr7Response(200, [], '{}')));
 
@@ -21,7 +21,7 @@ test('serialization preserves private properties declared on text response subcl
 });
 
 test('serialization preserves private properties declared on step subclasses', function (): void {
-    $step = new SubclassedStep('Hello', [], [], FinishReason::Stop, new Usage(1, 2), new Meta('anthropic', 'claude'));
+    $step = new SubclassedStep('Hello', [], [], FinishReason::Stop, new TextUsage(1, 2), new Meta('anthropic', 'claude'));
     $step->rememberSecret('changed');
     $step->withRawResponse(new Response(new Psr7Response(200, [], '{}')));
 

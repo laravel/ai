@@ -31,9 +31,9 @@ use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Step;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Streaming\Events\Error;
@@ -98,7 +98,7 @@ class TextGenerationLoop
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
         $previous = null;
-        $accumulatedUsage = new Usage;
+        $accumulatedUsage = new TextUsage;
         $lastResult = null;
 
         if ($approval !== null) {
@@ -112,7 +112,7 @@ class TextGenerationLoop
             }
 
             if (! $resumption->shouldContinue) {
-                return (new TextResponse('', new Usage, new Meta($provider->name(), $model)))
+                return (new TextResponse('', new TextUsage, new Meta($provider->name(), $model)))
                     ->withMessages(collect($newMessages));
             }
         } else {
@@ -224,7 +224,7 @@ class TextGenerationLoop
         $maxSteps = $this->resolveMaxSteps($options, $tools);
         $continuationToken = null;
         $previous = null;
-        $accumulatedUsage = new Usage;
+        $accumulatedUsage = new TextUsage;
         $finalReason = null;
 
         if ($approval !== null) {
@@ -1004,8 +1004,8 @@ class TextGenerationLoop
         $reasoningText = static::joinReasoning($steps->pluck('reasoning'));
 
         $totalUsage = $steps->reduce(
-            fn (Usage $carry, Step $step): Usage => $carry->add($step->usage),
-            new Usage,
+            fn (TextUsage $carry, Step $step): TextUsage => $carry->add($step->usage),
+            new TextUsage,
         );
 
         $newMessages = collect($newMessages)->values();

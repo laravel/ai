@@ -13,6 +13,7 @@ use Laravel\Ai\Prompts\QueuedAudioPrompt;
 use Laravel\Ai\Providers\ElevenLabsProvider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 
 test('audio rejects empty text', function (): void {
     Audio::fake();
@@ -30,7 +31,7 @@ test('audio can be faked', function (): void {
     Audio::fake([
         base64_encode('first-audio'),
         fn (AudioPrompt $prompt): string => base64_encode('second-audio-'.$prompt->text),
-        new AudioResponse(base64_encode('third-audio'), new Meta),
+        new AudioResponse(base64_encode('third-audio'), new Usage, new Meta),
     ]);
 
     $response = Audio::of('First text')->generate();
@@ -150,9 +151,9 @@ test('audio is stored under a random name derived from its mime type', function 
     Storage::fake('audio');
 
     Audio::fake([
-        new AudioResponse(base64_encode('wav-bytes'), new Meta, 'audio/wav'),
-        new AudioResponse(base64_encode('alias-bytes'), new Meta, 'audio/x-wav'),
-        new AudioResponse(base64_encode('mp3-bytes'), new Meta),
+        new AudioResponse(base64_encode('wav-bytes'), new Usage, new Meta, 'audio/wav'),
+        new AudioResponse(base64_encode('alias-bytes'), new Usage, new Meta, 'audio/x-wav'),
+        new AudioResponse(base64_encode('mp3-bytes'), new Usage, new Meta),
     ]);
 
     $wav = Audio::of('First text')->generate()->store('generated', 'audio');

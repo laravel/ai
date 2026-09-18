@@ -11,6 +11,7 @@ test('tool call stores all properties', function (): void {
         reasoningId: 'reason_789',
         reasoningSummary: ['thought' => 'I should check the weather'],
         reasoningEncryptedContent: 'enc-blob-1',
+        thoughtSignature: 'sig-1',
     );
 
     expect($toolCall->id)->toBe('call_123')
@@ -19,7 +20,8 @@ test('tool call stores all properties', function (): void {
         ->and($toolCall->resultId)->toBe('res_456')
         ->and($toolCall->reasoningId)->toBe('reason_789')
         ->and($toolCall->reasoningSummary)->toBe(['thought' => 'I should check the weather'])
-        ->and($toolCall->reasoningEncryptedContent)->toBe('enc-blob-1');
+        ->and($toolCall->reasoningEncryptedContent)->toBe('enc-blob-1')
+        ->and($toolCall->thoughtSignature)->toBe('sig-1');
 });
 
 test('tool call to array returns all properties', function (): void {
@@ -35,6 +37,7 @@ test('tool call to array returns all properties', function (): void {
         'reasoning_id' => null,
         'reasoning_summary' => null,
         'reasoning_encrypted_content' => null,
+        'thought_signature' => null,
     ]);
 });
 

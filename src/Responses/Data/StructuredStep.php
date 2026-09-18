@@ -15,7 +15,7 @@ class StructuredStep extends Step
         array $toolCalls,
         array $toolResults,
         FinishReason $finishReason,
-        Usage $usage,
+        TextUsage $usage,
         Meta $meta,
     ) {
         parent::__construct($text, $toolCalls, $toolResults, $finishReason, $usage, $meta);

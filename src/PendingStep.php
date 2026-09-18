@@ -7,7 +7,7 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Responses\Data\Step;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Tools\ToolNameResolver;
 
 /**
@@ -20,7 +20,7 @@ class PendingStep
      * @param  array<Tool|ProviderTool>  $tools
      * @param  array<string, mixed>|null  $schema
      * @param  Step[]  $steps  The steps completed so far in this run.
-     * @param  Usage  $usage  The usage accumulated by the completed steps.
+     * @param  TextUsage  $usage  The usage accumulated by the completed steps.
      */
     public function __construct(
         public readonly int $number,
@@ -33,7 +33,7 @@ class PendingStep
         public readonly ?array $schema,
         public readonly ?TextGenerationOptions $options,
         public readonly array $steps = [],
-        public readonly Usage $usage = new Usage,
+        public readonly TextUsage $usage = new TextUsage,
         public readonly ?int $timeout = null,
         public readonly ?string $invocationId = null,
     ) {}

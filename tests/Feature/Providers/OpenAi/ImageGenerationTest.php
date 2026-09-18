@@ -236,3 +236,41 @@ test('image http error response throws request exception', function (): void {
 
     Image::of('A red apple')->generate(provider: 'openai', model: 'gpt-image-1');
 })->throws(RequestException::class);
+
+test('image response reports the image token details returned by gpt-image', function (): void {
+    Http::fake([
+        '*' => Http::response([
+            'data' => [[
+                'b64_json' => base64_encode('fake-image'),
+            ]],
+            'usage' => [
+                'input_tokens' => 187,
+                'output_tokens' => 1481,
+                'input_tokens_details' => [
+                    'text_tokens' => 41,
+                    'image_tokens' => 146,
+                ],
+                'output_tokens_details' => [
+                    'text_tokens' => 209,
+                    'image_tokens' => 1272,
+                ],
+            ],
+        ]),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'openai', model: 'gpt-image-1');
+
+    expect($response->usage->imageInputTokens)->toBe(146)
+        ->and($response->usage->imageOutputTokens)->toBe(1272);
+});
+
+test('image response leaves the image token details null when dalle omits them', function (): void {
+    Http::fake([
+        '*' => fakeOpenAiImageResponse(),
+    ]);
+
+    $response = Image::of('A red apple')->generate(provider: 'openai', model: 'dall-e-3');
+
+    expect($response->usage->imageInputTokens)->toBeNull()
+        ->and($response->usage->imageOutputTokens)->toBeNull();
+});

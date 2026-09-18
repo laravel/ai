@@ -10,10 +10,11 @@ use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Responses\Data\ImageUsage;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
-use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
@@ -48,12 +49,12 @@ trait ParsesTextResponses
         $parts = $candidate['content']['parts'] ?? [];
 
         $text = $this->extractText($parts);
-        $rawToolCalls = $this->extractRawToolCalls($parts);
+        $functionCallParts = $this->extractFunctionCallParts($parts);
 
         return new StepResponse(
             text: $text,
-            toolCalls: $this->mapToolCalls($rawToolCalls),
-            finishReason: $this->extractFinishReason($data, $rawToolCalls),
+            toolCalls: $this->mapToolCalls($functionCallParts),
+            finishReason: $this->extractFinishReason($data, $functionCallParts),
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model, $this->extractCitations($data)),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
@@ -148,35 +149,35 @@ trait ParsesTextResponses
     }
 
     /**
-     * Extract raw tool calls from the response parts.
+     * Extract the parts carrying function calls from the response parts.
      */
-    protected function extractRawToolCalls(array $parts): array
+    protected function extractFunctionCallParts(array $parts): array
     {
         return array_values(
-            array_map(
-                fn (array $part) => $part['functionCall'],
-                array_filter($parts, fn (array $part): bool => isset($part['functionCall']))
-            )
+            array_filter($parts, fn (array $part): bool => isset($part['functionCall']))
         );
     }
 
     /**
-     * Map raw function call data to ToolCall DTOs.
+     * Map function call parts to ToolCall DTOs.
      *
      * @return array<ToolCall>
      */
-    protected function mapToolCalls(array $rawToolCalls): array
+    protected function mapToolCalls(array $functionCallParts): array
     {
-        return array_map(function (array $fc): ToolCall {
-            $id = $fc['id'] ?? (string) Str::uuid7();
+        return array_map(function (array $part): ToolCall {
+            $functionCall = $part['functionCall'];
+
+            $id = $functionCall['id'] ?? (string) Str::uuid7();
 
             return new ToolCall(
                 $id,
-                $fc['name'] ?? '',
-                $fc['args'] ?? [],
+                $functionCall['name'] ?? '',
+                $functionCall['args'] ?? [],
                 $id,
+                thoughtSignature: $part['thoughtSignature'] ?? null,
             );
-        }, $rawToolCalls);
+        }, $functionCallParts);
     }
 
     /**
@@ -229,13 +230,14 @@ trait ParsesTextResponses
     /**
      * Extract usage data from the response.
      */
-    protected function extractUsage(array $data): Usage
+    protected function extractUsage(array $data): TextUsage
     {
         $usage = $data['usageMetadata'] ?? [];
+
         $reasoningTokens = $usage['thoughtsTokenCount'] ?? null;
 
         // Gemini reports thought tokens outside the candidate token count...
-        return new Usage(
+        return new TextUsage(
             inputTokens: $usage['promptTokenCount'] ?? 0,
             outputTokens: ($usage['candidatesTokenCount'] ?? 0) + ($reasoningTokens ?? 0),
             cacheReadInputTokens: $usage['cachedContentTokenCount'] ?? null,
@@ -244,11 +246,39 @@ trait ParsesTextResponses
     }
 
     /**
+     * Extract usage data from an image generation response.
+     */
+    protected function extractImageUsage(array $data): ImageUsage
+    {
+        $usage = $data['usageMetadata'] ?? [];
+
+        $text = $this->extractUsage($data);
+
+        return new ImageUsage(
+            $text->inputTokens,
+            $text->outputTokens,
+            $text->cacheReadInputTokens,
+            $text->cacheWriteInputTokens,
+            $text->reasoningTokens,
+            $this->modalityTokens($usage['promptTokensDetails'] ?? [], 'IMAGE'),
+            $this->modalityTokens($usage['candidatesTokensDetails'] ?? [], 'IMAGE'),
+        );
+    }
+
+    /**
+     * Get the token count Gemini reported for the given modality.
+     */
+    protected function modalityTokens(array $details, string $modality): ?int
+    {
+        return collect($details)->firstWhere('modality', $modality)['tokenCount'] ?? null;
+    }
+
+    /**
      * Extract and map the finish reason from the Gemini response.
      */
-    protected function extractFinishReason(array $data, array $rawToolCalls): FinishReason
+    protected function extractFinishReason(array $data, array $functionCallParts): FinishReason
     {
-        if (filled($rawToolCalls)) {
+        if (filled($functionCallParts)) {
             return FinishReason::ToolCalls;
         }
 

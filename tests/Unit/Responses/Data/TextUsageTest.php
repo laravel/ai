@@ -1,9 +1,9 @@
 <?php
 
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 
 test('usage defaults to zero tokens and unreported details', function (): void {
-    $usage = new Usage;
+    $usage = new TextUsage;
 
     expect($usage->inputTokens)->toBe(0)
         ->and($usage->outputTokens)->toBe(0)
@@ -13,24 +13,24 @@ test('usage defaults to zero tokens and unreported details', function (): void {
 });
 
 test('usage derives totals from the inclusive input and output counts', function (): void {
-    $usage = new Usage(100, 50, cacheReadInputTokens: 30, cacheWriteInputTokens: 20, reasoningTokens: 5);
+    $usage = new TextUsage(100, 50, cacheReadInputTokens: 30, cacheWriteInputTokens: 20, reasoningTokens: 5);
 
     expect($usage->totalTokens())->toBe(150)
         ->and($usage->uncachedInputTokens())->toBe(50);
 });
 
 test('usage treats unreported cache counts as zero when deriving the uncached input', function (): void {
-    expect((new Usage(100, 50))->uncachedInputTokens())->toBe(100);
+    expect((new TextUsage(100, 50))->uncachedInputTokens())->toBe(100);
 });
 
 test('usage add sums every count', function (): void {
-    $combined = (new Usage(100, 50, 10, 25, 5))->add(new Usage(50, 25, 5, 10, 0));
+    $combined = (new TextUsage(100, 50, 10, 25, 5))->add(new TextUsage(50, 25, 5, 10, 0));
 
-    expect($combined)->toEqual(new Usage(150, 75, 15, 35, 5));
+    expect($combined)->toEqual(new TextUsage(150, 75, 15, 35, 5));
 });
 
 test('usage add keeps a detail null only when neither side reported it', function (): void {
-    $combined = (new Usage(1, 1, cacheReadInputTokens: 7))->add(new Usage(1, 1, reasoningTokens: 3));
+    $combined = (new TextUsage(1, 1, cacheReadInputTokens: 7))->add(new TextUsage(1, 1, reasoningTokens: 3));
 
     expect($combined->cacheReadInputTokens)->toBe(7)
         ->and($combined->reasoningTokens)->toBe(3)
@@ -38,7 +38,7 @@ test('usage add keeps a detail null only when neither side reported it', functio
 });
 
 test('usage to array serializes every count', function (): void {
-    $usage = new Usage(100, 50, 10, 25, null);
+    $usage = new TextUsage(100, 50, 10, 25, null);
 
     expect($usage->toArray())->toBe([
         'input_tokens' => 100,

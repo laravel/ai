@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Exceptions;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Streaming\Events\Citation;
 use Laravel\Ai\Streaming\Events\Error;
@@ -47,9 +47,9 @@ function vercelProtocolParts(array|Closure $events, ?string $messageId = null): 
         ->all();
 }
 
-function vercelFinishPart(string $reason = 'stop', ?Usage $usage = null): array
+function vercelFinishPart(string $reason = 'stop', ?TextUsage $usage = null): array
 {
-    $usage ??= new Usage;
+    $usage ??= new TextUsage;
 
     return [
         'type' => 'finish',
@@ -72,7 +72,7 @@ test('a text stream emits start, delta, and end parts for the message', function
         new TextStart('event-1', 'msg-1', time()),
         new TextDelta('event-2', 'msg-1', 'Hello.', time()),
         new TextEnd('event-3', 'msg-1', time()),
-        new StreamEnd('event-4', 'stop', new Usage, time()),
+        new StreamEnd('event-4', 'stop', new TextUsage, time()),
     ]);
 
     expect($parts)->toBe([
@@ -93,7 +93,7 @@ test('a reasoning stream emits start, delta, and end parts for the reasoning blo
         new ReasoningStart('event-1', 'reasoning-1', time()),
         new ReasoningDelta('event-2', 'reasoning-1', 'Considering the options.', time()),
         new ReasoningEnd('event-3', 'reasoning-1', time()),
-        new StreamEnd('event-4', 'stop', new Usage, time()),
+        new StreamEnd('event-4', 'stop', new TextUsage, time()),
     ]);
 
     expect($parts)->toBe([
@@ -115,7 +115,7 @@ test('a cited text stream emits a source url part for the cited page', function 
         new TextDelta('event-2', 'msg-1', 'Laravel is a PHP framework.', time()),
         new Citation('event-3', 'msg-1', new Data\UrlCitation('https://laravel.com/docs', 'Laravel Documentation'), time()),
         new TextEnd('event-4', 'msg-1', time()),
-        new StreamEnd('event-5', 'stop', new Usage, time()),
+        new StreamEnd('event-5', 'stop', new TextUsage, time()),
     ]);
 
     expect($parts)->toBe([
@@ -135,7 +135,7 @@ test('a url citation without a title omits only the title from the source url pa
     $parts = vercelProtocolParts([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new Citation('event-1', 'msg-1', new Data\UrlCitation('https://laravel.com/docs'), time()),
-        new StreamEnd('event-2', 'stop', new Usage, time()),
+        new StreamEnd('event-2', 'stop', new TextUsage, time()),
     ]);
 
     expect($parts[2])->toBe([
@@ -149,7 +149,7 @@ test('an unknown citation type is skipped instead of ending the stream', functio
     $parts = vercelProtocolParts([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new Citation('event-1', 'msg-1', new class extends Data\Citation {}, time()),
-        new StreamEnd('event-2', 'stop', new Usage, time()),
+        new StreamEnd('event-2', 'stop', new TextUsage, time()),
     ]);
 
     expect($parts)->toBe([
@@ -184,7 +184,7 @@ test('a paused stream emits an approval request part for each pending approval',
         new ToolApprovalRequest('event-2', collect([
             new PendingApproval('call-1', 'DeleteFile', ['path' => 'a.txt'], 'Destructive operation.'),
         ]), time()),
-        new StreamEnd('event-3', 'tool_calls', new Usage, time()),
+        new StreamEnd('event-3', 'tool_calls', new TextUsage, time()),
     ]);
 
     expect($parts)->toBe([
@@ -203,7 +203,7 @@ test('a resumed stream emits the approved tool output for the prior turn tool ca
         new ToolResult('event-1', new Data\ToolResult('call-1', 'DeleteFile', ['path' => 'a.txt'], 'deleted'), true, null, time()),
         new StreamStart('msg-2', 'anthropic', 'claude-sonnet-4-6', time()),
         new TextDelta('event-2', 'msg-2', 'Done.', time()),
-        new StreamEnd('event-3', 'stop', new Usage, time()),
+        new StreamEnd('event-3', 'stop', new TextUsage, time()),
     ], messageId: 'client-message-1');
 
     expect($parts)->toBe([
@@ -223,7 +223,7 @@ test('a resumed stream may continue an existing client-side message', function (
     $parts = vercelProtocolParts([
         new ToolResult('event-1', new Data\ToolResult('call-1', 'DeleteFile', ['path' => 'a.txt'], 'deleted'), true, null, time()),
         new StreamStart('msg-2', 'anthropic', 'claude-sonnet-4-6', time()),
-        new StreamEnd('event-2', 'stop', new Usage, time()),
+        new StreamEnd('event-2', 'stop', new TextUsage, time()),
     ], messageId: 'client-message-1');
 
     expect($parts[0])->toBe(['type' => 'start', 'messageId' => 'client-message-1'])
@@ -233,7 +233,7 @@ test('a resumed stream may continue an existing client-side message', function (
 test('a rejected approval streams as a denied tool output', function () {
     $parts = vercelProtocolParts([
         new ToolResult('event-1', new Data\ToolResult('call-1', 'DeleteFile', ['path' => 'a.txt'], 'The user rejected this tool call.'), false, 'The user rejected this tool call.', time(), denied: true),
-        new StreamEnd('event-2', 'stop', new Usage, time()),
+        new StreamEnd('event-2', 'stop', new TextUsage, time()),
     ], messageId: 'client-message-1');
 
     expect($parts)->toBe([
@@ -249,7 +249,7 @@ test('a rejected approval streams as a denied tool output', function () {
 test('a tool result without a prior call or existing message is skipped', function () {
     $parts = vercelProtocolParts([
         new ToolResult('event-1', new Data\ToolResult('call-1', 'DeleteFile', ['path' => 'a.txt'], 'deleted'), true, null, time()),
-        new StreamEnd('event-2', 'stop', new Usage, time()),
+        new StreamEnd('event-2', 'stop', new TextUsage, time()),
     ]);
 
     expect($parts)->toBe([
@@ -262,7 +262,7 @@ test('an unexecuted tool call streams as a tool output error', function () {
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new ToolCall('event-1', new Data\ToolCall('call-1', 'DeleteFile', ['path' => 'a.txt']), time()),
         new ToolResult('event-2', new Data\ToolResult('call-1', 'DeleteFile', ['path' => 'a.txt'], 'The agent reached its maximum number of steps without running this tool call.'), false, 'The agent reached its maximum number of steps without running this tool call.', time()),
-        new StreamEnd('event-3', 'stop', new Usage, time()),
+        new StreamEnd('event-3', 'stop', new TextUsage, time()),
     ]);
 
     expect($parts[3])->toBe([
@@ -277,7 +277,7 @@ test('a failed tool call without an error message streams a default error text',
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new ToolCall('event-1', new Data\ToolCall('call-1', 'GetWeather', ['city' => 'Lisbon']), time()),
         new ToolResult('event-2', new Data\ToolResult('call-1', 'GetWeather', ['city' => 'Lisbon'], null), false, null, time()),
-        new StreamEnd('event-3', 'stop', new Usage, time()),
+        new StreamEnd('event-3', 'stop', new TextUsage, time()),
     ]);
 
     expect($parts[3])->toBe([
@@ -291,16 +291,16 @@ test('the finish part carries the stream usage and finish reason as message meta
     $parts = vercelProtocolParts([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new TextDelta('event-1', 'msg-1', 'Hello.', time()),
-        new StreamEnd('event-2', 'length', new Usage(inputTokens: 10, outputTokens: 20), time()),
+        new StreamEnd('event-2', 'length', new TextUsage(inputTokens: 10, outputTokens: 20), time()),
     ]);
 
-    expect($parts[count($parts) - 2])->toBe(vercelFinishPart('length', new Usage(inputTokens: 10, outputTokens: 20)));
+    expect($parts[count($parts) - 2])->toBe(vercelFinishPart('length', new TextUsage(inputTokens: 10, outputTokens: 20)));
 });
 
 test('finish reasons outside the Vercel enum emit as other', function () {
     $parts = vercelProtocolParts([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
-        new StreamEnd('event-1', 'continue', new Usage, time()),
+        new StreamEnd('event-1', 'continue', new TextUsage, time()),
     ]);
 
     expect($parts[count($parts) - 2])->toBe(vercelFinishPart('other'));
@@ -309,7 +309,7 @@ test('finish reasons outside the Vercel enum emit as other', function () {
 test('an unknown finish reason emits as other', function () {
     $parts = vercelProtocolParts([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
-        new StreamEnd('event-1', 'unknown', new Usage, time()),
+        new StreamEnd('event-1', 'unknown', new TextUsage, time()),
     ]);
 
     expect($parts[count($parts) - 2])->toBe(vercelFinishPart('other'));
@@ -319,7 +319,7 @@ test('a provider tool event emits as a custom provider part', function () {
     $parts = vercelProtocolParts([
         new StreamStart('msg-1', 'openai', 'gpt-5', time()),
         new ProviderToolEvent('event-1', 'search-1', 'web_search_call', ['query' => 'Laravel'], 'in_progress', time(), 'openai'),
-        new StreamEnd('event-2', 'stop', new Usage, time()),
+        new StreamEnd('event-2', 'stop', new TextUsage, time()),
     ]);
 
     expect($parts[2])->toBe([
@@ -339,15 +339,15 @@ test('a multi-step stream emits one finish part with combined usage and the fina
     $parts = vercelProtocolParts([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new ToolCall('event-1', new Data\ToolCall('call-1', 'GetWeather', ['city' => 'Lisbon']), time()),
-        new StreamEnd('event-2', 'tool_calls', new Usage(inputTokens: 10, outputTokens: 5), time()),
+        new StreamEnd('event-2', 'tool_calls', new TextUsage(inputTokens: 10, outputTokens: 5), time()),
         new ToolResult('event-3', new Data\ToolResult('call-1', 'GetWeather', ['city' => 'Lisbon'], 'sunny'), true, null, time()),
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new TextDelta('event-4', 'msg-1', 'Sunny.', time()),
-        new StreamEnd('event-5', 'stop', new Usage(inputTokens: 20, outputTokens: 15), time()),
+        new StreamEnd('event-5', 'stop', new TextUsage(inputTokens: 20, outputTokens: 15), time()),
     ]);
 
     expect(collect($parts)->where('type', 'finish')->values()->all())->toBe([
-        vercelFinishPart('stop', new Usage(inputTokens: 30, outputTokens: 20)),
+        vercelFinishPart('stop', new TextUsage(inputTokens: 30, outputTokens: 20)),
     ])->and(collect($parts)->pluck('type')->all())->toBe([
         'start', 'start-step',
         'tool-input-available', 'tool-output-available', 'finish-step',
@@ -421,7 +421,7 @@ test('a stream end after an error does not emit finish parts', function () {
     $parts = vercelProtocolParts([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new Error('event-1', 'overloaded_error', 'Overloaded', false, time()),
-        new StreamEnd('event-2', 'error', new Usage, time()),
+        new StreamEnd('event-2', 'error', new TextUsage, time()),
     ]);
 
     expect($parts)->toBe([
@@ -437,7 +437,7 @@ test('a tool executed within the stream emits its input and output parts', funct
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new ToolCall('event-1', new Data\ToolCall('call-1', 'GetWeather', ['city' => 'Lisbon']), time()),
         new ToolResult('event-2', new Data\ToolResult('call-1', 'GetWeather', ['city' => 'Lisbon'], 'sunny'), true, null, time()),
-        new StreamEnd('event-3', 'stop', new Usage, time()),
+        new StreamEnd('event-3', 'stop', new TextUsage, time()),
     ]);
 
     expect($parts)->toBe([
@@ -459,7 +459,7 @@ test('a tool still producing its output emits preliminary parts without changing
         new ToolResult('event-3', new Data\ToolResult('call-1', 'document_specialist', ['task' => 'Report'], 'internal monologue'), true, null, 200, preliminary: true),
         new ToolResult('event-4', new Data\ToolResult('call-1', 'document_specialist', ['task' => 'Report'], 'done'), true, null, time()),
         new TextDelta('event-5', 'msg-1', ' Done.', time()),
-        new StreamEnd('event-6', 'stop', new Usage, time()),
+        new StreamEnd('event-6', 'stop', new TextUsage, time()),
     ]);
 
     expect($parts)->toBe([

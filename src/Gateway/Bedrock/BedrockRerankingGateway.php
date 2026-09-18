@@ -9,6 +9,7 @@ use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
+use Laravel\Ai\Responses\Data\RerankingUsage;
 use Laravel\Ai\Responses\RerankingResponse;
 use Throwable;
 
@@ -63,6 +64,7 @@ class BedrockRerankingGateway implements RerankingGateway
 
         return new RerankingResponse(
             $results,
+            new RerankingUsage,
             new Meta($provider->name(), $model),
         );
     }

@@ -115,13 +115,13 @@ trait BuildsTextRequests
 
         if ($this->isStateless($provider)) {
             $body['store'] = false;
+        }
 
-            if ($this->isReasoningModel($body['model'] ?? '')) {
-                $body['include'] = array_values(array_unique([
-                    ...($body['include'] ?? []),
-                    'reasoning.encrypted_content',
-                ]));
-            }
+        if ($this->isReasoningModel($body['model'] ?? '')) {
+            $body['include'] = array_values(array_unique([
+                ...($body['include'] ?? []),
+                'reasoning.encrypted_content',
+            ]));
         }
 
         return $body;

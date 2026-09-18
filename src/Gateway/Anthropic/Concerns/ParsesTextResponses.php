@@ -10,9 +10,9 @@ use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
-use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
@@ -59,7 +59,7 @@ trait ParsesTextResponses
         array $content,
         Provider $provider,
         string $model,
-        Usage $usage,
+        TextUsage $usage,
         FinishReason $finishReason,
         bool $structured,
     ): StepResponse {
@@ -182,14 +182,14 @@ trait ParsesTextResponses
     /**
      * Extract usage data from the Anthropic response.
      */
-    protected function extractUsage(array $data): Usage
+    protected function extractUsage(array $data): TextUsage
     {
         $usage = $data['usage'] ?? [];
         $cacheReadTokens = $usage['cache_read_input_tokens'] ?? null;
         $cacheWriteTokens = $usage['cache_creation_input_tokens'] ?? null;
 
         // Anthropic reports input tokens exclusive of the cache buckets...
-        return new Usage(
+        return new TextUsage(
             inputTokens: ($usage['input_tokens'] ?? 0) + ($cacheReadTokens ?? 0) + ($cacheWriteTokens ?? 0),
             outputTokens: $usage['output_tokens'] ?? 0,
             cacheReadInputTokens: $cacheReadTokens,

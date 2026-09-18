@@ -146,6 +146,44 @@ test('prior assistant tool call with empty arguments omits args in conversation 
     });
 });
 
+test('prior assistant tool calls replay the thought signature as a part sibling', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('OK'),
+    ]);
+
+    $agent = new class implements Agent, Conversational
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function messages(): iterable
+        {
+            return [
+                new Message(role: 'user', content: 'Generate two numbers'),
+                new AssistantMessage('', new Collection([
+                    new ToolCall('call_123', 'FixedNumberGenerator', [], 'call_123', thoughtSignature: 'sig_123'),
+                    new ToolCall('call_456', 'FixedNumberGenerator', [], 'call_456'),
+                ])),
+            ];
+        }
+    };
+
+    $agent->prompt('And again', provider: 'gemini');
+
+    $parts = collect(Http::recorded()[0][0]->data()['contents'])
+        ->where('role', 'model')
+        ->flatMap(fn ($content) => $content['parts'] ?? [])
+        ->filter(fn (array $part): bool => isset($part['functionCall']))
+        ->values();
+
+    expect($parts[0]['thoughtSignature'])->toBe('sig_123')
+        ->and($parts[1])->not->toHaveKey('thoughtSignature');
+});
+
 test('local image attachment without explicit mime type detects mime from file', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('I see an image'),

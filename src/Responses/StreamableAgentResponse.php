@@ -9,7 +9,7 @@ use Illuminate\Support\Collection;
 use IteratorAggregate;
 use Laravel\Ai\Responses\Data\Citation as CitationData;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Streaming\Events\Citation;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\StreamEnd;
@@ -26,7 +26,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 {
     public ?string $text = null;
 
-    public ?Usage $usage = null;
+    public ?TextUsage $usage = null;
 
     /** @var Collection<int, StreamEvent> */
     public Collection $events;
