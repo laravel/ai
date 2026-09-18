@@ -145,7 +145,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Serialize the turn's steps, one entry per model round-trip.
+     * Serialize the turn's steps, one entry per model round-trip. Raw provider blocks are kept only for a paused turn, the one case a provider needs them back verbatim.
      *
      * @return Collection<int, array{tool_calls: array, reasoning: string, replay_blocks: array}>
      */
@@ -155,7 +155,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             return $response->steps->values()->map(fn (Step $step): array => [
                 'tool_calls' => $this->toolCallsFor($step->toolCalls, $step->toolResults),
                 'reasoning' => $step->reasoning,
-                'replay_blocks' => $step->replayBlocks,
+                'replay_blocks' => $response->hasPendingApprovals() ? $step->replayBlocks : [],
             ]);
         }
 

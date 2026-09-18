@@ -838,9 +838,9 @@ test('it writes the steps a completed stream carried on its stream end', functio
     $steps = DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps');
 
     expect($steps)->json()->toHaveCount(2)->sequence(
-        fn ($step) => $step->toMatchArray(['replay_blocks' => [['type' => 'tool_use', 'id' => 'call-1']]])
+        fn ($step) => $step->toMatchArray(['replay_blocks' => []])
             ->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-1', 'result' => 'contents']),
-        fn ($step) => $step->toMatchArray(['tool_calls' => [], 'replay_blocks' => [['type' => 'text', 'text' => 'Done.']]]),
+        fn ($step) => $step->toMatchArray(['tool_calls' => [], 'replay_blocks' => []]),
     );
 });
 
