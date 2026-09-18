@@ -37,6 +37,7 @@ use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\StreamStart;
@@ -298,11 +299,17 @@ class TextGenerationLoop
                     ));
                 });
 
+                $reasoningDeltas = [];
+
                 foreach ($stepResult as $event) {
                     yield $event;
 
                     if ($event instanceof Error) {
                         $lastError = $event;
+                    }
+
+                    if ($event instanceof ReasoningDelta) {
+                        $reasoningDeltas[] = $event;
                     }
                 }
 
@@ -311,6 +318,10 @@ class TextGenerationLoop
 
                 if (! $stepResult->streamed() && $result instanceof StepResponse) {
                     yield from $this->eventsFor($invocationId, $provider, $prepared->model, $result);
+                }
+
+                if ($result instanceof StepResponse && $result->reasoning === '') {
+                    $result->reasoning = ReasoningDelta::combine($reasoningDeltas);
                 }
             } catch (Throwable $exception) {
                 $this->stepFailed($context, $attempt, $exception);

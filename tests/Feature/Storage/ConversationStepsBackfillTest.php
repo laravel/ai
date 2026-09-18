@@ -46,7 +46,7 @@ test('it moves a result recorded on a later row onto the step that made the call
             'replay_blocks' => [['type' => 'tool_use', 'id' => 'call-1']],
         ])
         ->and($rows['message-2']->meta)->json()->toBe(['provider' => 'anthropic'])
-        ->and($rows['message-3']->steps)->json()->toHaveCount(1)->{'0'}->toMatchArray(['tool_calls' => []]);
+        ->and($rows['message-3']->steps)->json()->toHaveCount(1)->{'0'}->toMatchArray(['content' => 'Deleted a.', 'tool_calls' => []]);
 
     $messages = (new DatabaseConversationStore)->getLatestConversationMessages('conversation-1', 10);
 
@@ -84,8 +84,8 @@ test('it splits a row per provider step and moves the turn reasoning blob onto t
     $row = DB::table('agent_conversation_messages')->first();
 
     expect($row->steps)->json()->toBe([
-        ['tool_calls' => [answeredToolCall('call-1')], 'reasoning' => '', 'replay_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]],
-        ['tool_calls' => [legacyCall('call-2')], 'reasoning' => 'Deleting b next.', 'replay_blocks' => [['type' => 'thinking', 'signature' => 'sig-2']]],
+        ['content' => '', 'tool_calls' => [answeredToolCall('call-1')], 'reasoning' => '', 'replay_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]],
+        ['content' => 'Now b.', 'tool_calls' => [legacyCall('call-2')], 'reasoning' => 'Deleting b next.', 'replay_blocks' => [['type' => 'thinking', 'signature' => 'sig-2']]],
     ])->and($row->meta)->json()->toBe(['provider' => 'anthropic', 'model' => 'claude-sonnet-4-6']);
 });
 

@@ -147,12 +147,13 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     /**
      * Serialize the turn's steps, one entry per model round-trip. Raw provider blocks are kept only for a paused turn, the one case a provider needs them back verbatim.
      *
-     * @return Collection<int, array{tool_calls: array, reasoning: string, replay_blocks: array}>
+     * @return Collection<int, array{content: string, tool_calls: array, reasoning: string, replay_blocks: array}>
      */
     protected function stepsFor(AgentPrompt $prompt, AgentResponse $response): Collection
     {
         if ($response->steps->isNotEmpty()) {
             return $response->steps->values()->map(fn (Step $step): array => [
+                'content' => $step->text,
                 'tool_calls' => $this->toolCallsFor($step->toolCalls, $step->toolResults),
                 'reasoning' => $step->reasoning,
                 'replay_blocks' => $response->hasPendingApprovals() ? $step->replayBlocks : [],
@@ -161,6 +162,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         // A resume that ran no step only carries the approval results storeApprovalResults() already wrote to the paused row...
         return collect([[
+            'content' => $response->text,
             'tool_calls' => $this->toolCallsFor(
                 $response->toolCalls->all(),
                 $prompt->hasApprovalDecisions() ? [] : $response->toolResults->all(),
@@ -361,11 +363,9 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     {
         $pending = $this->pausedCallIds($record);
         $provider = $this->decoded($record->meta)['provider'] ?? null;
-        $steps = $this->decodedSteps($record);
-        $lastStep = $steps->count() - 1;
 
-        return $steps->flatMap(function (array $step, int $index) use ($pending, $provider, $withReplayBlocks, $lastStep, $record): array {
-            $content = $index === $lastStep ? (string) $record->content : '';
+        return $this->decodedSteps($record)->flatMap(function (array $step) use ($pending, $provider, $withReplayBlocks): array {
+            $content = $step['content'];
 
             $replayed = collect($step['tool_calls'])
                 ->filter(fn (array $toolCall) => $this->isAnswered($toolCall) || in_array($toolCall['id'] ?? null, $pending, true))
@@ -389,13 +389,17 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Decode a stored row's steps.
+     * Decode a stored row's steps, a step written without its own content taking the turn's when it is the last.
      *
-     * @return Collection<int, array{tool_calls: array, reasoning: string, replay_blocks: array}>
+     * @return Collection<int, array{content: string, tool_calls: array, reasoning: string, replay_blocks: array}>
      */
     protected function decodedSteps(object $record): Collection
     {
-        return collect($this->decoded($record->steps))->map(fn (array $step): array => [
+        $steps = array_values($this->decoded($record->steps));
+        $lastStep = array_key_last($steps);
+
+        return collect($steps)->map(fn (array $step, int $index): array => [
+            'content' => (string) ($step['content'] ?? ($index === $lastStep ? $record->content ?? '' : '')),
             'tool_calls' => array_values($step['tool_calls'] ?? []),
             'reasoning' => (string) ($step['reasoning'] ?? ''),
             'replay_blocks' => $step['replay_blocks'] ?? [],

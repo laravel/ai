@@ -35,9 +35,6 @@ use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 use Laravel\Ai\Storage\StoredMessage;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
-use Laravel\Ai\Streaming\Events\ReasoningDelta;
-use Laravel\Ai\Streaming\Events\ReasoningEnd;
-use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
@@ -573,6 +570,7 @@ test('it replays a completed multi-step turn with each result answering its own 
         assistantStep(
             [['id' => 'call-1', 'name' => 'read_file', 'arguments' => ['path' => 'a'], 'result_id' => 'result-1']],
             [['id' => 'call-1', 'name' => 'read_file', 'arguments' => ['path' => 'a'], 'result' => 'contents of a', 'result_id' => 'result-1']],
+            content: 'Reading a first.',
         ),
         assistantStep(
             [['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b']]],
@@ -584,7 +582,7 @@ test('it replays a completed multi-step turn with each result answering its own 
     $messages = $store->getLatestConversationMessages($conversationId, 10);
 
     expect($messages)->toHaveCount(5)->sequence(
-        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['content' => ''])
+        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['content' => 'Reading a first.'])
             ->toolCalls->toHaveCount(1)->each->toMatchObject(['id' => 'call-1', 'resultId' => 'result-1']),
         fn ($message) => $message->toBeInstanceOf(ToolResultMessage::class)
             ->toolResults->toHaveCount(1)->each->toMatchObject(['id' => 'call-1', 'resultId' => 'result-1']),
@@ -773,9 +771,9 @@ test('it writes the steps of a paused turn with their replay blocks and keeps re
     $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
 
     expect($record->steps)->json()->toHaveCount(2)->sequence(
-        fn ($step) => $step->toMatchArray(['replay_blocks' => [['type' => 'tool_use', 'id' => 'call-0']]])
+        fn ($step) => $step->toMatchArray(['content' => '', 'replay_blocks' => [['type' => 'tool_use', 'id' => 'call-0']]])
             ->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-0', 'result' => 'contents']),
-        fn ($step) => $step->toMatchArray(['replay_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]])
+        fn ($step) => $step->toMatchArray(['content' => 'Let me think about that', 'replay_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]])
             ->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-1'])->each->not->toHaveKey('result'),
     )
         ->and($record->steps)->json()->{'0'}->tool_calls->toHaveCount(1)
@@ -1180,32 +1178,42 @@ test('it scopes conversations by participant type so shared ids no longer collid
 });
 
 test('it records the reasoning a streamed turn produced onto the turn steps', function (): void {
-    $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
+    Config::set('ai.conversations.generate_title', false);
 
-    $prompt = new AgentPrompt(
-        new ToolUsingAgent,
-        'How cold is it?',
-        [],
-        Mockery::mock(TextProvider::class),
-        'test-model',
-    );
+    $chunk = fn (array $delta, ?string $finishReason = null): string => 'data: '.json_encode([
+        'id' => 'chatcmpl-reasoner-1',
+        'object' => 'chat.completion.chunk',
+        'model' => 'deepseek-reasoner',
+        'choices' => [['index' => 0, 'delta' => $delta, 'finish_reason' => $finishReason]],
+    ]);
 
-    $response = new StreamedAgentResponse('invocation-id', collect([
-        new ReasoningStart(uniqid(), 'reasoning-1', time()),
-        new ReasoningDelta(uniqid(), 'reasoning-1', 'They want ', time()),
-        new ReasoningDelta(uniqid(), 'reasoning-1', 'the temperature.', time()),
-        new ReasoningEnd(uniqid(), 'reasoning-1', time()),
-        new TextDelta(uniqid(), 'message-1', 'It is 12°C.', time()),
-    ]), new Meta);
+    Http::fake(['api.deepseek.com/*' => Http::response(
+        body: implode("\n\n", [
+            $chunk(['role' => 'assistant', 'reasoning_content' => 'They want ']),
+            $chunk(['reasoning_content' => 'the temperature.']),
+            $chunk(['content' => 'It is 12°C.']),
+            $chunk([], 'stop'),
+            'data: [DONE]',
+        ])."\n\n",
+        headers: ['Content-Type' => 'text/event-stream'],
+    )]);
 
-    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+    $response = (new RememberingAssistantAgent)
+        ->forUser((object) ['id' => 1])
+        ->stream('How cold is it?', provider: 'deepseek', model: 'deepseek-reasoner');
 
-    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+    foreach ($response as $event) {
+        //
+    }
+
+    $record = DB::table('agent_conversation_messages')
+        ->where('conversation_id', $response->conversationId)
+        ->where('role', 'assistant')
+        ->first();
 
     expect(json_decode((string) $record->steps, true))
         ->toHaveCount(1)
-        ->{'0'}->toHaveKey('reasoning', 'They want the temperature.')
+        ->{'0'}->toMatchArray(['content' => 'It is 12°C.', 'reasoning' => 'They want the temperature.'])
         ->and(json_decode((string) $record->meta, true))->not->toHaveKey('reasoning');
 });
 
@@ -1420,11 +1428,12 @@ function storedConversationMessageAttributes(string $id, string $conversationId,
  * @param  list<array<string, mixed>>  $replayBlocks
  * @return array<string, mixed>
  */
-function assistantStep(array $toolCalls = [], array $toolResults = [], array $replayBlocks = []): array
+function assistantStep(array $toolCalls = [], array $toolResults = [], array $replayBlocks = [], ?string $content = null): array
 {
     $results = collect($toolResults)->keyBy('id');
 
     return [
+        ...$content === null ? [] : ['content' => $content],
         'tool_calls' => array_map(fn (array $call): array => [
             ...$call,
             ...array_intersect_key($results[$call['id']] ?? [], array_flip(['result', 'denied', 'failed'])),
