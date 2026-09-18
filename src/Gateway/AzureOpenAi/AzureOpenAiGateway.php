@@ -24,7 +24,6 @@ use Laravel\Ai\Gateway\OpenAi\Concerns\ParsesTextResponses;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Responses\Data\GeneratedImage;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
@@ -116,17 +115,6 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
             )),
             $this->extractImageUsage($data),
             new Meta($provider->name(), $model),
-        );
-    }
-
-    protected function extractImageUsage(array $data): TextUsage
-    {
-        $usage = $data['usage'] ?? [];
-
-        return new TextUsage(
-            inputTokens: $usage['input_tokens'] ?? 0,
-            outputTokens: $usage['output_tokens'] ?? 0,
-            cacheReadInputTokens: $usage['input_tokens_details']['cached_tokens'] ?? null,
         );
     }
 

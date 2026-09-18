@@ -30,6 +30,7 @@ use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\GeneratedImage;
+use Laravel\Ai\Responses\Data\ImageUsage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
 use Laravel\Ai\Responses\Data\Usage;
@@ -150,7 +151,7 @@ class OpenRouterGateway implements Gateway, RerankingGateway, StepTextGateway
 
         return new ImageResponse(
             $images,
-            new Usage($usage['prompt_tokens'] ?? 0, $usage['completion_tokens'] ?? 0),
+            new ImageUsage($usage['prompt_tokens'] ?? 0, $usage['completion_tokens'] ?? 0),
             new Meta($provider->name(), $data['model'] ?? $model),
         );
     }

@@ -9,6 +9,7 @@ use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Responses\Data\ImageUsage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -147,6 +148,22 @@ trait ParsesTextResponses
             cacheReadInputTokens: $usage['input_tokens_details']['cached_tokens'] ?? null,
             cacheWriteInputTokens: $usage['input_tokens_details']['cache_write_tokens'] ?? null,
             reasoningTokens: $usage['output_tokens_details']['reasoning_tokens'] ?? null,
+        );
+    }
+
+    /**
+     * Extract usage data from an image generation response.
+     */
+    protected function extractImageUsage(array $data): ImageUsage
+    {
+        $usage = $data['usage'] ?? [];
+
+        return new ImageUsage(
+            inputTokens: $usage['input_tokens'] ?? 0,
+            outputTokens: $usage['output_tokens'] ?? 0,
+            cacheReadInputTokens: $usage['input_tokens_details']['cached_tokens'] ?? null,
+            imageInputTokens: $usage['input_tokens_details']['image_tokens'] ?? null,
+            imageOutputTokens: $usage['output_tokens_details']['image_tokens'] ?? null,
         );
     }
 

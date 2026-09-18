@@ -7,8 +7,8 @@ use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\Data\GeneratedImage;
+use Laravel\Ai\Responses\Data\ImageUsage;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\ImageResponse;
 
 class XaiImageGateway implements ImageGateway
@@ -52,7 +52,7 @@ class XaiImageGateway implements ImageGateway
                 $image['b64_json'] ?? '',
                 'image/jpeg',
             )),
-            new Usage,
+            new ImageUsage,
             new Meta($provider->name(), $model),
         );
     }

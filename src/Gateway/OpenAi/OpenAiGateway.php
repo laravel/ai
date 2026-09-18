@@ -81,7 +81,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
                 $image['b64_json'] ?? '',
                 'image/png',
             )),
-            $this->extractUsage($data),
+            $this->extractImageUsage($data),
             new Meta($provider->name(), $model),
         );
     }

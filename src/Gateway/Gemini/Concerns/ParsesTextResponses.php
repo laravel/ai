@@ -10,6 +10,7 @@ use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Responses\Data\ImageUsage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -241,6 +242,33 @@ trait ParsesTextResponses
             cacheReadInputTokens: $usage['cachedContentTokenCount'] ?? null,
             reasoningTokens: $reasoningTokens,
         );
+    }
+
+    /**
+     * Extract usage data from an image generation response.
+     */
+    protected function extractImageUsage(array $data): ImageUsage
+    {
+        $usage = $data['usageMetadata'] ?? [];
+        $text = $this->extractUsage($data);
+
+        return new ImageUsage(
+            $text->inputTokens,
+            $text->outputTokens,
+            $text->cacheReadInputTokens,
+            $text->cacheWriteInputTokens,
+            $text->reasoningTokens,
+            $this->modalityTokens($usage['promptTokensDetails'] ?? [], 'IMAGE'),
+            $this->modalityTokens($usage['candidatesTokensDetails'] ?? [], 'IMAGE'),
+        );
+    }
+
+    /**
+     * Get the token count Gemini reported for the given modality.
+     */
+    protected function modalityTokens(array $details, string $modality): ?int
+    {
+        return collect($details)->firstWhere('modality', $modality)['tokenCount'] ?? null;
     }
 
     /**

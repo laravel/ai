@@ -11,8 +11,8 @@ use Laravel\Ai\Jobs\GenerateImage;
 use Laravel\Ai\Prompts\ImagePrompt;
 use Laravel\Ai\Prompts\QueuedImagePrompt;
 use Laravel\Ai\Responses\Data\GeneratedImage;
+use Laravel\Ai\Responses\Data\ImageUsage;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\ImageResponse;
 
 test('image rejects empty prompt', function (): void {
@@ -33,7 +33,7 @@ test('images can be faked', function (): void {
         fn (ImagePrompt $prompt): string => base64_encode('second-image-'.$prompt->prompt),
         new ImageResponse(
             new Collection([new GeneratedImage(base64_encode('third-image'))]),
-            new Usage,
+            new ImageUsage,
             new Meta,
         ),
     ]);
@@ -128,7 +128,7 @@ test('image is stored under a random name derived from its mime type', function 
     Image::fake([
         new ImageResponse(
             new Collection([new GeneratedImage(base64_encode('raw-bytes'), 'image/jpeg')]),
-            new Usage,
+            new ImageUsage,
             new Meta,
         ),
     ]);

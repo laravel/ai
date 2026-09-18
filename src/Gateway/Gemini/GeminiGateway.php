@@ -159,7 +159,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         return new ImageResponse(
             $images,
-            $this->extractUsage($data),
+            $this->extractImageUsage($data),
             new Meta($provider->name(), $model),
         );
     }
