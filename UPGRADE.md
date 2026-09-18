@@ -2,11 +2,11 @@
 
 ## Upgrading To 1.0 From 0.11
 
-### Conversation Turns Are Stored As Steps
+### Conversation Messages Store Steps
 
 **Likelihood Of Impact: High**
 
-The `tool_calls` and `tool_results` columns on `agent_conversation_messages` have been replaced by a single `steps` column. A turn is stored as a list of steps, one per model round-trip. Each step holds the text, reasoning, tool calls, provider-hosted tool calls, and replay blocks it produced, and each tool result sits on the call that made it:
+The `tool_calls` and `tool_results` columns on the `agent_conversation_messages` table have been replaced by a single `steps` column. Each assistant message now stores one entry per model round-trip, and each tool result is stored on the tool call that produced it:
 
 ```json
 [
@@ -15,19 +15,9 @@ The `tool_calls` and `tool_results` columns on `agent_conversation_messages` hav
 ]
 ```
 
-Data that used to live elsewhere on the row now lives on its step:
+The `participant_index` on the same table now also includes the `agent` column.
 
-- `meta.reasoning` is now `steps[].reasoning`.
-- `meta.provider_steps` and `meta.provider_content_blocks` are now `steps[].replay_blocks`.
-- The `tool_results` list is gone. Each result is stored on its call as `steps[].tool_calls[].result`.
-
-Replay blocks are kept only while a turn is paused for approval. They are cleared once the turn completes, and later requests rebuild the turn from its steps.
-
-A stored tool call has only the `id`, `name`, `arguments`, `result`, `result_id`, `denied`, and `failed` keys. Provider reasoning keys such as `reasoning_id` and `reasoning_encrypted_content` are no longer stored. The one exception is `thought_signature`, which is kept when Gemini sets it.
-
-The `participant_index` on the same table now also covers `agent`.
-
-The package's existing migration will not run again during an upgrade. Applications that have already migrated the conversation tables should create a migration similar to the following and run it before deploying the new code:
+The package's existing migration will not run again during an upgrade. If you have already migrated the conversation tables, create a new migration containing the code below, then run `php artisan migrate` before deploying the new version of your application. The migration adds the `steps` column, rewrites every existing row, and drops the old columns:
 
 <details>
 <summary>Backfill migration</summary>
@@ -196,9 +186,16 @@ return new class extends AiMigration
 
 </details>
 
-Rewrite any raw SQL against the old columns to read `steps`. On `Laravel\Ai\Models\ConversationMessage`, the `tool_calls` and `tool_results` attributes are now read-only and are built from `steps`, and a `provider_tool_calls` attribute has been added. To change a stored turn, write `steps`.
+If you run raw queries against the conversation tables, update them to read the `steps` column instead of `tool_calls` or `tool_results`. The `tool_calls` and `tool_results` attributes on the `Laravel\Ai\Models\ConversationMessage` model are still available as read-only attributes, and a `provider_tool_calls` attribute has been added. To modify a stored message, write to the `steps` attribute instead.
 
-`Laravel\Ai\Storage\StoredMessage` has changed to match. Its constructor takes `steps` in place of `toolCalls` and `toolResults`, and `toArray()` emits `steps` in their place. The `$toolCalls` and `$toolResults` properties are now methods, alongside a new `providerToolCalls()` method:
+If you read a message's reasoning or replay state from the `meta` column, update your code to read it from the steps instead:
+
+- `meta.reasoning` is now `steps[].reasoning`.
+- `meta.provider_steps` and `meta.provider_content_blocks` are now `steps[].replay_blocks`.
+
+Replay blocks are only retained while a turn is paused for tool approval and are cleared when the turn completes. Each stored tool call contains only the `id`, `name`, `arguments`, `result`, `result_id`, `denied`, and `failed` keys, plus `thought_signature` when Gemini provides one. Provider-specific reasoning keys such as `reasoning_id` and `reasoning_encrypted_content` are no longer stored.
+
+If you use the `Laravel\Ai\Storage\StoredMessage` class, replace the removed `$toolCalls` and `$toolResults` properties with the new `toolCalls()` and `toolResults()` methods:
 
 ```php
 // Before...
@@ -211,7 +208,7 @@ $message->toolResults();
 $message->providerToolCalls();
 ```
 
-No changes are needed if you only prompt agents and read their responses. Update any custom `ConversationStore`, raw query, or code that constructs a `StoredMessage` by hand.
+The `StoredMessage` constructor now accepts a `steps` argument in place of `toolCalls` and `toolResults`, and `toArray()` emits a `steps` key in their place. Update any code that constructs a `StoredMessage` manually.
 
 ### Agent Middleware Wraps Each Generation Step
 
@@ -219,7 +216,7 @@ No changes are needed if you only prompt agents and read their responses. Update
 
 Agent middleware now wraps each generation step instead of the whole run, and receives a `Laravel\Ai\PendingStep` instead of an `AgentPrompt`. A run that takes three steps invokes your middleware three times.
 
-Update the `handle()` method of each middleware:
+Update the `handle()` method of each of your middleware classes:
 
 ```php
 // Before...
@@ -270,7 +267,7 @@ The `withModel()`, `withInstructions()`, `withMessages()`, `withTools()`, `onlyT
 
 Return the `Laravel\Ai\Gateway\StepResult` returned by `$next($step)`, or return a `StepResponse` to answer the step without calling the model. Anything else throws a `LogicException`.
 
-The `AgentPrompted`, `AgentStreamed`, and `AgentFailed` events now carry the original `AgentPrompt` passed to the provider rather than a prompt modified by run middleware.
+The `AgentPrompted`, `AgentStreamed`, and `AgentFailed` events now carry the original `AgentPrompt` passed to the provider rather than a prompt modified by run middleware. If you relied on a listener receiving the modified prompt, move that logic into the middleware itself.
 
 ### Gemini Vector Store Imports Wait For Completion
 
@@ -282,13 +279,13 @@ Adding a file to a Gemini vector store now waits for the import to finish instea
 $store->addFile($fileId);
 ```
 
-The returned ID is the document name rather than the import operation name, so IDs stored by an earlier version no longer match. The call also throws a `Laravel\Ai\Exceptions\AiException` when the import fails or does not finish within five minutes.
+The returned ID is now the document name rather than the import operation name, so IDs stored by an earlier version of the package no longer match. If you persist these IDs, re-import the affected files. The call now throws a `Laravel\Ai\Exceptions\AiException` when the import fails or does not finish within five minutes, so wrap it in a `try` / `catch` if you need to handle that case.
 
 ### The AWS SDK Is No Longer Installed By Default
 
 **Likelihood Of Impact: High**
 
-The `aws/aws-sdk-php` package is no longer a required dependency. Applications using the Bedrock provider must install it:
+The `aws/aws-sdk-php` package is no longer a required dependency of the package. If you use the Bedrock provider, install it in your application:
 
 ```bash
 composer require aws/aws-sdk-php
@@ -300,35 +297,45 @@ Resolving the Bedrock provider without the SDK installed throws a `RuntimeExcept
 
 **Likelihood Of Impact: High**
 
-`Usage::$promptTokens` and `Usage::$completionTokens` have been renamed to `Usage::$inputTokens` and `Usage::$outputTokens`, and now carry the provider's full counts. Cached, cache-written, and reasoning tokens are subsets of them rather than separate additions:
+`Usage::$promptTokens` and `Usage::$completionTokens` have been renamed to `Usage::$inputTokens` and `Usage::$outputTokens`. Update any code that reads them:
 
 ```php
 // Before...
-$response->usage->promptTokens;     // excluded cached tokens
+$response->usage->promptTokens;
 $response->usage->completionTokens;
 
 // After...
-$response->usage->inputTokens;      // includes cached and cache-written tokens
-$response->usage->outputTokens;     // includes reasoning tokens
-$response->usage->uncachedInputTokens();
-$response->usage->totalTokens();
+$response->usage->inputTokens;
+$response->usage->outputTokens;
 ```
 
-If you previously calculated input token costs by applying a single rate to `promptTokens`, calculate each category separately: apply the base rate to `uncachedInputTokens()`, the cache read rate to `cacheReadInputTokens`, and the cache write rate to `cacheWriteInputTokens`.
+The new properties carry the provider's full counts. `inputTokens` now includes cached and cache-written tokens, and `outputTokens` now includes reasoning tokens. Previously, these were reported separately and excluded from the totals.
 
-`toArray()` and the JSON stored in the `usage` column of `agent_conversation_messages` use the `input_tokens` and `output_tokens` keys. Rows written before the upgrade keep the old keys.
+If you previously calculated input token costs by applying a single rate to `promptTokens`, calculate each category separately: apply the base rate to `uncachedInputTokens()`, the cache read rate to `cacheReadInputTokens`, and the cache write rate to `cacheWriteInputTokens`. For example:
 
-Reported values also changed in three places:
+```php
+$usage = $response->usage;
+
+$cost = $usage->uncachedInputTokens() * $baseRate
+    + ($usage->cacheReadInputTokens ?? 0) * $cacheReadRate
+    + ($usage->cacheWriteInputTokens ?? 0) * $cacheWriteRate;
+```
+
+`toArray()` and the JSON stored in the `usage` column of the `agent_conversation_messages` table now use the `input_tokens` and `output_tokens` keys. Rows written before the upgrade keep the old keys, so read both when reporting on historical rows.
+
+Reported values have also changed in three places:
 
 - Anthropic streams read the cumulative usage reported on `message_delta`, so a run using a server tool such as web search reports a higher input token count than before.
 - Anthropic populates `reasoningTokens` from the thinking token breakdown rather than always reporting `0`.
 - Cohere embeddings on Bedrock report the input token count returned by the API rather than always reporting `0`.
 
-### Text Usage Is A `TextUsage` Subclass
+### Text Responses Report A `TextUsage` Object
 
 **Likelihood Of Impact: Medium**
 
-`Usage` now holds only `inputTokens` and `outputTokens`. The cache and reasoning counts have moved to a `Laravel\Ai\Responses\Data\TextUsage` subclass, which is what text, agent, step, and stream responses report:
+The `Laravel\Ai\Responses\Data\Usage` class now holds only `inputTokens` and `outputTokens`. The `cacheReadInputTokens`, `cacheWriteInputTokens`, and `reasoningTokens` properties, along with the `add()` and `uncachedInputTokens()` methods, have moved to a new `Laravel\Ai\Responses\Data\TextUsage` subclass. Text, agent, step, and stream responses report a `TextUsage` object.
+
+No changes are needed if you only read usage from a response. If you construct a `TextResponse`, `StepResponse`, `Step`, or `StreamEnd` by hand, such as a fake in a test suite, pass a `TextUsage` instance. Note the new argument order:
 
 ```php
 // Before...
@@ -342,17 +349,13 @@ use Laravel\Ai\Responses\Data\TextUsage;
 new TextUsage($inputTokens, $outputTokens, $cacheReadInputTokens, $cacheWriteInputTokens, $reasoningTokens);
 ```
 
-The cache read and cache write positions are swapped. `cacheReadInputTokens`, `cacheWriteInputTokens`, and `reasoningTokens` are now `?int` and are `null` when the provider reports nothing, which is distinct from a reported `0`.
-
-`add()` and `uncachedInputTokens()` are available on `TextUsage` only.
-
-No changes are needed if you only read usage from a response. If you construct a `TextResponse`, `StepResponse`, `Step`, or `StreamEnd` by hand, such as a fake in a test suite, pass a `TextUsage` instance.
+The cache read and cache write arguments have swapped positions. The three optional counts are now `?int` and are `null` when the provider does not report them, so use the null coalescing operator when treating them as numbers.
 
 ### Usage Is Reported On Every Response
 
 **Likelihood Of Impact: Medium**
 
-`EmbeddingsResponse::$tokens` has been removed in favor of a `$usage` object, matching the other responses:
+The `EmbeddingsResponse::$tokens` property has been removed in favor of a `$usage` object, matching the other response types. Update any code that reads it:
 
 ```php
 // Before...
@@ -362,7 +365,7 @@ $response->tokens;
 $response->usage->inputTokens;
 ```
 
-`toArray()` and `jsonSerialize()` emit a `usage` object in place of the `tokens` integer.
+`EmbeddingsResponse::toArray()` and `jsonSerialize()` now emit a `usage` object in place of the `tokens` integer. Update any code that reads the serialized response.
 
 `AudioResponse` and `RerankingResponse` now carry a `$usage` property as well. Each capability reports its relevant billing metrics through its usage class:
 
@@ -371,7 +374,7 @@ $response->usage->inputTokens;
 - `RerankingResponse::$usage` is a `RerankingUsage`, adding `searchUnits`.
 - `AudioResponse::$usage` and `EmbeddingsResponse::$usage` are plain `Usage` instances.
 
-The added counts are `null` when the provider reports nothing.
+The added counts are `null` when the provider does not report them.
 
 No changes are needed unless you read `EmbeddingsResponse::$tokens` or construct these responses by hand. `EmbeddingsResponse`, `AudioResponse`, and `RerankingResponse` take their respective usage object as the second constructor argument, before the `Meta`. `ImageResponse` takes an `ImageUsage` as its second argument, before the `Meta`, while `TranscriptionResponse` takes a `TranscriptionUsage` as its third argument, after the text and segments and before the `Meta`.
 
@@ -381,7 +384,7 @@ No changes are needed unless you read `EmbeddingsResponse::$tokens` or construct
 
 Stream protocols are now objects implementing `Laravel\Ai\Streaming\Protocols\StreamProtocol` rather than a flag on the response. The `Laravel\Ai\Responses\Concerns\CanStreamUsingVercelProtocol` trait and the `toVercelProtocolArray()` method on stream events have been removed.
 
-`usingVercelDataProtocol()` no longer accepts a boolean:
+`usingVercelDataProtocol()` no longer accepts a boolean. Remove the first argument from any call that passes one:
 
 ```php
 // Before...
@@ -391,15 +394,15 @@ $agent->stream('...')->usingVercelDataProtocol(true, 'msg_1');
 $agent->stream('...')->usingVercelDataProtocol('msg_1');
 ```
 
-Calls without arguments are unaffected. To render a custom event, pass your own protocol to `usingProtocol()`.
+Calls without arguments are unaffected. If you overrode `toVercelProtocolArray()` to render a custom event, implement the `StreamProtocol` interface and pass your protocol to `usingProtocol()` instead.
 
 ### Sub-Agent Activity Is Streamed
 
 **Likelihood Of Impact: Medium**
 
-When a streamed run calls an `AgentTool`, the sub-agent now streams instead of running to completion behind the tool call. Its events are emitted into the parent stream, and the parent emits `ToolResult` events carrying the output produced so far. These have `preliminary` set to `true` and are followed by the final `ToolResult` for the call.
+When a streamed run calls an `AgentTool`, the sub-agent now streams instead of running to completion behind the tool call. Its events are emitted into the parent stream, and the parent emits `ToolResult` events carrying the output produced so far. These events have `preliminary` set to `true` and are followed by the final `ToolResult` for the call.
 
-Skip them when counting events or reading results:
+If you count events or read tool results from a stream, skip the preliminary results:
 
 ```php
 foreach ($agent->stream('...') as $event) {
@@ -417,13 +420,13 @@ The completed response's `text`, `reasoning`, `citations`, and `usage` now inclu
 
 A streamed step now emits a single `TextStart` / `TextEnd` pair. Previously, each content block emitted its own pair with a distinct message ID. `TextDelta::combine()` now separates text by step rather than by message ID, so an answer spanning several blocks is no longer split mid-sentence.
 
-Update any consumer that opens a UI block on `TextStart` and closes it on `TextEnd`, or that keys off a changing message ID.
+If your stream consumer opens a UI element on `TextStart` and closes it on `TextEnd`, or keys off a changing message ID, update it to expect one pair per step.
 
-### Paused Turn State Is Exposed As Steps
+### Paused Turns Expose Their Steps
 
 **Likelihood Of Impact: Low**
 
-`AgentResponse::pausedProviderContentBlocks()` and the same method on `StreamedAgentResponse` have been removed. Read the paused turn's steps from the response instead:
+The `pausedProviderContentBlocks()` method has been removed from `AgentResponse` and `StreamedAgentResponse`. If you read the paused state of a turn, read the `steps` property instead:
 
 ```php
 // Before...
@@ -433,27 +436,47 @@ $response->pausedProviderContentBlocks();
 $response->steps;
 ```
 
-`Laravel\Ai\Streaming\Events\ToolApprovalRequest` takes a `Collection` of `Laravel\Ai\Responses\Data\Step` as its fourth argument in place of the `$providerContentBlocks` array. No changes are needed unless you read the paused state or construct the event directly.
+The fourth constructor argument of `Laravel\Ai\Streaming\Events\ToolApprovalRequest` is now a `Collection` of `Laravel\Ai\Responses\Data\Step` instances instead of a `$providerContentBlocks` array. Update any code that constructs this event directly.
 
-### Replay Blocks
+### Provider Content Blocks Are Now Replay Blocks
 
 **Likelihood Of Impact: Low**
 
-The raw provider state carried through a turn is now called replay blocks everywhere:
+The raw provider state carried through a turn has been renamed from "provider content blocks" to "replay blocks". No changes are needed unless you construct the following objects directly or read the raw provider state from a message.
 
-- `Laravel\Ai\Messages\AssistantMessage::$providerContentBlocks` and `$providerContentBlocksProvider` are now `$replayBlocks` and `$replayBlocksProvider`, and the constructor arguments have been renamed to match.
-- `Laravel\Ai\Gateway\StepResponse` takes `replayBlocks:` in place of `providerContentBlocks:`, along with new `reasoning:` and `providerToolCalls:` arguments, and its `toArray()` emits `replay_blocks`.
-- `Laravel\Ai\Responses\Data\Step` and `StructuredStep` take two new required arguments after `$meta`: `string $reasoning` and `array $replayBlocks`. `Step` also accepts an optional trailing `array $providerToolCalls`. `Step::toArray()` gains `reasoning`, `replay_blocks`, and `provider_tool_calls` keys.
+If you read or construct an `AssistantMessage`, rename the properties and constructor arguments:
+
+```php
+// Before...
+$message->providerContentBlocks;
+$message->providerContentBlocksProvider;
+
+new AssistantMessage($content, $toolCalls, providerContentBlocks: $blocks, providerContentBlocksProvider: 'anthropic');
+
+// After...
+$message->replayBlocks;
+$message->replayBlocksProvider;
+
+new AssistantMessage($content, $toolCalls, replayBlocks: $blocks, replayBlocksProvider: 'anthropic');
+```
+
+If you construct a `Laravel\Ai\Gateway\StepResponse`, rename the `providerContentBlocks:` argument to `replayBlocks:`. The constructor also accepts new `reasoning:` and `providerToolCalls:` arguments, and `toArray()` emits a `replay_blocks` key.
+
+If you construct a `Laravel\Ai\Responses\Data\Step` or `StructuredStep`, pass the two new required arguments after `$meta`:
+
+```php
+new Step($text, $toolCalls, $toolResults, $finishReason, $usage, $meta, $reasoning, $replayBlocks);
+```
+
+`Step` also accepts an optional trailing `$providerToolCalls` array, and `Step::toArray()` now emits `reasoning`, `replay_blocks`, and `provider_tool_calls` keys.
 
 DeepSeek reasoning is now stored as a typed block rather than a raw string. For a DeepSeek turn, `AssistantMessage::$replayBlocks` is a list of `['type' => 'reasoning', 'reasoning_content' => '...']` entries.
-
-No changes are needed unless you construct these objects directly or read the raw provider state off a message.
 
 ### Reasoning Events On OpenAI And xAI
 
 **Likelihood Of Impact: Low**
 
-OpenAI and xAI models that stream raw reasoning text rather than a summary now emit `ReasoningStart`, `ReasoningDelta`, and `ReasoningEnd` events. Handle the new events in any stream consumer that renders reasoning.
+OpenAI and xAI models that stream raw reasoning text rather than a summary now emit `ReasoningStart`, `ReasoningDelta`, and `ReasoningEnd` events. If your stream consumer renders reasoning, handle these events for those providers.
 
 `$response->reasoning` moved from `AgentResponse` to `TextResponse` and is populated on non-streamed prompts as well. It contains the combined reasoning from every step, while each step's reasoning is available on `Laravel\Ai\Responses\Data\Step`.
 
@@ -473,7 +496,9 @@ Several protected methods used by custom providers and gateways have changed:
 
 **Likelihood Of Impact: Low**
 
-`latestConversationId()` receives the agent class name, and `storeConversation()` accepts the ID the conversation should be stored under:
+No changes are needed if you use the included database store. If you bind a custom `ConversationStore`, update the following three method signatures.
+
+`latestConversationId()` receives the agent class name. Scope the lookup to the given agent:
 
 ```php
 public function latestConversationId(
@@ -481,7 +506,11 @@ public function latestConversationId(
     string|int $participantId,
     string $agent,
 ): ?string;
+```
 
+`storeConversation()` accepts the ID the conversation should be stored under. Use the given ID when one is passed:
+
+```php
 public function storeConversation(
     ?string $participantType,
     string|int|null $participantId,
@@ -490,7 +519,7 @@ public function storeConversation(
 ): string;
 ```
 
-`storeUserMessage()` receives the agent class name and a `UserMessage` in place of an `AgentPrompt`, so a message may be stored before a provider has been resolved:
+`storeUserMessage()` receives the agent class name and a `UserMessage` in place of an `AgentPrompt`, so a message may be stored before a provider has been resolved. Read `$message->content` and `$message->attachments` in place of `$prompt->prompt` and `$prompt->attachments`:
 
 ```php
 public function storeUserMessage(
@@ -502,7 +531,7 @@ public function storeUserMessage(
 ): string;
 ```
 
-No changes are needed if you use the included database store. If you bind a custom `ConversationStore`, update all three signatures, scope `latestConversationId()` to the given agent, use the given ID when one is passed, and read `$message->content` and `$message->attachments` in place of `$prompt->prompt` and `$prompt->attachments`. `storeAssistantMessage()` is unchanged.
+`storeAssistantMessage()` is unchanged.
 
 ### The `RemembersConversations` Contract Adds `continueOrStart()`
 
@@ -514,7 +543,7 @@ The `Laravel\Ai\Contracts\RemembersConversations` interface now includes a `cont
 public function continueOrStart(?string $conversationId, object $as): static;
 ```
 
-No changes are needed if your agents use the `Concerns\RemembersConversations` trait, which provides the method. Add it to any agent that implements the contract by hand.
+No changes are needed if your agents use the `Concerns\RemembersConversations` trait, which provides the method. If an agent implements the contract by hand, add the method.
 
 ### The `Agent` Contract Accepts More Input Types
 
@@ -534,7 +563,7 @@ No changes are needed if your agents use the `Promptable` trait. If you implemen
 
 **Likelihood Of Impact: Low**
 
-The image, audio, and reranking methods accept provider options, and reranking also accepts a timeout:
+The image, audio, and reranking methods on providers now accept provider options, and reranking also accepts a timeout:
 
 ```php
 public function image(string $prompt, array $attachments = [], ?string $size = null, ?string $quality = null, ?string $model = null, ?int $timeout = null, array $providerOptions = []): ImageResponse;
@@ -546,21 +575,19 @@ public function rerank(array $documents, string $query, ?int $limit = null, ?str
 
 The corresponding `ImageGateway`, `AudioGateway`, and `RerankingGateway` methods gained the applicable `$providerOptions` and `$timeout` arguments. In addition, `Laravel\Ai\Contracts\Providers\Provider` gained a `withHeaders()` method for sending custom HTTP headers. Anything extending the base `Laravel\Ai\Providers\Provider` gets `withHeaders()` for free.
 
+Most applications are unaffected. If you have written a custom provider or gateway, update its method signatures to match.
+
 Reranking requests now use a 30-second timeout by default. Bedrock previously used the AWS SDK default, so a long reranking call may now time out. Raise it with the new `timeout()` method:
 
 ```php
 Reranking::of($documents)->timeout(60)->rerank('...');
 ```
 
-Most applications are unaffected. Update any custom provider or gateway to match the new signatures.
-
 ### Stream Event Constructor Signatures
 
 **Likelihood Of Impact: Low**
 
-The `$provider` argument of `Laravel\Ai\Streaming\Events\ProviderToolEvent` is now a required `string` rather than an optional `?string`.
-
-No changes are needed unless you construct this event directly.
+The `$provider` argument of `Laravel\Ai\Streaming\Events\ProviderToolEvent` is now a required `string` rather than an optional `?string`. If you construct this event directly, pass the provider name.
 
 ## Upgrading To 0.11 From 0.10
 
