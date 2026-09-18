@@ -137,7 +137,7 @@ test('fully individually cached requests are served in any input order without a
     $response = Embeddings::for(['b', 'a'])->cache(3600, individually: true)->generate(provider: 'cohere', model: 'embed-v4.0');
 
     expect(Http::recorded())->toHaveCount(1)
-        ->and($response->tokens)->toBe(0)
+        ->and($response->usage->inputTokens)->toBe(0)
         ->and($response->meta->provider)->toBe('cohere')
         ->and($response->meta->model)->toBe('embed-v4.0')
         ->and($response->embeddings)->toEqual([fakeCohereEmbedding('b'), fakeCohereEmbedding('a')]);
@@ -153,7 +153,7 @@ test('partially cached requests only generate embeddings for the uncached inputs
     [$request] = Http::recorded()[1];
 
     expect($request->data()['texts'])->toBe(['c', 'd'])
-        ->and($response->tokens)->toBe(2)
+        ->and($response->usage->inputTokens)->toBe(2)
         ->and($response->embeddings)->toEqual([
             fakeCohereEmbedding('c'),
             fakeCohereEmbedding('a'),

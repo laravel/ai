@@ -14,6 +14,7 @@ use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 
 class OllamaGateway implements EmbeddingGateway, StepTextGateway
@@ -121,7 +122,7 @@ class OllamaGateway implements EmbeddingGateway, StepTextGateway
 
         return new EmbeddingsResponse(
             $data['embeddings'] ?? [],
-            $data['prompt_eval_count'] ?? 0,
+            new Usage($data['prompt_eval_count'] ?? 0),
             new Meta($provider->name(), $model),
         );
     }

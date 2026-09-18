@@ -127,7 +127,7 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
 
         return new EmbeddingsResponse(
             collect($data['data'] ?? [])->pluck('embedding')->all(),
-            $data['usage']['total_tokens'] ?? 0,
+            new Usage($data['usage']['prompt_tokens'] ?? 0),
             new Meta($provider->name(), $model),
         );
     }

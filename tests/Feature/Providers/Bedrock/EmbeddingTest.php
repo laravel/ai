@@ -76,7 +76,7 @@ describe('cohere embeddings', function () {
             1024,
         );
 
-        expect($response->tokens)->toBe(7);
+        expect($response->usage->inputTokens)->toBe(7);
     });
 
     test('sends the Cohere request shape rather than the Titan one', function () {

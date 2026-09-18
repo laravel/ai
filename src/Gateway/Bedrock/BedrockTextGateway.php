@@ -563,7 +563,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
 
         return new EmbeddingsResponse(
             $embeddings,
-            $totalTokens,
+            new Usage($totalTokens),
             new Meta($provider->name(), $model),
         );
     }
@@ -606,7 +606,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
 
         return new EmbeddingsResponse(
             $this->parseCohereEmbeddings($result['embeddings'] ?? []),
-            $inputTokens,
+            new Usage($inputTokens),
             new Meta($provider->name(), $model),
         );
     }
