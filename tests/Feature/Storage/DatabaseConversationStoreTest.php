@@ -981,7 +981,7 @@ test('it replays a resumed pause as the paused call, its result, then the resume
     );
 });
 
-test('it rehydrates reasoning encrypted content on stored tool calls', function (): void {
+test('it still rehydrates reasoning encrypted content stored on legacy tool calls', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
 
@@ -1495,3 +1495,36 @@ function insertPausedConversationTurn(string $conversationId, string $id, array 
 {
     insertAssistantTurn($conversationId, $id, 'Waiting on you.', [assistantStep($toolCalls)], ['pending' => $pending]);
 }
+
+test('provider reasoning state is kept on the step replay blocks rather than copied onto each tool call', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
+    $prompt = new AgentPrompt(new ToolUsingAgent, 'Look it up', [], Mockery::mock(TextProvider::class), 'test-model');
+
+    $reasoningItem = ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => [], 'encrypted_content' => 'enc-blob-1'];
+
+    $response = (new AgentResponse('invocation-1', 'Found it.', new Usage, new Meta('openai', 'gpt-5')))
+        ->withSteps(collect([new Step(
+            'Found it.',
+            [new ToolCall('fc_1', 'ReadFile', ['path' => 'a'], 'call_1', 'rs_1', [], 'enc-blob-1')],
+            [new ToolResult('fc_1', 'ReadFile', ['path' => 'a'], 'contents', 'call_1')],
+            FinishReason::Stop,
+            new Usage,
+            new Meta('openai', 'gpt-5'),
+            '',
+            [$reasoningItem, ['type' => 'function_call', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'ReadFile', 'arguments' => '{"path":"a"}']],
+        )]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $step = json_decode(DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps'), true)[0];
+
+    expect($step['tool_calls'][0])->toBe([
+        'id' => 'fc_1',
+        'name' => 'ReadFile',
+        'arguments' => ['path' => 'a'],
+        'result_id' => 'call_1',
+        'thought_signature' => null,
+        'result' => 'contents',
+    ])->and($step['replay_blocks'][0])->toBe($reasoningItem);
+});

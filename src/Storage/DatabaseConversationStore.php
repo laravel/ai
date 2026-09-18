@@ -187,7 +187,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             $result = $results->get($toolCall->id);
 
             return [
-                ...$toolCall->toArray(),
+                ...Arr::except($toolCall->toArray(), ['reasoning_id', 'reasoning_summary', 'reasoning_encrypted_content']),
                 ...$result === null ? [] : Arr::only($result->toArray(), ['result', 'denied', 'failed']),
             ];
         })->values()->all();
