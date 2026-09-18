@@ -194,11 +194,9 @@ trait HandlesTextStreaming
             }
         }
 
-        $replayBlocks = [];
-
-        if (filled($currentReasoning)) {
-            $replayBlocks['reasoning_content'] = $currentReasoning;
-        }
+        $replayBlocks = filled($currentReasoning)
+            ? [['type' => 'reasoning', 'reasoning_content' => $currentReasoning]]
+            : [];
 
         return new StepResponse(
             text: $currentText,

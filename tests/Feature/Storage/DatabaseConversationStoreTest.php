@@ -375,7 +375,8 @@ test('it preserves the gemini thought signature across a persisted tool conversa
     $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
     $storedCall = json_decode((string) $record->steps, true)[0]['tool_calls'][0];
 
-    expect($storedCall['thought_signature'])->toBe('sig_persist_777');
+    expect($storedCall)->not->toHaveKey('thought_signature')
+        ->and(json_decode((string) $record->steps, true)[0]['replay_blocks'][0]['thoughtSignature'])->toBe('sig_persist_777');
 
     (new RememberingToolUsingAgent)->continue($conversationId, $user)->prompt('Generate another', provider: 'gemini');
 
@@ -638,7 +639,7 @@ test('it drops the unexecuted calls of a step-limited tail but keeps its text', 
     );
 });
 
-test('it replays a completed turn without its replay blocks', function (): void {
+test('it replays a completed turn with its replay blocks tagged by the provider that made them', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
@@ -654,13 +655,13 @@ test('it replays a completed turn without its replay blocks', function (): void 
     $messages = $store->getLatestConversationMessages($conversationId, 10);
 
     expect($messages)->toHaveCount(3)->sequence(
-        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['replayBlocks' => []])->toolCalls->toHaveCount(1)->each->toMatchObject(['id' => 'call-1']),
+        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['replayBlocksProvider' => 'anthropic'])->replayBlocks->toHaveCount(2),
         fn ($message) => $message->toBeInstanceOf(ToolResultMessage::class)->toolResults->toHaveCount(1)->each->toMatchObject(['id' => 'call-1']),
-        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['content' => 'Read a and b', 'replayBlocks' => []]),
+        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['content' => 'Read a and b', 'replayBlocksProvider' => 'anthropic'])->replayBlocks->toHaveCount(2),
     );
 });
 
-test('it replays blocks only from the paused turn, not the completed turns before it', function (): void {
+test('it replays blocks from completed turns as well as the paused one', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
@@ -678,7 +679,7 @@ test('it replays blocks only from the paused turn, not the completed turns befor
     $messages = $store->getLatestConversationMessages($conversationId, 10);
 
     expect($messages)->toHaveCount(3)->sequence(
-        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['replayBlocks' => []]),
+        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->replayBlocks->toHaveCount(2),
         fn ($message) => $message->toBeInstanceOf(Message::class)->toMatchObject(['content' => 'Now delete b']),
         fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->replayBlocks->toHaveCount(2),
     );
@@ -1524,7 +1525,25 @@ test('provider reasoning state is kept on the step replay blocks rather than cop
         'name' => 'ReadFile',
         'arguments' => ['path' => 'a'],
         'result_id' => 'call_1',
-        'thought_signature' => null,
         'result' => 'contents',
     ])->and($step['replay_blocks'][0])->toBe($reasoningItem);
+});
+
+test('a step that dropped an unanswered call replays generically so no raw block names a call without a result', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    insertAssistantTurn($conversationId, 'message-1', 'Read a', [
+        assistantStep(
+            [['id' => 'call-1', 'name' => 'read_file', 'arguments' => ['path' => 'a']], ['id' => 'call-2', 'name' => 'read_file', 'arguments' => ['path' => 'b']]],
+            [['id' => 'call-1', 'name' => 'read_file', 'arguments' => ['path' => 'a'], 'result' => 'contents of a']],
+            replayBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1'], ['type' => 'tool_use', 'id' => 'call-2']],
+        ),
+    ], meta: ['provider' => 'anthropic']);
+
+    $message = $store->getLatestConversationMessages($conversationId, 10)->first();
+
+    expect($message)->toBeInstanceOf(AssistantMessage::class)
+        ->and($message->replayBlocks)->toBe([])
+        ->and($message->toolCalls->pluck('id')->all())->toBe(['call-1']);
 });

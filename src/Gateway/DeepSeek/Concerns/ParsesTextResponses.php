@@ -57,11 +57,9 @@ trait ParsesTextResponses
             $toolCall['id'] ?? null,
         ), $rawToolCalls);
 
-        $replayBlocks = [];
-
-        if (filled($message['reasoning_content'] ?? null)) {
-            $replayBlocks['reasoning_content'] = $message['reasoning_content'];
-        }
+        $replayBlocks = filled($message['reasoning_content'] ?? null)
+            ? [['type' => 'reasoning', 'reasoning_content' => $message['reasoning_content']]]
+            : [];
 
         return new StepResponse(
             text: $text,
