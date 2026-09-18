@@ -250,6 +250,7 @@ trait ParsesTextResponses
     protected function extractImageUsage(array $data): ImageUsage
     {
         $usage = $data['usageMetadata'] ?? [];
+
         $text = $this->extractUsage($data);
 
         return new ImageUsage(
