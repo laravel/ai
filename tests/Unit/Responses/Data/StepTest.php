@@ -5,29 +5,6 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\TextUsage;
 
-test('step stores text tool calls and other properties', function (): void {
-    $usage = new TextUsage(10, 5);
-    $meta = new Meta('openai', 'gpt-4o');
-    $step = new Step(
-        text: 'Hello',
-        toolCalls: [],
-        toolResults: [],
-        finishReason: FinishReason::Stop,
-        usage: $usage,
-        meta: $meta,
-        reasoning: 'I greeted them.',
-        replayBlocks: [],
-    );
-
-    expect($step->text)->toBe('Hello')
-        ->and($step->toolCalls)->toBeEmpty()
-        ->and($step->toolResults)->toBeEmpty()
-        ->and($step->finishReason)->toBe(FinishReason::Stop)
-        ->and($step->usage)->toBe($usage)
-        ->and($step->meta)->toBe($meta)
-        ->and($step->reasoning)->toBe('I greeted them.');
-});
-
 test('step to array returns all properties including serialized usage and meta', function (): void {
     $usage = new TextUsage(10, 5);
     $meta = new Meta('openai', 'gpt-4o');

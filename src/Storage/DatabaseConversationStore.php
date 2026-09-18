@@ -145,7 +145,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Serialize the turn's steps, one entry per model round-trip. Raw provider blocks are kept only for a paused turn, the one case a provider needs them back verbatim.
+     * Serialize the turn's steps, one entry per model round-trip.
      *
      * @return Collection<int, array{content: string, tool_calls: array, reasoning: string, replay_blocks: array}>
      */
@@ -389,17 +389,14 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Decode a stored row's steps, a step written without its own content taking the turn's when it is the last.
+     * Decode a stored row's steps.
      *
      * @return Collection<int, array{content: string, tool_calls: array, reasoning: string, replay_blocks: array}>
      */
     protected function decodedSteps(object $record): Collection
     {
-        $steps = array_values($this->decoded($record->steps));
-        $lastStep = array_key_last($steps);
-
-        return collect($steps)->map(fn (array $step, int $index): array => [
-            'content' => (string) ($step['content'] ?? ($index === $lastStep ? $record->content ?? '' : '')),
+        return collect($this->decoded($record->steps))->map(fn (array $step): array => [
+            'content' => (string) ($step['content'] ?? ''),
             'tool_calls' => array_values($step['tool_calls'] ?? []),
             'reasoning' => (string) ($step['reasoning'] ?? ''),
             'replay_blocks' => $step['replay_blocks'] ?? [],

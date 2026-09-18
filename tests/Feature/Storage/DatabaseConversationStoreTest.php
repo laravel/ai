@@ -3,6 +3,7 @@
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
@@ -305,8 +306,8 @@ test('it stores one step per model round-trip from a remembered agent prompt', f
     expect(DB::table('agent_conversation_messages')->where('role', 'user')->value('steps'))->toBe('[]')
         ->and($record->content)->toBe('The number is 72019')
         ->and($record->steps)->json()->toHaveCount(2)->sequence(
-            fn ($step) => $step->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call_123', 'name' => 'FixedNumberGenerator', 'result' => '72019']),
-            fn ($step) => $step->toMatchArray(['tool_calls' => []]),
+            fn ($step) => $step->toMatchArray(['replay_blocks' => []])->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call_123', 'name' => 'FixedNumberGenerator', 'result' => '72019']),
+            fn ($step) => $step->toMatchArray(['tool_calls' => [], 'replay_blocks' => []]),
         );
 });
 
@@ -376,7 +377,6 @@ test('it preserves the gemini thought signature across a persisted tool conversa
     // Replayed to Gemini on the second turn, without which the request 400s...
     expect($signatures)->toBe(['sig_persist_777']);
 });
-
 
 test('it stores a response built without steps as a single step of lists', function (): void {
     $store = new DatabaseConversationStore;
@@ -464,7 +464,7 @@ test('it round trips tool result failure status through storage', function (): v
         ->and($result->error())->toBe('Tool not found');
 });
 
-test('it stores a tool result without the arguments its call already carries', function (): void {
+test('it stores a tool result id on the call that made it', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
     $prompt = new AgentPrompt(
@@ -1428,15 +1428,15 @@ function storedConversationMessageAttributes(string $id, string $conversationId,
  * @param  list<array<string, mixed>>  $replayBlocks
  * @return array<string, mixed>
  */
-function assistantStep(array $toolCalls = [], array $toolResults = [], array $replayBlocks = [], ?string $content = null): array
+function assistantStep(array $toolCalls = [], array $toolResults = [], array $replayBlocks = [], string $content = ''): array
 {
     $results = collect($toolResults)->keyBy('id');
 
     return [
-        ...$content === null ? [] : ['content' => $content],
+        'content' => $content,
         'tool_calls' => array_map(fn (array $call): array => [
             ...$call,
-            ...array_intersect_key($results[$call['id']] ?? [], array_flip(['result', 'denied', 'failed'])),
+            ...Arr::only($results[$call['id']] ?? [], ['result', 'denied', 'failed']),
         ], $toolCalls),
         'replay_blocks' => $replayBlocks,
     ];
@@ -1449,6 +1449,10 @@ function assistantStep(array $toolCalls = [], array $toolResults = [], array $re
  */
 function insertAssistantTurn(string $conversationId, string $id, string $content, array $steps, ?array $approvalState = null, array $meta = []): void
 {
+    if ($steps !== [] && $steps[array_key_last($steps)]['content'] === '') {
+        $steps[array_key_last($steps)]['content'] = $content;
+    }
+
     DB::table('agent_conversation_messages')->insert([
         ...storedConversationMessageAttributes($id, $conversationId, $content),
         'role' => 'assistant',

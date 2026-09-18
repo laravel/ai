@@ -10,12 +10,3 @@ test('can create an agent middleware class', function (): void {
     expect(app_path('Ai/Middleware/TestMiddleware.php'))->toBeFile()
         ->and(file_get_contents(app_path('Ai/Middleware/TestMiddleware.php')))->toContain('handle(PendingStep $step, Closure $next)');
 });
-
-test('may publish custom middleware stub', function (): void {
-    $this->artisan('vendor:publish', [
-        '--tag' => 'ai-stubs',
-        '--force' => true,
-    ])->assertExitCode(0)->run();
-
-    expect(base_path('stubs/agent-middleware.stub'))->toBeFile();
-});

@@ -89,6 +89,27 @@ test('it splits a row per provider step and moves the turn reasoning blob onto t
     ])->and($row->meta)->json()->toBe(['provider' => 'anthropic', 'model' => 'claude-sonnet-4-6']);
 });
 
+test('it replays a completed turn answer after the results it was written from', function (): void {
+    insertLegacyRow('message-1', 'user', 'Delete a');
+    insertLegacyRow('message-2', 'assistant', 'Done.', toolCalls: [legacyCall('call-1')], toolResults: [legacyResult('call-1')]);
+
+    (new BackfillConversationSteps)->up();
+
+    expect(DB::table('agent_conversation_messages')->where('id', 'message-2')->value('steps'))->json()->toBe([
+        ['content' => '', 'tool_calls' => [answeredToolCall('call-1')], 'reasoning' => '', 'replay_blocks' => []],
+        ['content' => 'Done.', 'tool_calls' => [], 'reasoning' => '', 'replay_blocks' => []],
+    ]);
+
+    $messages = (new DatabaseConversationStore)->getLatestConversationMessages('conversation-1', 10);
+
+    expect($messages->map(fn ($message) => $message::class)->all())->toBe([
+        Message::class,
+        AssistantMessage::class,
+        ToolResultMessage::class,
+        AssistantMessage::class,
+    ])->and($messages->last()->content)->toBe('Done.');
+});
+
 test('it records a result duplicated across rows once, on the row that made the call', function (): void {
     insertLegacyRow('message-1', 'assistant', '', toolCalls: [legacyCall('call-1')], toolResults: [legacyResult('call-1')], approvalState: ['pending' => []]);
     insertLegacyRow('message-2', 'assistant', 'Done.', toolResults: [legacyResult('call-1')]);

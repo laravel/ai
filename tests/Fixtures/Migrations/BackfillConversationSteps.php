@@ -9,9 +9,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Ai\Migrations\AiMigration;
 
-/**
- * The canonical copy of the UPGRADE.md migration that converts flat assistant rows into steps.
- */
 class BackfillConversationSteps extends AiMigration
 {
     /**
@@ -132,6 +129,11 @@ class BackfillConversationSteps extends AiMigration
                 'reasoning' => '',
                 'replay_blocks' => $meta['provider_content_blocks'] ?? [],
             ]];
+
+            // A completed turn's text was produced after its results, so it replays as a step of its own...
+            if ($calls !== [] && $row->approval_state === null && (string) $row->content !== '') {
+                $steps[] = ['content' => '', 'tool_calls' => [], 'reasoning' => '', 'replay_blocks' => []];
+            }
         }
 
         $steps[array_key_last($steps)]['content'] = (string) $row->content;
