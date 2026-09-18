@@ -68,10 +68,11 @@ test('it keeps answered and pending calls and drops the call that never ran', fu
     expect($steps)->json()->{'0'}->tool_calls->toBe([answeredToolCall('call-1'), legacyCall('call-2')]);
 });
 
-test('it splits a row with provider step metadata into one step per provider step', function (): void {
+test('it splits a row per provider step and moves the turn reasoning blob onto the last', function (): void {
     insertLegacyRow('message-1', 'assistant', 'Now b.', toolCalls: [legacyCall('call-1'), legacyCall('call-2')], toolResults: [legacyResult('call-1')], approvalState: ['pending' => ['call-2' => null]], meta: [
         'provider' => 'anthropic',
         'model' => 'claude-sonnet-4-6',
+        'reasoning' => 'Deleting b next.',
         'provider_steps' => [
             ['blocks' => [['type' => 'thinking', 'signature' => 'sig-1']], 'tool_call_ids' => ['call-1']],
             ['blocks' => [['type' => 'thinking', 'signature' => 'sig-2']], 'tool_call_ids' => ['call-2']],
@@ -83,8 +84,8 @@ test('it splits a row with provider step metadata into one step per provider ste
     $row = DB::table('agent_conversation_messages')->first();
 
     expect($row->steps)->json()->toBe([
-        ['tool_calls' => [answeredToolCall('call-1')], 'provider_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]],
-        ['tool_calls' => [legacyCall('call-2')], 'provider_blocks' => [['type' => 'thinking', 'signature' => 'sig-2']]],
+        ['tool_calls' => [answeredToolCall('call-1')], 'reasoning' => '', 'provider_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]],
+        ['tool_calls' => [legacyCall('call-2')], 'reasoning' => 'Deleting b next.', 'provider_blocks' => [['type' => 'thinking', 'signature' => 'sig-2']]],
     ])->and($row->meta)->json()->toBe(['provider' => 'anthropic', 'model' => 'claude-sonnet-4-6']);
 });
 

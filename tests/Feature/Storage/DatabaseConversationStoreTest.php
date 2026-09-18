@@ -691,8 +691,8 @@ test('it writes the steps of a paused turn with their provider blocks and keeps 
 
     $response = (new AgentResponse('invocation-id', 'Let me think about that', new Usage, new Meta('anthropic')))
         ->withSteps(collect([
-            new Step('', [new ToolCall('call-0', 'ReadFile', ['path' => 'a'])], [new ToolResult('call-0', 'ReadFile', ['path' => 'a'], 'contents')], FinishReason::ToolCalls, new Usage, new Meta, [['type' => 'tool_use', 'id' => 'call-0']]),
-            new Step('Let me think about that', [new ToolCall('call-1', 'DeleteFile', ['path' => 'config/app.php'])], [], FinishReason::ToolCalls, new Usage, new Meta, [['type' => 'thinking', 'signature' => 'sig-1']]),
+            new Step('', [new ToolCall('call-0', 'ReadFile', ['path' => 'a'])], [new ToolResult('call-0', 'ReadFile', ['path' => 'a'], 'contents')], FinishReason::ToolCalls, new Usage, new Meta, providerContentBlocks: [['type' => 'tool_use', 'id' => 'call-0']]),
+            new Step('Let me think about that', [new ToolCall('call-1', 'DeleteFile', ['path' => 'config/app.php'])], [], FinishReason::ToolCalls, new Usage, new Meta, providerContentBlocks: [['type' => 'thinking', 'signature' => 'sig-1']]),
         ]))
         ->withPendingApprovals(collect([
             new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file'),
@@ -729,7 +729,7 @@ test('it writes the steps a paused stream carried on its approval request', func
         new ToolApprovalRequest('event-1', collect([
             new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file'),
         ]), 0, collect([
-            new Step('', [new ToolCall('call-1', 'DeleteFile', ['path' => 'config/app.php'])], [], FinishReason::ToolCalls, new Usage, new Meta, [['type' => 'thinking', 'signature' => 'sig-1']]),
+            new Step('', [new ToolCall('call-1', 'DeleteFile', ['path' => 'config/app.php'])], [], FinishReason::ToolCalls, new Usage, new Meta, providerContentBlocks: [['type' => 'thinking', 'signature' => 'sig-1']]),
         ])),
     ]), new Meta);
 
@@ -758,8 +758,8 @@ test('it writes the steps a completed stream carried on its stream end', functio
     $response = new StreamedAgentResponse('invocation-id', collect([
         new TextDelta('event-1', 'message-1', 'Done.', 0),
         new StreamEnd('event-2', 'stop', new Usage, 0, collect([
-            new Step('', [$call], [new ToolResult('call-1', 'ReadFile', ['path' => 'config/app.php'], 'contents')], FinishReason::ToolCalls, new Usage, new Meta, [['type' => 'tool_use', 'id' => 'call-1']]),
-            new Step('Done.', [], [], FinishReason::Stop, new Usage, new Meta, [['type' => 'text', 'text' => 'Done.']]),
+            new Step('', [$call], [new ToolResult('call-1', 'ReadFile', ['path' => 'config/app.php'], 'contents')], FinishReason::ToolCalls, new Usage, new Meta, providerContentBlocks: [['type' => 'tool_use', 'id' => 'call-1']]),
+            new Step('Done.', [], [], FinishReason::Stop, new Usage, new Meta, providerContentBlocks: [['type' => 'text', 'text' => 'Done.']]),
         ])),
     ]), new Meta);
 
@@ -1109,7 +1109,7 @@ test('it scopes conversations by participant type so shared ids no longer collid
         ->and($userConversation)->not->toBe($adminConversation);
 });
 
-test('it records the reasoning a streamed turn produced into the message meta', function (): void {
+test('it records the reasoning a streamed turn produced onto the turn steps', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
 
@@ -1133,11 +1133,13 @@ test('it records the reasoning a streamed turn produced into the message meta', 
 
     $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
 
-    expect(json_decode((string) $record->meta, true))
-        ->toHaveKey('reasoning', 'They want the temperature.');
+    expect(json_decode((string) $record->steps, true))
+        ->toHaveCount(1)
+        ->{'0'}->toHaveKey('reasoning', 'They want the temperature.')
+        ->and(json_decode((string) $record->meta, true))->not->toHaveKey('reasoning');
 });
 
-test('it records the reasoning a prompted turn produced into the message meta', function (): void {
+test('it records the reasoning a prompted turn produced onto the turn steps', function (): void {
     Config::set('ai.conversations.generate_title', false);
 
     Http::fake(['api.deepseek.com/*' => Http::response([
@@ -1165,11 +1167,13 @@ test('it records the reasoning a prompted turn produced into the message meta', 
         ->where('role', 'assistant')
         ->first();
 
-    expect(json_decode((string) $record->meta, true))
-        ->toHaveKey('reasoning', 'They want the temperature.');
+    expect(json_decode((string) $record->steps, true))
+        ->toHaveCount(1)
+        ->{'0'}->toHaveKey('reasoning', 'They want the temperature.')
+        ->and(json_decode((string) $record->meta, true))->not->toHaveKey('reasoning');
 });
 
-test('it omits reasoning from the message meta when the model did not reason', function (): void {
+test('it records no reasoning on the turn steps when the model did not reason', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Quiet conversation');
 
@@ -1189,7 +1193,7 @@ test('it omits reasoning from the message meta when the model did not reason', f
 
     $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
 
-    expect(json_decode((string) $record->meta, true))->not->toHaveKey('reasoning');
+    expect(json_decode((string) $record->steps, true))->{'0'}->toHaveKey('reasoning', '');
 });
 
 test('it records the sources a streamed turn cited into the message meta', function (): void {
