@@ -164,6 +164,247 @@ The added counts are `null` when the provider reports nothing.
 
 No changes are needed unless you read `EmbeddingsResponse::$tokens` or construct these responses by hand. `EmbeddingsResponse`, `AudioResponse`, and `RerankingResponse` take their respective usage object as the second constructor argument, before the `Meta`. `ImageResponse` takes an `ImageUsage` as its second argument, before the `Meta`, while `TranscriptionResponse` takes a `TranscriptionUsage` as its third argument, after the text and segments and before the `Meta`.
 
+### Conversation Turns Are Stored As Steps
+
+**Likelihood Of Impact: High**
+
+The `tool_calls` and `tool_results` columns on `agent_conversation_messages` have been replaced by a single `steps` column. Each entry is one model round-trip, carrying the text, reasoning, tool calls, provider-hosted tool calls, and replay blocks that step produced, with each tool result stored on the call that made it:
+
+```json
+[
+    {"content": "", "tool_calls": [{"id": "call_1", "name": "read_file", "arguments": {}, "result": "..."}], "reasoning": "", "replay_blocks": [], "provider_tool_calls": []},
+    {"content": "Done.", "tool_calls": [], "reasoning": "", "replay_blocks": [], "provider_tool_calls": []}
+]
+```
+
+State that was previously spread across the row now lives on the step that produced it:
+
+- `meta.reasoning` is now `steps[].reasoning`.
+- `meta.provider_steps` and `meta.provider_content_blocks` are now `steps[].replay_blocks`.
+- The `tool_results` list is gone. Each result is stored on its call as `steps[].tool_calls[].result`.
+
+Replay blocks are only kept while a turn is paused for approval. Once the turn completes they are cleared, and the turn is rebuilt from its steps on the next request.
+
+Each stored tool call carries only the `id`, `name`, `arguments`, `result`, `result_id`, `denied`, and `failed` keys. Provider-specific reasoning keys such as `reasoning_id` and `reasoning_encrypted_content` are no longer stored on the call, with the exception of `thought_signature`, which is kept when Gemini sets one.
+
+The `participant_index` on the same table now also covers `agent`.
+
+The package's existing migration will not run again during an upgrade. Applications that have already migrated the conversation tables should create a migration similar to the following and run it before deploying the new code:
+
+<details>
+<summary>Backfill migration</summary>
+
+```php
+<?php
+
+use Illuminate\Database\Query\Builder;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Laravel\Ai\Migrations\AiMigration;
+
+return new class extends AiMigration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        $table = config('ai.conversations.tables.messages', 'agent_conversation_messages');
+
+        Schema::connection($this->getConnection())->table($table, function (Blueprint $blueprint) {
+            $blueprint->longText('steps')->nullable();
+        });
+
+        $this->query($table)->where('role', 'user')->update(['steps' => '[]']);
+
+        $this->query($table)
+            ->select('conversation_id')
+            ->distinct()
+            ->orderBy('conversation_id')
+            ->chunk(100, function (Collection $conversations) use ($table) {
+                foreach ($conversations as $conversation) {
+                    $this->backfillConversation($table, $conversation->conversation_id);
+                }
+            });
+
+        Schema::connection($this->getConnection())->table($table, function (Blueprint $blueprint) {
+            $blueprint->longText('steps')->nullable(false)->change();
+            $blueprint->dropColumn(['tool_calls', 'tool_results']);
+            $blueprint->dropIndex('participant_index');
+            $blueprint->index(['participant_type', 'participant_id', 'agent'], 'participant_index');
+        });
+    }
+
+    /**
+     * Rewrite every assistant row of one conversation as steps, each result landing on the invocation that made its call.
+     */
+    protected function backfillConversation(string $table, string $conversationId): void
+    {
+        $rows = $this->query($table)
+            ->where('conversation_id', $conversationId)
+            ->where('role', 'assistant')
+            ->orderBy('id')
+            ->get();
+
+        // Results are gathered across the conversation because an approval resolved on a later request used to be recorded on that request's row...
+        $results = [];
+        $pending = [];
+
+        foreach ($rows as $row) {
+            foreach ($this->decoded($row->tool_results) as $result) {
+                if (isset($result['id'])) {
+                    $results[$result['id']] ??= $result;
+                }
+            }
+
+            $pending = [...$pending, ...array_keys($this->decoded($row->approval_state)['pending'] ?? [])];
+        }
+
+        foreach ($rows as $row) {
+            [$steps, $meta] = $this->stepsFrom($row);
+
+            $steps = array_map(function (array $step) use ($results, $pending): array {
+                $toolCalls = [];
+
+                foreach ($step['tool_calls'] as $toolCall) {
+                    $result = $results[$toolCall['id'] ?? ''] ?? null;
+
+                    if ($result === null && ! in_array($toolCall['id'] ?? null, $pending, true)) {
+                        continue;
+                    }
+
+                    $toolCalls[] = $result === null ? $toolCall : [
+                        ...$toolCall,
+                        'result' => $result['result'] ?? null,
+                        ...array_filter(['denied' => $result['denied'] ?? false, 'failed' => $result['failed'] ?? false]),
+                    ];
+                }
+
+                $step['tool_calls'] = $toolCalls;
+
+                return $step;
+            }, $steps);
+
+            $this->query($table)->where('id', $row->id)->update([
+                'steps' => json_encode($steps),
+                'meta' => json_encode($meta),
+            ]);
+        }
+    }
+
+    /**
+     * Split a flat assistant row into steps of unanswered tool calls, moving any replay and reasoning state out of its meta.
+     *
+     * @return array{0: list<array<string, mixed>>, 1: array<string, mixed>}
+     */
+    protected function stepsFrom(object $row): array
+    {
+        $meta = $this->decoded($row->meta);
+        $calls = array_values($this->decoded($row->tool_calls));
+
+        $providerSteps = $meta['provider_steps'] ?? null;
+
+        if (is_array($providerSteps) && $providerSteps !== []) {
+            $steps = [];
+
+            foreach ($providerSteps as $providerStep) {
+                $ids = $providerStep['tool_call_ids'] ?? [];
+
+                $steps[] = [
+                    'content' => '',
+                    'tool_calls' => array_values(array_filter($calls, fn (array $call) => in_array($call['id'] ?? null, $ids, true))),
+                    'reasoning' => '',
+                    'replay_blocks' => $providerStep['blocks'] ?? [],
+                ];
+            }
+        } else {
+            $steps = [[
+                'content' => '',
+                'tool_calls' => $calls,
+                'reasoning' => '',
+                'replay_blocks' => $meta['provider_content_blocks'] ?? [],
+            ]];
+
+            // A completed turn's text was produced after its results, so it replays as a step of its own...
+            if ($calls !== [] && $row->approval_state === null && (string) $row->content !== '') {
+                $steps[] = ['content' => '', 'tool_calls' => [], 'reasoning' => '', 'replay_blocks' => []];
+            }
+        }
+
+        $steps[array_key_last($steps)]['content'] = (string) $row->content;
+        $steps[array_key_last($steps)]['reasoning'] = (string) ($meta['reasoning'] ?? '');
+
+        unset($meta['provider_steps'], $meta['provider_content_blocks'], $meta['reasoning']);
+
+        return [$steps, $meta];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function decoded(?string $json): array
+    {
+        return is_array($decoded = json_decode($json ?? '', true)) ? $decoded : [];
+    }
+
+    protected function query(string $table): Builder
+    {
+        return DB::connection($this->getConnection())->table($table);
+    }
+};
+```
+
+</details>
+
+Rewrite any raw SQL against the old columns to read `steps`. The `tool_calls` and `tool_results` attributes on `Laravel\Ai\Models\ConversationMessage` are now read-only accessors collapsed from `steps`, alongside a new `provider_tool_calls` accessor. Write `steps` instead.
+
+`Laravel\Ai\Storage\StoredMessage` follows the column. Its constructor takes `steps` in place of `toolCalls` and `toolResults`, `toArray()` emits `steps` in their place, and the `$toolCalls` and `$toolResults` properties became `toolCalls()` and `toolResults()` methods, joined by `providerToolCalls()`:
+
+```php
+// Before...
+$message->toolCalls;
+$message->toolResults;
+
+// After...
+$message->toolCalls();
+$message->toolResults();
+$message->providerToolCalls();
+```
+
+No changes are needed if you only prompt agents and read their responses. Update any custom `ConversationStore`, raw query, or code that constructs a `StoredMessage` by hand.
+
+### Paused Turn State Is Exposed As Steps
+
+**Likelihood Of Impact: Low**
+
+`AgentResponse::pausedProviderContentBlocks()` and its `StreamedAgentResponse` counterpart have been removed. The steps a paused turn produced are on the response:
+
+```php
+// Before...
+$response->pausedProviderContentBlocks();
+
+// After...
+$response->steps;
+```
+
+`Laravel\Ai\Streaming\Events\ToolApprovalRequest` takes a `Collection` of `Laravel\Ai\Responses\Data\Step` as its fourth argument in place of the `$providerContentBlocks` array. No changes are needed unless you read the paused state or construct the event directly.
+
+### Replay Blocks
+
+**Likelihood Of Impact: Low**
+
+The raw provider state carried through a turn is now called replay blocks everywhere it appears:
+
+- `Laravel\Ai\Messages\AssistantMessage::$providerContentBlocks` and `$providerContentBlocksProvider` are now `$replayBlocks` and `$replayBlocksProvider`, and the constructor arguments are renamed to match.
+- `Laravel\Ai\Gateway\StepResponse` takes `replayBlocks:` in place of `providerContentBlocks:`, along with new `reasoning:` and `providerToolCalls:` arguments, and its `toArray()` emits `replay_blocks`.
+- `Laravel\Ai\Responses\Data\Step` and `StructuredStep` require `string $reasoning` and `array $replayBlocks` after `$meta`, and `Step` accepts a trailing `array $providerToolCalls`. `Step::toArray()` gains `reasoning`, `replay_blocks`, and `provider_tool_calls`.
+
+DeepSeek reasoning is stored as a typed block rather than a raw string, so `AssistantMessage::$replayBlocks` for a DeepSeek turn is a list of `['type' => 'reasoning', 'reasoning_content' => '...']` entries.
+
+No changes are needed unless you construct these objects directly or read the raw provider state off a message.
+
 ### Stream Protocols
 
 **Likelihood Of Impact: Medium**
@@ -319,9 +560,7 @@ Most applications are unaffected. Update any custom provider or gateway to match
 
 The `$provider` argument of `Laravel\Ai\Streaming\Events\ProviderToolEvent` is now a required `string` rather than an optional `?string`.
 
-`Laravel\Ai\Streaming\Events\ToolApprovalRequest` takes a `$steps` array of every assistant step in the paused turn as its fourth argument, moving `$providerContentBlocks` to fifth. The same steps are available from `pausedSteps()` on the response.
-
-No changes are needed unless you construct these events directly.
+No changes are needed unless you construct this event directly.
 
 ## Upgrading To 0.11 From 0.10
 
