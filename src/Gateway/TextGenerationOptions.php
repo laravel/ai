@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Gateway;
 
-use Illuminate\Support\Arr;
 use Laravel\Ai\Attributes\CacheInstructions;
 use Laravel\Ai\Attributes\CacheToolDefinitions;
 use Laravel\Ai\Attributes\MaxSteps;
@@ -39,16 +38,16 @@ class TextGenerationOptions
     public function providerOptions(Lab|string $provider): ?array
     {
         $agentOptions = $this->agent instanceof HasProviderOptions
-            ? Arr::except($this->agent->providerOptions(
+            ? $this->agent->providerOptions(
                 $provider instanceof Lab ? $provider : (Lab::tryFrom($provider) ?? $provider)
-            ), HasProviderOptions::HEADERS)
+            )
             : null;
 
         if ($this->providerOptions === null) {
             return $agentOptions;
         }
 
-        return [...($agentOptions ?? []), ...Arr::except($this->providerOptions, HasProviderOptions::HEADERS)];
+        return [...($agentOptions ?? []), ...$this->providerOptions];
     }
 
     /**

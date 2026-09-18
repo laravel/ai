@@ -30,7 +30,7 @@ test('states can be classified', function (string $provider, string $apiKey): vo
         ->and($response['department']->choice)->toBe('technical')
         ->and(round(array_sum($response['department']->probabilities), 1))->toBe(1.0)
         ->and($response['frustration']->score)->toBeGreaterThan(0.5)
-        ->and($response->usage->promptTokens)->toBeGreaterThan(0)
+        ->and($response->usage->inputTokens)->toBeGreaterThan(0)
         ->and($response->meta->provider)->toBe($provider);
 
     Event::assertDispatched(Classifying::class);

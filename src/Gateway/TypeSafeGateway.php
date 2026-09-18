@@ -60,8 +60,8 @@ class TypeSafeGateway implements ClassificationGateway
         return new ClassificationResponse(
             $answers,
             new Usage(
-                promptTokens: $data['usage']['input_tokens'] ?? 0,
-                completionTokens: $data['usage']['output_tokens'] ?? 0,
+                inputTokens: $data['usage']['input_tokens'] ?? 0,
+                outputTokens: $data['usage']['output_tokens'] ?? 0,
             ),
             new Meta($provider->name(), $data['model'] ?? $model),
         );

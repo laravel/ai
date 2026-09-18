@@ -148,7 +148,7 @@ trait HandlesTextStreaming
                 }
 
                 if (isset($part['functionCall'])) {
-                    $pendingToolCalls[] = $part['functionCall'];
+                    $pendingToolCalls[] = $part;
                     $modelParts[] = $part;
 
                     continue;
@@ -166,6 +166,12 @@ trait HandlesTextStreaming
                         time(),
                         provider: $provider->name(),
                     ))->withInvocationId($invocationId);
+
+                    continue;
+                }
+
+                if (isset($part['thoughtSignature'])) {
+                    $modelParts[] = $part;
                 }
             }
 
