@@ -410,6 +410,27 @@ describe('hydrating useChat from stored messages', function () {
         ]);
     });
 
+    test('stored provider tool calls hydrate as the custom parts the stream emitted', function () {
+        $ui = Vercel::toUiMessages([
+            new ConversationMessage([
+                'id' => 'msg-2',
+                'role' => 'assistant',
+                'content' => 'Found it.',
+                'meta' => ['provider' => 'openai'],
+                'steps' => [['tool_calls' => [], 'provider_tool_calls' => [['id' => 'ws-1', 'type' => 'web_search_call', 'data' => ['query' => 'laravel']]]]],
+            ]),
+        ]);
+
+        expect($ui[0]['parts'])->toBe([
+            [
+                'type' => 'custom',
+                'kind' => 'openai.web_search_call',
+                'providerMetadata' => ['openai' => ['itemId' => 'ws-1', 'status' => 'completed', 'data' => ['query' => 'laravel']]],
+            ],
+            ['type' => 'text', 'text' => 'Found it.'],
+        ]);
+    });
+
     test('a completed tool turn hydrates as a settled tool part instead of a blank bubble', function () {
         $ui = Vercel::toUiMessages([
             new ConversationMessage([

@@ -23,10 +23,12 @@ use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\Models\ConversationMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\ProviderToolCall;
 use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -1575,4 +1577,28 @@ test('a step that dropped an unanswered call replays generically so no raw block
     expect($message)->toBeInstanceOf(AssistantMessage::class)
         ->and($message->replayBlocks)->toBe([])
         ->and($message->toolCalls->pluck('id')->all())->toBe(['call-1']);
+});
+
+test('provider tool calls are stored per step and exposed on the stored message and model', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Search conversation');
+    $prompt = new AgentPrompt(new ToolUsingAgent, 'Search', [], Mockery::mock(TextProvider::class), 'test-model');
+
+    $search = new ProviderToolCall('ws-1', 'web_search_call', ['action' => ['query' => 'laravel ai']]);
+    $execution = new ProviderToolCall('ce-1', 'code_interpreter_call', ['code' => 'print(1)']);
+
+    $response = (new AgentResponse('invocation-1', 'Found it.', new TextUsage, new Meta('openai', 'gpt-5')))
+        ->withSteps(collect([
+            new Step('', [], [], FinishReason::Stop, new TextUsage, new Meta('openai', 'gpt-5'), '', [], [$search]),
+            new Step('Found it.', [], [], FinishReason::Stop, new TextUsage, new Meta('openai', 'gpt-5'), '', [], [$execution]),
+        ]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $steps = json_decode(DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps'), true);
+
+    expect($steps[0]['provider_tool_calls'])->toBe([$search->toArray()])
+        ->and($steps[1]['provider_tool_calls'])->toBe([$execution->toArray()])
+        ->and($store->paginateConversationMessages($conversationId, 1)->items()[0]->providerToolCalls())->toBe([$search->toArray(), $execution->toArray()])
+        ->and(ConversationMessage::query()->where('role', 'assistant')->first()->provider_tool_calls)->toBe([$search->toArray(), $execution->toArray()]);
 });

@@ -97,10 +97,19 @@ class Vercel
     protected static function uiPartsFrom(Message|ConversationMessage $message): array
     {
         $parts = [];
+        $provider = $message instanceof ConversationMessage ? (string) (($message->meta ?? [])['provider'] ?? '') : '';
 
         foreach ($message instanceof ConversationMessage ? $message->steps ?? [] : [] as $step) {
             if (filled($step['reasoning'] ?? null)) {
                 $parts[] = ['type' => 'reasoning', 'text' => $step['reasoning']];
+            }
+
+            foreach ($step['provider_tool_calls'] ?? [] as $call) {
+                $parts[] = [
+                    'type' => 'custom',
+                    'kind' => $provider.'.'.$call['type'],
+                    'providerMetadata' => [$provider => ['itemId' => $call['id'], 'status' => 'completed', 'data' => $call['data']]],
+                ];
             }
         }
 

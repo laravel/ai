@@ -993,6 +993,7 @@ class TextGenerationLoop
             $result->meta,
             $result->reasoning,
             $result->replayBlocks,
+            $result->providerToolCalls,
         ))->withRawResponse($result->raw);
     }
 

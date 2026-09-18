@@ -24,6 +24,7 @@ use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\ProviderToolCall;
 use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
@@ -151,7 +152,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     /**
      * Serialize the turn's steps, one entry per model round-trip.
      *
-     * @return Collection<int, array{content: string, tool_calls: array, reasoning: string, replay_blocks: array}>
+     * @return Collection<int, array{content: string, tool_calls: array, reasoning: string, replay_blocks: array, provider_tool_calls: array}>
      */
     protected function stepsFor(AgentPrompt $prompt, AgentResponse $response): Collection
     {
@@ -161,6 +162,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 'tool_calls' => $this->toolCallsFor($step->toolCalls, $step->toolResults),
                 'reasoning' => $step->reasoning,
                 'replay_blocks' => $response->hasPendingApprovals() ? $step->replayBlocks : [],
+                'provider_tool_calls' => array_map(fn (ProviderToolCall $call): array => $call->toArray(), $step->providerToolCalls),
             ]);
         }
 
@@ -173,6 +175,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             ),
             'reasoning' => $response->reasoning,
             'replay_blocks' => [],
+            'provider_tool_calls' => [],
         ]]);
     }
 
@@ -406,7 +409,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     /**
      * Decode a stored row's steps.
      *
-     * @return Collection<int, array{content: string, tool_calls: array, reasoning: string, replay_blocks: array}>
+     * @return Collection<int, array{content: string, tool_calls: array, reasoning: string, replay_blocks: array, provider_tool_calls: array}>
      */
     protected function decodedSteps(object $record): Collection
     {
@@ -415,6 +418,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'tool_calls' => array_values($step['tool_calls'] ?? []),
             'reasoning' => (string) ($step['reasoning'] ?? ''),
             'replay_blocks' => $step['replay_blocks'] ?? [],
+            'provider_tool_calls' => array_values($step['provider_tool_calls'] ?? []),
         ])->values();
     }
 

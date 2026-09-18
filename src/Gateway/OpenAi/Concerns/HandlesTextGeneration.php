@@ -301,6 +301,7 @@ trait HandlesTextGeneration
             meta: new Meta($provider->name(), $responseData['model'] ?? $model),
             continuationToken: $responseId,
             replayBlocks: $this->extractReplayBlocks($responseData['output'] ?? []),
+            providerToolCalls: $this->extractProviderToolCalls($responseData['output'] ?? []),
         );
     }
 

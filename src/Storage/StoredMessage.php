@@ -94,6 +94,16 @@ class StoredMessage implements Arrayable, JsonSerializable
     }
 
     /**
+     * The provider-hosted tool calls made across every step of the turn, in step order.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function providerToolCalls(): array
+    {
+        return Arr::collapse(array_column($this->steps, 'provider_tool_calls'));
+    }
+
+    /**
      * The tool results recorded across every step of the turn, in step order.
      *
      * @return list<array<string, mixed>>

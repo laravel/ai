@@ -12,6 +12,7 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\ImageUsage;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\ProviderToolCall;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
@@ -60,7 +61,21 @@ trait ParsesTextResponses
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
             replayBlocks: $this->sanitizeRequestParts($this->excludeThinkingParts($parts)),
             reasoning: $this->extractReasoning($parts),
+            providerToolCalls: $this->extractProviderToolCalls($parts),
         );
+    }
+
+    /**
+     * Extract the code execution parts, which Gemini emits without an identifier.
+     *
+     * @return array<int, ProviderToolCall>
+     */
+    protected function extractProviderToolCalls(array $parts): array
+    {
+        return array_values(array_map(
+            fn (array $part): ProviderToolCall => new ProviderToolCall('', 'code_execution', $part),
+            array_filter($parts, fn (array $part): bool => isset($part['executableCode']) || isset($part['codeExecutionResult'])),
+        ));
     }
 
     /**

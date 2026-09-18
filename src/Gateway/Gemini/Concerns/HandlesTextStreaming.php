@@ -230,6 +230,7 @@ trait HandlesTextStreaming
             usage: $usage ?? new TextUsage(0, 0),
             meta: new Meta($provider->name(), $model),
             replayBlocks: $this->sanitizeRequestParts($this->excludeThinkingParts($modelParts)),
+            providerToolCalls: $this->extractProviderToolCalls($modelParts),
         );
     }
 

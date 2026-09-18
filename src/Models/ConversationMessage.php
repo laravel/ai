@@ -15,6 +15,7 @@ use Illuminate\Support\Arr;
  * @property ?array $attachments
  * @property ?array $steps
  * @property-read array $tool_calls
+ * @property-read array $provider_tool_calls
  * @property-read array $tool_results
  * @property ?array $approval_state
  */
@@ -40,7 +41,7 @@ class ConversationMessage extends Model
      *
      * @var array<int, string>
      */
-    protected $appends = ['tool_calls', 'tool_results'];
+    protected $appends = ['tool_calls', 'tool_results', 'provider_tool_calls'];
 
     /**
      * The attributes that should be cast.
@@ -61,6 +62,14 @@ class ConversationMessage extends Model
     protected function toolCalls(): Attribute
     {
         return Attribute::get(fn (): array => Arr::collapse(array_column($this->steps ?? [], 'tool_calls')));
+    }
+
+    /**
+     * The provider-hosted tool calls made across every step of the turn, in step order.
+     */
+    protected function providerToolCalls(): Attribute
+    {
+        return Attribute::get(fn (): array => Arr::collapse(array_column($this->steps ?? [], 'provider_tool_calls')));
     }
 
     /**

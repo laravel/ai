@@ -8,6 +8,7 @@ use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Responses\Concerns\HasRawResponse;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\ProviderToolCall;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 
@@ -20,6 +21,7 @@ class StepResponse implements Arrayable, JsonSerializable
      * @param  array<string, mixed>|null  $structured
      * @param  array<array-key, mixed>  $replayBlocks
      * @param  PendingApproval[]  $pendingApprovals
+     * @param  ProviderToolCall[]  $providerToolCalls
      */
     public function __construct(
         public string $text,
@@ -32,6 +34,7 @@ class StepResponse implements Arrayable, JsonSerializable
         public array $replayBlocks = [],
         public array $pendingApprovals = [],
         public string $reasoning = '',
+        public array $providerToolCalls = [],
     ) {}
 
     /**
@@ -43,6 +46,7 @@ class StepResponse implements Arrayable, JsonSerializable
             'text' => $this->text,
             'structured' => $this->structured,
             'tool_calls' => array_map(fn (ToolCall $tc): array => $tc->toArray(), $this->toolCalls),
+            'provider_tool_calls' => array_map(fn (ProviderToolCall $call): array => $call->toArray(), $this->providerToolCalls),
             'replay_blocks' => $this->replayBlocks,
             'finish_reason' => $this->finishReason->value,
             'usage' => $this->usage->toArray(),
