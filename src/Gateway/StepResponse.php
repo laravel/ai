@@ -18,7 +18,7 @@ class StepResponse implements Arrayable, JsonSerializable
     /**
      * @param  ToolCall[]  $toolCalls
      * @param  array<string, mixed>|null  $structured
-     * @param  array<array-key, mixed>  $providerContentBlocks
+     * @param  array<array-key, mixed>  $replayBlocks
      * @param  PendingApproval[]  $pendingApprovals
      */
     public function __construct(
@@ -29,7 +29,7 @@ class StepResponse implements Arrayable, JsonSerializable
         public Meta $meta,
         public ?array $structured = null,
         public ?string $continuationToken = null,
-        public array $providerContentBlocks = [],
+        public array $replayBlocks = [],
         public array $pendingApprovals = [],
         public string $reasoning = '',
     ) {}
@@ -43,7 +43,7 @@ class StepResponse implements Arrayable, JsonSerializable
             'text' => $this->text,
             'structured' => $this->structured,
             'tool_calls' => array_map(fn (ToolCall $tc): array => $tc->toArray(), $this->toolCalls),
-            'provider_content_blocks' => $this->providerContentBlocks,
+            'replay_blocks' => $this->replayBlocks,
             'finish_reason' => $this->finishReason->value,
             'usage' => $this->usage->toArray(),
             'meta' => $this->meta->toArray(),

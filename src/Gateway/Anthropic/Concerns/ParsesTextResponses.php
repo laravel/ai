@@ -92,7 +92,7 @@ trait ParsesTextResponses
             usage: $usage,
             meta: new Meta($provider->name(), $model, $citations),
             structured: $structuredData,
-            providerContentBlocks: $content,
+            replayBlocks: $content,
             reasoning: $this->extractReasoning($content),
         );
     }

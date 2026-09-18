@@ -24,7 +24,7 @@ test('a paused stream exposes the steps carried by the approval request', functi
         new ToolApprovalRequest('e1', collect([new PendingApproval('call-1', 'DeleteFile', [], 'Deletes a file')]), 1, collect([streamedStep('')])),
     ]);
 
-    expect($response->steps->first()->providerContentBlocks)->toBe([['type' => 'thinking', 'signature' => 'sig-1']]);
+    expect($response->steps->first()->replayBlocks)->toBe([['type' => 'thinking', 'signature' => 'sig-1']]);
 });
 
 test('a completed stream exposes the steps carried by the stream end', function (): void {

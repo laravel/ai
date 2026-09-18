@@ -182,11 +182,11 @@ test('assistant message with empty tool input is formatted as a json object', fu
         ->and(json_encode($input))->toBe('{}');
 });
 
-test('assistant message with providerContentBlocks is formatted verbatim', function (): void {
+test('assistant message with replayBlocks is formatted verbatim', function (): void {
     $message = new AssistantMessage(
         'Hello',
         new Collection([new ToolCall('tool-1', 'doIt', [])]),
-        providerContentBlocks: [
+        replayBlocks: [
             ['reasoningContent' => ['reasoningText' => ['text' => 'think', 'signature' => 'sig']]],
             ['text' => 'Hello'],
             ['toolUse' => ['toolUseId' => 'tool-1', 'name' => 'doIt', 'input' => []]],

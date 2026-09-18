@@ -964,7 +964,7 @@ class TextGenerationLoop
         return new AssistantMessage(
             $result->text,
             collect($result->toolCalls),
-            $result->providerContentBlocks,
+            $result->replayBlocks,
         );
     }
 
@@ -981,7 +981,7 @@ class TextGenerationLoop
             $result->usage,
             $result->meta,
             $result->reasoning,
-            $result->providerContentBlocks,
+            $result->replayBlocks,
         ))->withRawResponse($result->raw);
     }
 

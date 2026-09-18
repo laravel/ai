@@ -147,7 +147,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     /**
      * Serialize the turn's steps, one entry per model round-trip.
      *
-     * @return Collection<int, array{tool_calls: array, reasoning: string, provider_blocks: array}>
+     * @return Collection<int, array{tool_calls: array, reasoning: string, replay_blocks: array}>
      */
     protected function stepsFor(AgentPrompt $prompt, AgentResponse $response): Collection
     {
@@ -155,7 +155,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             return $response->steps->values()->map(fn (Step $step): array => [
                 'tool_calls' => $this->toolCallsFor($step->toolCalls, $step->toolResults),
                 'reasoning' => $step->reasoning,
-                'provider_blocks' => $step->providerContentBlocks,
+                'replay_blocks' => $step->replayBlocks,
             ]);
         }
 
@@ -166,7 +166,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 $prompt->hasApprovalDecisions() ? [] : $response->toolResults->all(),
             ),
             'reasoning' => $response->reasoning,
-            'provider_blocks' => [],
+            'replay_blocks' => [],
         ]]);
     }
 
@@ -321,7 +321,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         return $records->flatMap(fn (object $record, int $index): array => $record->role === 'user'
             ? [$this->userMessageFrom($record)]
-            : $this->assistantTurnFrom($record, replayRawBlocks: $index >= $replayFrom));
+            : $this->assistantTurnFrom($record, withReplayBlocks: $index >= $replayFrom));
     }
 
     /**
@@ -357,14 +357,14 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      *
      * @return array<int, Message>
      */
-    protected function assistantTurnFrom(object $record, bool $replayRawBlocks): array
+    protected function assistantTurnFrom(object $record, bool $withReplayBlocks): array
     {
         $pending = $this->pausedCallIds($record);
         $provider = $this->decoded($record->meta)['provider'] ?? null;
         $steps = $this->decodedSteps($record);
         $lastStep = $steps->count() - 1;
 
-        return $steps->flatMap(function (array $step, int $index) use ($pending, $provider, $replayRawBlocks, $lastStep, $record): array {
+        return $steps->flatMap(function (array $step, int $index) use ($pending, $provider, $withReplayBlocks, $lastStep, $record): array {
             $content = $index === $lastStep ? (string) $record->content : '';
 
             $replayed = collect($step['tool_calls'])
@@ -374,11 +374,11 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             $toolCalls = $replayed->map(ToolCall::fromArray(...));
             $toolResults = $replayed->filter($this->isAnswered(...))->map(ToolResult::fromArray(...))->values();
 
-            $providerBlocks = $replayRawBlocks ? $step['provider_blocks'] : [];
+            $replayBlocks = $withReplayBlocks ? $step['replay_blocks'] : [];
 
-            $isBlank = $content === '' && $toolCalls->isEmpty() && $providerBlocks === [];
+            $isBlank = $content === '' && $toolCalls->isEmpty() && $replayBlocks === [];
 
-            $messages = $isBlank ? [] : [new AssistantMessage($content, $toolCalls, $providerBlocks, $provider)];
+            $messages = $isBlank ? [] : [new AssistantMessage($content, $toolCalls, $replayBlocks, $provider)];
 
             if ($toolResults->isNotEmpty()) {
                 $messages[] = new ToolResultMessage($toolResults);
@@ -391,14 +391,14 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     /**
      * Decode a stored row's steps.
      *
-     * @return Collection<int, array{tool_calls: array, reasoning: string, provider_blocks: array}>
+     * @return Collection<int, array{tool_calls: array, reasoning: string, replay_blocks: array}>
      */
     protected function decodedSteps(object $record): Collection
     {
         return collect($this->decoded($record->steps))->map(fn (array $step): array => [
             'tool_calls' => array_values($step['tool_calls'] ?? []),
             'reasoning' => (string) ($step['reasoning'] ?? ''),
-            'provider_blocks' => $step['provider_blocks'] ?? [],
+            'replay_blocks' => $step['replay_blocks'] ?? [],
         ])->values();
     }
 

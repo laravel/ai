@@ -35,7 +35,7 @@ trait ParsesTextResponses
      * Parse the DeepSeek response data into a single step response.
      *
      * DeepSeek thinking-mode responses can include `reasoning_content` on each
-     * choice's message. We capture it into `providerContentBlocks`; the message
+     * choice's message. We capture it into `replayBlocks`; the message
      * mapper only replays it for assistant messages that include tool calls.
      */
     protected function parseTextResponse(
@@ -57,10 +57,10 @@ trait ParsesTextResponses
             $toolCall['id'] ?? null,
         ), $rawToolCalls);
 
-        $providerContentBlocks = [];
+        $replayBlocks = [];
 
         if (filled($message['reasoning_content'] ?? null)) {
-            $providerContentBlocks['reasoning_content'] = $message['reasoning_content'];
+            $replayBlocks['reasoning_content'] = $message['reasoning_content'];
         }
 
         return new StepResponse(
@@ -70,7 +70,7 @@ trait ParsesTextResponses
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
-            providerContentBlocks: $providerContentBlocks,
+            replayBlocks: $replayBlocks,
             reasoning: (string) ($message['reasoning_content'] ?? ''),
         );
     }

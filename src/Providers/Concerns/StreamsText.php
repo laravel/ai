@@ -50,7 +50,7 @@ trait StreamsText
 
                     $meta = new Meta($this->name(), $prompt->model);
 
-                    $messages = $this->withoutForeignProviderContentBlocks([
+                    $messages = $this->withoutForeignReplayBlocks([
                         ...($prompt->messages ?? []),
                         ...($agent instanceof Conversational ? $agent->messages() : []),
                     ]);

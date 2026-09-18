@@ -616,11 +616,11 @@ test('it drops the unexecuted calls of a step-limited tail but keeps its text', 
     expect($messages)->toHaveCount(3)->sequence(
         fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toolCalls->toHaveCount(1)->each->toMatchObject(['id' => 'call-1']),
         fn ($message) => $message->toBeInstanceOf(ToolResultMessage::class),
-        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['content' => 'I ran out of steps.', 'providerContentBlocks' => []])->toolCalls->toBeEmpty(),
+        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['content' => 'I ran out of steps.', 'replayBlocks' => []])->toolCalls->toBeEmpty(),
     );
 });
 
-test('it replays a completed turn without its provider blocks', function (): void {
+test('it replays a completed turn without its replay blocks', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
@@ -628,47 +628,47 @@ test('it replays a completed turn without its provider blocks', function (): voi
         assistantStep(
             [['id' => 'call-1', 'name' => 'read_file', 'arguments' => ['path' => 'a']]],
             [['id' => 'call-1', 'name' => 'read_file', 'arguments' => ['path' => 'a'], 'result' => 'contents of a']],
-            providerBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
+            replayBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
         ),
-        assistantStep(providerBlocks: [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'text', 'text' => 'Read a and b']]),
+        assistantStep(replayBlocks: [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'text', 'text' => 'Read a and b']]),
     ], meta: ['provider' => 'anthropic']);
 
     $messages = $store->getLatestConversationMessages($conversationId, 10);
 
     expect($messages)->toHaveCount(3)->sequence(
-        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['providerContentBlocks' => []])->toolCalls->toHaveCount(1)->each->toMatchObject(['id' => 'call-1']),
+        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['replayBlocks' => []])->toolCalls->toHaveCount(1)->each->toMatchObject(['id' => 'call-1']),
         fn ($message) => $message->toBeInstanceOf(ToolResultMessage::class)->toolResults->toHaveCount(1)->each->toMatchObject(['id' => 'call-1']),
-        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['content' => 'Read a and b', 'providerContentBlocks' => []]),
+        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['content' => 'Read a and b', 'replayBlocks' => []]),
     );
 });
 
-test('it replays raw provider blocks only from the paused turn, not the completed turns before it', function (): void {
+test('it replays blocks only from the paused turn, not the completed turns before it', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
     insertAssistantTurn($conversationId, 'message-1', 'Read a', [
-        assistantStep(providerBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'text', 'text' => 'Read a']]),
+        assistantStep(replayBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'text', 'text' => 'Read a']]),
     ], meta: ['provider' => 'anthropic']);
     DB::table('agent_conversation_messages')->insert(storedConversationMessageAttributes('message-2', $conversationId, 'Now delete b'));
     insertAssistantTurn($conversationId, 'message-3', '', [
         assistantStep(
             [['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'b']]],
-            providerBlocks: [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'tool_use', 'id' => 'call-1']],
+            replayBlocks: [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'tool_use', 'id' => 'call-1']],
         ),
     ], ['pending' => ['call-1' => 'Destructive.']], ['provider' => 'anthropic']);
 
     $messages = $store->getLatestConversationMessages($conversationId, 10);
 
     expect($messages)->toHaveCount(3)->sequence(
-        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['providerContentBlocks' => []]),
+        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject(['replayBlocks' => []]),
         fn ($message) => $message->toBeInstanceOf(Message::class)->toMatchObject(['content' => 'Now delete b']),
-        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->providerContentBlocks->toHaveCount(2),
+        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->replayBlocks->toHaveCount(2),
     );
 
     $messages = $store->getLatestConversationMessages($conversationId, 1);
 
     expect($messages)->toHaveCount(1)
-        ->and($messages->first()->providerContentBlocks)->toHaveCount(2);
+        ->and($messages->first()->replayBlocks)->toHaveCount(2);
 });
 
 test('it skips a step that has nothing left to say once its unexecuted calls are dropped', function (): void {
@@ -691,7 +691,7 @@ test('it skips a step that has nothing left to say once its unexecuted calls are
     );
 });
 
-test('it replays a multi-step pause with each step carrying its own provider blocks', function (): void {
+test('it replays a multi-step pause with each step carrying its own replay blocks', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
@@ -699,7 +699,7 @@ test('it replays a multi-step pause with each step carrying its own provider blo
         assistantStep(
             [['id' => 'call-1', 'name' => 'read_file', 'arguments' => ['path' => 'a']]],
             [['id' => 'call-1', 'name' => 'read_file', 'arguments' => ['path' => 'a'], 'result' => 'contents of a']],
-            providerBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
+            replayBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
         ),
         assistantStep(
             [['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b']]],
@@ -712,14 +712,14 @@ test('it replays a multi-step pause with each step carrying its own provider blo
 
     expect($messages)->toHaveCount(3)->sequence(
         fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject([
-            'providerContentBlocks' => [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
-            'providerContentBlocksProvider' => 'anthropic',
+            'replayBlocks' => [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
+            'replayBlocksProvider' => 'anthropic',
         ]),
         fn ($message) => $message->toBeInstanceOf(ToolResultMessage::class)->toolResults->toHaveCount(1)->each->toMatchObject(['id' => 'call-1']),
         fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toMatchObject([
             'content' => 'Let me delete b too',
-            'providerContentBlocks' => [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'tool_use', 'id' => 'call-2']],
-            'providerContentBlocksProvider' => 'anthropic',
+            'replayBlocks' => [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'tool_use', 'id' => 'call-2']],
+            'replayBlocksProvider' => 'anthropic',
         ])->toolCalls->toHaveCount(1)->each->toMatchObject(['id' => 'call-2']),
     );
 });
@@ -747,7 +747,7 @@ test('it keeps an executed call and a pending call together on a mixed pause ste
     );
 });
 
-test('it writes the steps of a paused turn with their provider blocks and keeps replay state out of meta', function (): void {
+test('it writes the steps of a paused turn with their replay blocks and keeps replay state out of meta', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
@@ -773,9 +773,9 @@ test('it writes the steps of a paused turn with their provider blocks and keeps 
     $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
 
     expect($record->steps)->json()->toHaveCount(2)->sequence(
-        fn ($step) => $step->toMatchArray(['provider_blocks' => [['type' => 'tool_use', 'id' => 'call-0']]])
+        fn ($step) => $step->toMatchArray(['replay_blocks' => [['type' => 'tool_use', 'id' => 'call-0']]])
             ->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-0', 'result' => 'contents']),
-        fn ($step) => $step->toMatchArray(['provider_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]])
+        fn ($step) => $step->toMatchArray(['replay_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]])
             ->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-1'])->each->not->toHaveKey('result'),
     )
         ->and($record->steps)->json()->{'0'}->tool_calls->toHaveCount(1)
@@ -807,7 +807,7 @@ test('it writes the steps a paused stream carried on its approval request', func
 
     $steps = DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps');
 
-    expect($steps)->json()->toHaveCount(1)->{'0'}->toMatchArray(['provider_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]])
+    expect($steps)->json()->toHaveCount(1)->{'0'}->toMatchArray(['replay_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]])
         ->and($steps)->json()->{'0'}->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-1'])->each->not->toHaveKey('result');
 });
 
@@ -838,9 +838,9 @@ test('it writes the steps a completed stream carried on its stream end', functio
     $steps = DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps');
 
     expect($steps)->json()->toHaveCount(2)->sequence(
-        fn ($step) => $step->toMatchArray(['provider_blocks' => [['type' => 'tool_use', 'id' => 'call-1']]])
+        fn ($step) => $step->toMatchArray(['replay_blocks' => [['type' => 'tool_use', 'id' => 'call-1']]])
             ->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-1', 'result' => 'contents']),
-        fn ($step) => $step->toMatchArray(['tool_calls' => [], 'provider_blocks' => [['type' => 'text', 'text' => 'Done.']]]),
+        fn ($step) => $step->toMatchArray(['tool_calls' => [], 'replay_blocks' => [['type' => 'text', 'text' => 'Done.']]]),
     );
 });
 
@@ -1417,10 +1417,10 @@ function storedConversationMessageAttributes(string $id, string $conversationId,
 /**
  * @param  list<array<string, mixed>>  $toolCalls
  * @param  list<array<string, mixed>>  $toolResults
- * @param  list<array<string, mixed>>  $providerBlocks
+ * @param  list<array<string, mixed>>  $replayBlocks
  * @return array<string, mixed>
  */
-function assistantStep(array $toolCalls = [], array $toolResults = [], array $providerBlocks = []): array
+function assistantStep(array $toolCalls = [], array $toolResults = [], array $replayBlocks = []): array
 {
     $results = collect($toolResults)->keyBy('id');
 
@@ -1429,7 +1429,7 @@ function assistantStep(array $toolCalls = [], array $toolResults = [], array $pr
             ...$call,
             ...array_intersect_key($results[$call['id']] ?? [], array_flip(['result', 'denied', 'failed'])),
         ], $toolCalls),
-        'provider_blocks' => $providerBlocks,
+        'replay_blocks' => $replayBlocks,
     ];
 }
 

@@ -15,25 +15,25 @@ class AssistantMessage extends Message
      *
      * @var array<array-key, mixed>
      */
-    public array $providerContentBlocks = [];
+    public array $replayBlocks = [];
 
     /**
      * The provider the replay state belongs to, or null when it was produced within the current run.
      */
-    public ?string $providerContentBlocksProvider = null;
+    public ?string $replayBlocksProvider = null;
 
     /**
      * Create a new text conversation message instance.
      *
      * @param  Collection<int, ToolCall>|null  $toolCalls
-     * @param  array<array-key, mixed>  $providerContentBlocks
+     * @param  array<array-key, mixed>  $replayBlocks
      */
-    public function __construct(string $content, ?Collection $toolCalls = null, array $providerContentBlocks = [], ?string $providerContentBlocksProvider = null)
+    public function __construct(string $content, ?Collection $toolCalls = null, array $replayBlocks = [], ?string $replayBlocksProvider = null)
     {
         parent::__construct('assistant', $content);
 
         $this->toolCalls = $toolCalls ?: new Collection;
-        $this->providerContentBlocks = $providerContentBlocks;
-        $this->providerContentBlocksProvider = $providerContentBlocksProvider;
+        $this->replayBlocks = $replayBlocks;
+        $this->replayBlocksProvider = $replayBlocksProvider;
     }
 }
