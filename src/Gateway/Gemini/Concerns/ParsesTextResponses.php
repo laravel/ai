@@ -11,9 +11,9 @@ use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
-use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
@@ -229,13 +229,13 @@ trait ParsesTextResponses
     /**
      * Extract usage data from the response.
      */
-    protected function extractUsage(array $data): Usage
+    protected function extractUsage(array $data): TextUsage
     {
         $usage = $data['usageMetadata'] ?? [];
         $reasoningTokens = $usage['thoughtsTokenCount'] ?? null;
 
         // Gemini reports thought tokens outside the candidate token count...
-        return new Usage(
+        return new TextUsage(
             inputTokens: $usage['promptTokenCount'] ?? 0,
             outputTokens: ($usage['candidatesTokenCount'] ?? 0) + ($reasoningTokens ?? 0),
             cacheReadInputTokens: $usage['cachedContentTokenCount'] ?? null,

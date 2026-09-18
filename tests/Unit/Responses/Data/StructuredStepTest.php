@@ -3,7 +3,7 @@
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\StructuredStep;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 
 test('structured step stores structured data', function (): void {
     $step = new StructuredStep(
@@ -12,7 +12,7 @@ test('structured step stores structured data', function (): void {
         [],
         [],
         FinishReason::Stop,
-        new Usage,
+        new TextUsage,
         new Meta('openai', 'gpt-4o')
     );
 
@@ -27,7 +27,7 @@ test('structured step to array includes structured data', function (): void {
         [],
         [],
         FinishReason::Stop,
-        new Usage,
+        new TextUsage,
         new Meta('anthropic', 'claude-3')
     );
 
@@ -44,7 +44,7 @@ test('structured step jsonSerialize includes structured data', function (): void
         [],
         [],
         FinishReason::Stop,
-        new Usage,
+        new TextUsage,
         new Meta('openai', 'gpt-4o')
     );
 

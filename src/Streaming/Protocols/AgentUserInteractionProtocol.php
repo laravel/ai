@@ -8,8 +8,8 @@ use Laravel\Ai\AgentUserInteraction\AgentUserInteraction;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Responses\Data;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\UrlCitation;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Streaming\Events\Citation;
 use Laravel\Ai\Streaming\Events\Error;
@@ -111,7 +111,7 @@ class AgentUserInteractionProtocol extends StreamProtocol
 
             // Hold each step's usage and reason for the terminal run finished event...
             if ($event instanceof StreamEnd) {
-                $usage = ($usage ?? new Usage)->add($event->usage);
+                $usage = ($usage ?? new TextUsage)->add($event->usage);
                 $reason = $event->reason;
 
                 continue;
@@ -231,7 +231,7 @@ class AgentUserInteractionProtocol extends StreamProtocol
      *
      * @return array<string, mixed>
      */
-    protected function completionAttributes(?Usage $usage, ?string $reason, ?string $provider, ?string $model): array
+    protected function completionAttributes(?TextUsage $usage, ?string $reason, ?string $provider, ?string $model): array
     {
         return [
             ...($usage !== null ? ['usage' => [Arr::whereNotNull([

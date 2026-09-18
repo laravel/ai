@@ -23,8 +23,8 @@ use Laravel\Ai\PendingStep;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 use Laravel\Ai\Streaming\Events\StreamEnd;
@@ -214,7 +214,7 @@ test('agent middleware that reads the response of a streamed step still yields i
         ->withMiddleware([function (PendingStep $step, Closure $next) {
             $result = $next($step);
 
-            return $result->response()->text === '' ? new StepResponse('Fallback', [], FinishReason::Stop, new Usage, new Meta) : $result;
+            return $result->response()->text === '' ? new StepResponse('Fallback', [], FinishReason::Stop, new TextUsage, new Meta) : $result;
         }])
         ->stream('Test prompt');
 
@@ -251,7 +251,7 @@ test('agent middleware that replaces a streamed step response narrates the repla
         ->withMiddleware([function (PendingStep $step, Closure $next) {
             $result = $next($step);
 
-            return $result->response()->text === 'Fake response' ? new StepResponse('Replaced', [], FinishReason::Stop, new Usage, new Meta) : $result;
+            return $result->response()->text === 'Fake response' ? new StepResponse('Replaced', [], FinishReason::Stop, new TextUsage, new Meta) : $result;
         }])
         ->stream('Test prompt');
 
@@ -551,7 +551,7 @@ function shortCircuitingMiddleware(): object
     {
         public function handle(PendingStep $step, Closure $next): StepResponse
         {
-            return new StepResponse('Short-circuited response', [], FinishReason::Stop, new Usage, new Meta);
+            return new StepResponse('Short-circuited response', [], FinishReason::Stop, new TextUsage, new Meta);
         }
     };
 }

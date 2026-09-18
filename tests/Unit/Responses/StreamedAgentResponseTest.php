@@ -2,7 +2,7 @@
 
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
@@ -24,7 +24,7 @@ test('a paused stream exposes the replay state carried by the approval request',
 });
 
 test('a stream that completed without pausing exposes no replay state', function (): void {
-    $response = streamedResponseFor([new StreamEnd('e1', 'stop', new Usage, 1)]);
+    $response = streamedResponseFor([new StreamEnd('e1', 'stop', new TextUsage, 1)]);
 
     expect($response->pausedSteps())->toBe([])
         ->and($response->pausedProviderContentBlocks())->toBe([]);

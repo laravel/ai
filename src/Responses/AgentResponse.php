@@ -6,7 +6,7 @@ use Illuminate\Support\Collection;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 
 class AgentResponse extends TextResponse
 {
@@ -20,7 +20,7 @@ class AgentResponse extends TextResponse
 
     public ?string $assistantMessageId = null;
 
-    public function __construct(string $invocationId, string $text, Usage $usage, Meta $meta)
+    public function __construct(string $invocationId, string $text, TextUsage $usage, Meta $meta)
     {
         $this->invocationId = $invocationId;
 
@@ -32,7 +32,7 @@ class AgentResponse extends TextResponse
      */
     public static function fakeWithReasoning(string $reasoning, string $text = ''): self
     {
-        return tap(new self('fake-invocation', $text, new Usage, new Meta), function (self $response) use ($reasoning): void {
+        return tap(new self('fake-invocation', $text, new TextUsage, new Meta), function (self $response) use ($reasoning): void {
             $response->reasoning = $reasoning;
         });
     }
@@ -44,7 +44,7 @@ class AgentResponse extends TextResponse
      */
     public static function fakeWithPendingApprovals(array|Collection $pendingApprovals): self
     {
-        return (new self('fake-invocation', '', new Usage, new Meta))
+        return (new self('fake-invocation', '', new TextUsage, new Meta))
             ->withPendingApprovals(Collection::make($pendingApprovals));
     }
 

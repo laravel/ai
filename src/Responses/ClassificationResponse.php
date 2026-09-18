@@ -11,7 +11,7 @@ use IteratorAggregate;
 use JsonSerializable;
 use Laravel\Ai\Responses\Data\Answer;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 use LogicException;
 use Traversable;
 
@@ -24,7 +24,7 @@ class ClassificationResponse implements Arrayable, ArrayAccess, Countable, Itera
      */
     public function __construct(
         public readonly array $answers,
-        public readonly Usage $usage,
+        public readonly TextUsage $usage,
         public readonly Meta $meta,
     ) {}
 

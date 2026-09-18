@@ -3,10 +3,10 @@
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Step;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 
 test('step stores text tool calls and other properties', function (): void {
-    $usage = new Usage(10, 5);
+    $usage = new TextUsage(10, 5);
     $meta = new Meta('openai', 'gpt-4o');
     $step = new Step(
         text: 'Hello',
@@ -26,7 +26,7 @@ test('step stores text tool calls and other properties', function (): void {
 });
 
 test('step to array returns all properties including serialized usage and meta', function (): void {
-    $usage = new Usage(10, 5);
+    $usage = new TextUsage(10, 5);
     $meta = new Meta('openai', 'gpt-4o');
     $step = new Step('test', [], [], FinishReason::Stop, $usage, $meta);
 
@@ -41,7 +41,7 @@ test('step to array returns all properties including serialized usage and meta',
 });
 
 test('step json serialize returns to array', function (): void {
-    $usage = new Usage(0, 0);
+    $usage = new TextUsage(0, 0);
     $meta = new Meta;
     $step = new Step('', [], [], FinishReason::Unknown, $usage, $meta);
 

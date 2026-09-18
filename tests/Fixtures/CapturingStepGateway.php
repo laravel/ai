@@ -10,8 +10,8 @@ use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
-use Laravel\Ai\Responses\Data\Usage;
 
 class CapturingStepGateway implements StepTextGateway
 {
@@ -23,8 +23,8 @@ class CapturingStepGateway implements StepTextGateway
         $this->calls[] = ['model' => $model, 'instructions' => $instructions, 'tools' => $tools, 'schema' => $schema, 'context' => $stepContext];
 
         return count($this->calls) === 1
-            ? new StepResponse('', [new ToolCall('call_1', 'FixedNumberGenerator', [])], FinishReason::ToolCalls, new Usage(10, 5), new Meta, continuationToken: 'resp_1')
-            : new StepResponse('Done.', [], FinishReason::Stop, new Usage, new Meta);
+            ? new StepResponse('', [new ToolCall('call_1', 'FixedNumberGenerator', [])], FinishReason::ToolCalls, new TextUsage(10, 5), new Meta, continuationToken: 'resp_1')
+            : new StepResponse('Done.', [], FinishReason::Stop, new TextUsage, new Meta);
     }
 
     public function generateStreamStep(string $invocationId, TextProvider $provider, string $model, ?string $instructions, array $messages, array $tools, ?array $schema, ?TextGenerationOptions $options, ?int $timeout, StepContext $stepContext): Generator

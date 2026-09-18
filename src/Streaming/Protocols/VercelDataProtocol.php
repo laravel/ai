@@ -4,8 +4,8 @@ namespace Laravel\Ai\Streaming\Protocols;
 
 use Generator;
 use Illuminate\Support\Arr;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\UrlCitation;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Streaming\Events\Citation;
 use Laravel\Ai\Streaming\Events\Error;
@@ -48,7 +48,7 @@ class VercelDataProtocol extends StreamProtocol
 
         $toolCalls = [];
         $reason = null;
-        $usage = new Usage;
+        $usage = new TextUsage;
 
         foreach ($response as $event) {
             // Send one stream start event, wrapping each subsequent provider step in step parts...
@@ -288,7 +288,7 @@ class VercelDataProtocol extends StreamProtocol
      *
      * @return array<string, mixed>
      */
-    protected function finishPart(string $reason, Usage $usage): array
+    protected function finishPart(string $reason, TextUsage $usage): array
     {
         return [
             'type' => 'finish',

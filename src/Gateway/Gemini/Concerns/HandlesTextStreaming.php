@@ -7,7 +7,7 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
@@ -227,7 +227,7 @@ trait HandlesTextStreaming
             text: $currentText,
             toolCalls: $toolCalls,
             finishReason: $this->extractFinishReason($data, $pendingToolCalls),
-            usage: $usage ?? new Usage(0, 0),
+            usage: $usage ?? new TextUsage(0, 0),
             meta: new Meta($provider->name(), $model),
             providerContentBlocks: $this->sanitizeRequestParts($this->excludeThinkingParts($modelParts)),
         );

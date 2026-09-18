@@ -33,6 +33,7 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
@@ -161,13 +162,13 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
     /**
      * Extract usage data from a Converse response.
      */
-    protected function extractUsage(array $data): Usage
+    protected function extractUsage(array $data): TextUsage
     {
         $usage = $data['usage'] ?? [];
         $cacheReadTokens = $usage['cacheReadInputTokens'] ?? null;
         $cacheWriteTokens = $usage['cacheWriteInputTokens'] ?? null;
 
-        return new Usage(
+        return new TextUsage(
             inputTokens: ($usage['inputTokens'] ?? 0) + ($cacheReadTokens ?? 0) + ($cacheWriteTokens ?? 0),
             outputTokens: $usage['outputTokens'] ?? 0,
             cacheReadInputTokens: $cacheReadTokens,
@@ -256,7 +257,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
     ): Generator {
         $messageId = (string) Str::uuid();
         $timestamp = time();
-        $totalUsage = new Usage;
+        $totalUsage = new TextUsage;
 
         yield (new StreamStart(
             (string) Str::uuid(),

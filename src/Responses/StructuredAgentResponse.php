@@ -8,13 +8,13 @@ use Illuminate\Contracts\Support\Jsonable;
 use Illuminate\Support\Collection;
 use JsonSerializable;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 
 class StructuredAgentResponse extends AgentResponse implements Arrayable, ArrayAccess, Jsonable, JsonSerializable
 {
     use ProvidesStructuredResponse;
 
-    public function __construct(string $invocationId, array $structured, string $text, Usage $usage, Meta $meta)
+    public function __construct(string $invocationId, array $structured, string $text, TextUsage $usage, Meta $meta)
     {
         parent::__construct($invocationId, $text, $usage, $meta);
 

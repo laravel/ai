@@ -26,8 +26,8 @@ use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\PendingStep;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Tools\AgentTool;
 use Tests\Fixtures\Agents\AssistantAgent;
@@ -184,7 +184,7 @@ test('step completed carries the whole step response', function (): void {
         ->and($completed->response->text)->toBe('Hello!')
         ->and($completed->response->meta->model)->not->toBeEmpty()
         ->and($completed->response->meta->provider)->not->toBeEmpty()
-        ->and($completed->response->usage)->toBeInstanceOf(Usage::class)
+        ->and($completed->response->usage)->toBeInstanceOf(TextUsage::class)
         ->and($completed->agent)->toBe($agent)
         ->and($starting->agent)->toBe($agent)
         ->and($completed->time)->toBeFloat()->toBeGreaterThan(0.0);

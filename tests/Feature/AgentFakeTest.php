@@ -13,9 +13,9 @@ use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
@@ -38,7 +38,7 @@ describe('prompt responses', function (): void {
         AssistantAgent::fake([
             'First response',
             fn (string $prompt): string => 'Second response ('.$prompt.')',
-            new TextResponse('Third response', new Usage, new Meta),
+            new TextResponse('Third response', new TextUsage, new Meta),
         ]);
 
         $response = (new AssistantAgent)->prompt('First prompt');
@@ -66,7 +66,7 @@ describe('prompt responses', function (): void {
 
     test('fake responses may expose a raw http response', function (): void {
         AssistantAgent::fake([
-            (new TextResponse('Hello', new Usage, new Meta))->withRawResponse(new Response(
+            (new TextResponse('Hello', new TextUsage, new Meta))->withRawResponse(new Response(
                 new Psr7Response(200, ['x-ratelimit-remaining-requests' => '99'], '{}')
             )),
         ]);
@@ -110,7 +110,7 @@ describe('prompt responses', function (): void {
             new StructuredTextResponse(
                 ['symbol' => 'Pb'],
                 json_encode(['symbol' => 'Pb']),
-                new Usage,
+                new TextUsage,
                 new Meta,
             ),
         ]);
@@ -143,7 +143,7 @@ describe('prompt responses', function (): void {
 
     test('structured agents with empty schemas fall back to a text response', function (): void {
         EmptySchemaStructuredAgent::fake([
-            new TextResponse('Hello', new Usage, new Meta),
+            new TextResponse('Hello', new TextUsage, new Meta),
         ]);
 
         $response = (new EmptySchemaStructuredAgent)->prompt('Anything');
@@ -179,7 +179,7 @@ describe('stream responses', function (): void {
         AssistantAgent::fake([
             'First response',
             fn (string $prompt): string => 'Second response ('.$prompt.')',
-            new TextResponse('Third response', new Usage, new Meta),
+            new TextResponse('Third response', new TextUsage, new Meta),
         ]);
 
         $response = (new AssistantAgent)->stream('First prompt');
@@ -224,7 +224,7 @@ describe('stream responses', function (): void {
 
     test('faked agents can stream the sources an answer cited', function (): void {
         AssistantAgent::fake([
-            new TextResponse('Laravel MCP ships an MCP server.', new Usage, new Meta('anthropic', 'test-model', collect([
+            new TextResponse('Laravel MCP ships an MCP server.', new TextUsage, new Meta('anthropic', 'test-model', collect([
                 new UrlCitation('https://laravel.com/docs/mcp', 'Laravel MCP'),
             ]))),
         ]);

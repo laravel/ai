@@ -4,12 +4,12 @@ use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
-use Laravel\Ai\Responses\Data\Usage;
 
 function agentResponseWithSteps(): AgentResponse
 {
-    return (new AgentResponse('invocation-id', '', new Usage, new Meta))
+    return (new AgentResponse('invocation-id', '', new TextUsage, new Meta))
         ->withMessages(collect([
             new AssistantMessage('', collect([new ToolCall('call-0', 'ReadFile', [])]), [['type' => 'thinking', 'signature' => 'sig-0']]),
             new AssistantMessage('Done', collect([new ToolCall('call-1', 'DeleteFile', [])]), [['type' => 'thinking', 'signature' => 'sig-1']]),

@@ -5,9 +5,9 @@ namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 use Generator;
 use Illuminate\Support\Str;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
@@ -331,7 +331,7 @@ trait HandlesTextStreaming
             content: array_values($responseContent),
             provider: $provider,
             model: $model,
-            usage: $usage ?? new Usage(0, 0),
+            usage: $usage ?? new TextUsage(0, 0),
             finishReason: $this->extractFinishReason(['stop_reason' => $stopReason]),
             structured: false,
         );

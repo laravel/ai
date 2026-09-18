@@ -10,9 +10,9 @@ use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Responses\Concerns\HasRawResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Step;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
-use Laravel\Ai\Responses\Data\Usage;
 
 class TextResponse implements \Stringable
 {
@@ -38,7 +38,7 @@ class TextResponse implements \Stringable
     /**
      * Create a new text response instance.
      */
-    public function __construct(public string $text, public Usage $usage, public Meta $meta)
+    public function __construct(public string $text, public TextUsage $usage, public Meta $meta)
     {
         $this->messages = new Collection;
         $this->toolCalls = new Collection;

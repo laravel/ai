@@ -19,7 +19,7 @@ class Step implements Arrayable, JsonSerializable
         public array $toolCalls,
         public array $toolResults,
         public FinishReason $finishReason,
-        public Usage $usage,
+        public TextUsage $usage,
         public Meta $meta,
         public string $reasoning = '',
     ) {}

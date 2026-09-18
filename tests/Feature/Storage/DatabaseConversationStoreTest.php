@@ -25,10 +25,10 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\UrlCitation;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 use Laravel\Ai\Storage\StoredMessage;
@@ -385,7 +385,7 @@ test('it stores sparse keyed tool calls and results as JSON arrays', function ()
         'test-model',
     );
 
-    $response = new AgentResponse('invocation-id', 'The order has shipped.', new Usage, new Meta);
+    $response = new AgentResponse('invocation-id', 'The order has shipped.', new TextUsage, new Meta);
     $response->toolCalls = collect([
         2 => new ToolCall('call-1', 'lookup_order', ['id' => 1]),
         8 => new ToolCall('call-2', 'lookup_carrier', ['id' => 1]),
@@ -453,7 +453,7 @@ test('it round trips tool result failure status through storage', function (): v
         'test-model',
     );
 
-    $response = new AgentResponse('invocation-id', '', new Usage, new Meta);
+    $response = new AgentResponse('invocation-id', '', new TextUsage, new Meta);
     $response->toolCalls = collect([new ToolCall('call-1', 'query-resources', [])]);
     $response->toolResults = collect([
         new ToolResult('call-1', 'query-resources', [], 'Tool not found', failed: true),
@@ -537,7 +537,7 @@ test('a bare rejection resume does not persist a blank assistant row', function 
         approvalDecisions: Decisions::from(['call-1' => Decision::reject()]),
     );
 
-    $response = new AgentResponse('invocation-id', '', new Usage, new Meta);
+    $response = new AgentResponse('invocation-id', '', new TextUsage, new Meta);
     $response->toolResults = collect([
         new ToolResult('call-1', 'DeleteFile', [], 'The user rejected this tool call.'),
     ]);
@@ -1046,7 +1046,7 @@ test('it records every step of a paused turn into the message meta', function ()
         'test-model',
     );
 
-    $response = (new AgentResponse('invocation-id', '', new Usage, new Meta))
+    $response = (new AgentResponse('invocation-id', '', new TextUsage, new Meta))
         ->withMessages(collect([
             new AssistantMessage('', collect([new ToolCall('call-0', 'ReadFile', ['path' => 'config/app.php'])]), [['type' => 'thinking', 'signature' => 'sig-0']]),
             new ToolResultMessage(collect([new ToolResult('call-0', 'ReadFile', ['path' => 'config/app.php'], 'contents')])),
@@ -1080,7 +1080,7 @@ test('it omits provider content blocks when the assistant turn is not paused', f
         'test-model',
     );
 
-    $response = (new AgentResponse('invocation-id', 'Deleted the file.', new Usage, new Meta))
+    $response = (new AgentResponse('invocation-id', 'Deleted the file.', new TextUsage, new Meta))
         ->withMessages(collect([
             new AssistantMessage('Deleted the file.', null, [['type' => 'thinking', 'signature' => 'sig-1']]),
         ]));
