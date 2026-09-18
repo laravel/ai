@@ -2,173 +2,11 @@
 
 ## Upgrading To 1.0 From 0.11
 
-### Agent Middleware Wraps Each Generation Step
-
-**Likelihood Of Impact: High**
-
-Agent middleware now wraps each generation step instead of the whole run, and receives a `Laravel\Ai\PendingStep` instead of an `AgentPrompt`. A run that takes three steps invokes your middleware three times.
-
-Update the `handle()` method of each middleware:
-
-```php
-// Before...
-use Closure;
-use Laravel\Ai\Prompts\AgentPrompt;
-use Laravel\Ai\Responses\AgentResponse;
-
-class LogTheRun
-{
-    public function handle(AgentPrompt $prompt, Closure $next)
-    {
-        return $next($prompt)->then(function (AgentResponse $response) {
-            // ...
-        });
-    }
-}
-
-// After...
-use Closure;
-use Laravel\Ai\Gateway\StepResponse;
-use Laravel\Ai\PendingStep;
-
-class LogTheRun
-{
-    public function handle(PendingStep $step, Closure $next)
-    {
-        return $next($step)->then(function (StepResponse $response) {
-            // ...
-        });
-    }
-}
-```
-
-You may modify a step by creating a copy before passing it to the next middleware:
-
-```php
-public function handle(PendingStep $step, Closure $next)
-{
-    if (! $step->isFirstStep()) {
-        $step = $step->withoutTools('SearchDocumentation');
-    }
-
-    return $next($step);
-}
-```
-
-The `withModel()`, `withInstructions()`, `withMessages()`, `withTools()`, `onlyTools()`, `withoutTools()`, `withToolChoice()`, `withMaxTokens()`, and `withProviderOptions()` methods are available, along with `isFirstStep()` and the `$isFinalStep` property.
-
-Return the `Laravel\Ai\Gateway\StepResult` returned by `$next($step)`, or return a `StepResponse` to answer the step without calling the model. Anything else throws a `LogicException`.
-
-The `AgentPrompted`, `AgentStreamed`, and `AgentFailed` events now carry the original `AgentPrompt` passed to the provider rather than a prompt modified by run middleware.
-
-### Gemini Vector Store Imports Wait For Completion
-
-**Likelihood Of Impact: High**
-
-Adding a file to a Gemini vector store now waits for the import to finish instead of returning as soon as it is requested:
-
-```php
-$store->addFile($fileId);
-```
-
-The returned ID is the document name rather than the import operation name, so IDs stored by an earlier version no longer match. The call also throws a `Laravel\Ai\Exceptions\AiException` when the import fails or does not finish within five minutes.
-
-### The AWS SDK Is No Longer Installed By Default
-
-**Likelihood Of Impact: High**
-
-The `aws/aws-sdk-php` package is no longer a required dependency. Applications using the Bedrock provider must install it:
-
-```bash
-composer require aws/aws-sdk-php
-```
-
-Resolving the Bedrock provider without the SDK installed throws a `RuntimeException`.
-
-### Token Usage Is Reported Inclusively
-
-**Likelihood Of Impact: High**
-
-`Usage::$promptTokens` and `Usage::$completionTokens` have been renamed to `Usage::$inputTokens` and `Usage::$outputTokens`, and now carry the provider's full counts. Cached, cache-written, and reasoning tokens are subsets of them rather than separate additions:
-
-```php
-// Before...
-$response->usage->promptTokens;     // excluded cached tokens
-$response->usage->completionTokens;
-
-// After...
-$response->usage->inputTokens;      // includes cached and cache-written tokens
-$response->usage->outputTokens;     // includes reasoning tokens
-$response->usage->uncachedInputTokens();
-$response->usage->totalTokens();
-```
-
-If you previously calculated input token costs by applying a single rate to `promptTokens`, calculate each category separately: apply the base rate to `uncachedInputTokens()`, the cache read rate to `cacheReadInputTokens`, and the cache write rate to `cacheWriteInputTokens`.
-
-`toArray()` and the JSON stored in the `usage` column of `agent_conversation_messages` use the `input_tokens` and `output_tokens` keys. Rows written before the upgrade keep the old keys.
-
-Reported values also changed in three places:
-
-- Anthropic streams read the cumulative usage reported on `message_delta`, so a run using a server tool such as web search reports a higher input token count than before.
-- Anthropic populates `reasoningTokens` from the thinking token breakdown rather than always reporting `0`.
-- Cohere embeddings on Bedrock report the input token count returned by the API rather than always reporting `0`.
-
-### Text Usage Is A `TextUsage` Subclass
-
-**Likelihood Of Impact: Medium**
-
-`Usage` now holds only `inputTokens` and `outputTokens`. The cache and reasoning counts moved to a `Laravel\Ai\Responses\Data\TextUsage` subclass, which is what text, agent, step, and stream responses report:
-
-```php
-// Before...
-use Laravel\Ai\Responses\Data\Usage;
-
-new Usage($promptTokens, $completionTokens, $cacheWriteInputTokens, $cacheReadInputTokens, $reasoningTokens);
-
-// After...
-use Laravel\Ai\Responses\Data\TextUsage;
-
-new TextUsage($inputTokens, $outputTokens, $cacheReadInputTokens, $cacheWriteInputTokens, $reasoningTokens);
-```
-
-The cache read and cache write positions are swapped. `cacheReadInputTokens`, `cacheWriteInputTokens`, and `reasoningTokens` are now `?int` and are `null` when the provider reports nothing, which is distinct from a reported `0`.
-
-`add()` and `uncachedInputTokens()` are available on `TextUsage` only.
-
-No changes are needed if you only read usage from a response. If you construct a `TextResponse`, `StepResponse`, `Step`, or `StreamEnd` by hand, such as a fake in a test suite, pass a `TextUsage` instance.
-
-### Usage Is Reported On Every Response
-
-**Likelihood Of Impact: Medium**
-
-`EmbeddingsResponse::$tokens` has been removed in favor of a `$usage` object, matching the other responses:
-
-```php
-// Before...
-$response->tokens;
-
-// After...
-$response->usage->inputTokens;
-```
-
-`toArray()` and `jsonSerialize()` emit a `usage` object in place of the `tokens` integer.
-
-`AudioResponse` and `RerankingResponse` now carry a `$usage` property as well. Each capability reports its relevant billing metrics through its usage class:
-
-- `ImageResponse::$usage` is an `ImageUsage`, adding `imageInputTokens` and `imageOutputTokens`.
-- `TranscriptionResponse::$usage` is a `TranscriptionUsage`, adding `audioSeconds`.
-- `RerankingResponse::$usage` is a `RerankingUsage`, adding `searchUnits`.
-- `AudioResponse::$usage` and `EmbeddingsResponse::$usage` are a plain `Usage`.
-
-The added counts are `null` when the provider reports nothing.
-
-No changes are needed unless you read `EmbeddingsResponse::$tokens` or construct these responses by hand. `EmbeddingsResponse`, `AudioResponse`, and `RerankingResponse` take their respective usage object as the second constructor argument, before the `Meta`. `ImageResponse` takes an `ImageUsage` as its second argument, before the `Meta`, while `TranscriptionResponse` takes a `TranscriptionUsage` as its third argument, after the text and segments and before the `Meta`.
-
 ### Conversation Turns Are Stored As Steps
 
 **Likelihood Of Impact: High**
 
-The `tool_calls` and `tool_results` columns on `agent_conversation_messages` have been replaced by a single `steps` column. Each entry is one model round-trip, carrying the text, reasoning, tool calls, provider-hosted tool calls, and replay blocks that step produced, with each tool result stored on the call that made it:
+The `tool_calls` and `tool_results` columns on `agent_conversation_messages` have been replaced by a single `steps` column. A turn is stored as a list of steps, one per model round-trip. Each step holds the text, reasoning, tool calls, provider-hosted tool calls, and replay blocks it produced, and each tool result sits on the call that made it:
 
 ```json
 [
@@ -177,15 +15,15 @@ The `tool_calls` and `tool_results` columns on `agent_conversation_messages` hav
 ]
 ```
 
-State that was previously spread across the row now lives on the step that produced it:
+Data that used to live elsewhere on the row now lives on its step:
 
 - `meta.reasoning` is now `steps[].reasoning`.
 - `meta.provider_steps` and `meta.provider_content_blocks` are now `steps[].replay_blocks`.
 - The `tool_results` list is gone. Each result is stored on its call as `steps[].tool_calls[].result`.
 
-Replay blocks are only kept while a turn is paused for approval. Once the turn completes they are cleared, and the turn is rebuilt from its steps on the next request.
+Replay blocks are kept only while a turn is paused for approval. They are cleared once the turn completes, and later requests rebuild the turn from its steps.
 
-Each stored tool call carries only the `id`, `name`, `arguments`, `result`, `result_id`, `denied`, and `failed` keys. Provider-specific reasoning keys such as `reasoning_id` and `reasoning_encrypted_content` are no longer stored on the call, with the exception of `thought_signature`, which is kept when Gemini sets one.
+A stored tool call has only the `id`, `name`, `arguments`, `result`, `result_id`, `denied`, and `failed` keys. Provider reasoning keys such as `reasoning_id` and `reasoning_encrypted_content` are no longer stored. The one exception is `thought_signature`, which is kept when Gemini sets it.
 
 The `participant_index` on the same table now also covers `agent`.
 
@@ -358,9 +196,9 @@ return new class extends AiMigration
 
 </details>
 
-Rewrite any raw SQL against the old columns to read `steps`. The `tool_calls` and `tool_results` attributes on `Laravel\Ai\Models\ConversationMessage` are now read-only accessors collapsed from `steps`, alongside a new `provider_tool_calls` accessor. Write `steps` instead.
+Rewrite any raw SQL against the old columns to read `steps`. On `Laravel\Ai\Models\ConversationMessage`, the `tool_calls` and `tool_results` attributes are now read-only and are built from `steps`, and a `provider_tool_calls` attribute has been added. To change a stored turn, write `steps`.
 
-`Laravel\Ai\Storage\StoredMessage` follows the column. Its constructor takes `steps` in place of `toolCalls` and `toolResults`, `toArray()` emits `steps` in their place, and the `$toolCalls` and `$toolResults` properties became `toolCalls()` and `toolResults()` methods, joined by `providerToolCalls()`:
+`Laravel\Ai\Storage\StoredMessage` changed to match. Its constructor takes `steps` in place of `toolCalls` and `toolResults`, and `toArray()` emits `steps` in their place. The `$toolCalls` and `$toolResults` properties are now methods, alongside a new `providerToolCalls()` method:
 
 ```php
 // Before...
@@ -375,35 +213,167 @@ $message->providerToolCalls();
 
 No changes are needed if you only prompt agents and read their responses. Update any custom `ConversationStore`, raw query, or code that constructs a `StoredMessage` by hand.
 
-### Paused Turn State Is Exposed As Steps
+### Agent Middleware Wraps Each Generation Step
 
-**Likelihood Of Impact: Low**
+**Likelihood Of Impact: High**
 
-`AgentResponse::pausedProviderContentBlocks()` and its `StreamedAgentResponse` counterpart have been removed. The steps a paused turn produced are on the response:
+Agent middleware now wraps each generation step instead of the whole run, and receives a `Laravel\Ai\PendingStep` instead of an `AgentPrompt`. A run that takes three steps invokes your middleware three times.
+
+Update the `handle()` method of each middleware:
 
 ```php
 // Before...
-$response->pausedProviderContentBlocks();
+use Closure;
+use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Responses\AgentResponse;
+
+class LogTheRun
+{
+    public function handle(AgentPrompt $prompt, Closure $next)
+    {
+        return $next($prompt)->then(function (AgentResponse $response) {
+            // ...
+        });
+    }
+}
 
 // After...
-$response->steps;
+use Closure;
+use Laravel\Ai\Gateway\StepResponse;
+use Laravel\Ai\PendingStep;
+
+class LogTheRun
+{
+    public function handle(PendingStep $step, Closure $next)
+    {
+        return $next($step)->then(function (StepResponse $response) {
+            // ...
+        });
+    }
+}
 ```
 
-`Laravel\Ai\Streaming\Events\ToolApprovalRequest` takes a `Collection` of `Laravel\Ai\Responses\Data\Step` as its fourth argument in place of the `$providerContentBlocks` array. No changes are needed unless you read the paused state or construct the event directly.
+You may modify a step by creating a copy before passing it to the next middleware:
 
-### Replay Blocks
+```php
+public function handle(PendingStep $step, Closure $next)
+{
+    if (! $step->isFirstStep()) {
+        $step = $step->withoutTools('SearchDocumentation');
+    }
 
-**Likelihood Of Impact: Low**
+    return $next($step);
+}
+```
 
-The raw provider state carried through a turn is now called replay blocks everywhere it appears:
+The `withModel()`, `withInstructions()`, `withMessages()`, `withTools()`, `onlyTools()`, `withoutTools()`, `withToolChoice()`, `withMaxTokens()`, and `withProviderOptions()` methods are available, along with `isFirstStep()` and the `$isFinalStep` property.
 
-- `Laravel\Ai\Messages\AssistantMessage::$providerContentBlocks` and `$providerContentBlocksProvider` are now `$replayBlocks` and `$replayBlocksProvider`, and the constructor arguments are renamed to match.
-- `Laravel\Ai\Gateway\StepResponse` takes `replayBlocks:` in place of `providerContentBlocks:`, along with new `reasoning:` and `providerToolCalls:` arguments, and its `toArray()` emits `replay_blocks`.
-- `Laravel\Ai\Responses\Data\Step` and `StructuredStep` require `string $reasoning` and `array $replayBlocks` after `$meta`, and `Step` accepts a trailing `array $providerToolCalls`. `Step::toArray()` gains `reasoning`, `replay_blocks`, and `provider_tool_calls`.
+Return the `Laravel\Ai\Gateway\StepResult` returned by `$next($step)`, or return a `StepResponse` to answer the step without calling the model. Anything else throws a `LogicException`.
 
-DeepSeek reasoning is stored as a typed block rather than a raw string, so `AssistantMessage::$replayBlocks` for a DeepSeek turn is a list of `['type' => 'reasoning', 'reasoning_content' => '...']` entries.
+The `AgentPrompted`, `AgentStreamed`, and `AgentFailed` events now carry the original `AgentPrompt` passed to the provider rather than a prompt modified by run middleware.
 
-No changes are needed unless you construct these objects directly or read the raw provider state off a message.
+### Gemini Vector Store Imports Wait For Completion
+
+**Likelihood Of Impact: High**
+
+Adding a file to a Gemini vector store now waits for the import to finish instead of returning as soon as it is requested:
+
+```php
+$store->addFile($fileId);
+```
+
+The returned ID is the document name rather than the import operation name, so IDs stored by an earlier version no longer match. The call also throws a `Laravel\Ai\Exceptions\AiException` when the import fails or does not finish within five minutes.
+
+### The AWS SDK Is No Longer Installed By Default
+
+**Likelihood Of Impact: High**
+
+The `aws/aws-sdk-php` package is no longer a required dependency. Applications using the Bedrock provider must install it:
+
+```bash
+composer require aws/aws-sdk-php
+```
+
+Resolving the Bedrock provider without the SDK installed throws a `RuntimeException`.
+
+### Token Usage Is Reported Inclusively
+
+**Likelihood Of Impact: High**
+
+`Usage::$promptTokens` and `Usage::$completionTokens` have been renamed to `Usage::$inputTokens` and `Usage::$outputTokens`, and now carry the provider's full counts. Cached, cache-written, and reasoning tokens are subsets of them rather than separate additions:
+
+```php
+// Before...
+$response->usage->promptTokens;     // excluded cached tokens
+$response->usage->completionTokens;
+
+// After...
+$response->usage->inputTokens;      // includes cached and cache-written tokens
+$response->usage->outputTokens;     // includes reasoning tokens
+$response->usage->uncachedInputTokens();
+$response->usage->totalTokens();
+```
+
+If you previously calculated input token costs by applying a single rate to `promptTokens`, calculate each category separately: apply the base rate to `uncachedInputTokens()`, the cache read rate to `cacheReadInputTokens`, and the cache write rate to `cacheWriteInputTokens`.
+
+`toArray()` and the JSON stored in the `usage` column of `agent_conversation_messages` use the `input_tokens` and `output_tokens` keys. Rows written before the upgrade keep the old keys.
+
+Reported values also changed in three places:
+
+- Anthropic streams read the cumulative usage reported on `message_delta`, so a run using a server tool such as web search reports a higher input token count than before.
+- Anthropic populates `reasoningTokens` from the thinking token breakdown rather than always reporting `0`.
+- Cohere embeddings on Bedrock report the input token count returned by the API rather than always reporting `0`.
+
+### Text Usage Is A `TextUsage` Subclass
+
+**Likelihood Of Impact: Medium**
+
+`Usage` now holds only `inputTokens` and `outputTokens`. The cache and reasoning counts moved to a `Laravel\Ai\Responses\Data\TextUsage` subclass, which is what text, agent, step, and stream responses report:
+
+```php
+// Before...
+use Laravel\Ai\Responses\Data\Usage;
+
+new Usage($promptTokens, $completionTokens, $cacheWriteInputTokens, $cacheReadInputTokens, $reasoningTokens);
+
+// After...
+use Laravel\Ai\Responses\Data\TextUsage;
+
+new TextUsage($inputTokens, $outputTokens, $cacheReadInputTokens, $cacheWriteInputTokens, $reasoningTokens);
+```
+
+The cache read and cache write positions are swapped. `cacheReadInputTokens`, `cacheWriteInputTokens`, and `reasoningTokens` are now `?int` and are `null` when the provider reports nothing, which is distinct from a reported `0`.
+
+`add()` and `uncachedInputTokens()` are available on `TextUsage` only.
+
+No changes are needed if you only read usage from a response. If you construct a `TextResponse`, `StepResponse`, `Step`, or `StreamEnd` by hand, such as a fake in a test suite, pass a `TextUsage` instance.
+
+### Usage Is Reported On Every Response
+
+**Likelihood Of Impact: Medium**
+
+`EmbeddingsResponse::$tokens` has been removed in favor of a `$usage` object, matching the other responses:
+
+```php
+// Before...
+$response->tokens;
+
+// After...
+$response->usage->inputTokens;
+```
+
+`toArray()` and `jsonSerialize()` emit a `usage` object in place of the `tokens` integer.
+
+`AudioResponse` and `RerankingResponse` now carry a `$usage` property as well. Each capability reports its relevant billing metrics through its usage class:
+
+- `ImageResponse::$usage` is an `ImageUsage`, adding `imageInputTokens` and `imageOutputTokens`.
+- `TranscriptionResponse::$usage` is a `TranscriptionUsage`, adding `audioSeconds`.
+- `RerankingResponse::$usage` is a `RerankingUsage`, adding `searchUnits`.
+- `AudioResponse::$usage` and `EmbeddingsResponse::$usage` are a plain `Usage`.
+
+The added counts are `null` when the provider reports nothing.
+
+No changes are needed unless you read `EmbeddingsResponse::$tokens` or construct these responses by hand. `EmbeddingsResponse`, `AudioResponse`, and `RerankingResponse` take their respective usage object as the second constructor argument, before the `Meta`. `ImageResponse` takes an `ImageUsage` as its second argument, before the `Meta`, while `TranscriptionResponse` takes a `TranscriptionUsage` as its third argument, after the text and segments and before the `Meta`.
 
 ### Stream Protocols
 
@@ -448,6 +418,36 @@ The completed response's `text`, `reasoning`, `citations`, and `usage` now inclu
 A streamed step now emits a single `TextStart` / `TextEnd` pair. Previously, each content block emitted its own pair with a distinct message ID. `TextDelta::combine()` now separates text by step rather than by message ID, so an answer spanning several blocks is no longer split mid-sentence.
 
 Update any consumer that opens a UI block on `TextStart` and closes it on `TextEnd`, or that keys off a changing message ID.
+
+### Paused Turn State Is Exposed As Steps
+
+**Likelihood Of Impact: Low**
+
+`AgentResponse::pausedProviderContentBlocks()` and the same method on `StreamedAgentResponse` have been removed. Read the paused turn's steps from the response instead:
+
+```php
+// Before...
+$response->pausedProviderContentBlocks();
+
+// After...
+$response->steps;
+```
+
+`Laravel\Ai\Streaming\Events\ToolApprovalRequest` takes a `Collection` of `Laravel\Ai\Responses\Data\Step` as its fourth argument in place of the `$providerContentBlocks` array. No changes are needed unless you read the paused state or construct the event directly.
+
+### Replay Blocks
+
+**Likelihood Of Impact: Low**
+
+The raw provider state carried through a turn is now called replay blocks everywhere:
+
+- `Laravel\Ai\Messages\AssistantMessage::$providerContentBlocks` and `$providerContentBlocksProvider` are now `$replayBlocks` and `$replayBlocksProvider`, and the constructor arguments are renamed to match.
+- `Laravel\Ai\Gateway\StepResponse` takes `replayBlocks:` in place of `providerContentBlocks:`, along with new `reasoning:` and `providerToolCalls:` arguments, and its `toArray()` emits `replay_blocks`.
+- `Laravel\Ai\Responses\Data\Step` and `StructuredStep` take two new required arguments after `$meta`: `string $reasoning` and `array $replayBlocks`. `Step` also accepts an optional trailing `array $providerToolCalls`. `Step::toArray()` gains `reasoning`, `replay_blocks`, and `provider_tool_calls` keys.
+
+DeepSeek reasoning is now stored as a typed block rather than a raw string. For a DeepSeek turn, `AssistantMessage::$replayBlocks` is a list of `['type' => 'reasoning', 'reasoning_content' => '...']` entries.
+
+No changes are needed unless you construct these objects directly or read the raw provider state off a message.
 
 ### Reasoning Events On OpenAI And xAI
 
