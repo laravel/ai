@@ -166,6 +166,12 @@ trait HandlesTextStreaming
                         time(),
                         provider: $provider->name(),
                     ))->withInvocationId($invocationId);
+
+                    continue;
+                }
+
+                if (isset($part['thoughtSignature'])) {
+                    $modelParts[] = $part;
                 }
             }
 
