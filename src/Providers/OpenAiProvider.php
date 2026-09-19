@@ -3,8 +3,13 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Contracts\Gateway\AudioGateway;
+use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
+use Laravel\Ai\Contracts\Gateway\ImageGateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
+use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
@@ -18,6 +23,7 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\OpenAi\OpenAiFileGateway;
+use Laravel\Ai\Gateway\OpenAi\OpenAiGateway;
 use Laravel\Ai\Gateway\OpenAi\OpenAiStoreGateway;
 use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\FileSearch;
@@ -40,6 +46,56 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     use Concerns\ManagesFiles;
     use Concerns\ManagesStores;
     use Concerns\StreamsText;
+
+    protected ?OpenAiGateway $openAiGateway = null;
+
+    /**
+     * Get the shared OpenAI gateway instance.
+     */
+    protected function openAiGateway(): OpenAiGateway
+    {
+        return $this->openAiGateway ??= new OpenAiGateway($this->events);
+    }
+
+    /**
+     * Get the provider's text gateway.
+     */
+    public function textGateway(): StepTextGateway
+    {
+        return $this->textGateway ??= $this->openAiGateway();
+    }
+
+    /**
+     * Get the provider's image gateway.
+     */
+    public function imageGateway(): ImageGateway
+    {
+        return $this->imageGateway ??= $this->openAiGateway();
+    }
+
+    /**
+     * Get the provider's audio gateway.
+     */
+    public function audioGateway(): AudioGateway
+    {
+        return $this->audioGateway ??= $this->openAiGateway();
+    }
+
+    /**
+     * Get the provider's transcription gateway.
+     */
+    public function transcriptionGateway(): TranscriptionGateway
+    {
+        return $this->transcriptionGateway ??= $this->openAiGateway();
+    }
+
+    /**
+     * Get the provider's embedding gateway.
+     */
+    public function embeddingGateway(): EmbeddingGateway
+    {
+        return $this->embeddingGateway ??= $this->openAiGateway();
+    }
 
     /**
      * Get the code execution tool options for the provider.

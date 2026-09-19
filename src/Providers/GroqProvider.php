@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Providers;
 
-use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -16,11 +15,6 @@ class GroqProvider extends Provider implements TextProvider, TranscriptionProvid
     use Concerns\HasTextGateway;
     use Concerns\HasTranscriptionGateway;
     use Concerns\StreamsText;
-
-    public function __construct(protected array $config, protected Dispatcher $events)
-    {
-        //
-    }
 
     /**
      * Get the provider's text gateway.

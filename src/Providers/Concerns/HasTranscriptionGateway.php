@@ -13,7 +13,7 @@ trait HasTranscriptionGateway
      */
     public function transcriptionGateway(): TranscriptionGateway
     {
-        return $this->transcriptionGateway ?? $this->gateway;
+        return $this->transcriptionGateway;
     }
 
     /**

@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Providers;
 
-use Illuminate\Contracts\Events\Dispatcher;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
@@ -40,11 +39,6 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
     use Concerns\StreamsText;
 
     protected ?AzureOpenAiGateway $azureGateway = null;
-
-    public function __construct(protected array $config, protected Dispatcher $events)
-    {
-        //
-    }
 
     /**
      * Get the shared Azure OpenAI gateway instance.

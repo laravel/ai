@@ -13,7 +13,7 @@ trait HasImageGateway
      */
     public function imageGateway(): ImageGateway
     {
-        return $this->imageGateway ?? $this->gateway;
+        return $this->imageGateway;
     }
 
     /**

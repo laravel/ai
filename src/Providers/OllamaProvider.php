@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Providers;
 
-use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -18,11 +17,6 @@ class OllamaProvider extends Provider implements EmbeddingProvider, TextProvider
     use Concerns\StreamsText;
 
     protected ?OllamaGateway $ollamaGateway = null;
-
-    public function __construct(protected array $config, protected Dispatcher $events)
-    {
-        //
-    }
 
     /**
      * Get the credentials for the Ollama provider (API key is optional).

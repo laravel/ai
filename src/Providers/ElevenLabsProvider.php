@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Providers;
 
-use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\AudioGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
@@ -15,10 +14,6 @@ class ElevenLabsProvider extends Provider implements AudioProvider, Transcriptio
     use Concerns\GeneratesTranscriptions;
     use Concerns\HasAudioGateway;
     use Concerns\HasTranscriptionGateway;
-
-    public function __construct(
-        protected array $config,
-        protected Dispatcher $events) {}
 
     /**
      * Get the provider's audio gateway.

@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Providers;
 
-use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\AudioGateway;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
@@ -26,11 +25,6 @@ class MistralProvider extends Provider implements AudioProvider, EmbeddingProvid
     use Concerns\StreamsText;
 
     protected ?MistralGateway $mistralGateway = null;
-
-    public function __construct(protected array $config, protected Dispatcher $events)
-    {
-        //
-    }
 
     /**
      * Get the shared Mistral gateway instance.

@@ -13,7 +13,7 @@ trait HasEmbeddingGateway
      */
     public function embeddingGateway(): EmbeddingGateway
     {
-        return $this->embeddingGateway ?? $this->gateway;
+        return $this->embeddingGateway;
     }
 
     /**

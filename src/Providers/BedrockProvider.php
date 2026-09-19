@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Providers;
 
-use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
@@ -26,11 +25,6 @@ class BedrockProvider extends Provider implements EmbeddingProvider, ImageProvid
     use Concerns\HasTextGateway;
     use Concerns\Reranks;
     use Concerns\StreamsText;
-
-    public function __construct(
-        protected array $config,
-        protected Dispatcher $events
-    ) {}
 
     /**
      * Get the credentials for the underlying AI provider.

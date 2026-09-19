@@ -16,7 +16,7 @@ trait HasTextGateway
      */
     public function textGateway(): StepTextGateway
     {
-        return $this->textGateway ?? $this->gateway;
+        return $this->textGateway;
     }
 
     /**

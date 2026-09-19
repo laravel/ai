@@ -120,9 +120,9 @@ test('openai temperature and max tokens are preserved in tool call follow up', f
     $gateway = new OpenAiGateway(app(Dispatcher::class));
     $manager = app(AiManager::class);
     $manager->purge('openai');
-    $manager->extend('openai', fn ($app, array $config): OpenAiProvider => new OpenAiProvider(
-        $gateway, $config, app(Dispatcher::class),
-    ));
+    $manager->extend('openai', fn ($app, array $config): OpenAiProvider => (new OpenAiProvider(
+        $config, app(Dispatcher::class),
+    ))->useTextGateway($gateway));
 
     (new TextGenOptionsToolAgent)->prompt('Give me a number', provider: 'openai');
 

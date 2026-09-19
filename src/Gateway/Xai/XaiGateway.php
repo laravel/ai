@@ -4,26 +4,15 @@ namespace Laravel\Ai\Gateway\Xai;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
-use Laravel\Ai\Contracts\Files\TranscribableAudio;
-use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
-use Laravel\Ai\Contracts\Providers\AudioProvider;
-use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
-use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
-use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
-use Laravel\Ai\Responses\AudioResponse;
-use Laravel\Ai\Responses\EmbeddingsResponse;
-use Laravel\Ai\Responses\ImageResponse;
-use Laravel\Ai\Responses\TranscriptionResponse;
-use LogicException;
 
-class XaiGateway implements Gateway, StepTextGateway
+class XaiGateway implements StepTextGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesXaiClient;
@@ -97,65 +86,5 @@ class XaiGateway implements Gateway, StepTextGateway
             $model,
             $response->getBody(),
         );
-    }
-
-    /**
-     * @throws LogicException
-     */
-    public function generateImage(
-        ImageProvider $provider,
-        string $model,
-        string $prompt,
-        array $attachments = [],
-        ?string $size = null,
-        ?string $quality = null,
-        ?int $timeout = null,
-        array $providerOptions = [],
-    ): ImageResponse {
-        throw new LogicException('Use XaiImageGateway for image generation.');
-    }
-
-    /**
-     * @throws LogicException
-     */
-    public function generateAudio(
-        AudioProvider $provider,
-        string $model,
-        string $text,
-        string $voice,
-        ?string $instructions = null,
-        int $timeout = 30,
-        array $providerOptions = [],
-    ): AudioResponse {
-        throw new LogicException('xAI does not support audio generation.');
-    }
-
-    /**
-     * @throws LogicException
-     */
-    public function generateTranscription(
-        TranscriptionProvider $provider,
-        string $model,
-        TranscribableAudio $audio,
-        ?string $language = null,
-        bool $diarize = false,
-        int $timeout = 30,
-        array $providerOptions = [],
-    ): TranscriptionResponse {
-        throw new LogicException('xAI does not support transcription generation.');
-    }
-
-    /**
-     * @throws LogicException
-     */
-    public function generateEmbeddings(
-        EmbeddingProvider $provider,
-        string $model,
-        array $inputs,
-        int $dimensions,
-        int $timeout = 30,
-        array $providerOptions = [],
-    ): EmbeddingsResponse {
-        throw new LogicException('xAI does not support embedding generation.');
     }
 }
