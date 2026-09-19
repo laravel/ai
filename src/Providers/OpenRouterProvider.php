@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Providers;
 
-use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\AudioGateway;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
@@ -37,11 +36,6 @@ class OpenRouterProvider extends Provider implements AudioProvider, EmbeddingPro
     use Concerns\HasTranscriptionGateway;
     use Concerns\Reranks;
     use Concerns\StreamsText;
-
-    public function __construct(protected array $config, protected Dispatcher $events)
-    {
-        //
-    }
 
     /**
      * Get the web fetch tool options for the provider.

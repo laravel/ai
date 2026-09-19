@@ -16,9 +16,6 @@ use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Enums\Lab;
-use Laravel\Ai\Gateway\Anthropic\AnthropicGateway;
-use Laravel\Ai\Gateway\Gemini\GeminiGateway;
-use Laravel\Ai\Gateway\OpenAi\OpenAiGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\AzureOpenAiProvider;
 use Laravel\Ai\Providers\BedrockProvider;
@@ -316,7 +313,6 @@ class AiManager extends MultipleInstanceManager
     public function createAnthropicDriver(array $config): AnthropicProvider
     {
         return new AnthropicProvider(
-            new AnthropicGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );
@@ -383,7 +379,6 @@ class AiManager extends MultipleInstanceManager
     public function createGeminiDriver(array $config): GeminiProvider
     {
         return new GeminiProvider(
-            new GeminiGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );
@@ -439,7 +434,6 @@ class AiManager extends MultipleInstanceManager
     public function createOpenaiDriver(array $config): OpenAiProvider
     {
         return new OpenAiProvider(
-            new OpenAiGateway($this->app['events']),
             $config,
             $this->app->make(Dispatcher::class)
         );

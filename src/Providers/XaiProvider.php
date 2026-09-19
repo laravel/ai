@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Providers;
 
-use Illuminate\Contracts\Events\Dispatcher;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
@@ -25,11 +24,6 @@ class XaiProvider extends Provider implements ImageProvider, SupportsCodeExecuti
     use Concerns\HasImageGateway;
     use Concerns\HasTextGateway;
     use Concerns\StreamsText;
-
-    public function __construct(
-        protected array $config,
-        protected Dispatcher $events,
-    ) {}
 
     /**
      * Get the code execution tool options for the provider.

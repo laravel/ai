@@ -4,8 +4,13 @@ namespace Laravel\Ai\Providers;
 
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
+use Laravel\Ai\Contracts\Gateway\AudioGateway;
+use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
+use Laravel\Ai\Contracts\Gateway\ImageGateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
+use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
@@ -19,6 +24,7 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Gemini\GeminiFileGateway;
+use Laravel\Ai\Gateway\Gemini\GeminiGateway;
 use Laravel\Ai\Gateway\Gemini\GeminiStoreGateway;
 use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\FileSearch;
@@ -42,6 +48,56 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
     use Concerns\ManagesFiles;
     use Concerns\ManagesStores;
     use Concerns\StreamsText;
+
+    protected ?GeminiGateway $geminiGateway = null;
+
+    /**
+     * Get the shared Gemini gateway instance.
+     */
+    protected function geminiGateway(): GeminiGateway
+    {
+        return $this->geminiGateway ??= new GeminiGateway($this->events);
+    }
+
+    /**
+     * Get the provider's text gateway.
+     */
+    public function textGateway(): StepTextGateway
+    {
+        return $this->textGateway ??= $this->geminiGateway();
+    }
+
+    /**
+     * Get the provider's image gateway.
+     */
+    public function imageGateway(): ImageGateway
+    {
+        return $this->imageGateway ??= $this->geminiGateway();
+    }
+
+    /**
+     * Get the provider's audio gateway.
+     */
+    public function audioGateway(): AudioGateway
+    {
+        return $this->audioGateway ??= $this->geminiGateway();
+    }
+
+    /**
+     * Get the provider's transcription gateway.
+     */
+    public function transcriptionGateway(): TranscriptionGateway
+    {
+        return $this->transcriptionGateway ??= $this->geminiGateway();
+    }
+
+    /**
+     * Get the provider's embedding gateway.
+     */
+    public function embeddingGateway(): EmbeddingGateway
+    {
+        return $this->embeddingGateway ??= $this->geminiGateway();
+    }
 
     /**
      * Get the file search tool options for the provider.

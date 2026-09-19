@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Providers;
 
-use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -15,11 +14,6 @@ class CohereProvider extends Provider implements EmbeddingProvider, RerankingPro
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasRerankingGateway;
     use Concerns\Reranks;
-
-    public function __construct(
-        protected array $config,
-        protected Dispatcher $events,
-    ) {}
 
     /**
      * Get the name of the default embeddings model.

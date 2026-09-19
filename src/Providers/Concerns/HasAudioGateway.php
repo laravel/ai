@@ -13,7 +13,7 @@ trait HasAudioGateway
      */
     public function audioGateway(): AudioGateway
     {
-        return $this->audioGateway ?? $this->gateway;
+        return $this->audioGateway;
     }
 
     /**

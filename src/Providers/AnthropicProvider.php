@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Providers;
 
 use Laravel\Ai\Contracts\Gateway\FileGateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\SupportsCodeExecution;
 use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
@@ -11,6 +12,7 @@ use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Anthropic\AnthropicFileGateway;
+use Laravel\Ai\Gateway\Anthropic\AnthropicGateway;
 use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
@@ -87,6 +89,14 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsCodeEx
     public function smartestTextModel(): string
     {
         return $this->config['models']['text']['smartest'] ?? 'claude-opus-5';
+    }
+
+    /**
+     * Get the provider's text gateway.
+     */
+    public function textGateway(): StepTextGateway
+    {
+        return $this->textGateway ??= new AnthropicGateway($this->events);
     }
 
     /**

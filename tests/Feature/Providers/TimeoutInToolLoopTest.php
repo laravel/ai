@@ -250,9 +250,9 @@ test('openai timeout is preserved in tool call follow up', function (): void {
     $spy = new SpyOpenAiGateway(app(Dispatcher::class));
     $manager = app(AiManager::class);
     $manager->purge('openai');
-    $manager->extend('openai', fn ($app, array $config): OpenAiProvider => new OpenAiProvider(
-        $spy, $config, app(Dispatcher::class),
-    ));
+    $manager->extend('openai', fn ($app, array $config): OpenAiProvider => (new OpenAiProvider(
+        $config, app(Dispatcher::class),
+    ))->useTextGateway($spy));
 
     (new TimeoutToolAgent)->prompt('Give me a number', provider: 'openai');
 
@@ -274,9 +274,9 @@ test('anthropic timeout is preserved in tool call follow up', function (): void 
     $spy = new SpyAnthropicGateway(app(Dispatcher::class));
     $manager = app(AiManager::class);
     $manager->purge('anthropic');
-    $manager->extend('anthropic', fn ($app, array $config): AnthropicProvider => new AnthropicProvider(
-        $spy, $config, app(Dispatcher::class),
-    ));
+    $manager->extend('anthropic', fn ($app, array $config): AnthropicProvider => (new AnthropicProvider(
+        $config, app(Dispatcher::class),
+    ))->useTextGateway($spy));
 
     (new TimeoutToolAgent)->prompt('Give me a number', provider: 'anthropic');
 
@@ -326,9 +326,9 @@ test('gemini timeout is preserved in tool call follow up', function (): void {
     $spy = new SpyGeminiGateway(app(Dispatcher::class));
     $manager = app(AiManager::class);
     $manager->purge('gemini');
-    $manager->extend('gemini', fn ($app, array $config): GeminiProvider => new GeminiProvider(
-        $spy, $config, app(Dispatcher::class),
-    ));
+    $manager->extend('gemini', fn ($app, array $config): GeminiProvider => (new GeminiProvider(
+        $config, app(Dispatcher::class),
+    ))->useTextGateway($spy));
 
     (new TimeoutToolAgent)->prompt('Give me a number', provider: 'gemini');
 

@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Providers;
 
-use Illuminate\Contracts\Events\Dispatcher;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
@@ -21,11 +20,6 @@ class OpenAiCompatibleProvider extends Provider implements EmbeddingProvider, Te
     use Concerns\HasTextGateway;
     use Concerns\HasTranscriptionGateway;
     use Concerns\StreamsText;
-
-    public function __construct(protected array $config, protected Dispatcher $events)
-    {
-        //
-    }
 
     /**
      * Get the credentials for the underlying AI provider.
