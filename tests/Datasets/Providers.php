@@ -42,6 +42,7 @@ dataset('file-providers', [
     'openai' => ['openai', 'OPENAI_API_KEY'],
     'gemini' => ['gemini', 'GEMINI_API_KEY'],
     'azure' => ['azure', 'AZURE_OPENAI_API_KEY'],
+    'openrouter' => ['openrouter', 'OPENROUTER_API_KEY'],
 ]);
 
 dataset('store-providers', [
