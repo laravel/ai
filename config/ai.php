@@ -42,6 +42,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Conversations
+    |--------------------------------------------------------------------------
+    |
+    | Below you may configure how remembered conversations behave. When
+    | "generate_title" is enabled, starting a conversation makes an
+    | additional title-generation LLM call (billed like any other
+    | generation) using the cheapest text model. It is disabled by
+    | default; enable it only if you want AI-generated titles.
+    | Failures fall back to truncated prompt text and are reported.
+    |
+    */
+
+    'conversations' => [
+        'generate_title' => env('AI_CONVERSATIONS_GENERATE_TITLE', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | AI Providers
     |--------------------------------------------------------------------------
     |
