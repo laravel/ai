@@ -7,6 +7,9 @@ class BooleanAnswer extends Answer
     /**
      * Create a new boolean answer instance.
      *
+     * Unlike a choice or a score, this answer has no separate confidence: with
+     * only two outcomes, the probability describes the distribution completely.
+     *
      * @param  float  $probability  The probability that the answer is "true".
      */
     public function __construct(

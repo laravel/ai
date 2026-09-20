@@ -10,6 +10,8 @@ final readonly class Boolean implements Question
     /**
      * Create a new yes / no question whose answer is the probability of "true".
      *
+     * This is TypeSafe's "noul" primitive.
+     *
      * @param  string|array<string, mixed>  $instructions
      * @param  array{true?: string, false?: string}|null  $criteria  Descriptions of what a yes and a no mean.
      *
