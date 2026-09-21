@@ -538,7 +538,7 @@ public function storeUserMessage(
 ): string;
 ```
 
-`storeApprovalResults()` no longer receives the participant. Look the paused turn up by conversation alone, so a turn paused for one participant may be resolved by another:
+`storeApprovalResults()` no longer receives the participant. Look the paused turn up by conversation alone, so a turn paused for one participant may be resolved by another. The package no longer scopes the lookup, so authorize the resuming participant in your application before passing decisions back to the agent:
 
 ```php
 public function storeApprovalResults(
