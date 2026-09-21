@@ -50,8 +50,8 @@ trait AnswersQuestions
 
         $answers = [];
 
-        foreach ($data['answers'] as $key => $answer) {
-            if ($mapped = $this->mapAnswer($answer)) {
+        foreach ($data['answers'] ?? [] as $key => $answer) {
+            if ($mapped = $this->mapAnswer($answer, $questions[$key] ?? null)) {
                 $answers[$key] = $mapped;
             }
         }
@@ -67,7 +67,7 @@ trait AnswersQuestions
     }
 
     /**
-     * Map a question to the System One wire format.
+     * Map a question to the decisions wire format.
      */
     protected function mapQuestion(Question $question): array
     {
@@ -92,17 +92,17 @@ trait AnswersQuestions
     }
 
     /**
-     * Map a System One answer to an answer object, skipping unknown answer types.
+     * Map an answer to an answer object, skipping unknown answer types.
      */
-    protected function mapAnswer(array $answer): ?Answer
+    protected function mapAnswer(array $answer, ?Question $question = null): ?Answer
     {
         return match ($answer['type'] ?? null) {
             'noul' => new BooleanAnswer($answer['noul']),
-            'choice' => new ChoiceAnswer($answer['choice'], $answer['probabilities'], $answer['confidence'] ?? null),
+            'choice' => new ChoiceAnswer($answer['choice'], $answer['probabilities'] ?? [], $answer['confidence'] ?? null),
             'score' => new ScoreAnswer(
                 $answer['score'],
-                $this->withIntegerKeys($answer['probabilities']),
-                $this->withIntegerKeys($answer['legend']),
+                $this->withIntegerKeys($answer['probabilities'] ?? []),
+                $this->withIntegerKeys($answer['legend'] ?? ($question instanceof Score ? $question->levels : [])),
                 $answer['confidence'] ?? null,
             ),
             default => null,
@@ -110,7 +110,7 @@ trait AnswersQuestions
     }
 
     /**
-     * Cast the string level keys System One returns to integers.
+     * Cast the string level keys the provider returns to integers.
      */
     protected function withIntegerKeys(array $levels): array
     {

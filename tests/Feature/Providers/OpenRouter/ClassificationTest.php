@@ -126,3 +126,29 @@ test('decisions requests use the configured base url', function (): void {
 
     Http::assertSent(fn (Request $request): bool => $request->url() === 'http://localhost:8080/api/alpha/decisions');
 });
+
+test('answers without the optional distribution fields fall back to the questions asked', function (): void {
+    Http::fake(['*' => Http::response([
+        'model' => 'typesafe/jev-1.13',
+        'answers' => [
+            'department' => ['type' => 'choice', 'choice' => 'payments'],
+            'urgency' => ['type' => 'score', 'score' => 2.0],
+        ],
+        'usage' => ['input_tokens' => 10, 'output_tokens' => 2],
+    ])]);
+
+    $response = Classification::of('text')
+        ->questions([
+            'department' => new Choice('Team?', ['account' => null, 'payments' => null]),
+            'urgency' => new Score('How urgent?', ['Next release', 'This week', 'Blocking revenue']),
+        ])
+        ->classify(provider: 'openrouter');
+
+    expect($response['department']->probabilities)->toBe([])
+        ->and($response['department']->probabilityOf('payments'))->toBe(0.0)
+        ->and($response['department']->confidence)->toBeNull()
+        ->and($response['urgency']->probabilities)->toBe([])
+        ->and($response['urgency']->legend)->toBe(['Next release', 'This week', 'Blocking revenue'])
+        ->and($response['urgency']->label())->toBe('Blocking revenue')
+        ->and($response['urgency']->normalized())->toBe(1.0);
+});
