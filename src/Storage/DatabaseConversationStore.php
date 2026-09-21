@@ -16,6 +16,7 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\PaginatesConversations;
 use Laravel\Ai\Contracts\ResolvesPendingApprovals;
 use Laravel\Ai\Contracts\VerifiesConversationOwnership;
+use Laravel\Ai\Enums\MessageStatus;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -107,7 +108,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'steps' => '[]',
             'usage' => '[]',
             'meta' => '[]',
-            'approval_requested_at' => null,
+            'status' => MessageStatus::Completed,
         ]));
 
         $this->touchConversation($conversationId, $now);
@@ -142,7 +143,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'steps' => $steps->toJson(),
             'usage' => json_encode($response->usage),
             'meta' => json_encode($response->meta),
-            'approval_requested_at' => $response->hasPendingApprovals() ? $now : null,
+            'status' => $response->hasPendingApprovals() ? MessageStatus::Paused : MessageStatus::Completed,
         ]));
 
         if (! $response->hasPendingApprovals()) {
@@ -162,7 +163,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         $decided = array_keys($prompt->approvalDecisions->all());
 
         $named = $this->assistantRows($conversationId)
-            ->whereNotNull('approval_requested_at')
+            ->where('status', MessageStatus::Paused)
             ->get()
             ->first(fn (object $record): bool => array_intersect($this->gatedCallIds($record), $decided) !== []);
 
@@ -172,7 +173,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         $newest = $this->assistantRows($conversationId)->first();
 
-        return $newest?->approval_requested_at === null ? null : $newest;
+        return $newest === null || MessageStatus::from($newest->status) !== MessageStatus::Paused ? null : $newest;
     }
 
     /**
@@ -201,7 +202,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'steps' => $steps->toJson(),
             'usage' => json_encode(TextUsage::fromArray($this->decoded($paused->usage))->add($response->usage)),
             'meta' => json_encode($this->mergedMeta($paused, $response)),
-            'approval_requested_at' => $response->hasPendingApprovals() ? $now : null,
+            'status' => $response->hasPendingApprovals() ? MessageStatus::Paused : MessageStatus::Completed,
             'updated_at' => $now,
         ]);
 
@@ -296,7 +297,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     {
         $this->table($this->messagesTable())
             ->where('conversation_id', $conversationId)
-            ->whereNotNull('approval_requested_at')
+            ->where('status', MessageStatus::Paused)
             ->get(['id', 'steps'])
             ->each(function (object $record): void {
                 $steps = $this->decodedSteps($record);
@@ -517,9 +518,9 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         $newest = $this->table($this->messagesTable())
             ->where('conversation_id', $conversationId)
             ->orderByDesc('id')
-            ->first(['role', 'steps', 'approval_requested_at']);
+            ->first(['role', 'steps', 'status']);
 
-        return $newest === null || $newest->role !== 'assistant' || $newest->approval_requested_at === null
+        return $newest === null || $newest->role !== 'assistant' || MessageStatus::from($newest->status) !== MessageStatus::Paused
             ? []
             : $this->pendingApprovalsIn($newest)->all();
     }
@@ -570,7 +571,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         DB::connection($this->connection)->transaction(function () use ($conversationId, $toolResults, $resultIds) {
             $paused = $this->assistantRows($conversationId)
-                ->whereNotNull('approval_requested_at')
+                ->where('status', MessageStatus::Paused)
                 ->lockForUpdate()
                 ->get();
 

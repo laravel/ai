@@ -7,8 +7,8 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Carbon;
 use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Enums\MessageStatus;
 
 /**
  * @property string $id
@@ -19,7 +19,7 @@ use Laravel\Ai\Approvals\PendingApproval;
  * @property-read array $tool_calls
  * @property-read array $provider_tool_calls
  * @property-read array $tool_results
- * @property ?Carbon $approval_requested_at
+ * @property MessageStatus $status
  */
 #[WithoutIncrementing]
 class ConversationMessage extends Model
@@ -55,7 +55,7 @@ class ConversationMessage extends Model
         'steps' => 'array',
         'usage' => 'array',
         'meta' => 'array',
-        'approval_requested_at' => 'datetime',
+        'status' => MessageStatus::class,
     ];
 
     /**

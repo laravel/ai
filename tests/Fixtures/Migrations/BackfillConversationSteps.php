@@ -7,6 +7,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Laravel\Ai\Enums\MessageStatus;
 use Laravel\Ai\Migrations\AiMigration;
 
 class BackfillConversationSteps extends AiMigration
@@ -20,7 +21,7 @@ class BackfillConversationSteps extends AiMigration
 
         Schema::connection($this->getConnection())->table($table, function (Blueprint $blueprint) {
             $blueprint->longText('steps')->nullable();
-            $blueprint->timestamp('approval_requested_at')->nullable();
+            $blueprint->string('status', 25)->default(MessageStatus::Completed->value);
         });
 
         $this->query($table)->where('role', 'user')->update(['steps' => '[]']);
@@ -99,7 +100,7 @@ class BackfillConversationSteps extends AiMigration
             $this->query($table)->where('id', $row->id)->update([
                 'steps' => json_encode($steps),
                 'meta' => json_encode($meta),
-                'approval_requested_at' => blank($this->decoded($row->approval_state)['pending'] ?? []) ? null : $row->created_at,
+                'status' => blank($this->decoded($row->approval_state)['pending'] ?? []) ? MessageStatus::Completed : MessageStatus::Paused,
             ]);
         }
     }

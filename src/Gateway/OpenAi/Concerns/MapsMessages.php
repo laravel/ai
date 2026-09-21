@@ -112,14 +112,15 @@ trait MapsMessages
     }
 
     /**
-     * Map a tool call to a function_call input item, keeping the item id only when OpenAI issued it.
+     * Map a tool call to a function_call input item, keeping the item id only when OpenAI issued it and its reasoning survived.
      *
      * @return array<string, mixed>
      */
     protected function functionCallItem(ToolCall $toolCall): array
     {
+        // A replayed call whose reasoning was dropped cannot carry its item id, as the API rejects an fc_ item with no reasoning item before it...
         return Arr::whereNotNull([
-            'id' => str_starts_with($toolCall->id, 'fc_') ? $toolCall->id : null,
+            'id' => $toolCall->reasoningId !== null && str_starts_with($toolCall->id, 'fc_') ? $toolCall->id : null,
             'call_id' => $toolCall->resultId,
             'type' => 'function_call',
             'name' => $toolCall->name,

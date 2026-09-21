@@ -6,6 +6,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Ai\Concerns\HasConversations;
+use Laravel\Ai\Enums\MessageStatus;
 use Laravel\Ai\Models\Conversation;
 
 uses(RefreshDatabase::class)->beforeEach(function (): void {
@@ -90,6 +91,7 @@ test('conversation can retrieve messages using relationship', function (): void 
             'steps' => '[]',
             'usage' => '[]',
             'meta' => '[]',
+            'status' => MessageStatus::Completed,
             'created_at' => now(),
             'updated_at' => now(),
         ],
@@ -125,6 +127,7 @@ test('message tool calls and results flatten across steps in order and serialize
         ]),
         'usage' => '[]',
         'meta' => '[]',
+        'status' => MessageStatus::Completed,
         'created_at' => now(),
         'updated_at' => now(),
     ]);
