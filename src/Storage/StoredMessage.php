@@ -7,6 +7,7 @@ use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use JsonSerializable;
+use Laravel\Ai\Enums\MessageStatus;
 
 /**
  * A conversation message as it was persisted, with its JSON columns decoded.
@@ -30,7 +31,7 @@ class StoredMessage implements Arrayable, JsonSerializable
         public array $usage = [],
         public array $meta = [],
         public array $steps = [],
-        public ?CarbonInterface $approvalRequestedAt = null,
+        public MessageStatus $status = MessageStatus::Completed,
         public array $attachments = [],
     ) {}
 
@@ -49,7 +50,7 @@ class StoredMessage implements Arrayable, JsonSerializable
             usage: static::decoded($record['usage'] ?? null),
             meta: static::decoded($record['meta'] ?? null),
             steps: array_values(static::decoded($record['steps'] ?? null)),
-            approvalRequestedAt: blank($record['approval_requested_at'] ?? null) ? null : Carbon::parse($record['approval_requested_at']),
+            status: MessageStatus::from($record['status'] ?? MessageStatus::Completed->value),
             attachments: array_values(static::decoded($record['attachments'] ?? null)),
         );
     }
@@ -69,7 +70,7 @@ class StoredMessage implements Arrayable, JsonSerializable
             'usage' => $this->usage,
             'meta' => $this->meta,
             'steps' => $this->steps,
-            'approval_requested_at' => $this->approvalRequestedAt?->toJSON(),
+            'status' => $this->status->value,
             'attachments' => $this->attachments,
         ];
     }

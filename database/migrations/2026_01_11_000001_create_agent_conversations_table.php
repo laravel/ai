@@ -36,7 +36,7 @@ return new class extends AiMigration
             $table->longText('steps');
             $table->text('usage');
             $table->text('meta');
-            $table->timestamp('approval_requested_at')->nullable();
+            $table->string('status', 25);
             $table->timestamps();
 
             $table->index(['conversation_id', 'participant_type', 'participant_id', 'updated_at'], 'conversation_index');
