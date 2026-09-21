@@ -50,5 +50,5 @@ interface ConversationStore
      *
      * @throws ApprovalMismatchException when no paused row matches the resolved results
      */
-    public function storeApprovalResults(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolResults): void;
+    public function storeApprovalResults(string $conversationId, array $toolResults): void;
 }

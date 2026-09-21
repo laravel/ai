@@ -120,7 +120,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
     {
-        if ($prompt->hasApprovalDecisions() && ($paused = $this->pausedRowFor($conversationId, $participantType, $participantId, $prompt)) !== null) {
+        if ($prompt->hasApprovalDecisions() && ($paused = $this->pausedRowFor($conversationId, $prompt)) !== null) {
             return $this->resumePausedRow($conversationId, $paused, $prompt, $response);
         }
 
@@ -157,11 +157,11 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     /**
      * Find the row the given resume paused on, matching the turn its decisions name.
      */
-    protected function pausedRowFor(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt): ?object
+    protected function pausedRowFor(string $conversationId, AgentPrompt $prompt): ?object
     {
         $decided = array_keys($prompt->approvalDecisions->all());
 
-        $named = $this->assistantRows($conversationId, $participantType, $participantId)
+        $named = $this->assistantRows($conversationId)
             ->whereNotNull('approval_requested_at')
             ->get()
             ->first(fn (object $record): bool => array_intersect($this->gatedCallIds($record), $decided) !== []);
@@ -170,7 +170,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             return $named;
         }
 
-        $newest = $this->assistantRows($conversationId, $participantType, $participantId)->first();
+        $newest = $this->assistantRows($conversationId)->first();
 
         return $newest?->approval_requested_at === null ? null : $newest;
     }
@@ -560,7 +560,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      *
      * @throws ApprovalMismatchException when no paused row matches the resolved results
      */
-    public function storeApprovalResults(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolResults): void
+    public function storeApprovalResults(string $conversationId, array $toolResults): void
     {
         if ($toolResults === []) {
             return;
@@ -568,8 +568,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         $resultIds = array_map(fn (ToolResult $result) => $result->id, $toolResults);
 
-        DB::connection($this->connection)->transaction(function () use ($conversationId, $participantType, $participantId, $toolResults, $resultIds) {
-            $paused = $this->assistantRows($conversationId, $participantType, $participantId)
+        DB::connection($this->connection)->transaction(function () use ($conversationId, $toolResults, $resultIds) {
+            $paused = $this->assistantRows($conversationId)
                 ->whereNotNull('approval_requested_at')
                 ->lockForUpdate()
                 ->get();
@@ -605,15 +605,12 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Query the participant's assistant rows in the conversation, newest first.
+     * Query the conversation's assistant rows, newest first.
      */
-    protected function assistantRows(string $conversationId, ?string $participantType, string|int|null $participantId): Builder
+    protected function assistantRows(string $conversationId): Builder
     {
         return $this->table($this->messagesTable())
             ->where('conversation_id', $conversationId)
-            ->when($participantId === null,
-                fn ($query) => $query->whereNull('participant_type')->whereNull('participant_id'),
-                fn ($query) => $query->where('participant_type', $participantType)->where('participant_id', $participantId))
             ->where('role', 'assistant')
             ->orderByDesc('id');
     }

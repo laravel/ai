@@ -132,6 +132,53 @@ test('an ownerless remembered agent pauses for approval and resumes without a pa
         ->and($resumed->toolResults[0]->result)->toBe('72019');
 });
 
+test('a resume settles the paused turn and runs the tool once whoever resumes it', function (?object $resumer) {
+    Config::set('ai.conversations.generate_title', false);
+
+    ApprovableNumberGenerator::$invocations = 0;
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [[
+                    'type' => 'tool_use',
+                    'id' => 'toolu_1',
+                    'name' => 'ApprovableNumberGenerator',
+                    'input' => (object) [],
+                ]],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            Http::response([
+                'id' => 'msg_2',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'The number is 72019.']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]),
+    ]);
+
+    $paused = (new RememberingApprovableAgent)->forUser((object) ['id' => 1])->prompt('Generate a number', provider: 'anthropic');
+
+    $resumed = (new RememberingApprovableAgent)
+        ->continue($paused->conversationId, $resumer)
+        ->prompt(Decisions::from(['toolu_1' => true]), provider: 'anthropic');
+
+    expect($resumed->text)->toBe('The number is 72019.')
+        ->and(ApprovableNumberGenerator::$invocations)->toBe(1)
+        ->and((new DatabaseConversationStore)->pendingApprovalsFor($paused->conversationId))->toBe([]);
+})->with([
+    'another participant' => [fn () => (object) ['id' => 2]],
+    'no participant' => [null],
+]);
+
 test('a resumed approval replays the paused turn replay blocks', function () {
     Config::set('ai.conversations.generate_title', false);
 
