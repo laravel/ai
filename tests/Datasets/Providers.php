@@ -63,6 +63,7 @@ dataset('reranking-providers', [
 ]);
 
 dataset('classification-providers', [
+    'openrouter' => ['openrouter', 'OPENROUTER_API_KEY'],
     'typesafe' => ['typesafe', 'TYPESAFE_API_KEY'],
 ]);
 
