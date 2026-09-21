@@ -183,17 +183,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     public function storeStep(string $messageId, Step $step): void
     {
-        $now = now();
-
-        DB::connection($this->connection)->transaction(function () use ($messageId, $step, $now): void {
-            $row = $this->lockedMessage($messageId);
-
-            $this->table($this->messagesTable())->where('id', $messageId)->update([
-                'steps' => $this->decodedSteps($row)->push($this->serializedStep($step))->toJson(),
-                'completed_at' => null,
-                'updated_at' => $now,
-            ]);
-        });
+        $this->reviseOpenSteps($messageId, fn (Collection $steps): Collection => $steps->push($this->serializedStep($step)));
     }
 
     /**
@@ -207,32 +197,49 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             return;
         }
 
-        $now = now();
+        $resolved = collect($toolResults)->keyBy(fn (ToolResult $result): string => $result->id);
 
-        DB::connection($this->connection)->transaction(function () use ($messageId, $toolResults, $now): void {
+        $this->reviseOpenSteps($messageId, fn (Collection $steps): Collection => $steps->map(fn (array $step): array => [
+            ...$step,
+            'tool_calls' => array_map(fn (array $toolCall): array => $this->withResult($toolCall, $resolved), $step['tool_calls']),
+        ]));
+    }
+
+    /**
+     * Rewrite an open assistant turn's steps under a lock, leaving the turn open.
+     *
+     * @param  callable(Collection<int, array<string, mixed>>): Collection<int, array<string, mixed>>  $revise
+     */
+    protected function reviseOpenSteps(string $messageId, callable $revise): void
+    {
+        DB::connection($this->connection)->transaction(function () use ($messageId, $revise): void {
             $row = $this->lockedMessage($messageId);
 
-            $resolved = collect($toolResults)->keyBy(fn (ToolResult $result): string => $result->id);
-
-            $steps = $this->decodedSteps($row)->map(function (array $step) use ($resolved): array {
-                $step['tool_calls'] = array_map(function (array $toolCall) use ($resolved): array {
-                    $result = $resolved->get($toolCall['id'] ?? '');
-
-                    return $result === null || PendingApproval::isAnswered($toolCall)
-                        ? $toolCall
-                        // Arguments come along because an edited approval runs the tool with different ones than the call asked for...
-                        : [...$toolCall, ...Arr::only($result->toArray(), ['arguments', 'result', 'denied', 'failed'])];
-                }, $step['tool_calls']);
-
-                return $step;
-            });
-
             $this->table($this->messagesTable())->where('id', $messageId)->update([
-                'steps' => $steps->toJson(),
+                'steps' => $revise($this->decodedSteps($row))->toJson(),
                 'completed_at' => null,
-                'updated_at' => $now,
+                'updated_at' => now(),
             ]);
         });
+    }
+
+    /**
+     * Fold a tool call's result onto the stored call, leaving one that already has an answer alone.
+     *
+     * @param  array<string, mixed>  $toolCall
+     * @param  Collection<string, ToolResult>  $results
+     * @return array<string, mixed>
+     */
+    protected function withResult(array $toolCall, Collection $results): array
+    {
+        $result = $results->get($toolCall['id'] ?? '');
+
+        if ($result === null || PendingApproval::isAnswered($toolCall)) {
+            return $toolCall;
+        }
+
+        // Arguments come along because an edited approval runs the tool with different ones than the call asked for...
+        return [...$toolCall, ...Arr::only($result->toArray(), ['arguments', 'result', 'denied', 'failed'])];
     }
 
     /**

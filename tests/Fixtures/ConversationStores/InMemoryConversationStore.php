@@ -86,8 +86,10 @@ class InMemoryConversationStore implements ConversationStore
 
     public function completeAssistantMessage(string $messageId, AgentPrompt $prompt, AgentResponse $response): void
     {
-        $this->messages[$this->indexOf($messageId)] = [
-            ...$this->messages[$this->indexOf($messageId)],
+        $index = $this->indexOf($messageId);
+
+        $this->messages[$index] = [
+            ...$this->messages[$index],
             'content' => $response->text,
             'completed' => true,
         ];
