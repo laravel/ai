@@ -4,6 +4,8 @@ namespace Laravel\Ai\Storage;
 
 class RecordedTurn
 {
+    public bool $hasSteps = false;
+
     public function __construct(
         public readonly ?string $invocationId,
         public readonly string $assistantMessageId,

@@ -173,11 +173,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             $steps = $this->withoutReplayBlocks($steps);
         }
 
-        $this->table($this->messagesTable())->where('id', $paused->id)->update([
-            'steps' => $steps->toJson(),
-            'completed_at' => null,
-            'updated_at' => now(),
-        ]);
+        $this->table($this->messagesTable())->where('id', $paused->id)->update(['steps' => $steps->toJson()]);
 
         return $paused->id;
     }
@@ -194,10 +190,9 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
             $this->table($this->messagesTable())->where('id', $messageId)->update([
                 'steps' => $this->decodedSteps($row)->push($this->serializedStep($step))->toJson(),
+                'completed_at' => null,
                 'updated_at' => $now,
             ]);
-
-            $this->touchConversation($row->conversation_id, $now);
         });
     }
 
@@ -234,10 +229,9 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
             $this->table($this->messagesTable())->where('id', $messageId)->update([
                 'steps' => $steps->toJson(),
+                'completed_at' => null,
                 'updated_at' => $now,
             ]);
-
-            $this->touchConversation($row->conversation_id, $now);
         });
     }
 
@@ -251,7 +245,10 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         DB::connection($this->connection)->transaction(function () use ($messageId, $response, $now): void {
             $row = $this->lockedMessage($messageId);
 
-            $steps = $this->withApprovalReasons($this->decodedSteps($row), $response);
+            $recorded = $this->decodedSteps($row);
+
+            // A turn nothing recorded as it ran, such as one remembered only once it paused, is written from the response in full...
+            $steps = $this->withApprovalReasons($recorded->isEmpty() ? $this->stepsFor($response) : $recorded, $response);
 
             if (! $response->hasPendingApprovals()) {
                 $steps = $this->withoutReplayBlocks($steps);
@@ -273,32 +270,6 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
             $this->touchConversation($row->conversation_id, $now);
         });
-    }
-
-    /**
-     * Store an assistant turn that has already completed in a single write and return its message ID.
-     */
-    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): string
-    {
-        $messageId = (string) Str::uuid7();
-
-        $now = now();
-
-        $this->table($this->messagesTable())->insert($this->messageAttributes($messageId, $conversationId, $participantType, $participantId, $now, [
-            'agent' => $prompt->agent::class,
-            'role' => 'assistant',
-            'content' => $response->text,
-            'attachments' => '[]',
-            'steps' => $this->withApprovalReasons($this->stepsFor($response), $response)->toJson(),
-            'usage' => json_encode($response->usage),
-            'meta' => json_encode($response->meta),
-            'approval_requested_at' => $response->hasPendingApprovals() ? $now : null,
-            'completed_at' => $now,
-        ]));
-
-        $this->touchConversation($conversationId, $now);
-
-        return $messageId;
     }
 
     /**

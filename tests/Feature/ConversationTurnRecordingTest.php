@@ -2,14 +2,17 @@
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Tools\Request as ToolRequest;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
@@ -176,4 +179,69 @@ test('a failover attempt continues on the rows the first attempt opened', functi
         ->and($rows[1]->content)->toBe('Hello from backup')
         ->and($rows[1]->completed_at)->not->toBeNull()
         ->and(json_decode($rows[1]->meta, true)['provider'])->toBe('backup');
+});
+
+test('a failover after a recorded step leaves that attempt on its own row and answers on a fresh one', function (): void {
+    Config::set('ai.conversations.generate_title', false);
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    $completion = fn (array $message, string $reason) => [
+        'id' => 'chatcmpl-'.uniqid(),
+        'object' => 'chat.completion',
+        'model' => 'test',
+        'choices' => [['index' => 0, 'message' => ['role' => 'assistant', ...$message], 'finish_reason' => $reason]],
+        'usage' => ['prompt_tokens' => 5, 'completion_tokens' => 3, 'total_tokens' => 8],
+    ];
+
+    Http::fakeSequence()
+        ->push($completion(['content' => null, 'tool_calls' => [['id' => 'call_1', 'type' => 'function', 'function' => ['name' => 'FixedNumberGenerator', 'arguments' => '{}']]]], 'tool_calls'))
+        ->push(status: 429)
+        ->push($completion(['content' => 'Hello from backup'], 'stop'));
+
+    $response = (new RememberingToolUsingAgent)
+        ->forUser((object) ['id' => 1])
+        ->prompt('Hello', provider: ['primary', 'backup']);
+
+    $rows = DB::table('agent_conversation_messages')->where('conversation_id', $response->conversationId)->orderBy('id')->get();
+
+    expect($rows->pluck('role')->all())->toBe(['user', 'assistant', 'assistant'])
+        ->and($rows[1]->completed_at)->toBeNull()
+        ->and($rows[1]->steps)->json()->toHaveCount(1)->{'0'}->tool_calls->{'0'}->toMatchArray(['id' => 'call_1', 'result' => 72019])
+        ->and($rows[2]->id)->toBe($response->assistantMessageId)
+        ->and($rows[2]->content)->toBe('Hello from backup')
+        ->and($rows[2]->steps)->json()->toHaveCount(1);
+});
+
+test('a terminal failure lets go of the turn so the agent history is whole again', function (): void {
+    Config::set('ai.conversations.generate_title', false);
+    Config::set('ai.providers.groq.key', 'test-key');
+
+    Http::fake(['api.groq.com/*' => Http::response(status: 400)]);
+
+    $agent = (new RememberingAssistantAgent)->forUser((object) ['id' => 1]);
+
+    try {
+        $agent->prompt('Hello', provider: 'groq');
+    } catch (RequestException) {
+        //
+    }
+
+    expect(collect($agent->messages())->map(fn ($message) => $message->content)->all())->toBe(['Hello']);
+});
+
+test('a resume with nothing paused throws before it stores anything', function (): void {
+    Config::set('ai.providers.anthropic.key', 'test-key');
+
+    Http::fake();
+
+    expect(fn () => (new RememberingToolUsingAgent)->forUser((object) ['id' => 1])->prompt(Decisions::from(['call_1' => true]), provider: 'anthropic'))
+        ->toThrow(ApprovalMismatchException::class)
+        ->and(DB::table('agent_conversations')->count())->toBe(0)
+        ->and(DB::table('agent_conversation_messages')->count())->toBe(0);
+
+    Http::assertNothingSent();
 });

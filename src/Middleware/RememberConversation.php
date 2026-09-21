@@ -10,7 +10,9 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\RemembersConversations;
+use Laravel\Ai\Contracts\ResolvesPendingApprovals;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
+use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Models\Conversation;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -61,12 +63,22 @@ class RememberConversation
         /** @var Agent&RemembersConversations $agent */
         $agent = $prompt->agent;
 
-        // A failover attempt of the same invocation continues on the rows the first attempt opened...
-        $turn = $agent->recordedTurn($prompt->invocationId) ?? $this->openTurn($prompt);
+        $turn = $this->turnFor($prompt);
 
         $agent->recordTurn($turn);
 
-        return $next($prompt)->then(function (AgentResponse $completedResponse) use ($prompt, $agent, $turn): void {
+        try {
+            $response = $next($prompt);
+        } catch (Throwable $exception) {
+            // A failover retry of this invocation still needs the rows, so only a terminal failure lets go of them...
+            if (! $exception instanceof FailoverableException || $prompt->isFinalAttempt()) {
+                $agent->recordTurn(null);
+            }
+
+            throw $exception;
+        }
+
+        return $response->then(function (AgentResponse $completedResponse) use ($prompt, $agent, $turn): void {
             $this->store->completeAssistantMessage($turn->assistantMessageId, $prompt, $completedResponse);
 
             $agent->recordTurn(null);
@@ -83,6 +95,35 @@ class RememberConversation
     }
 
     /**
+     * Get the rows this run writes to, continuing a failover attempt's rows unless steps already landed on them.
+     */
+    protected function turnFor(AgentPrompt $prompt): RecordedTurn
+    {
+        /** @var Agent&RemembersConversations $agent */
+        $agent = $prompt->agent;
+
+        $attempted = $agent->recordedTurn($prompt->invocationId);
+
+        if ($attempted === null) {
+            return $this->openTurn($prompt);
+        }
+
+        if (! $attempted->hasSteps) {
+            return $attempted;
+        }
+
+        // The retry starts the turn over, so the steps a failed attempt recorded stay on their own row rather than reading as one run...
+        [$participantType, $participantId] = $this->participantFor($agent);
+
+        return new RecordedTurn(
+            $prompt->invocationId,
+            $this->store->startAssistantMessage($agent->currentConversation(), $participantType, $participantId, $agent::class),
+            $attempted->userMessageId,
+            $attempted->startedConversation,
+        );
+    }
+
+    /**
      * Store the conversation, the user message and the assistant turn the run is about to write.
      */
     protected function openTurn(AgentPrompt $prompt): RecordedTurn
@@ -91,6 +132,10 @@ class RememberConversation
         $agent = $prompt->agent;
 
         [$participantType, $participantId] = $this->participantFor($agent);
+
+        if ($prompt->hasApprovalDecisions()) {
+            return new RecordedTurn($prompt->invocationId, $this->pausedRowFor($prompt, $participantType, $participantId));
+        }
 
         $startedConversation = $agent->currentConversation() === null;
 
@@ -103,21 +148,6 @@ class RememberConversation
         }
 
         $conversationId = $agent->currentConversation();
-
-        if ($prompt->hasApprovalDecisions()) {
-            $assistantMessageId = $this->store->resumeAssistantMessage($conversationId, $prompt->provider->name(), array_keys($prompt->approvalDecisions->all()));
-
-            // A faked run never validates its decisions, so it gets a fresh row rather than the mismatch a real resume would raise...
-            if ($assistantMessageId === null && Ai::hasFakeGatewayFor($agent::class)) {
-                $assistantMessageId = $this->store->startAssistantMessage($conversationId, $participantType, $participantId, $agent::class);
-            }
-
-            if ($assistantMessageId === null) {
-                throw new ApprovalMismatchException('The approval results do not match a paused conversation turn.', collect());
-            }
-
-            return new RecordedTurn($prompt->invocationId, $assistantMessageId);
-        }
 
         $userMessageId = $this->store->storeUserMessage(
             $conversationId,
@@ -132,6 +162,43 @@ class RememberConversation
             $this->store->startAssistantMessage($conversationId, $participantType, $participantId, $agent::class),
             $userMessageId,
             $startedConversation,
+        );
+    }
+
+    /**
+     * Reopen the paused row a resume continues on, before anything else is written.
+     *
+     * @throws ApprovalMismatchException when the participant has no paused turn to resume
+     */
+    protected function pausedRowFor(AgentPrompt $prompt, ?string $participantType, string|int|null $participantId): string
+    {
+        /** @var Agent&RemembersConversations $agent */
+        $agent = $prompt->agent;
+
+        $conversationId = $agent->currentConversation();
+
+        $messageId = $conversationId === null
+            ? null
+            : $this->store->resumeAssistantMessage($conversationId, $prompt->provider->name(), array_keys($prompt->approvalDecisions->all()));
+
+        if ($messageId !== null) {
+            return $messageId;
+        }
+
+        // A faked run never validates its decisions, so it gets a fresh row rather than the mismatch a real resume would raise...
+        if (Ai::hasFakeGatewayFor($agent::class)) {
+            if ($conversationId === null) {
+                $agent->continue($conversationId = $this->store->storeConversation($participantType, $participantId, ''), $agent->conversationParticipant());
+            }
+
+            return $this->store->startAssistantMessage($conversationId, $participantType, $participantId, $agent::class);
+        }
+
+        throw new ApprovalMismatchException(
+            'The approval results do not match a paused conversation turn.',
+            $conversationId !== null && $this->store instanceof ResolvesPendingApprovals
+                ? collect($this->store->pendingApprovalsFor($conversationId))
+                : collect(),
         );
     }
 
@@ -177,13 +244,9 @@ class RememberConversation
                 new UserMessage($prompt->prompt, $prompt->attachments),
             );
 
-            $assistantMessageId = $this->store->storeAssistantMessage(
-                $agent->currentConversation(),
-                $participantType,
-                $participantId,
-                $prompt,
-                $completedResponse,
-            );
+            $assistantMessageId = $this->store->startAssistantMessage($agent->currentConversation(), $participantType, $participantId, $agent::class);
+
+            $this->store->completeAssistantMessage($assistantMessageId, $prompt, $completedResponse);
 
             $completedResponse->withinConversation($agent->currentConversation(), null)
                 ->withStoredMessages($userMessageId, $assistantMessageId);

@@ -56,11 +56,6 @@ class FakeConversationStore implements ConversationStore
         //
     }
 
-    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): string
-    {
-        return 'assistant-message-123';
-    }
-
     public function getLatestConversationMessages(string $conversationId, int $limit, ?string $before = null): Collection
     {
         return new Collection;

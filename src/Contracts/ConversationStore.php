@@ -68,11 +68,6 @@ interface ConversationStore
     public function completeAssistantMessage(string $messageId, AgentPrompt $prompt, AgentResponse $response): void;
 
     /**
-     * Store an assistant turn that has already completed in a single write and return its message ID.
-     */
-    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): string;
-
-    /**
      * Get the latest messages for the given conversation, optionally only those stored before the given message.
      *
      * @return Collection<int, Message>

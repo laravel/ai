@@ -419,7 +419,7 @@ test('it stores a response built without steps as a single step of lists', funct
         8 => new ToolResult('call-2', 'lookup_carrier', ['id' => 1], ['carrier' => 'UPS']),
     ]);
 
-    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+    storeAssistantTurn($store, $conversationId, $prompt, $response);
 
     $steps = DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps');
 
@@ -471,7 +471,7 @@ test('it round trips tool result failure status through storage', function (): v
         new ToolResult('call-1', 'query-resources', [], 'Tool not found', failed: true),
     ]);
 
-    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+    storeAssistantTurn($store, $conversationId, $prompt, $response);
 
     $result = $store->getLatestConversationMessages($conversationId, 10)
         ->first(fn (Message $message): bool => $message instanceof ToolResultMessage)
@@ -506,7 +506,7 @@ test('it stores a tool result id on the call that made it', function (): void {
             [],
         )]));
 
-    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+    storeAssistantTurn($store, $conversationId, $prompt, $response);
 
     $stored = DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps');
 
@@ -550,7 +550,7 @@ test('it treats tool results stored before the failed flag as successful', funct
         ->and($result->error())->toBeNull();
 });
 
-test('a resume reopens the paused row and completes it in place', function (): void {
+test('a resume writes onto the paused row and completes it in place', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Approval conversation');
 
@@ -564,6 +564,8 @@ test('a resume reopens the paused row and completes it in place', function (): v
 
     $store->storeToolResults($messageId, [new ToolResult('call-1', 'DeleteFile', [], 'The user rejected this tool call.', denied: true)]);
 
+    $inProgress = DB::table('agent_conversation_messages')->where('id', 'paused-1')->first();
+
     $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Mockery::mock(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => Decision::reject()]));
 
     $store->completeAssistantMessage($messageId, $prompt, new AgentResponse('invocation-id', '', new TextUsage, new Meta));
@@ -571,7 +573,8 @@ test('a resume reopens the paused row and completes it in place', function (): v
     $row = DB::table('agent_conversation_messages')->where('id', 'paused-1')->first();
 
     expect($messageId)->toBe('paused-1')
-        ->and($reopened->completed_at)->toBeNull()
+        ->and($reopened->completed_at)->not->toBeNull()
+        ->and($inProgress->completed_at)->toBeNull()
         ->and($row->completed_at)->not->toBeNull()
         ->and($row->steps)->json()->{'0'}->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-1', 'approval_reason' => null, 'denied' => true])
         ->and($store->pendingApprovalsFor($conversationId))->toBe([])
@@ -983,7 +986,7 @@ test('it writes the steps of a paused turn with their replay blocks and keeps re
             new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file'),
         ]));
 
-    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+    storeAssistantTurn($store, $conversationId, $prompt, $response);
 
     $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
 
@@ -1019,7 +1022,7 @@ test('it writes the steps a paused stream carried on its approval request', func
         ])),
     ]), new Meta);
 
-    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+    storeAssistantTurn($store, $conversationId, $prompt, $response);
 
     $steps = DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps');
 
@@ -1049,7 +1052,7 @@ test('it writes the steps a completed stream carried on its stream end', functio
         ])),
     ]), new Meta);
 
-    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+    storeAssistantTurn($store, $conversationId, $prompt, $response);
 
     $steps = DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps');
 
@@ -1490,7 +1493,7 @@ test('it records no reasoning on the turn steps when the model did not reason', 
         new TextDelta(uniqid(), 'message-1', 'It is 12°C.', time()),
     ]), new Meta);
 
-    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+    storeAssistantTurn($store, $conversationId, $prompt, $response);
 
     $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
 
@@ -1515,7 +1518,7 @@ test('it records the sources a streamed turn cited into the message meta', funct
         new CitationEvent(uniqid(), 'message-1', new UrlCitation('https://laravel.com/docs/mcp', 'Laravel MCP'), time()),
     ]), new Meta);
 
-    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+    storeAssistantTurn($store, $conversationId, $prompt, $response);
 
     $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
 
@@ -1542,7 +1545,7 @@ test('it stores no sources when a streamed turn cited nothing', function (): voi
         new TextDelta(uniqid(), 'message-1', 'It is 12°C.', time()),
     ]), new Meta);
 
-    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+    storeAssistantTurn($store, $conversationId, $prompt, $response);
 
     $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
 
@@ -1725,7 +1728,7 @@ test('provider reasoning state is kept on the step replay blocks rather than cop
             [$reasoningItem, ['type' => 'function_call', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'ReadFile', 'arguments' => '{"path":"a"}']],
         )]));
 
-    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+    storeAssistantTurn($store, $conversationId, $prompt, $response);
 
     $step = json_decode(DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps'), true)[0];
 
@@ -1771,7 +1774,7 @@ test('provider tool calls are stored per step and exposed on the stored message 
             new Step('Found it.', [], [], FinishReason::Stop, new TextUsage, new Meta('openai', 'gpt-5'), '', [], [$execution]),
         ]));
 
-    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+    storeAssistantTurn($store, $conversationId, $prompt, $response);
 
     $steps = json_decode(DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps'), true);
 
@@ -1780,3 +1783,12 @@ test('provider tool calls are stored per step and exposed on the stored message 
         ->and($store->paginateConversationMessages($conversationId, 1)->items()[0]->providerToolCalls())->toBe([$search->toArray(), $execution->toArray()])
         ->and(ConversationMessage::query()->where('role', 'assistant')->first()->provider_tool_calls)->toBe([$search->toArray(), $execution->toArray()]);
 });
+
+function storeAssistantTurn(DatabaseConversationStore $store, string $conversationId, AgentPrompt $prompt, AgentResponse $response, ?string $participantType = 'user', string|int|null $participantId = 1): string
+{
+    $messageId = $store->startAssistantMessage($conversationId, $participantType, $participantId, $prompt->agent::class);
+
+    $store->completeAssistantMessage($messageId, $prompt, $response);
+
+    return $messageId;
+}

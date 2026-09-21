@@ -196,7 +196,7 @@ trait GeneratesText
         /** @var Agent&RemembersConversationsContract $agent */
         $agent = $prompt->agent;
 
-        $turn = RememberConversation::appliesTo($agent) ? $agent->recordedTurn($invocationId) : null;
+        $turn = RememberConversation::appliesTo($agent) ? $agent->recordedTurn($prompt->invocationId) : null;
 
         return new RunContext(
             $invocationId, $prompt->agent, $this, $prompt->model, $this->events,
