@@ -678,6 +678,41 @@ test('a resume on another provider drops the paused replay blocks when it reopen
     expect(DB::table('agent_conversation_messages')->where('id', 'paused-1')->value('steps'))->json()->{'0'}->replay_blocks->toBe([]);
 });
 
+test('a turn that never completed replays without the raw blocks no provider can be read off', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Killed conversation');
+
+    insertAssistantTurn($conversationId, 'message-1', '', [
+        assistantStep(
+            [['id' => 'call-1', 'name' => 'edit_file', 'arguments' => ['path' => 'a']]],
+            replayBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
+        ),
+    ]);
+
+    DB::table('agent_conversation_messages')->where('id', 'message-1')->update(['status' => MessageStatus::Started]);
+
+    expect($store->getLatestConversationMessages($conversationId, 10)->first())
+        ->replayBlocks->toBe([])
+        ->toolCalls->toHaveCount(1)->each->toMatchObject(['id' => 'call-1']);
+});
+
+test('a resume claiming its paused row still replays the raw blocks the pause collected', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Approval conversation');
+
+    insertAssistantTurn($conversationId, 'paused-1', '', [
+        assistantStep(
+            [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []]],
+            replayBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
+        ),
+    ], ['call-1' => null], ['provider' => 'anthropic']);
+
+    $store->resumeAssistantMessage($conversationId, 'anthropic', ['call-1']);
+
+    expect($store->getLatestConversationMessages($conversationId, 10)->first())
+        ->replayBlocks->toBe([['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']]);
+});
+
 test('a turn that never completed replays its interrupted call with a placeholder result', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Killed conversation');
@@ -700,7 +735,7 @@ test('a turn that never completed replays its interrupted call with a placeholde
         fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toolCalls->toHaveCount(1)->each->toMatchObject(['id' => 'call-2']),
         fn ($message) => $message->toBeInstanceOf(ToolResultMessage::class)->toolResults->toHaveCount(1)->each->toMatchObject([
             'id' => 'call-2',
-            'failed' => true,
+            'failed' => false,
             'result' => 'This tool call was interrupted before a result was recorded, so it may or may not have run.',
         ]),
     );
@@ -1824,4 +1859,29 @@ test('a resume reclaims the pause an earlier resume failed on', function (): voi
     $store->failAssistantMessage('paused-1', new RuntimeException('The provider blew up.'));
 
     expect($store->resumeAssistantMessage($conversationId, 'anthropic', ['call-1']))->toBe('paused-1');
+});
+
+test('a resume killed after its approved result landed keeps the result and offers no second decision', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Approval conversation');
+
+    insertAssistantTurn($conversationId, 'paused-1', '', [
+        assistantStep(
+            [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []]],
+            [['id' => 'call-1', 'name' => 'DeleteFile', 'result' => 'deleted']],
+            [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
+        ),
+    ], ['call-1' => 'Deletes a file'], ['provider' => 'anthropic']);
+
+    // The row as a resume that died after running the tool left it, still claimed...
+    DB::table('agent_conversation_messages')->where('id', 'paused-1')->update(['status' => MessageStatus::Started]);
+
+    expect($store->pendingApprovalsFor($conversationId))->toBe([])
+        ->and($store->resumeAssistantMessage($conversationId, 'anthropic', ['call-1']))->toBeNull();
+
+    expect($store->getLatestConversationMessages($conversationId, 10))->toHaveCount(2)->sequence(
+        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->replayBlocks->toBe([]),
+        fn ($message) => $message->toBeInstanceOf(ToolResultMessage::class)->toolResults->toHaveCount(1)
+            ->each->toMatchObject(['id' => 'call-1', 'result' => 'deleted', 'failed' => false]),
+    );
 });

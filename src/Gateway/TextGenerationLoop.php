@@ -185,6 +185,9 @@ class TextGenerationLoop
             }
 
             if ($pendingApprovals->isNotEmpty()) {
+                // Recorded before the response leaves, so a process killed before the turn closes still leaves a resumable pause...
+                $context?->recordPendingApprovals($pendingApprovals);
+
                 return $this->buildFinalResponse($steps, $newMessages, $lastResult)
                     ->withPendingApprovals($pendingApprovals);
             }

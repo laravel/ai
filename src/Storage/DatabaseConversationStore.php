@@ -639,7 +639,9 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         $provider = $this->decoded($record->meta)['provider'] ?? null;
         $interrupted = MessageStatus::from($record->status)->isInterrupted();
 
-        return $this->decodedSteps($record)->flatMap(function (array $step) use ($pending, $provider, $interrupted): array {
+        $awaitingApproval = $pending !== [];
+
+        return $this->decodedSteps($record)->flatMap(function (array $step) use ($pending, $provider, $interrupted, $awaitingApproval): array {
             $content = $step['content'];
 
             $replayed = collect($step['tool_calls'])
@@ -654,8 +656,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 ->map(fn (array $toolCall) => PendingApproval::isAnswered($toolCall) ? ToolResult::fromArray($toolCall) : $this->interruptedResultFor($toolCall))
                 ->values();
 
-            // Raw blocks still name a dropped call, so a step missing one rebuilds generically rather than replaying a call no result answers...
-            $replayBlocks = $replayed->count() === count($step['tool_calls']) ? $step['replay_blocks'] : [];
+            // Raw blocks still name a dropped call, and a killed turn's outlive the run that could replay them, so both rebuild generically...
+            $replayBlocks = $replayed->count() === count($step['tool_calls']) && ($awaitingApproval || ! $interrupted) ? $step['replay_blocks'] : [];
 
             $isBlank = $content === '' && $toolCalls->isEmpty() && $replayBlocks === [];
 
@@ -682,7 +684,6 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             $toolCall['arguments'] ?? [],
             'This tool call was interrupted before a result was recorded, so it may or may not have run.',
             $toolCall['result_id'] ?? null,
-            failed: true,
         );
     }
 

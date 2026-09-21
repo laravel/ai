@@ -4,9 +4,12 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Approvals\Decisions;
+use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Tests\Fixtures\Agents\RememberingApprovableAgent;
@@ -1121,6 +1124,38 @@ test('a plain call sharing a step with a gated call runs at the pause and both r
     expect($sentResultIds)->toBe(['toolu_plain', 'toolu_gated'])
         ->and($calls['toolu_gated'])->toHaveKey('result')
         ->and($store->pendingApprovalsFor($paused->conversationId))->toBe([]);
+});
+
+test('a prompt killed between the pause and the close still leaves a resumable pause', function (): void {
+    Config::set('ai.conversations.generate_title', false);
+    Config::set('ai.providers.anthropic.key', 'test-key');
+
+    Http::fake(['api.anthropic.com/*' => Http::response([
+        'id' => 'msg_1',
+        'type' => 'message',
+        'role' => 'assistant',
+        'model' => 'claude-sonnet-4-6',
+        'content' => [['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'ApprovableNumberGenerator', 'input' => (object) []]],
+        'stop_reason' => 'tool_use',
+        'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+    ])]);
+
+    app()->instance(ConversationStore::class, new class extends DatabaseConversationStore
+    {
+        public function completeAssistantMessage(string $messageId, AgentPrompt $prompt, AgentResponse $response): void
+        {
+            throw new RuntimeException('The worker died before the turn closed.');
+        }
+    });
+
+    expect(fn () => (new RememberingApprovableAgent)->forUser((object) ['id' => 1])->prompt('Generate a number', provider: 'anthropic'))
+        ->toThrow(RuntimeException::class);
+
+    $row = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+
+    expect($row->steps)->json()->{'0'}->tool_calls->{'0'}->toHaveKey('approval_reason')
+        ->and((new DatabaseConversationStore)->pendingApprovalsFor($row->conversation_id))->toHaveCount(1)
+        ->and((new DatabaseConversationStore)->resumeAssistantMessage($row->conversation_id, 'anthropic', ['toolu_1']))->toBe($row->id);
 });
 
 test('a stream abandoned at the approval request still leaves a resumable pause', function (): void {
