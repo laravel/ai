@@ -35,7 +35,7 @@ class FakeConversationStore implements ConversationStore
         return new Collection;
     }
 
-    public function storeApprovalResults(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolResults): void
+    public function storeApprovalResults(string $conversationId, array $toolResults): void
     {
         //
     }

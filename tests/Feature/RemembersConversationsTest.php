@@ -56,7 +56,7 @@ test('it threads the participant type into latestConversationId when continuing 
             return new Collection;
         }
 
-        public function storeApprovalResults(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolResults): void
+        public function storeApprovalResults(string $conversationId, array $toolResults): void
         {
             //
         }
@@ -105,7 +105,7 @@ test('it continues the last conversation through a store that ignores the partic
             return new Collection;
         }
 
-        public function storeApprovalResults(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolResults): void
+        public function storeApprovalResults(string $conversationId, array $toolResults): void
         {
             //
         }
@@ -163,7 +163,7 @@ test('it resolves the participant id via getKey for models with custom primary k
             return new Collection;
         }
 
-        public function storeApprovalResults(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolResults): void
+        public function storeApprovalResults(string $conversationId, array $toolResults): void
         {
             //
         }
