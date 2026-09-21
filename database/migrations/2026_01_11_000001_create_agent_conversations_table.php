@@ -38,7 +38,6 @@ return new class extends AiMigration
             $table->text('meta');
             $table->timestamp('approval_requested_at')->nullable();
             $table->timestamp('completed_at')->nullable();
-            $table->timestamp('failed_at')->nullable();
             $table->timestamps();
 
             $table->index(['conversation_id', 'participant_type', 'participant_id', 'updated_at'], 'conversation_index');

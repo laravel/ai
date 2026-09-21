@@ -210,7 +210,6 @@ test('a failover after a recorded step leaves that attempt on its own row and an
 
     expect($rows->pluck('role')->all())->toBe(['user', 'assistant', 'assistant'])
         ->and($rows[1]->completed_at)->toBeNull()
-        ->and($rows[1]->failed_at)->not->toBeNull()
         ->and($rows[1]->steps)->json()->toHaveCount(1)->{'0'}->tool_calls->{'0'}->toMatchArray(['id' => 'call_1', 'result' => 72019])
         ->and($rows[2]->id)->toBe($response->assistantMessageId)
         ->and($rows[2]->content)->toBe('Hello from backup')
@@ -280,7 +279,6 @@ test('a step whose last tool throws keeps the results of the tools that finished
     $row = assistantRowFor(DB::table('agent_conversations')->value('id'));
 
     expect($row->completed_at)->toBeNull()
-        ->and($row->failed_at)->not->toBeNull()
         ->and(json_decode($row->meta, true)['error'])->toBe('The tool blew up.')
         ->and($row->steps)->json()->toHaveCount(1)->{'0'}->tool_calls->toHaveCount(3)
         ->and(json_decode($row->steps, true)[0]['tool_calls'])->sequence(
