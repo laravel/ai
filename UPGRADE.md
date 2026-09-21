@@ -145,6 +145,7 @@ return new class extends AiMigration
                     'tool_calls' => array_values(array_filter($calls, fn (array $call) => in_array($call['id'] ?? null, $ids, true))),
                     'reasoning' => '',
                     'replay_blocks' => $providerStep['blocks'] ?? [],
+                    'provider_tool_calls' => [],
                 ];
             }
         } else {
@@ -153,12 +154,18 @@ return new class extends AiMigration
                 'tool_calls' => $calls,
                 'reasoning' => '',
                 'replay_blocks' => $meta['provider_content_blocks'] ?? [],
+                'provider_tool_calls' => [],
             ]];
 
             // A completed turn's text was produced after its results, so it replays as a step of its own...
             if ($calls !== [] && $row->approval_state === null && (string) $row->content !== '') {
-                $steps[] = ['content' => '', 'tool_calls' => [], 'reasoning' => '', 'replay_blocks' => []];
+                $steps[] = ['content' => '', 'tool_calls' => [], 'reasoning' => '', 'replay_blocks' => [], 'provider_tool_calls' => []];
             }
+        }
+
+        // Raw provider blocks are replayed only while a turn is paused, so a completed turn keeps none...
+        if ($row->approval_state === null) {
+            $steps = array_map(fn (array $step): array => [...$step, 'replay_blocks' => []], $steps);
         }
 
         $steps[array_key_last($steps)]['content'] = (string) $row->content;
@@ -496,7 +503,7 @@ Several protected methods used by custom providers and gateways have changed:
 
 **Likelihood Of Impact: Low**
 
-No changes are needed if you use the included database store. If you bind a custom `ConversationStore`, update the following three method signatures.
+No changes are needed if you use the included database store. If you bind a custom `ConversationStore`, update the following four method signatures.
 
 `latestConversationId()` receives the agent class name. Scope the lookup to the given agent:
 
@@ -529,6 +536,15 @@ public function storeUserMessage(
     string $agent,
     UserMessage $message,
 ): string;
+```
+
+`storeApprovalResults()` no longer receives the participant. Look the paused turn up by conversation alone, so a turn paused for one participant may be resolved by another:
+
+```php
+public function storeApprovalResults(
+    string $conversationId,
+    array $toolResults,
+): void;
 ```
 
 `storeAssistantMessage()` is unchanged.

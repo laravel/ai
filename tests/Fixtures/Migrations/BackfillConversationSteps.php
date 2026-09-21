@@ -120,6 +120,7 @@ class BackfillConversationSteps extends AiMigration
                     'tool_calls' => array_values(array_filter($calls, fn (array $call) => in_array($call['id'] ?? null, $ids, true))),
                     'reasoning' => '',
                     'replay_blocks' => $providerStep['blocks'] ?? [],
+                    'provider_tool_calls' => [],
                 ];
             }
         } else {
@@ -128,12 +129,18 @@ class BackfillConversationSteps extends AiMigration
                 'tool_calls' => $calls,
                 'reasoning' => '',
                 'replay_blocks' => $meta['provider_content_blocks'] ?? [],
+                'provider_tool_calls' => [],
             ]];
 
             // A completed turn's text was produced after its results, so it replays as a step of its own...
             if ($calls !== [] && $row->approval_state === null && (string) $row->content !== '') {
-                $steps[] = ['content' => '', 'tool_calls' => [], 'reasoning' => '', 'replay_blocks' => []];
+                $steps[] = ['content' => '', 'tool_calls' => [], 'reasoning' => '', 'replay_blocks' => [], 'provider_tool_calls' => []];
             }
+        }
+
+        // Raw provider blocks are replayed only while a turn is paused, so a completed turn keeps none...
+        if ($row->approval_state === null) {
+            $steps = array_map(fn (array $step): array => [...$step, 'replay_blocks' => []], $steps);
         }
 
         $steps[array_key_last($steps)]['content'] = (string) $row->content;

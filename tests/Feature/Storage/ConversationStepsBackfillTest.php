@@ -108,8 +108,8 @@ test('it splits a row per provider step and moves the turn reasoning blob onto t
     $row = DB::table('agent_conversation_messages')->first();
 
     expect($row->steps)->json()->toBe([
-        ['content' => '', 'tool_calls' => [answeredToolCall('call-1')], 'reasoning' => '', 'replay_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']]],
-        ['content' => 'Now b.', 'tool_calls' => [legacyCall('call-2')], 'reasoning' => 'Deleting b next.', 'replay_blocks' => [['type' => 'thinking', 'signature' => 'sig-2']]],
+        ['content' => '', 'tool_calls' => [answeredToolCall('call-1')], 'reasoning' => '', 'replay_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']], 'provider_tool_calls' => []],
+        ['content' => 'Now b.', 'tool_calls' => [legacyCall('call-2')], 'reasoning' => 'Deleting b next.', 'replay_blocks' => [['type' => 'thinking', 'signature' => 'sig-2']], 'provider_tool_calls' => []],
     ])->and($row->meta)->json()->toBe(['provider' => 'anthropic', 'model' => 'claude-sonnet-4-6']);
 });
 
@@ -120,8 +120,8 @@ test('it replays a completed turn answer after the results it was written from',
     (new BackfillConversationSteps)->up();
 
     expect(DB::table('agent_conversation_messages')->where('id', 'message-2')->value('steps'))->json()->toBe([
-        ['content' => '', 'tool_calls' => [answeredToolCall('call-1')], 'reasoning' => '', 'replay_blocks' => []],
-        ['content' => 'Done.', 'tool_calls' => [], 'reasoning' => '', 'replay_blocks' => []],
+        ['content' => '', 'tool_calls' => [answeredToolCall('call-1')], 'reasoning' => '', 'replay_blocks' => [], 'provider_tool_calls' => []],
+        ['content' => 'Done.', 'tool_calls' => [], 'reasoning' => '', 'replay_blocks' => [], 'provider_tool_calls' => []],
     ]);
 
     $messages = (new DatabaseConversationStore)->getLatestConversationMessages('conversation-1', 10);
@@ -132,6 +132,20 @@ test('it replays a completed turn answer after the results it was written from',
         ToolResultMessage::class,
         AssistantMessage::class,
     ])->and($messages->last()->content)->toBe('Done.');
+});
+
+test('it drops the raw provider blocks of a turn that is no longer paused', function (): void {
+    insertLegacyRow('message-1', 'assistant', 'Done.', toolCalls: [legacyCall('call-1')], toolResults: [legacyResult('call-1')], meta: [
+        'provider' => 'anthropic',
+        'provider_content_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']],
+    ]);
+
+    (new BackfillConversationSteps)->up();
+
+    expect(DB::table('agent_conversation_messages')->value('steps'))->json()->toBe([
+        ['content' => '', 'tool_calls' => [answeredToolCall('call-1')], 'reasoning' => '', 'replay_blocks' => [], 'provider_tool_calls' => []],
+        ['content' => 'Done.', 'tool_calls' => [], 'reasoning' => '', 'replay_blocks' => [], 'provider_tool_calls' => []],
+    ]);
 });
 
 test('it records a result duplicated across rows once, on the row that made the call', function (): void {
