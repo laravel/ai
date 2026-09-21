@@ -6,10 +6,6 @@ use Closure;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Approvals\Decision;
-use Laravel\Ai\Concerns\RemembersConversations;
-use Laravel\Ai\Contracts\Agent;
-use Laravel\Ai\Contracts\ConversationStore;
-use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -55,7 +51,7 @@ trait ResumesToolApprovals
     }
 
     /**
-     * Get a callback that captures a resume's resolved approval results, also durably recording them when the store supports it.
+     * Get a callback that captures a resume's resolved approval results for the ToolApprovalResolved event.
      */
     protected function approvalResultRecorderFor(AgentPrompt $prompt, ?Collection &$resolvedApprovalResults): ?Closure
     {
@@ -63,37 +59,8 @@ trait ResumesToolApprovals
             return null;
         }
 
-        $storeRecorder = $this->storeApprovalResultRecorderFor($prompt);
-
-        return function (array $toolResults) use ($storeRecorder, &$resolvedApprovalResults): void {
+        return function (array $toolResults) use (&$resolvedApprovalResults): void {
             $resolvedApprovalResults = collect($toolResults);
-
-            if ($storeRecorder !== null) {
-                $storeRecorder($toolResults);
-            }
         };
-    }
-
-    /**
-     * Get a callback that durably records resolved approval results before the run continues, if the store supports it.
-     */
-    protected function storeApprovalResultRecorderFor(AgentPrompt $prompt): ?Closure
-    {
-        $agent = $prompt->agent;
-
-        if (! in_array(RemembersConversations::class, class_uses_recursive($agent), true)) {
-            return null;
-        }
-
-        /** @var Agent&RemembersConversationsContract $agent */
-        $conversationId = $agent->currentConversation();
-
-        if ($conversationId === null) {
-            return null;
-        }
-
-        $store = app(ConversationStore::class);
-
-        return fn (array $toolResults) => $store->storeApprovalResults($conversationId, $toolResults);
     }
 }

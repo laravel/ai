@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\InvokingTool;
@@ -13,6 +14,9 @@ use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Responses\Data\Step;
+use Laravel\Ai\Responses\Data\ToolResult;
+use Laravel\Ai\Storage\RecordedTurn;
 use Throwable;
 
 class RunContext
@@ -23,7 +27,31 @@ class RunContext
         public readonly TextProvider $provider,
         public readonly string $model,
         protected readonly Dispatcher $events,
+        protected readonly ?ConversationStore $store = null,
+        protected readonly ?RecordedTurn $turn = null,
     ) {}
+
+    /**
+     * Write a step onto the turn's stored row before its tools run, when the turn is being recorded.
+     */
+    public function recordStep(Step $step): void
+    {
+        if ($this->turn !== null) {
+            $this->store->storeStep($this->turn->assistantMessageId, $step);
+        }
+    }
+
+    /**
+     * Write tool results onto the turn's stored row as they arrive, when the turn is being recorded.
+     *
+     * @param  array<int, ToolResult>  $toolResults
+     */
+    public function recordToolResults(array $toolResults): void
+    {
+        if ($this->turn !== null && $toolResults !== []) {
+            $this->store->storeToolResults($this->turn->assistantMessageId, $toolResults);
+        }
+    }
 
     /**
      * Report that a generation step is about to start.

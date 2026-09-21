@@ -4,12 +4,15 @@ namespace Laravel\Ai\Concerns;
 
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Models\Conversation;
+use Laravel\Ai\Storage\RecordedTurn;
 
 trait RemembersConversations
 {
     protected ?string $conversationId = null;
 
     protected ?object $conversationUser = null;
+
+    protected ?RecordedTurn $recordedTurn = null;
 
     /**
      * Start a new conversation for the given participant.
@@ -76,7 +79,8 @@ trait RemembersConversations
         return resolve(ConversationStore::class)
             ->getLatestConversationMessages(
                 $this->conversationId,
-                $this->maxConversationMessages()
+                $this->maxConversationMessages(),
+                $this->recordedTurn?->userMessageId,
             )->all();
     }
 
@@ -110,5 +114,23 @@ trait RemembersConversations
     public function conversationParticipant(): ?object
     {
         return $this->conversationUser;
+    }
+
+    /**
+     * Remember the rows the current turn is being recorded on, or forget them once it completes.
+     */
+    public function recordTurn(?RecordedTurn $turn): static
+    {
+        $this->recordedTurn = $turn;
+
+        return $this;
+    }
+
+    /**
+     * Get the rows the given invocation is being recorded on, if this agent opened them.
+     */
+    public function recordedTurn(?string $invocationId): ?RecordedTurn
+    {
+        return $this->recordedTurn?->invocationId === $invocationId ? $this->recordedTurn : null;
     }
 }

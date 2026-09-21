@@ -21,9 +21,11 @@ class BackfillConversationSteps extends AiMigration
         Schema::connection($this->getConnection())->table($table, function (Blueprint $blueprint) {
             $blueprint->longText('steps')->nullable();
             $blueprint->timestamp('approval_requested_at')->nullable();
+            $blueprint->timestamp('completed_at')->nullable();
         });
 
         $this->query($table)->where('role', 'user')->update(['steps' => '[]']);
+        $this->query($table)->update(['completed_at' => DB::raw('updated_at')]);
 
         $this->query($table)
             ->select('conversation_id')

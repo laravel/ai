@@ -8,6 +8,7 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\Step;
 
 class InMemoryConversationStore implements ConversationStore
 {
@@ -33,6 +34,11 @@ class InMemoryConversationStore implements ConversationStore
         return $id;
     }
 
+    public function updateConversationTitle(string $conversationId, string $title): void
+    {
+        $this->conversations[$conversationId]['title'] = $title;
+    }
+
     public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, string $agent, UserMessage $message): string
     {
         $id = (string) Str::uuid7();
@@ -47,7 +53,7 @@ class InMemoryConversationStore implements ConversationStore
         return $id;
     }
 
-    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
+    public function startAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, string $agent): string
     {
         $id = (string) Str::uuid7();
 
@@ -55,22 +61,58 @@ class InMemoryConversationStore implements ConversationStore
             'id' => $id,
             'conversation_id' => $conversationId,
             'role' => 'assistant',
-            'content' => $response->text,
+            'content' => '',
+            'steps' => [],
+            'completed' => false,
         ];
 
         return $id;
     }
 
-    public function getLatestConversationMessages(string $conversationId, int $limit): Collection
+    public function resumeAssistantMessage(string $conversationId, string $provider, array $decided): ?string
+    {
+        return null;
+    }
+
+    public function storeStep(string $messageId, Step $step): void
+    {
+        $this->messages[$this->indexOf($messageId)]['steps'][] = $step;
+    }
+
+    public function storeToolResults(string $messageId, array $toolResults): void
+    {
+        //
+    }
+
+    public function completeAssistantMessage(string $messageId, AgentPrompt $prompt, AgentResponse $response): void
+    {
+        $this->messages[$this->indexOf($messageId)] = [
+            ...$this->messages[$this->indexOf($messageId)],
+            'content' => $response->text,
+            'completed' => true,
+        ];
+    }
+
+    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): string
+    {
+        $id = $this->startAssistantMessage($conversationId, $participantType, $participantId, $prompt->agent::class);
+
+        $this->completeAssistantMessage($id, $prompt, $response);
+
+        return $id;
+    }
+
+    public function getLatestConversationMessages(string $conversationId, int $limit, ?string $before = null): Collection
     {
         return collect($this->messages)
             ->where('conversation_id', $conversationId)
-            ->take($limit)
+            ->when($before !== null, fn (Collection $messages) => $messages->takeUntil(fn (array $message): bool => $message['id'] === $before))
+            ->take(-$limit)
             ->values();
     }
 
-    public function storeApprovalResults(string $conversationId, array $toolResults): void
+    protected function indexOf(string $messageId): int
     {
-        //
+        return collect($this->messages)->search(fn (array $message): bool => $message['id'] === $messageId);
     }
 }

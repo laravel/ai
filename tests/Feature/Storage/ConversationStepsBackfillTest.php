@@ -42,6 +42,7 @@ test('it moves a result recorded on a later row onto the step that made the call
     expect(Schema::hasColumns('agent_conversation_messages', ['tool_calls', 'tool_results', 'approval_state']))->toBeFalse()
         ->and($rows['message-1']->steps)->toBe('[]')
         ->and($rows['message-2']->approval_requested_at)->toBeNull()
+        ->and($rows->pluck('completed_at')->filter())->toHaveCount($rows->count())
         ->and($rows['message-3']->approval_requested_at)->toBeNull()
         ->and($rows['message-2']->steps)->json()->toHaveCount(1)->{'0'}->toMatchArray([
             'tool_calls' => [answeredToolCall('call-1')],

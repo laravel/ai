@@ -2,6 +2,8 @@
 
 namespace Laravel\Ai\Contracts;
 
+use Laravel\Ai\Storage\RecordedTurn;
+
 interface RemembersConversations extends Conversational
 {
     /**
@@ -43,4 +45,14 @@ interface RemembersConversations extends Conversational
      * Get the user having the current conversation.
      */
     public function conversationParticipant(): ?object;
+
+    /**
+     * Remember the rows the current turn is being recorded on, or forget them once it completes.
+     */
+    public function recordTurn(?RecordedTurn $turn): static;
+
+    /**
+     * Get the rows the given invocation is being recorded on, if this agent opened them.
+     */
+    public function recordedTurn(?string $invocationId): ?RecordedTurn;
 }

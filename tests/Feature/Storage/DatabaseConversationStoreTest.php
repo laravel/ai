@@ -16,7 +16,6 @@ use Laravel\Ai\Contracts\PaginatesConversations;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\ResolvesPendingApprovals;
 use Laravel\Ai\Contracts\VerifiesConversationOwnership;
-use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -551,35 +550,33 @@ test('it treats tool results stored before the failed flag as successful', funct
         ->and($result->error())->toBeNull();
 });
 
-test('a bare rejection resume does not persist a blank assistant row', function (): void {
+test('a resume reopens the paused row and completes it in place', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Approval conversation');
 
     insertAssistantTurn($conversationId, 'paused-1', '', [
-        assistantStep(
-            [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []]],
-            [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => [], 'result' => 'The user rejected this tool call.', 'result_id' => null]],
-        ),
-    ], []);
+        assistantStep([['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []]]),
+    ], ['call-1' => null], ['provider' => 'anthropic']);
 
-    $prompt = new AgentPrompt(
-        new ToolUsingAgent,
-        '',
-        [],
-        Mockery::mock(TextProvider::class),
-        'test-model',
-        approvalDecisions: Decisions::from(['call-1' => Decision::reject()]),
-    );
+    $messageId = $store->resumeAssistantMessage($conversationId, 'anthropic', ['call-1']);
 
-    $response = new AgentResponse('invocation-id', '', new TextUsage, new Meta);
-    $response->toolResults = collect([
-        new ToolResult('call-1', 'DeleteFile', [], 'The user rejected this tool call.'),
-    ]);
+    $reopened = DB::table('agent_conversation_messages')->where('id', 'paused-1')->first();
 
-    $messageId = $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+    $store->storeToolResults($messageId, [new ToolResult('call-1', 'DeleteFile', [], 'The user rejected this tool call.', denied: true)]);
+
+    $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Mockery::mock(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => Decision::reject()]));
+
+    $store->completeAssistantMessage($messageId, $prompt, new AgentResponse('invocation-id', '', new TextUsage, new Meta));
+
+    $row = DB::table('agent_conversation_messages')->where('id', 'paused-1')->first();
 
     expect($messageId)->toBe('paused-1')
-        ->and(DB::table('agent_conversation_messages')->where('role', 'assistant')->count())->toBe(1);
+        ->and($reopened->completed_at)->toBeNull()
+        ->and($row->completed_at)->not->toBeNull()
+        ->and($row->steps)->json()->{'0'}->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-1', 'approval_reason' => null, 'denied' => true])
+        ->and($store->pendingApprovalsFor($conversationId))->toBe([])
+        ->and(DB::table('agent_conversation_messages')->where('role', 'assistant')->count())->toBe(1)
+        ->and($store->resumeAssistantMessage($conversationId, 'anthropic', ['call-1']))->toBeNull();
 });
 
 test('a resume folds its steps, text and usage into the paused row', function (): void {
@@ -587,27 +584,19 @@ test('a resume folds its steps, text and usage into the paused row', function ()
     $conversationId = $store->storeConversation('user', 1, 'Approval conversation');
 
     insertAssistantTurn($conversationId, 'paused-1', '', [
-        assistantStep(
-            [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []]],
-            [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => [], 'result' => 'Deleted', 'result_id' => null]],
-        ),
-    ], []);
+        assistantStep([['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []]]),
+    ], ['call-1' => null], ['provider' => 'openai']);
 
     DB::table('agent_conversation_messages')->where('id', 'paused-1')->update(['usage' => json_encode(['input_tokens' => 10, 'output_tokens' => 5])]);
 
-    $prompt = new AgentPrompt(
-        new ToolUsingAgent,
-        '',
-        [],
-        Mockery::mock(TextProvider::class),
-        'test-model',
-        approvalDecisions: Decisions::from(['call-1' => true]),
-    );
+    $messageId = $store->resumeAssistantMessage($conversationId, 'openai', ['call-1']);
 
-    $response = new AgentResponse('invocation-id', 'Done.', new TextUsage(20, 7), new Meta('openai', 'gpt-5'));
-    $response->steps = collect([new Step('Done.', [], [], FinishReason::Stop, new TextUsage(20, 7), new Meta, '', [])]);
+    $store->storeToolResults($messageId, [new ToolResult('call-1', 'DeleteFile', [], 'Deleted')]);
+    $store->storeStep($messageId, new Step('Done.', [], [], FinishReason::Stop, new TextUsage(20, 7), new Meta, '', []));
 
-    $messageId = $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+    $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Mockery::mock(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
+
+    $store->completeAssistantMessage($messageId, $prompt, new AgentResponse('invocation-id', 'Done.', new TextUsage(20, 7), new Meta('openai', 'gpt-5')));
 
     $row = DB::table('agent_conversation_messages')->where('role', 'assistant')->sole();
 
@@ -626,15 +615,13 @@ test('a resume keeps the citations the paused half of the turn collected', funct
         assistantStep([['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []]]),
     ], ['call-1' => 'Deletes a file'], ['provider' => 'anthropic', 'model' => 'claude-sonnet-4-5', 'citations' => [(new UrlCitation('https://laravel.com/docs/ai'))->toArray()]]);
 
+    $messageId = $store->resumeAssistantMessage($conversationId, 'anthropic', ['call-1']);
+
     $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Mockery::mock(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
 
     $meta = new Meta('anthropic', 'claude-sonnet-4-6', collect([new UrlCitation('https://laravel.com/docs/mcp')]));
 
-    $response = (new AgentResponse('invocation-id', 'Deleted.', new TextUsage, $meta))->withSteps(collect([
-        new Step('Deleted.', [], [], FinishReason::Stop, new TextUsage, $meta, '', []),
-    ]));
-
-    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+    $store->completeAssistantMessage($messageId, $prompt, new AgentResponse('invocation-id', 'Deleted.', new TextUsage, $meta));
 
     expect(DB::table('agent_conversation_messages')->where('id', 'paused-1')->value('meta'))->json()
         ->model->toBe('claude-sonnet-4-6')
@@ -643,7 +630,7 @@ test('a resume keeps the citations the paused half of the turn collected', funct
         ->citations->{'1'}->url->toBe('https://laravel.com/docs/mcp');
 });
 
-test('a fold that recorded no result does not leave the row reporting a pending approval', function (): void {
+test('a resume that recorded no result does not leave the row reporting a pending approval', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Approval conversation');
 
@@ -651,40 +638,78 @@ test('a fold that recorded no result does not leave the row reporting a pending 
         assistantStep([['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []]]),
     ], ['call-1' => 'Deletes a file']);
 
+    $messageId = $store->resumeAssistantMessage($conversationId, 'anthropic', ['call-1']);
+
     $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Mockery::mock(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
 
-    $response = (new AgentResponse('invocation-id', 'Done.', new TextUsage, new Meta))->withSteps(collect([
-        new Step('Done.', [], [], FinishReason::Stop, new TextUsage, new Meta, '', []),
-    ]));
-
-    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+    $store->completeAssistantMessage($messageId, $prompt, new AgentResponse('invocation-id', 'Done.', new TextUsage, new Meta));
 
     expect($store->pendingApprovalsFor($conversationId))->toBe([]);
 });
 
-test('a resume does not fold into a settled row once a newer plain turn follows it', function (): void {
+test('a resume does not reopen a settled row once a newer plain turn follows it', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Approval conversation');
 
-    insertAssistantTurn($conversationId, 'paused-1', 'Old.', [assistantStep()], []);
+    insertAssistantTurn($conversationId, 'paused-1', 'Old.', [assistantStep([['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []]])], ['call-1' => null]);
     insertAssistantTurn($conversationId, 'plain-2', 'Hi.', [assistantStep()]);
 
-    $prompt = new AgentPrompt(
-        new ToolUsingAgent,
-        '',
-        [],
-        Mockery::mock(TextProvider::class),
-        'test-model',
-        approvalDecisions: Decisions::from(['call-1' => true]),
+    expect($store->resumeAssistantMessage($conversationId, 'anthropic', ['call-9']))->toBeNull()
+        ->and(DB::table('agent_conversation_messages')->where('id', 'paused-1')->value('completed_at'))->not->toBeNull();
+});
+
+test('a resume on another provider drops the paused replay blocks when it reopens the row', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Approval conversation');
+
+    insertAssistantTurn($conversationId, 'paused-1', '', [
+        assistantStep(
+            [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []]],
+            replayBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
+        ),
+    ], ['call-1' => null], ['provider' => 'anthropic']);
+
+    $store->resumeAssistantMessage($conversationId, 'openai', ['call-1']);
+
+    expect(DB::table('agent_conversation_messages')->where('id', 'paused-1')->value('steps'))->json()->{'0'}->replay_blocks->toBe([]);
+});
+
+test('a turn that never completed replays its interrupted call with a placeholder result', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Killed conversation');
+
+    insertAssistantTurn($conversationId, 'message-1', '', [
+        assistantStep(
+            [['id' => 'call-1', 'name' => 'edit_file', 'arguments' => ['path' => 'a']]],
+            [['id' => 'call-1', 'name' => 'edit_file', 'result' => 'edited a']],
+        ),
+        assistantStep([['id' => 'call-2', 'name' => 'edit_file', 'arguments' => ['path' => 'b']]]),
+    ]);
+
+    DB::table('agent_conversation_messages')->where('id', 'message-1')->update(['completed_at' => null]);
+
+    $messages = $store->getLatestConversationMessages($conversationId, 10);
+
+    expect($messages)->toHaveCount(4)->sequence(
+        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toolCalls->toHaveCount(1)->each->toMatchObject(['id' => 'call-1']),
+        fn ($message) => $message->toBeInstanceOf(ToolResultMessage::class)->toolResults->toHaveCount(1)->each->toMatchObject(['result' => 'edited a']),
+        fn ($message) => $message->toBeInstanceOf(AssistantMessage::class)->toolCalls->toHaveCount(1)->each->toMatchObject(['id' => 'call-2']),
+        fn ($message) => $message->toBeInstanceOf(ToolResultMessage::class)->toolResults->toHaveCount(1)->each->toMatchObject([
+            'id' => 'call-2',
+            'failed' => true,
+            'result' => 'This tool call was interrupted before a result was recorded, so it may or may not have run.',
+        ]),
     );
+});
 
-    $response = new AgentResponse('invocation-id', 'Done.', new TextUsage, new Meta);
-    $response->steps = collect([new Step('Done.', [], [], FinishReason::Stop, new TextUsage, new Meta, '', [])]);
+test('history can stop before a given message', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Transcript');
 
-    $messageId = $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+    insertStoredConversationMessages($conversationId, ['message-001', 'message-002', 'message-003']);
 
-    expect($messageId)->not->toBeIn(['paused-1', 'plain-2'])
-        ->and(DB::table('agent_conversation_messages')->where('id', 'paused-1')->value('content'))->toBe('Old.');
+    expect($store->getLatestConversationMessages($conversationId, 10, before: 'message-003')->pluck('content')->all())
+        ->toBe(['Content for message-001', 'Content for message-002']);
 });
 
 test('it replays a completed multi-step turn with each result answering its own step', function (): void {
@@ -768,60 +793,68 @@ test('it replays every step of a paused turn with its replay blocks tagged by th
     );
 });
 
-test('completing a turn stores no replay blocks and drops those of the paused rows it resumed', function (): void {
+test('completing a turn drops the replay blocks its steps recorded', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
     insertAssistantTurn($conversationId, 'message-1', '', [
         assistantStep(
-            [['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'b'], 'result' => 'deleted']],
+            [['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'b']]],
             replayBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
         ),
-    ], [], ['provider' => 'anthropic']);
+    ], ['call-1' => null], ['provider' => 'anthropic']);
+
+    $messageId = $store->resumeAssistantMessage($conversationId, 'anthropic', ['call-1']);
+
+    $store->storeToolResults($messageId, [new ToolResult('call-1', 'delete_file', ['path' => 'b'], 'deleted')]);
+    $store->storeStep($messageId, new Step('Deleted b.', [], [], FinishReason::Stop, new TextUsage, new Meta, '', [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'text', 'text' => 'Deleted b.']]));
+
+    $recorded = json_decode(DB::table('agent_conversation_messages')->where('id', 'message-1')->value('steps'), true);
 
     $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Mockery::mock(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
 
-    $response = (new AgentResponse('invocation-id', 'Deleted b.', new TextUsage, new Meta('anthropic')))->withSteps(collect([
-        new Step('Deleted b.', [], [], FinishReason::Stop, new TextUsage, new Meta, '', [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'text', 'text' => 'Deleted b.']]),
-    ]));
+    $store->completeAssistantMessage($messageId, $prompt, new AgentResponse('invocation-id', 'Deleted b.', new TextUsage, new Meta('anthropic')));
 
-    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+    $row = DB::table('agent_conversation_messages')->where('id', 'message-1')->first();
 
-    $blocks = DB::table('agent_conversation_messages')->where('role', 'assistant')->pluck('steps')
-        ->flatMap(fn (string $steps) => collect(json_decode($steps, true))->pluck('replay_blocks'));
-
-    expect($blocks->all())->toBe([[], []])
-        ->and(DB::table('agent_conversation_messages')->where('id', 'message-1')->value('approval_requested_at'))->toBeNull();
+    expect(array_column($recorded, 'replay_blocks'))->toBe([
+        [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
+        [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'text', 'text' => 'Deleted b.']],
+    ])->and(array_column(json_decode($row->steps, true), 'replay_blocks'))->toBe([[], []])
+        ->and($row->content)->toBe('Deleted b.')
+        ->and($row->approval_requested_at)->toBeNull();
 });
 
-test('a turn that pauses again keeps the replay blocks of the rows it resumed', function (): void {
+test('a turn that pauses again keeps the replay blocks of every step it recorded', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
     insertAssistantTurn($conversationId, 'message-1', '', [
         assistantStep(
-            [['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'b'], 'result' => 'deleted']],
+            [['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'b']]],
             replayBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
         ),
-    ], [], ['provider' => 'anthropic']);
+    ], ['call-1' => null], ['provider' => 'anthropic']);
+
+    $messageId = $store->resumeAssistantMessage($conversationId, 'anthropic', ['call-1']);
+
+    $store->storeToolResults($messageId, [new ToolResult('call-1', 'delete_file', ['path' => 'b'], 'deleted')]);
+    $store->storeStep($messageId, new Step('', [new ToolCall('call-2', 'DeleteFile', ['path' => 'c'])], [], FinishReason::ToolCalls, new TextUsage, new Meta, '', [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'tool_use', 'id' => 'call-2']]));
 
     $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Mockery::mock(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
 
     $response = (new AgentResponse('invocation-id', '', new TextUsage, new Meta('anthropic')))
-        ->withSteps(collect([
-            new Step('', [new ToolCall('call-2', 'DeleteFile', ['path' => 'c'])], [], FinishReason::ToolCalls, new TextUsage, new Meta, '', [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'tool_use', 'id' => 'call-2']]),
-        ]))
         ->withPendingApprovals(collect([new PendingApproval('call-2', 'DeleteFile', ['path' => 'c'], 'Deletes a file')]));
 
-    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+    $store->completeAssistantMessage($messageId, $prompt, $response);
 
-    $blocks = DB::table('agent_conversation_messages')->where('role', 'assistant')->pluck('steps')
-        ->flatMap(fn (string $steps) => collect(json_decode($steps, true))->pluck('replay_blocks'));
+    $row = DB::table('agent_conversation_messages')->where('id', 'message-1')->first();
 
-    expect($blocks->all())->toEqualCanonicalizing([
+    expect(array_column(json_decode($row->steps, true), 'replay_blocks'))->toBe([
         [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
         [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'tool_use', 'id' => 'call-2']],
-    ])->and(DB::table('agent_conversation_messages')->where('id', 'message-1')->value('approval_requested_at'))->not->toBeNull();
+    ])->and($row->approval_requested_at)->not->toBeNull()
+        ->and($store->pendingApprovalsFor($conversationId))->toHaveCount(1)->{'0'}->toMatchObject(['id' => 'call-2', 'reason' => 'Deletes a file']);
 });
 
 test('a resume folds into the paused row holding its decided call rather than the newest pause', function (): void {
@@ -829,24 +862,25 @@ test('a resume folds into the paused row holding its decided call rather than th
     $conversationId = $store->storeConversation('user', 1, 'Approval conversation');
 
     insertAssistantTurn($conversationId, 'paused-1', '', [
-        assistantStep([['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'a'], 'result' => 'deleted']]),
+        assistantStep([['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'a']]]),
     ], ['call-1' => 'Deletes a file'], ['provider' => 'anthropic']);
 
     insertAssistantTurn($conversationId, 'paused-2', '', [
         assistantStep([['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b']]]),
     ], ['call-2' => 'Deletes b file'], ['provider' => 'anthropic']);
 
+    $messageId = $store->resumeAssistantMessage($conversationId, 'anthropic', ['call-1']);
+
+    $store->storeToolResults($messageId, [new ToolResult('call-1', 'delete_file', ['path' => 'a'], 'deleted')]);
+
     $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Mockery::mock(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
 
-    $response = (new AgentResponse('invocation-id', 'Deleted a.', new TextUsage, new Meta('anthropic')))->withSteps(collect([
-        new Step('Deleted a.', [], [], FinishReason::Stop, new TextUsage, new Meta, '', []),
-    ]));
-
-    expect($store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response))->toBe('paused-1');
+    $store->completeAssistantMessage($messageId, $prompt, new AgentResponse('invocation-id', 'Deleted a.', new TextUsage, new Meta('anthropic')));
 
     $rows = DB::table('agent_conversation_messages')->where('role', 'assistant')->get()->keyBy('id');
 
-    expect($rows['paused-1']->content)->toBe('Deleted a.')
+    expect($messageId)->toBe('paused-1')
+        ->and($rows['paused-1']->content)->toBe('Deleted a.')
         ->and($rows['paused-1']->approval_requested_at)->toBeNull()
         ->and($rows['paused-2']->content)->toBe('')
         ->and($rows['paused-2']->approval_requested_at)->not->toBeNull();
@@ -1026,16 +1060,7 @@ test('it writes the steps a completed stream carried on its stream end', functio
     );
 });
 
-test('storing approval results for a conversation with no paused row throws', function (): void {
-    $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
-
-    $store->storeApprovalResults($conversationId, [
-        new ToolResult('call-1', 'delete_file', ['path' => 'x'], 'Deleted x'),
-    ]);
-})->throws(ApprovalMismatchException::class, 'The approval results do not match a paused conversation turn.');
-
-test('a mismatch against a paused row carries the approvals that are actually pending', function (): void {
+test('a resume that matches no paused call reports the approvals that are actually pending', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
@@ -1046,20 +1071,13 @@ test('a mismatch against a paused row carries the approvals that are actually pe
         ]),
     ], ['call-1' => 'Destructive operation.']);
 
-    try {
-        $store->storeApprovalResults($conversationId, [
-            new ToolResult('call-9', 'delete_file', ['path' => 'x'], 'Deleted x'),
-        ]);
+    DB::table('agent_conversation_messages')->where('id', 'message-1')->update(['approval_requested_at' => null]);
 
-        $this->fail('Expected an approval mismatch.');
-    } catch (ApprovalMismatchException $e) {
-        expect($e->pendingApprovals->map->toArray()->all())->toBe([
-            ['id' => 'call-1', 'tool' => 'delete_file', 'arguments' => ['path' => 'x'], 'reason' => 'Destructive operation.'],
-        ]);
-    }
+    expect($store->resumeAssistantMessage($conversationId, 'anthropic', ['call-9']))->toBeNull()
+        ->and($store->pendingApprovalsFor($conversationId))->toBe([]);
 });
 
-test('resolving approval results does not require the resolver to be the paused turn\'s participant', function (): void {
+test('a resume does not require the resolver to be the paused turn\'s participant', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
@@ -1069,17 +1087,18 @@ test('resolving approval results does not require the resolver to be the paused 
 
     DB::table('agent_conversation_messages')->where('id', 'message-1')->update(['participant_id' => 2]);
 
-    $store->storeApprovalResults($conversationId, [
-        new ToolResult('call-1', 'delete_file', ['path' => 'x'], 'Deleted x'),
-    ]);
+    $messageId = $store->resumeAssistantMessage($conversationId, 'anthropic', ['call-1']);
+
+    $store->storeToolResults($messageId, [new ToolResult('call-1', 'delete_file', ['path' => 'x'], 'Deleted x')]);
 
     $row = DB::table('agent_conversation_messages')->where('id', 'message-1')->first();
 
-    expect($store->pendingApprovalsFor($conversationId))->toBe([])
+    expect($messageId)->toBe('message-1')
+        ->and($store->pendingApprovalsFor($conversationId))->toBe([])
         ->and($row->steps)->json()->{'0'}->tool_calls->{'0'}->toMatchArray(['id' => 'call-1', 'result' => 'Deleted x']);
 });
 
-test('resolving approval results writes each outcome into the step that made the call', function (): void {
+test('recording tool results writes each outcome into the step that made the call', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
@@ -1094,13 +1113,13 @@ test('resolving approval results writes each outcome into the step that made the
         ]),
     ], ['call-1' => 'Deletes x', 'call-2' => 'Deletes y']);
 
-    $store->storeApprovalResults($conversationId, [
+    $store->storeToolResults('message-1', [
         new ToolResult('call-1', 'delete_file', ['path' => 'x'], 'Deleted x'),
     ]);
 
     $partial = $store->pendingApprovalsFor($conversationId);
 
-    $store->storeApprovalResults($conversationId, [
+    $store->storeToolResults('message-1', [
         new ToolResult('call-1', 'delete_file', ['path' => 'x'], 'Deleted x'),
         new ToolResult('call-2', 'delete_file', ['path' => 'y'], 'The user rejected this tool call.', denied: true),
     ]);
@@ -1118,7 +1137,7 @@ test('resolving approval results writes each outcome into the step that made the
         );
 });
 
-test('resolving an edited approval records the arguments the tool actually ran with', function (): void {
+test('recording an edited approval records the arguments the tool actually ran with', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
@@ -1126,7 +1145,7 @@ test('resolving an edited approval records the arguments the tool actually ran w
         assistantStep([['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'x']]]),
     ], ['call-1' => 'Deletes x']);
 
-    $store->storeApprovalResults($conversationId, [
+    $store->storeToolResults('message-1', [
         new ToolResult('call-1', 'delete_file', ['path' => 'y'], 'Deleted y'),
     ]);
 
@@ -1147,7 +1166,7 @@ test('it replays a resumed pause as the paused call, its result, then the resume
         assistantStep([['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'a']]]),
     ], ['call-1' => null]);
 
-    $store->storeApprovalResults($conversationId, [
+    $store->storeToolResults('message-1', [
         new ToolResult('call-1', 'delete_file', ['path' => 'a'], 'Deleted a'),
     ]);
 
@@ -1602,6 +1621,7 @@ function createConversationSchema(?string $connection = null): void
         $table->text('usage');
         $table->text('meta');
         $table->timestamp('approval_requested_at')->nullable();
+        $table->timestamp('completed_at')->nullable();
         $table->timestamps();
     });
 }
@@ -1621,6 +1641,7 @@ function storedConversationMessageAttributes(string $id, string $conversationId,
         'steps' => '[]',
         'usage' => '[]',
         'meta' => '[]',
+        'completed_at' => now(),
         'created_at' => now(),
         'updated_at' => now(),
     ];

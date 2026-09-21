@@ -11,6 +11,7 @@ use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentPrompted;
@@ -192,7 +193,15 @@ trait GeneratesText
      */
     protected function runContextFor(string $invocationId, AgentPrompt $prompt): RunContext
     {
-        return new RunContext($invocationId, $prompt->agent, $this, $prompt->model, $this->events);
+        /** @var Agent&RemembersConversationsContract $agent */
+        $agent = $prompt->agent;
+
+        $turn = RememberConversation::appliesTo($agent) ? $agent->recordedTurn($invocationId) : null;
+
+        return new RunContext(
+            $invocationId, $prompt->agent, $this, $prompt->model, $this->events,
+            $turn === null ? null : resolve(ConversationStore::class), $turn,
+        );
     }
 
     /**

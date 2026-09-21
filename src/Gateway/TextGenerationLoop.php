@@ -112,6 +112,8 @@ class TextGenerationLoop
                 $recordApprovalResults($resumption->results);
             }
 
+            $context?->recordToolResults($resumption->results);
+
             if (! $resumption->shouldContinue) {
                 return (new TextResponse('', new TextUsage, new Meta($provider->name(), $model)))
                     ->withMessages(collect($newMessages));
@@ -167,7 +169,12 @@ class TextGenerationLoop
 
             $accumulatedUsage = $accumulatedUsage->add($lastResult->usage);
 
+            // Recorded before the tools run so a process killed mid-tool still leaves the call it was executing on record...
+            $context?->recordStep($this->buildStep($lastResult));
+
             [$toolResults, $pendingApprovals] = $this->stepToolResultsWithOptions($lastResult, $prepared->isFinalStep, $prepared->tools, $prepared->options, $context);
+
+            $context?->recordToolResults($toolResults);
 
             $steps->push($this->buildStep($lastResult, $toolResults));
 
@@ -236,6 +243,8 @@ class TextGenerationLoop
             if ($recordApprovalResults !== null) {
                 $recordApprovalResults($resumption->results);
             }
+
+            $context?->recordToolResults($resumption->results);
 
             foreach ($resumption->results as $toolResult) {
                 yield (new ToolResultEvent(
@@ -343,6 +352,8 @@ class TextGenerationLoop
             $accumulatedUsage = $accumulatedUsage->add($result->usage);
             $finalReason = $result->finishReason;
 
+            $context?->recordStep($this->buildStep($result));
+
             $toolStream = $this->streamedStepToolResults(
                 $result, $prepared->isFinalStep, $prepared->tools, $invocationId, $prepared->options, $context,
             );
@@ -353,6 +364,8 @@ class TextGenerationLoop
             }
 
             [$toolResults, $pendingApprovals] = $toolStream->getReturn();
+
+            $context?->recordToolResults($toolResults);
 
             $steps->push($this->buildStep($result, $toolResults));
 

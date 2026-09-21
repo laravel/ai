@@ -4,16 +4,19 @@ namespace Laravel\Ai\Middleware;
 
 use Closure;
 use Illuminate\Support\Str;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Concerns\RemembersConversations as RemembersConversationsTrait;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\RemembersConversations;
+use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Models\Conversation;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
+use Laravel\Ai\Storage\RecordedTurn;
 use Throwable;
 
 class RememberConversation
@@ -43,57 +46,137 @@ class RememberConversation
         /** @var Agent&RemembersConversations $agent */
         $agent = $prompt->agent;
 
-        $pendingConversationId = $agent->currentConversation() === null
-            ? (string) Str::uuid7()
-            : null;
+        if ($agent->hasConversationParticipant() || $agent->currentConversation() !== null) {
+            return $this->rememberAsItRuns($prompt, $next);
+        }
+
+        return $this->rememberOnceItPauses($prompt, $next);
+    }
+
+    /**
+     * Open the turn's rows before the run so every step lands as it happens, then close them once the run returns.
+     */
+    protected function rememberAsItRuns(AgentPrompt $prompt, Closure $next)
+    {
+        /** @var Agent&RemembersConversations $agent */
+        $agent = $prompt->agent;
+
+        // A failover attempt of the same invocation continues on the rows the first attempt opened...
+        $turn = $agent->recordedTurn($prompt->invocationId) ?? $this->openTurn($prompt);
+
+        $agent->recordTurn($turn);
+
+        return $next($prompt)->then(function (AgentResponse $completedResponse) use ($prompt, $agent, $turn): void {
+            $this->store->completeAssistantMessage($turn->assistantMessageId, $prompt, $completedResponse);
+
+            $agent->recordTurn(null);
+
+            if ($turn->startedConversation && (bool) config('ai.conversations.generate_title', true)) {
+                $this->store->updateConversationTitle($agent->currentConversation(), $this->generateTitle($prompt->prompt));
+            }
+
+            $completedResponse->withinConversation(
+                $agent->currentConversation(),
+                $agent->conversationParticipant(),
+            )->withStoredMessages($turn->userMessageId, $turn->assistantMessageId);
+        });
+    }
+
+    /**
+     * Store the conversation, the user message and the assistant turn the run is about to write.
+     */
+    protected function openTurn(AgentPrompt $prompt): RecordedTurn
+    {
+        /** @var Agent&RemembersConversations $agent */
+        $agent = $prompt->agent;
+
+        [$participantType, $participantId] = $this->participantFor($agent);
+
+        $startedConversation = $agent->currentConversation() === null;
+
+        if ($startedConversation) {
+            $agent->continue($this->store->storeConversation(
+                $participantType,
+                $participantId,
+                Str::limit($prompt->prompt, 50, preserveWords: true),
+            ), $agent->conversationParticipant());
+        }
+
+        $conversationId = $agent->currentConversation();
+
+        if ($prompt->hasApprovalDecisions()) {
+            $assistantMessageId = $this->store->resumeAssistantMessage($conversationId, $prompt->provider->name(), array_keys($prompt->approvalDecisions->all()));
+
+            // A faked run never validates its decisions, so it gets a fresh row rather than the mismatch a real resume would raise...
+            if ($assistantMessageId === null && Ai::hasFakeGatewayFor($agent::class)) {
+                $assistantMessageId = $this->store->startAssistantMessage($conversationId, $participantType, $participantId, $agent::class);
+            }
+
+            if ($assistantMessageId === null) {
+                throw new ApprovalMismatchException('The approval results do not match a paused conversation turn.', collect());
+            }
+
+            return new RecordedTurn($prompt->invocationId, $assistantMessageId);
+        }
+
+        $userMessageId = $this->store->storeUserMessage(
+            $conversationId,
+            $participantType,
+            $participantId,
+            $agent::class,
+            new UserMessage($prompt->prompt, $prompt->attachments),
+        );
+
+        return new RecordedTurn(
+            $prompt->invocationId,
+            $this->store->startAssistantMessage($conversationId, $participantType, $participantId, $agent::class),
+            $userMessageId,
+            $startedConversation,
+        );
+    }
+
+    /**
+     * An agent with no participant and no conversation is only remembered when its turn pauses for approval, which is known once the run returns.
+     */
+    protected function rememberOnceItPauses(AgentPrompt $prompt, Closure $next)
+    {
+        /** @var Agent&RemembersConversations $agent */
+        $agent = $prompt->agent;
+
+        $pendingConversationId = (string) Str::uuid7();
 
         $response = $next($prompt);
 
         // Surface the ID to stream protocols without treating it as an existing conversation...
-        if ($pendingConversationId !== null && $response instanceof StreamableAgentResponse) {
-            $response->withinConversation($pendingConversationId, $agent->conversationParticipant());
+        if ($response instanceof StreamableAgentResponse) {
+            $response->withinConversation($pendingConversationId, null);
         }
 
         return $response->then(function (AgentResponse $completedResponse) use ($prompt, $agent, $pendingConversationId): void {
-            if (! $this->shouldRemember($agent, $prompt, $completedResponse)) {
-                if ($pendingConversationId !== null) {
-                    $completedResponse->conversationId = null;
-                    $completedResponse->conversationUser = null;
-                }
+            if (! $completedResponse->hasPendingApprovals() && ! $prompt->hasApprovalDecisions()) {
+                $completedResponse->conversationId = null;
+                $completedResponse->conversationUser = null;
 
                 return;
             }
 
-            $participant = $agent->conversationParticipant();
-            $participantType = $participant === null ? null : Conversation::participantType($participant);
-            $participantId = $participant === null ? null : Conversation::participantKey($participant);
+            [$participantType, $participantId] = $this->participantFor($agent);
 
-            // Create conversation if necessary...
-            if ($pendingConversationId !== null || ! $agent->currentConversation()) {
-                $conversationId = $this->store->storeConversation(
-                    $participantType,
-                    $participantId,
-                    $this->generateTitle($prompt->prompt),
-                    $pendingConversationId,
-                );
+            $agent->continue($this->store->storeConversation(
+                $participantType,
+                $participantId,
+                $this->generateTitle($prompt->prompt),
+                $pendingConversationId,
+            ), null);
 
-                $agent->continue($conversationId, $participant);
-            }
+            $userMessageId = $prompt->hasApprovalDecisions() ? null : $this->store->storeUserMessage(
+                $agent->currentConversation(),
+                $participantType,
+                $participantId,
+                $agent::class,
+                new UserMessage($prompt->prompt, $prompt->attachments),
+            );
 
-            // Record user message...
-            $userMessageId = null;
-
-            if (! $prompt->hasApprovalDecisions()) {
-                $userMessageId = $this->store->storeUserMessage(
-                    $agent->currentConversation(),
-                    $participantType,
-                    $participantId,
-                    $agent::class,
-                    new UserMessage($prompt->prompt, $prompt->attachments),
-                );
-            }
-
-            // Record assistant message...
             $assistantMessageId = $this->store->storeAssistantMessage(
                 $agent->currentConversation(),
                 $participantType,
@@ -102,24 +185,24 @@ class RememberConversation
                 $completedResponse,
             );
 
-            $completedResponse->withinConversation(
-                $agent->currentConversation(),
-                $participant,
-            )->withStoredMessages($userMessageId, $assistantMessageId);
+            $completedResponse->withinConversation($agent->currentConversation(), null)
+                ->withStoredMessages($userMessageId, $assistantMessageId);
         });
     }
 
     /**
-     * Determine whether this turn should be persisted.
+     * Get the agent's conversation participant as its stored type and key.
      *
      * @param  Agent&RemembersConversations  $agent
+     * @return array{?string, string|int|null}
      */
-    protected function shouldRemember(Agent $agent, AgentPrompt $prompt, AgentResponse $response): bool
+    protected function participantFor(Agent $agent): array
     {
-        return $agent->hasConversationParticipant()
-            || $agent->currentConversation() !== null
-            || $response->hasPendingApprovals()
-            || $prompt->hasApprovalDecisions();
+        $participant = $agent->conversationParticipant();
+
+        return $participant === null
+            ? [null, null]
+            : [Conversation::participantType($participant), Conversation::participantKey($participant)];
     }
 
     /**

@@ -7,6 +7,7 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\Step;
 
 class FakeConversationStore implements ConversationStore
 {
@@ -20,23 +21,48 @@ class FakeConversationStore implements ConversationStore
         return $id ?? 'conversation-123';
     }
 
+    public function updateConversationTitle(string $conversationId, string $title): void
+    {
+        //
+    }
+
     public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, string $agent, UserMessage $message): string
     {
         return 'user-message-123';
     }
 
-    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
+    public function startAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, string $agent): string
     {
         return 'assistant-message-123';
     }
 
-    public function getLatestConversationMessages(string $conversationId, int $limit): Collection
+    public function resumeAssistantMessage(string $conversationId, string $provider, array $decided): ?string
     {
-        return new Collection;
+        return null;
     }
 
-    public function storeApprovalResults(string $conversationId, array $toolResults): void
+    public function storeStep(string $messageId, Step $step): void
     {
         //
+    }
+
+    public function storeToolResults(string $messageId, array $toolResults): void
+    {
+        //
+    }
+
+    public function completeAssistantMessage(string $messageId, AgentPrompt $prompt, AgentResponse $response): void
+    {
+        //
+    }
+
+    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): string
+    {
+        return 'assistant-message-123';
+    }
+
+    public function getLatestConversationMessages(string $conversationId, int $limit, ?string $before = null): Collection
+    {
+        return new Collection;
     }
 }

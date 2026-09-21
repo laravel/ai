@@ -32,6 +32,7 @@ class StoredMessage implements Arrayable, JsonSerializable
         public array $steps = [],
         public ?CarbonInterface $approvalRequestedAt = null,
         public array $attachments = [],
+        public ?CarbonInterface $completedAt = null,
     ) {}
 
     /**
@@ -51,6 +52,7 @@ class StoredMessage implements Arrayable, JsonSerializable
             steps: array_values(static::decoded($record['steps'] ?? null)),
             approvalRequestedAt: blank($record['approval_requested_at'] ?? null) ? null : Carbon::parse($record['approval_requested_at']),
             attachments: array_values(static::decoded($record['attachments'] ?? null)),
+            completedAt: blank($record['completed_at'] ?? null) ? null : Carbon::parse($record['completed_at']),
         );
     }
 
@@ -71,6 +73,7 @@ class StoredMessage implements Arrayable, JsonSerializable
             'steps' => $this->steps,
             'approval_requested_at' => $this->approvalRequestedAt?->toJSON(),
             'attachments' => $this->attachments,
+            'completed_at' => $this->completedAt?->toJSON(),
         ];
     }
 
