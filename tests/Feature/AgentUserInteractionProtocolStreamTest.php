@@ -12,6 +12,7 @@ use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\StreamableAgentResponse;
+use Laravel\Ai\Storage\DatabaseConversationStore;
 use Laravel\Ai\Streaming\Events\Citation;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
@@ -468,7 +469,7 @@ test('a paused run reports its interrupt outcome even when the stream later thro
     Exceptions::assertReported(RuntimeException::class);
 });
 
-test('a resume the store cannot match ends the real stream with the mismatch code', function () {
+test('a resume the store rejects mid-stream ends the real stream with the mismatch code', function () {
     Config::set('ai.conversations.generate_title', false);
 
     Exceptions::fake();
@@ -488,9 +489,16 @@ test('a resume the store cannot match ends the real stream with the mismatch cod
 
     $paused = (new RememberingApprovableAgent)->forUser((object) ['id' => 1])->prompt('Generate a number', provider: 'anthropic');
 
-    // The paused row belongs to user 1, but history loads by conversation alone, so the resume validates and then finds no row to write to...
+    app()->instance(ConversationStore::class, new class extends DatabaseConversationStore
+    {
+        public function storeApprovalResults(string $conversationId, array $toolResults): void
+        {
+            throw new ApprovalMismatchException('The approval results do not match a paused conversation turn.', collect());
+        }
+    });
+
     $events = agUiEvents((new RememberingApprovableAgent)
-        ->continue($paused->conversationId, (object) ['id' => 2])
+        ->continue($paused->conversationId, (object) ['id' => 1])
         ->stream(Decisions::from(['toolu_1' => true]), provider: 'anthropic')
         ->usingAgentUserInteractionProtocol('thread-1', 'run-1')
         ->toResponse(request()));

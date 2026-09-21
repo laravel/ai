@@ -500,7 +500,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      *
      * @throws ApprovalMismatchException when no paused row matches the resolved results
      */
-    public function storeApprovalResults(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolResults): void
+    public function storeApprovalResults(string $conversationId, array $toolResults): void
     {
         if ($toolResults === []) {
             return;
@@ -508,12 +508,9 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         $resultIds = array_map(fn (ToolResult $result) => $result->id, $toolResults);
 
-        DB::connection($this->connection)->transaction(function () use ($conversationId, $participantType, $participantId, $toolResults, $resultIds) {
+        DB::connection($this->connection)->transaction(function () use ($conversationId, $toolResults, $resultIds) {
             $paused = $this->table($this->messagesTable())
                 ->where('conversation_id', $conversationId)
-                ->when($participantId === null,
-                    fn ($query) => $query->whereNull('participant_type')->whereNull('participant_id'),
-                    fn ($query) => $query->where('participant_type', $participantType)->where('participant_id', $participantId))
                 ->where('role', 'assistant')
                 ->whereNotNull('approval_state')
                 ->orderByDesc('id')

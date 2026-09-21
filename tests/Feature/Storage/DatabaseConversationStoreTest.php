@@ -898,7 +898,7 @@ test('storing approval results for a conversation with no paused row throws', fu
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
 
-    $store->storeApprovalResults($conversationId, 'user', 1, [
+    $store->storeApprovalResults($conversationId, [
         new ToolResult('call-1', 'delete_file', ['path' => 'x'], 'Deleted x'),
     ]);
 })->throws(ApprovalMismatchException::class, 'The approval results do not match a paused conversation turn.');
@@ -915,7 +915,7 @@ test('a mismatch against a paused row carries the approvals that are actually pe
     ], ['pending' => ['call-1' => 'Destructive operation.']]);
 
     try {
-        $store->storeApprovalResults($conversationId, 'user', 1, [
+        $store->storeApprovalResults($conversationId, [
             new ToolResult('call-9', 'delete_file', ['path' => 'x'], 'Deleted x'),
         ]);
 
@@ -925,6 +925,26 @@ test('a mismatch against a paused row carries the approvals that are actually pe
             ['id' => 'call-1', 'tool' => 'delete_file', 'arguments' => ['path' => 'x'], 'reason' => 'Destructive operation.'],
         ]);
     }
+});
+
+test('resolving approval results does not require the resolver to be the paused turn\'s participant', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    insertAssistantTurn($conversationId, 'message-1', '', [
+        assistantStep([['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'x']]]),
+    ], ['pending' => ['call-1' => 'Deletes x']]);
+
+    DB::table('agent_conversation_messages')->where('id', 'message-1')->update(['participant_id' => 2]);
+
+    $store->storeApprovalResults($conversationId, [
+        new ToolResult('call-1', 'delete_file', ['path' => 'x'], 'Deleted x'),
+    ]);
+
+    $row = DB::table('agent_conversation_messages')->where('id', 'message-1')->first();
+
+    expect($row->approval_state)->json()->toBe(['pending' => []])
+        ->and($row->steps)->json()->{'0'}->tool_calls->{'0'}->toMatchArray(['id' => 'call-1', 'result' => 'Deleted x']);
 });
 
 test('resolving approval results writes each outcome into the step that made the call', function (): void {
@@ -942,13 +962,13 @@ test('resolving approval results writes each outcome into the step that made the
         ]),
     ], ['pending' => ['call-1' => 'Deletes x', 'call-2' => 'Deletes y']]);
 
-    $store->storeApprovalResults($conversationId, 'user', 1, [
+    $store->storeApprovalResults($conversationId, [
         new ToolResult('call-1', 'delete_file', ['path' => 'x'], 'Deleted x'),
     ]);
 
     $partial = json_decode(DB::table('agent_conversation_messages')->where('id', 'message-1')->value('approval_state'), true);
 
-    $store->storeApprovalResults($conversationId, 'user', 1, [
+    $store->storeApprovalResults($conversationId, [
         new ToolResult('call-1', 'delete_file', ['path' => 'x'], 'Deleted x'),
         new ToolResult('call-2', 'delete_file', ['path' => 'y'], 'The user rejected this tool call.', denied: true),
     ]);
@@ -974,7 +994,7 @@ test('resolving an edited approval records the arguments the tool actually ran w
         assistantStep([['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'x']]]),
     ], ['pending' => ['call-1' => 'Deletes x']]);
 
-    $store->storeApprovalResults($conversationId, 'user', 1, [
+    $store->storeApprovalResults($conversationId, [
         new ToolResult('call-1', 'delete_file', ['path' => 'y'], 'Deleted y'),
     ]);
 
@@ -995,7 +1015,7 @@ test('it replays a resumed pause as the paused call, its result, then the resume
         assistantStep([['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'a']]]),
     ], ['pending' => ['call-1' => null]]);
 
-    $store->storeApprovalResults($conversationId, 'user', 1, [
+    $store->storeApprovalResults($conversationId, [
         new ToolResult('call-1', 'delete_file', ['path' => 'a'], 'Deleted a'),
     ]);
 
