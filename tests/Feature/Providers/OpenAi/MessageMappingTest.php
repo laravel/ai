@@ -309,7 +309,7 @@ test('reasoning blocks are interleaved with associated tool calls on assistant r
         $call1Index = collect($input)->search(fn ($i): bool => ($i['id'] ?? '') === 'fc_1');
         $rs2Index = collect($input)->search(fn ($i): bool => ($i['type'] ?? '') === 'reasoning' && ($i['id'] ?? '') === 'rs_2');
         $call2Index = collect($input)->search(fn ($i): bool => ($i['id'] ?? '') === 'fc_2');
-        $call3Index = collect($input)->search(fn ($i): bool => ($i['id'] ?? '') === 'fc_3');
+        $call3 = collect($input)->first(fn ($i): bool => ($i['call_id'] ?? '') === 'call_3');
 
         return $rs1Index !== false
             && $call1Index !== false
@@ -317,7 +317,9 @@ test('reasoning blocks are interleaved with associated tool calls on assistant r
             && $rs2Index !== false
             && $call2Index !== false
             && $rs2Index + 1 === $call2Index
-            && $call3Index !== false;
+            // A call with no reasoning of its own goes out without its item id, which the API only accepts beside a reasoning item...
+            && $call3 !== null
+            && ! array_key_exists('id', $call3);
     });
 });
 
