@@ -258,15 +258,13 @@ test('it drops a call that already has a result', function (): void {
     $conversationId = $store->storeConversation('user', 1, 'Resumed');
 
     $calls = [
-        ['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => [], 'approval_reason' => null],
-        ['id' => 'call-2', 'name' => 'SendEmail', 'arguments' => [], 'approval_reason' => null],
+        ['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []],
+        ['id' => 'call-2', 'name' => 'SendEmail', 'arguments' => []],
     ];
 
-    insertPausedConversationTurn($conversationId, 'message-001', $calls, []);
-
-    DB::table('agent_conversation_messages')
-        ->where('id', 'message-001')
-        ->update(['steps' => json_encode([assistantStep($calls, [['id' => 'call-1', 'name' => 'DeleteFile', 'result' => 'Deleted.']])])]);
+    insertAssistantTurn($conversationId, 'message-001', 'Waiting on you.', [
+        assistantStep($calls, [['id' => 'call-1', 'name' => 'DeleteFile', 'result' => 'Deleted.']]),
+    ], ['call-1' => null, 'call-2' => null]);
 
     expect(collect($store->pendingApprovalsFor($conversationId))->pluck('id')->all())->toBe(['call-2']);
 });
@@ -618,6 +616,50 @@ test('a resume folds its steps, text and usage into the paused row', function ()
         ->and($row->steps)->json()->toHaveCount(2)->{'1'}->content->toBe('Done.')
         ->and($row->usage)->json()->toMatchArray(['input_tokens' => 30, 'output_tokens' => 12])
         ->and($row->meta)->json()->toMatchArray(['provider' => 'openai', 'model' => 'gpt-5']);
+});
+
+test('a resume keeps the citations the paused half of the turn collected', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Approval conversation');
+
+    insertAssistantTurn($conversationId, 'paused-1', '', [
+        assistantStep([['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []]]),
+    ], ['call-1' => 'Deletes a file'], ['provider' => 'anthropic', 'model' => 'claude-sonnet-4-5', 'citations' => [(new UrlCitation('https://laravel.com/docs/ai'))->toArray()]]);
+
+    $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Mockery::mock(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
+
+    $meta = new Meta('anthropic', 'claude-sonnet-4-6', collect([new UrlCitation('https://laravel.com/docs/mcp')]));
+
+    $response = (new AgentResponse('invocation-id', 'Deleted.', new TextUsage, $meta))->withSteps(collect([
+        new Step('Deleted.', [], [], FinishReason::Stop, new TextUsage, $meta, '', []),
+    ]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    expect(DB::table('agent_conversation_messages')->where('id', 'paused-1')->value('meta'))->json()
+        ->model->toBe('claude-sonnet-4-6')
+        ->citations->toHaveCount(2)
+        ->citations->{'0'}->url->toBe('https://laravel.com/docs/ai')
+        ->citations->{'1'}->url->toBe('https://laravel.com/docs/mcp');
+});
+
+test('a fold that recorded no result does not leave the row reporting a pending approval', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Approval conversation');
+
+    insertAssistantTurn($conversationId, 'paused-1', 'Waiting.', [
+        assistantStep([['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []]]),
+    ], ['call-1' => 'Deletes a file']);
+
+    $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Mockery::mock(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
+
+    $response = (new AgentResponse('invocation-id', 'Done.', new TextUsage, new Meta))->withSteps(collect([
+        new Step('Done.', [], [], FinishReason::Stop, new TextUsage, new Meta, '', []),
+    ]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    expect($store->pendingApprovalsFor($conversationId))->toBe([]);
 });
 
 test('a resume does not fold into a settled row once a newer plain turn follows it', function (): void {
@@ -1595,12 +1637,10 @@ function insertAssistantTurn(string $conversationId, string $id, string $content
         $steps[array_key_last($steps)]['content'] = $content;
     }
 
-    foreach ($steps as &$step) {
-        $step['tool_calls'] = array_map(
-            fn (array $toolCall) => array_key_exists($toolCall['id'], $pending ?? []) ? [...$toolCall, 'approval_reason' => $pending[$toolCall['id']]] : $toolCall,
-            $step['tool_calls'],
-        );
-    }
+    $steps = array_map(fn (array $step): array => [...$step, 'tool_calls' => array_map(
+        fn (array $toolCall) => array_key_exists($toolCall['id'], $pending ?? []) ? [...$toolCall, 'approval_reason' => $pending[$toolCall['id']]] : $toolCall,
+        $step['tool_calls'],
+    )], $steps);
 
     DB::table('agent_conversation_messages')->insert([
         ...storedConversationMessageAttributes($id, $conversationId, $content),

@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
+use Laravel\Ai\Approvals\PendingApproval;
 
 /**
  * @property string $id
@@ -80,7 +81,7 @@ class ConversationMessage extends Model
     {
         return Attribute::get(fn (): array => array_values(array_map(
             fn (array $toolCall): array => Arr::only($toolCall, ['id', 'name', 'arguments', 'result', 'result_id', 'denied', 'failed']),
-            array_filter($this->tool_calls, fn (array $toolCall): bool => array_key_exists('result', $toolCall)),
+            array_filter($this->tool_calls, PendingApproval::isAnswered(...)),
         )));
     }
 

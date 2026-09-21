@@ -23,7 +23,17 @@ class PendingApproval implements Arrayable
      */
     public static function isPending(array $toolCall): bool
     {
-        return array_key_exists('approval_reason', $toolCall) && ! array_key_exists('result', $toolCall);
+        return array_key_exists('approval_reason', $toolCall) && ! static::isAnswered($toolCall);
+    }
+
+    /**
+     * Determine whether a stored tool call has been answered by its tool.
+     *
+     * @param  array<string, mixed>  $toolCall
+     */
+    public static function isAnswered(array $toolCall): bool
+    {
+        return array_key_exists('result', $toolCall);
     }
 
     /**

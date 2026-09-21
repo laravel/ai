@@ -200,7 +200,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'content' => blank($response->text) ? $paused->content : $response->text,
             'steps' => $steps->toJson(),
             'usage' => json_encode(TextUsage::fromArray($this->decoded($paused->usage))->add($response->usage)),
-            'meta' => json_encode($response->meta),
+            'meta' => json_encode($this->mergedMeta($paused, $response)),
             'approval_requested_at' => $response->hasPendingApprovals() ? $now : null,
             'updated_at' => $now,
         ]);
@@ -212,6 +212,19 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         $this->touchConversation($conversationId, $now);
 
         return $paused->id;
+    }
+
+    /**
+     * Keep the citations the paused half of the turn collected, under the resuming provider and model.
+     *
+     * @return array<string, mixed>
+     */
+    protected function mergedMeta(object $paused, AgentResponse $response): array
+    {
+        return [
+            ...$response->meta->toArray(),
+            'citations' => [...$this->decoded($paused->meta)['citations'] ?? [], ...$response->meta->citations->all()],
+        ];
     }
 
     /**
@@ -307,16 +320,6 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     protected function withoutReplayBlocks(Collection $steps): Collection
     {
         return $steps->map(fn (array $step): array => [...$step, 'replay_blocks' => []]);
-    }
-
-    /**
-     * Determine whether a stored tool call has been answered by its tool.
-     *
-     * @param  array<string, mixed>  $toolCall
-     */
-    protected function isAnswered(array $toolCall): bool
-    {
-        return array_key_exists('result', $toolCall);
     }
 
     /**
@@ -453,11 +456,11 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             $content = $step['content'];
 
             $replayed = collect($step['tool_calls'])
-                ->filter(fn (array $toolCall) => $this->isAnswered($toolCall) || in_array($toolCall['id'] ?? null, $pending, true))
+                ->filter(fn (array $toolCall) => PendingApproval::isAnswered($toolCall) || in_array($toolCall['id'] ?? null, $pending, true))
                 ->values();
 
             $toolCalls = $replayed->map(ToolCall::fromArray(...));
-            $toolResults = $replayed->filter($this->isAnswered(...))->map(ToolResult::fromArray(...))->values();
+            $toolResults = $replayed->filter(PendingApproval::isAnswered(...))->map(ToolResult::fromArray(...))->values();
 
             // Raw blocks still name a dropped call, so a step missing one rebuilds generically rather than replaying a call no result answers...
             $replayBlocks = $replayed->count() === count($step['tool_calls']) ? $step['replay_blocks'] : [];
@@ -514,9 +517,11 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         $newest = $this->table($this->messagesTable())
             ->where('conversation_id', $conversationId)
             ->orderByDesc('id')
-            ->first(['role', 'steps']);
+            ->first(['role', 'steps', 'approval_requested_at']);
 
-        return $newest === null || $newest->role !== 'assistant' ? [] : $this->pendingApprovalsIn($newest)->all();
+        return $newest === null || $newest->role !== 'assistant' || $newest->approval_requested_at === null
+            ? []
+            : $this->pendingApprovalsIn($newest)->all();
     }
 
     /**
@@ -584,7 +589,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 $step['tool_calls'] = array_map(function (array $toolCall) use ($resolved): array {
                     $result = $resolved->get($toolCall['id'] ?? '');
 
-                    return $result === null || $this->isAnswered($toolCall)
+                    return $result === null || PendingApproval::isAnswered($toolCall)
                         ? $toolCall
                         // Arguments come along because an edited approval runs the tool with different ones than the call asked for...
                         : [...$toolCall, ...Arr::only($result->toArray(), ['arguments', 'result', 'denied', 'failed'])];

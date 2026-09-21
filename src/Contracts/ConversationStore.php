@@ -32,7 +32,7 @@ interface ConversationStore
     public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, string $agent, UserMessage $message): string;
 
     /**
-     * Store the assistant turn and return its message ID, folding a resumed run into the row it paused on, or null when nothing was stored.
+     * Store the assistant turn, folding a resume into the row it paused on, or null when nothing was stored.
      */
     public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string;
 
