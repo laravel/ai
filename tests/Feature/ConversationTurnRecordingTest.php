@@ -210,6 +210,7 @@ test('a failover after a recorded step leaves that attempt on its own row and an
 
     expect($rows->pluck('role')->all())->toBe(['user', 'assistant', 'assistant'])
         ->and($rows[1]->completed_at)->toBeNull()
+        ->and($rows[1]->failed_at)->not->toBeNull()
         ->and($rows[1]->steps)->json()->toHaveCount(1)->{'0'}->tool_calls->{'0'}->toMatchArray(['id' => 'call_1', 'result' => 72019])
         ->and($rows[2]->id)->toBe($response->assistantMessageId)
         ->and($rows[2]->content)->toBe('Hello from backup')
@@ -245,3 +246,109 @@ test('a resume with nothing paused throws before it stores anything', function (
 
     Http::assertNothingSent();
 });
+
+test('a step whose last tool throws keeps the results of the tools that finished', function (): void {
+    Config::set('ai.conversations.generate_title', false);
+    Config::set('ai.providers.anthropic.key', 'test-key');
+
+    Http::fake(['api.anthropic.com/*' => Http::response(anthropicTurn([
+        ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'FirstNumber', 'input' => (object) []],
+        ['type' => 'tool_use', 'id' => 'toolu_2', 'name' => 'SecondNumber', 'input' => (object) []],
+        ['type' => 'tool_use', 'id' => 'toolu_3', 'name' => 'ExplodingTool', 'input' => (object) []],
+    ], 'tool_use'))]);
+
+    $agent = new class implements Agent, Conversational, HasTools
+    {
+        use Promptable;
+        use RemembersConversations;
+
+        public function instructions(): string
+        {
+            return 'Use the tools.';
+        }
+
+        public function tools(): iterable
+        {
+            return [new FirstNumber, new SecondNumber, new ExplodingTool];
+        }
+    };
+
+    $agent->forUser((object) ['id' => 1]);
+
+    expect(fn () => $agent->prompt('Add them up', provider: 'anthropic'))->toThrow(RuntimeException::class, 'The tool blew up.');
+
+    $row = assistantRowFor(DB::table('agent_conversations')->value('id'));
+
+    expect($row->completed_at)->toBeNull()
+        ->and($row->failed_at)->not->toBeNull()
+        ->and(json_decode($row->meta, true)['error'])->toBe('The tool blew up.')
+        ->and($row->steps)->json()->toHaveCount(1)->{'0'}->tool_calls->toHaveCount(3)
+        ->and(json_decode($row->steps, true)[0]['tool_calls'])->sequence(
+            fn ($call) => $call->toMatchArray(['id' => 'toolu_1', 'result' => 'one']),
+            fn ($call) => $call->toMatchArray(['id' => 'toolu_2', 'result' => 'two']),
+            fn ($call) => $call->not->toHaveKey('result'),
+        );
+
+    $replayed = collect($agent->messages())->flatMap(fn ($message) => $message->toolResults ?? [])
+        ->mapWithKeys(fn ($result) => [$result->id => $result->result]);
+
+    expect($replayed->all())->toBe([
+        'toolu_1' => 'one',
+        'toolu_2' => 'two',
+        'toolu_3' => 'This tool call was interrupted before a result was recorded, so it may or may not have run.',
+    ]);
+});
+
+class FirstNumber implements Tool
+{
+    public function description(): string
+    {
+        return 'Returns one.';
+    }
+
+    public function handle(ToolRequest $request): string
+    {
+        return 'one';
+    }
+
+    public function schema(JsonSchema $schema): array
+    {
+        return [];
+    }
+}
+
+class SecondNumber implements Tool
+{
+    public function description(): string
+    {
+        return 'Returns two.';
+    }
+
+    public function handle(ToolRequest $request): string
+    {
+        return 'two';
+    }
+
+    public function schema(JsonSchema $schema): array
+    {
+        return [];
+    }
+}
+
+class ExplodingTool implements Tool
+{
+    public function description(): string
+    {
+        return 'Always throws.';
+    }
+
+    public function handle(ToolRequest $request): string
+    {
+        throw new RuntimeException('The tool blew up.');
+    }
+
+    public function schema(JsonSchema $schema): array
+    {
+        return [];
+    }
+}

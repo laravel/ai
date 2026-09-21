@@ -9,6 +9,7 @@ use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\ToolResult;
+use Throwable;
 
 interface ConversationStore
 {
@@ -37,7 +38,7 @@ interface ConversationStore
     public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, string $agent, UserMessage $message): string;
 
     /**
-     * Open an assistant turn that is about to run and return its message ID.
+     * Open an assistant turn that is about to run and return its message ID, failing any turn of the conversation's that is still open.
      *
      * @param  class-string<Agent>  $agent
      */
@@ -68,7 +69,14 @@ interface ConversationStore
     public function completeAssistantMessage(string $messageId, AgentPrompt $prompt, AgentResponse $response): void;
 
     /**
+     * Close an open assistant turn the run failed on, keeping whatever it recorded.
+     */
+    public function failAssistantMessage(string $messageId, Throwable $exception): void;
+
+    /**
      * Get the latest messages for the given conversation, optionally only those stored before the given message.
+     *
+     * Message IDs order the conversation, so a store must issue them in ascending order, as UUIDv7 does.
      *
      * @return Collection<int, Message>
      */

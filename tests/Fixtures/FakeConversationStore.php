@@ -8,6 +8,7 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Step;
+use Throwable;
 
 class FakeConversationStore implements ConversationStore
 {
@@ -52,6 +53,11 @@ class FakeConversationStore implements ConversationStore
     }
 
     public function completeAssistantMessage(string $messageId, AgentPrompt $prompt, AgentResponse $response): void
+    {
+        //
+    }
+
+    public function failAssistantMessage(string $messageId, Throwable $exception): void
     {
         //
     }

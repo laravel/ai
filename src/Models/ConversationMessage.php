@@ -21,6 +21,7 @@ use Laravel\Ai\Approvals\PendingApproval;
  * @property-read array $tool_results
  * @property ?Carbon $approval_requested_at
  * @property ?Carbon $completed_at
+ * @property ?Carbon $failed_at
  */
 #[WithoutIncrementing]
 class ConversationMessage extends Model
@@ -58,6 +59,7 @@ class ConversationMessage extends Model
         'meta' => 'array',
         'approval_requested_at' => 'datetime',
         'completed_at' => 'datetime',
+        'failed_at' => 'datetime',
     ];
 
     /**

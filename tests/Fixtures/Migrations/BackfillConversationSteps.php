@@ -22,6 +22,7 @@ class BackfillConversationSteps extends AiMigration
             $blueprint->longText('steps')->nullable();
             $blueprint->timestamp('approval_requested_at')->nullable();
             $blueprint->timestamp('completed_at')->nullable();
+            $blueprint->timestamp('failed_at')->nullable();
         });
 
         $this->query($table)->where('role', 'user')->update(['steps' => '[]']);

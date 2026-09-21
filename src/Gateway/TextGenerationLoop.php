@@ -112,8 +112,6 @@ class TextGenerationLoop
                 $recordApprovalResults($resumption->results);
             }
 
-            $context?->recordToolResults($resumption->results);
-
             if (! $resumption->shouldContinue) {
                 return (new TextResponse('', new TextUsage, new Meta($provider->name(), $model)))
                     ->withMessages(collect($newMessages));
@@ -173,8 +171,6 @@ class TextGenerationLoop
             $context?->recordStep($this->buildStep($lastResult));
 
             [$toolResults, $pendingApprovals] = $this->stepToolResultsWithOptions($lastResult, $prepared->isFinalStep, $prepared->tools, $prepared->options, $context);
-
-            $context?->recordToolResults($toolResults);
 
             $steps->push($this->buildStep($lastResult, $toolResults));
 
@@ -243,8 +239,6 @@ class TextGenerationLoop
             if ($recordApprovalResults !== null) {
                 $recordApprovalResults($resumption->results);
             }
-
-            $context?->recordToolResults($resumption->results);
 
             foreach ($resumption->results as $toolResult) {
                 yield (new ToolResultEvent(
@@ -364,8 +358,6 @@ class TextGenerationLoop
             }
 
             [$toolResults, $pendingApprovals] = $toolStream->getReturn();
-
-            $context?->recordToolResults($toolResults);
 
             $steps->push($this->buildStep($result, $toolResults));
 
@@ -645,7 +637,9 @@ class TextGenerationLoop
 
             yield from $this->preliminaryToolResults($events, $toolCall, $invocationId);
 
-            $toolResults[] = $this->toolResult($toolCall, $events->getReturn());
+            $toolResults[] = $agentResult = $this->toolResult($toolCall, $events->getReturn());
+
+            $context?->recordToolResults([$agentResult]);
         }
 
         return [$toolResults, $pendingApprovals];
@@ -743,7 +737,7 @@ class TextGenerationLoop
      */
     protected function resolvedToolResult(ToolCall $toolCall, ?Tool $tool, bool $isFinalStep, array $tools = [], ?RunContext $context = null): ToolResult
     {
-        return $this->toolResult(
+        $result = $this->toolResult(
             $toolCall,
             match (true) {
                 ! $tool instanceof Tool && $this->repairsToolCalls => "Tool '{$toolCall->name}' does not exist. Available tools: {$this->availableToolNames($tools)}.",
@@ -752,6 +746,11 @@ class TextGenerationLoop
             },
             failed: ! $tool instanceof Tool || $isFinalStep,
         );
+
+        // Recorded per call so the tools that finished keep their results when a later call in the same step throws...
+        $context?->recordToolResults([$result]);
+
+        return $result;
     }
 
     /**
@@ -870,7 +869,7 @@ class TextGenerationLoop
             if ($decision->isRejected()) {
                 $hasBareRejection = $hasBareRejection || $decision->result === null;
 
-                $toolResults[] = new ToolResult(
+                $toolResults[] = $denied = new ToolResult(
                     $toolCall->id,
                     $toolCall->name,
                     $toolCall->arguments,
@@ -878,6 +877,8 @@ class TextGenerationLoop
                     $toolCall->resultId,
                     denied: true,
                 );
+
+                $context?->recordToolResults([$denied]);
 
                 continue;
             }
@@ -898,7 +899,7 @@ class TextGenerationLoop
                 $result = 'The tool call failed: '.$exception->getMessage();
             }
 
-            $toolResults[] = new ToolResult(
+            $toolResults[] = $approved = new ToolResult(
                 $toolCall->id,
                 $toolCall->name,
                 $arguments,
@@ -906,6 +907,8 @@ class TextGenerationLoop
                 $toolCall->resultId,
                 failed: $failed,
             );
+
+            $context?->recordToolResults([$approved]);
         }
 
         return [$toolResults, ! $hasBareRejection];

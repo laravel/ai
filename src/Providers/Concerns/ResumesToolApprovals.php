@@ -4,7 +4,6 @@ namespace Laravel\Ai\Providers\Concerns;
 
 use Closure;
 use Illuminate\Support\Collection;
-use Laravel\Ai\Ai;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
@@ -19,7 +18,7 @@ trait ResumesToolApprovals
      */
     protected function resumableApprovalFor(AgentPrompt $prompt): ?array
     {
-        return $this->resumesAgainstRealGateway($prompt) ? $prompt->approvalDecisions->all() : null;
+        return $prompt->resumesAgainstRealGateway() ? $prompt->approvalDecisions->all() : null;
     }
 
     /**
@@ -43,19 +42,11 @@ trait ResumesToolApprovals
     }
 
     /**
-     * Determine whether the prompt is a resume that runs tools against the real (non-faked) gateway.
-     */
-    protected function resumesAgainstRealGateway(AgentPrompt $prompt): bool
-    {
-        return $prompt->hasApprovalDecisions() && ! Ai::hasFakeGatewayFor($prompt->agent::class);
-    }
-
-    /**
      * Get a callback that captures a resume's resolved approval results for the ToolApprovalResolved event.
      */
     protected function approvalResultRecorderFor(AgentPrompt $prompt, ?Collection &$resolvedApprovalResults): ?Closure
     {
-        if (! $this->resumesAgainstRealGateway($prompt)) {
+        if (! $prompt->resumesAgainstRealGateway()) {
             return null;
         }
 

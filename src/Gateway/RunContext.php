@@ -39,7 +39,7 @@ class RunContext
         if ($this->turn !== null) {
             $this->store->storeStep($this->turn->assistantMessageId, $step);
 
-            $this->turn->hasSteps = true;
+            $this->turn->markStepped();
         }
     }
 

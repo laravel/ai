@@ -4,6 +4,7 @@ namespace Laravel\Ai\Prompts;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -178,5 +179,13 @@ class AgentPrompt extends Prompt
     public function isFinalAttempt(): bool
     {
         return $this->isFinalAttempt;
+    }
+
+    /**
+     * Determine whether this prompt is a resume whose decisions run against the real (non-faked) gateway.
+     */
+    public function resumesAgainstRealGateway(): bool
+    {
+        return $this->hasApprovalDecisions() && ! Ai::hasFakeGatewayFor($this->agent::class);
     }
 }

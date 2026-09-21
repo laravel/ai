@@ -4,7 +4,6 @@ namespace Laravel\Ai\Middleware;
 
 use Closure;
 use Illuminate\Support\Str;
-use Laravel\Ai\Ai;
 use Laravel\Ai\Concerns\RemembersConversations as RemembersConversationsTrait;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
@@ -72,6 +71,8 @@ class RememberConversation
         } catch (Throwable $exception) {
             // A failover retry of this invocation still needs the rows, so only a terminal failure lets go of them...
             if (! $exception instanceof FailoverableException || $prompt->isFinalAttempt()) {
+                $this->store->failAssistantMessage($turn->assistantMessageId, $exception);
+
                 $agent->recordTurn(null);
             }
 
@@ -108,7 +109,7 @@ class RememberConversation
             return $this->openTurn($prompt);
         }
 
-        if (! $attempted->hasSteps) {
+        if (! $attempted->hasSteps()) {
             return $attempted;
         }
 
@@ -188,7 +189,7 @@ class RememberConversation
         }
 
         // A faked run never validates its decisions, so it gets a fresh row rather than the mismatch a real resume would raise...
-        if (Ai::hasFakeGatewayFor($agent::class)) {
+        if (! $prompt->resumesAgainstRealGateway()) {
             if ($conversationId === null) {
                 $agent->continue($conversationId = $this->store->storeConversation($participantType, $participantId, ''), $agent->conversationParticipant());
             }

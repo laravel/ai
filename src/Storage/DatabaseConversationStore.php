@@ -28,6 +28,7 @@ use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
+use Throwable;
 
 class DatabaseConversationStore implements ConversationStore, PaginatesConversations, ResolvesPendingApprovals, VerifiesConversationOwnership
 {
@@ -108,6 +109,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'meta' => '[]',
             'approval_requested_at' => null,
             'completed_at' => $now,
+            'failed_at' => null,
         ]));
 
         $this->touchConversation($conversationId, $now);
@@ -136,6 +138,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         $now = now();
 
+        $this->failOpenTurns($conversationId, $now);
+
         $this->table($this->messagesTable())->insert($this->messageAttributes($messageId, $conversationId, $participantType, $participantId, $now, [
             'agent' => $agent,
             'role' => 'assistant',
@@ -146,6 +150,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'meta' => '[]',
             'approval_requested_at' => null,
             'completed_at' => null,
+            'failed_at' => null,
         ]));
 
         $this->touchConversation($conversationId, $now);
@@ -173,7 +178,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             $steps = $this->withoutReplayBlocks($steps);
         }
 
-        $this->table($this->messagesTable())->where('id', $paused->id)->update(['steps' => $steps->toJson()]);
+        $this->table($this->messagesTable())->where('id', $paused->id)->update(['steps' => $steps->toJson(), 'failed_at' => null]);
 
         return $paused->id;
     }
@@ -268,6 +273,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 'meta' => json_encode($this->mergedMeta($row, $response)),
                 'approval_requested_at' => $response->hasPendingApprovals() ? $now : null,
                 'completed_at' => $now,
+                'failed_at' => null,
                 'updated_at' => $now,
             ]);
 
@@ -298,6 +304,36 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         $newest = $this->assistantRows($conversationId)->first();
 
         return $newest?->approval_requested_at === null ? null : $newest;
+    }
+
+    /**
+     * Close an open assistant turn the run failed on, keeping whatever it recorded.
+     */
+    public function failAssistantMessage(string $messageId, Throwable $exception): void
+    {
+        $now = now();
+
+        DB::connection($this->connection)->transaction(function () use ($messageId, $exception, $now): void {
+            $row = $this->lockedMessage($messageId);
+
+            $this->table($this->messagesTable())->where('id', $messageId)->update([
+                'meta' => json_encode([...$this->decoded($row->meta), 'error' => $exception->getMessage()]),
+                'failed_at' => $now,
+                'updated_at' => $now,
+            ]);
+        });
+    }
+
+    /**
+     * Fail the conversation's turns that are still open, since a conversation only ever runs one turn at a time.
+     */
+    protected function failOpenTurns(string $conversationId, mixed $now): void
+    {
+        $this->assistantRows($conversationId)
+            ->reorder()
+            ->whereNull('completed_at')
+            ->whereNull('failed_at')
+            ->update(['failed_at' => $now, 'updated_at' => $now]);
     }
 
     /**

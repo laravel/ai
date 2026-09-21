@@ -9,6 +9,7 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Step;
+use Throwable;
 
 class InMemoryConversationStore implements ConversationStore
 {
@@ -93,6 +94,11 @@ class InMemoryConversationStore implements ConversationStore
             'content' => $response->text,
             'completed' => true,
         ];
+    }
+
+    public function failAssistantMessage(string $messageId, Throwable $exception): void
+    {
+        //
     }
 
     public function getLatestConversationMessages(string $conversationId, int $limit, ?string $before = null): Collection
