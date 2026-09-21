@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Base64Audio;
 use Laravel\Ai\Files\Base64Document;
@@ -124,7 +125,7 @@ class Vercel
         }
 
         foreach (static::toolCallArraysFrom($message) as $toolCall) {
-            $isPending = array_key_exists('approval_reason', $toolCall) && ! array_key_exists('result', $toolCall);
+            $isPending = PendingApproval::isPending($toolCall);
 
             $parts[] = [
                 'type' => 'tool-'.$toolCall['name'],

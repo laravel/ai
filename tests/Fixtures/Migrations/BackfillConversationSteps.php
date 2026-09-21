@@ -99,7 +99,7 @@ class BackfillConversationSteps extends AiMigration
             $this->query($table)->where('id', $row->id)->update([
                 'steps' => json_encode($steps),
                 'meta' => json_encode($meta),
-                'approval_requested_at' => $row->approval_state === null ? null : $row->created_at,
+                'approval_requested_at' => blank($this->decoded($row->approval_state)['pending'] ?? []) ? null : $row->created_at,
             ]);
         }
     }

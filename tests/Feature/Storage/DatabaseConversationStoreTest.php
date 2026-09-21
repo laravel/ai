@@ -748,7 +748,8 @@ test('completing a turn stores no replay blocks and drops those of the paused ro
     $blocks = DB::table('agent_conversation_messages')->where('role', 'assistant')->pluck('steps')
         ->flatMap(fn (string $steps) => collect(json_decode($steps, true))->pluck('replay_blocks'));
 
-    expect($blocks->all())->toBe([[], []]);
+    expect($blocks->all())->toBe([[], []])
+        ->and(DB::table('agent_conversation_messages')->where('id', 'message-1')->value('approval_requested_at'))->toBeNull();
 });
 
 test('a turn that pauses again keeps the replay blocks of the rows it resumed', function (): void {
@@ -778,7 +779,35 @@ test('a turn that pauses again keeps the replay blocks of the rows it resumed', 
     expect($blocks->all())->toEqualCanonicalizing([
         [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
         [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'tool_use', 'id' => 'call-2']],
-    ]);
+    ])->and(DB::table('agent_conversation_messages')->where('id', 'message-1')->value('approval_requested_at'))->not->toBeNull();
+});
+
+test('a resume folds into the paused row holding its decided call rather than the newest pause', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Approval conversation');
+
+    insertAssistantTurn($conversationId, 'paused-1', '', [
+        assistantStep([['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'a'], 'result' => 'deleted']]),
+    ], ['call-1' => 'Deletes a file'], ['provider' => 'anthropic']);
+
+    insertAssistantTurn($conversationId, 'paused-2', '', [
+        assistantStep([['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b']]]),
+    ], ['call-2' => 'Deletes b file'], ['provider' => 'anthropic']);
+
+    $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Mockery::mock(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
+
+    $response = (new AgentResponse('invocation-id', 'Deleted a.', new TextUsage, new Meta('anthropic')))->withSteps(collect([
+        new Step('Deleted a.', [], [], FinishReason::Stop, new TextUsage, new Meta, '', []),
+    ]));
+
+    expect($store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response))->toBe('paused-1');
+
+    $rows = DB::table('agent_conversation_messages')->where('role', 'assistant')->get()->keyBy('id');
+
+    expect($rows['paused-1']->content)->toBe('Deleted a.')
+        ->and($rows['paused-1']->approval_requested_at)->toBeNull()
+        ->and($rows['paused-2']->content)->toBe('')
+        ->and($rows['paused-2']->approval_requested_at)->not->toBeNull();
 });
 
 test('it skips a step that has nothing left to say once its unexecuted calls are dropped', function (): void {

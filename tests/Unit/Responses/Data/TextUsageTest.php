@@ -37,6 +37,13 @@ test('usage add keeps a detail null only when neither side reported it', functio
         ->and($combined->cacheWriteInputTokens)->toBeNull();
 });
 
+test('usage from array restores what to array serialized', function (): void {
+    $usage = new TextUsage(100, 50, 10, 25, null);
+
+    expect(TextUsage::fromArray($usage->toArray()))->toEqual($usage)
+        ->and(TextUsage::fromArray([]))->toEqual(new TextUsage);
+});
+
 test('usage to array serializes every count', function (): void {
     $usage = new TextUsage(100, 50, 10, 25, null);
 

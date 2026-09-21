@@ -369,25 +369,22 @@ describe('hydrating AG-UI from stored messages', function () {
         ]);
     });
 
-    test('a resolved approval hydrates its result before the resumed response', function () {
+    test('a folded approval turn hydrates its resolved result after the message that called it', function () {
         $messages = AgentUserInteraction::toClientState([
             new ConversationMessage([
                 'id' => 'msg-1',
                 'role' => 'assistant',
-                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon'], 'result' => 'Sunny']]]],
-            ]),
-            new ConversationMessage([
-                'id' => 'msg-2',
-                'role' => 'assistant',
                 'content' => 'It is sunny.',
-                'steps' => [],
+                'steps' => [
+                    ['tool_calls' => [['id' => 'call-1', 'name' => 'getWeather', 'arguments' => ['city' => 'Lisbon'], 'approval_reason' => 'Costs money', 'result' => 'Sunny']]],
+                    ['content' => 'It is sunny.', 'tool_calls' => []],
+                ],
             ]),
         ])['messages'];
 
         expect($messages)->sequence(
-            fn ($message) => $message->role->toBe('assistant'),
-            fn ($message) => $message->role->toBe('tool'),
-            fn ($message) => $message->role->toBe('assistant'),
+            fn ($message) => $message->toMatchArray(['id' => 'msg-1', 'role' => 'assistant', 'content' => 'It is sunny.'])->toolCalls->toHaveCount(1),
+            fn ($message) => $message->toMatchArray(['role' => 'tool', 'toolCallId' => 'call-1', 'content' => 'Sunny']),
         );
     });
 

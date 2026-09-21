@@ -22,6 +22,22 @@ readonly class TextUsage extends Usage
     }
 
     /**
+     * Reconstruct an instance from a previously serialized toArray() payload.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function fromArray(array $data): self
+    {
+        return new self(
+            inputTokens: $data['input_tokens'] ?? 0,
+            outputTokens: $data['output_tokens'] ?? 0,
+            cacheReadInputTokens: $data['cache_read_input_tokens'] ?? null,
+            cacheWriteInputTokens: $data['cache_write_input_tokens'] ?? null,
+            reasoningTokens: $data['reasoning_tokens'] ?? null,
+        );
+    }
+
+    /**
      * Get the input tokens that were neither read from nor written to a prompt cache.
      */
     public function uncachedInputTokens(): int
