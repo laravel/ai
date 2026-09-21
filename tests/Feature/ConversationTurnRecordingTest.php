@@ -15,6 +15,7 @@ use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Tools\Request as ToolRequest;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
@@ -242,9 +243,10 @@ test('a resume with nothing paused throws before it stores anything', function (
     Http::fake();
 
     expect(fn () => (new RememberingToolUsingAgent)->forUser((object) ['id' => 1])->prompt(Decisions::from(['call_1' => true]), provider: 'anthropic'))
-        ->toThrow(ApprovalMismatchException::class)
-        ->and(DB::table('agent_conversations')->count())->toBe(0)
-        ->and(DB::table('agent_conversation_messages')->count())->toBe(0);
+        ->toThrow(ApprovalMismatchException::class);
+
+    test()->assertDatabaseEmpty('agent_conversations');
+    test()->assertDatabaseEmpty('agent_conversation_messages');
 
     Http::assertNothingSent();
 });
@@ -392,4 +394,39 @@ test('a step is on record even when a listener of its completed event throws', f
 
     expect($row->status)->toBe('failed')
         ->and($row->steps)->json()->toHaveCount(1)->{'0'}->content->toBe('Hello there.');
+});
+
+test('a stream that dies after yielding marks the turn failed even with a provider left to fall back to', function (): void {
+    Config::set('ai.conversations.generate_title', false);
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    $chunk = fn (array $delta, ?string $reason) => 'data: '.json_encode([
+        'id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'created' => 1, 'model' => 'test',
+        'choices' => [['index' => 0, 'delta' => $delta, 'finish_reason' => $reason]],
+    ])."\n\n";
+
+    Http::fake(['api.groq.com/*' => Http::response(
+        $chunk(['role' => 'assistant', 'content' => 'Hello'], null).$chunk([], 'stop')."data: [DONE]\n\n"
+    )]);
+
+    Event::listen(StepCompleted::class, function (): void {
+        throw new RateLimitedException('Slow down.');
+    });
+
+    $agent = (new RememberingAssistantAgent)->forUser((object) ['id' => 1]);
+
+    expect(function () use ($agent): void {
+        foreach ($agent->stream('Hello', provider: ['primary', 'backup']) as $event) {
+            //
+        }
+    })->toThrow(RateLimitedException::class);
+
+    $row = assistantRowFor(DB::table('agent_conversations')->value('id'));
+
+    expect($row->status)->toBe('failed')
+        ->and(json_decode($row->meta, true)['error'] ?? null)->not->toBeEmpty();
 });

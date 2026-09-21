@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Storage;
 
 use Illuminate\Contracts\Pagination\CursorPaginator;
+use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Pagination\Cursor;
 use Illuminate\Support\Arr;
@@ -48,7 +49,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     public function latestConversationId(string $participantType, string|int $participantId, string $agent): ?string
     {
-        return $this->table($this->messagesTable())
+        return $this->messages()
             ->where('participant_type', $participantType)
             ->where('participant_id', $participantId)
             ->where('agent', $agent)
@@ -61,7 +62,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     public function conversationBelongsTo(string $conversationId, ?string $participantType, string|int|null $participantId): bool
     {
-        $conversation = $this->table($this->conversationsTable())
+        $conversation = $this->conversations()
             ->where('id', $conversationId)
             ->first(['participant_type', 'participant_id']);
 
@@ -77,7 +78,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     {
         $conversationId = $id ?? (string) Str::uuid7();
 
-        $this->table($this->conversationsTable())->insert([
+        $this->conversations()->insert([
             'id' => $conversationId,
             'participant_type' => $participantType,
             'participant_id' => $participantId,
@@ -100,14 +101,11 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         $now = now();
 
-        $this->table($this->messagesTable())->insert($this->messageAttributes($messageId, $conversationId, $participantType, $participantId, $now, [
+        $this->messages()->insert($this->messageAttributes($messageId, $conversationId, $participantType, $participantId, $now, [
             'agent' => $agent,
             'role' => 'user',
             'content' => $message->content,
             'attachments' => $message->attachments->toJson(),
-            'steps' => '[]',
-            'usage' => '[]',
-            'meta' => '[]',
             'status' => MessageStatus::Completed,
         ]));
 
@@ -121,7 +119,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     public function updateConversationTitle(string $conversationId, string $title): void
     {
-        $this->table($this->conversationsTable())
+        $this->conversations()
             ->where('id', $conversationId)
             ->update(['title' => $title, 'updated_at' => now()]);
     }
@@ -137,14 +135,10 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         $now = now();
 
-        $this->table($this->messagesTable())->insert($this->messageAttributes($messageId, $conversationId, $participantType, $participantId, $now, [
+        $this->messages()->insert($this->messageAttributes($messageId, $conversationId, $participantType, $participantId, $now, [
             'agent' => $agent,
             'role' => 'assistant',
             'content' => '',
-            'attachments' => '[]',
-            'steps' => '[]',
-            'usage' => '[]',
-            'meta' => '[]',
             'status' => MessageStatus::Started,
         ]));
 
@@ -160,7 +154,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     public function resumeAssistantMessage(string $conversationId, string $provider, array $decided): ?string
     {
-        return DB::connection($this->connection)->transaction(function () use ($conversationId, $provider, $decided): ?string {
+        return $this->connection()->transaction(function () use ($conversationId, $provider, $decided): ?string {
             $paused = $this->pausedRowFor($conversationId, $decided);
 
             if ($paused === null || $this->pausedCallIds($paused) === []) {
@@ -172,7 +166,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 : ['steps' => $this->withoutReplayBlocks($this->decodedSteps($paused))->toJson()];
 
             // A turn already running elsewhere is left alone, so two resumes of one pause cannot both execute its tools...
-            $claimed = $this->table($this->messagesTable())
+            $claimed = $this->messages()
                 ->where('id', $paused->id)
                 ->whereIn('status', [MessageStatus::Paused, MessageStatus::Failed])
                 ->update([...$steps, 'status' => MessageStatus::Started, 'updated_at' => now()]);
@@ -200,7 +194,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             return;
         }
 
-        $resolved = collect($toolResults)->keyBy(fn (ToolResult $result): string => $result->id);
+        $resolved = $this->keyedResults($toolResults);
 
         $this->reviseOpenSteps($messageId, fn (Collection $steps): Collection => $steps->map(fn (array $step): array => [
             ...$step,
@@ -215,10 +209,10 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     protected function reviseOpenSteps(string $messageId, callable $revise): void
     {
-        DB::connection($this->connection)->transaction(function () use ($messageId, $revise): void {
+        $this->connection()->transaction(function () use ($messageId, $revise): void {
             $row = $this->lockedMessage($messageId);
 
-            $this->table($this->messagesTable())->where('id', $messageId)->update([
+            $this->messages()->where('id', $messageId)->update([
                 'steps' => $revise($this->decodedSteps($row))->toJson(),
                 'status' => MessageStatus::Started,
                 'updated_at' => now(),
@@ -252,7 +246,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     {
         $now = now();
 
-        DB::connection($this->connection)->transaction(function () use ($messageId, $response, $now): void {
+        $this->connection()->transaction(function () use ($messageId, $response, $now): void {
             $row = $this->lockedMessage($messageId);
 
             $recorded = $this->decodedSteps($row);
@@ -264,7 +258,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 $steps = $this->withoutReplayBlocks($steps);
             }
 
-            $this->table($this->messagesTable())->where('id', $messageId)->update([
+            $this->messages()->where('id', $messageId)->update([
                 'content' => blank($response->text) ? $row->content : $response->text,
                 'steps' => $steps->toJson(),
                 'usage' => json_encode(TextUsage::fromArray($this->decoded($row->usage))->add($response->usage)),
@@ -299,7 +293,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         $newest = $this->assistantRows($conversationId)->first();
 
-        if ($newest === null || $newest->status === MessageStatus::Completed->value) {
+        if ($newest === null || MessageStatus::from($newest->status) === MessageStatus::Completed) {
             return null;
         }
 
@@ -319,10 +313,10 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         $reasons = collect($approvals)->mapWithKeys(fn (PendingApproval $approval): array => [$approval->id => $approval->reason]);
 
-        DB::connection($this->connection)->transaction(function () use ($messageId, $reasons): void {
+        $this->connection()->transaction(function () use ($messageId, $reasons): void {
             $row = $this->lockedMessage($messageId);
 
-            $this->table($this->messagesTable())->where('id', $messageId)->update([
+            $this->messages()->where('id', $messageId)->update([
                 'steps' => $this->withApprovalReasons($this->decodedSteps($row), $reasons)->toJson(),
                 'status' => MessageStatus::Paused,
                 'updated_at' => now(),
@@ -335,10 +329,10 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     public function failAssistantMessage(string $messageId, Throwable $exception): void
     {
-        DB::connection($this->connection)->transaction(function () use ($messageId, $exception): void {
+        $this->connection()->transaction(function () use ($messageId, $exception): void {
             $row = $this->lockedMessage($messageId);
 
-            $this->table($this->messagesTable())->where('id', $messageId)->update([
+            $this->messages()->where('id', $messageId)->update([
                 'meta' => json_encode([...$this->decoded($row->meta), 'error' => $exception->getMessage()]),
                 'status' => MessageStatus::Failed,
                 'updated_at' => now(),
@@ -351,7 +345,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     protected function lockedMessage(string $messageId): object
     {
-        $row = $this->table($this->messagesTable())->where('id', $messageId)->lockForUpdate()->first();
+        $row = $this->messages()->where('id', $messageId)->lockForUpdate()->first();
 
         if ($row === null) {
             throw new InvalidArgumentException("Conversation message [{$messageId}] does not exist.");
@@ -445,7 +439,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     protected function toolCallsFor(iterable $toolCalls, iterable $toolResults): array
     {
-        $results = collect($toolResults)->keyBy(fn (ToolResult $result): string => $result->id);
+        $results = $this->keyedResults($toolResults);
 
         return collect($toolCalls)->map(function (ToolCall $toolCall) use ($results): array {
             $result = $results->get($toolCall->id);
@@ -468,8 +462,9 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     protected function forgetReplayBlocks(string $conversationId): void
     {
-        $this->table($this->messagesTable())
+        $this->messages()
             ->where('conversation_id', $conversationId)
+            ->where('status', '!=', MessageStatus::Completed)
             ->get(['id', 'steps'])
             ->each(function (object $record): void {
                 $steps = $this->decodedSteps($record);
@@ -478,7 +473,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                     return;
                 }
 
-                $this->table($this->messagesTable())->where('id', $record->id)->update([
+                $this->messages()->where('id', $record->id)->update([
                     'steps' => $this->withoutReplayBlocks($steps)->toJson(),
                 ]);
             });
@@ -560,9 +555,20 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     protected function touchConversation(string $conversationId, mixed $timestamp): void
     {
-        $this->table($this->conversationsTable())
+        $this->conversations()
             ->where('id', $conversationId)
             ->update(['updated_at' => $timestamp]);
+    }
+
+    /**
+     * Key the given tool results by the ID of the call they answer.
+     *
+     * @param  iterable<int, ToolResult>  $toolResults
+     * @return Collection<string, ToolResult>
+     */
+    protected function keyedResults(iterable $toolResults): Collection
+    {
+        return collect($toolResults)->keyBy(fn (ToolResult $result): string => $result->id);
     }
 
     /**
@@ -573,14 +579,19 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     protected function messageAttributes(string $messageId, string $conversationId, ?string $participantType, string|int|null $participantId, mixed $now, array $attributes): array
     {
-        return array_merge($attributes, [
+        return [
+            'attachments' => '[]',
+            'steps' => '[]',
+            'usage' => '[]',
+            'meta' => '[]',
+            ...$attributes,
             'id' => $messageId,
             'conversation_id' => $conversationId,
             'participant_type' => $participantType,
             'participant_id' => $participantId,
             'created_at' => $now,
             'updated_at' => $now,
-        ]);
+        ];
     }
 
     /**
@@ -590,7 +601,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     public function getLatestConversationMessages(string $conversationId, int $limit, ?string $before = null): Collection
     {
-        $records = $this->table($this->messagesTable())
+        $records = $this->messages()
+            ->useWritePdo()
             ->where('conversation_id', $conversationId)
             ->when($before !== null, fn (Builder $query): Builder => $query->where('id', '<', $before))
             ->orderByDesc('id')
@@ -697,7 +709,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     public function paginateConversationMessages(string $conversationId, int $perPage = 15, string $cursorName = 'cursor', Cursor|string|null $cursor = null): CursorPaginator
     {
-        return $this->table($this->messagesTable())
+        return $this->messages()
             ->where('conversation_id', $conversationId)
             ->orderByDesc('id')
             ->cursorPaginate($perPage, ['*'], $cursorName, $cursor)
@@ -711,12 +723,12 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     public function pendingApprovalsFor(string $conversationId): array
     {
-        $newest = $this->table($this->messagesTable())
+        $newest = $this->messages()
             ->where('conversation_id', $conversationId)
             ->orderByDesc('id')
             ->first(['role', 'steps', 'status']);
 
-        return $newest === null || $newest->role !== 'assistant' || $newest->status === MessageStatus::Completed->value
+        return $newest === null || $newest->role !== 'assistant' || MessageStatus::from($newest->status) === MessageStatus::Completed
             ? []
             : $this->pendingApprovalsIn($newest)->all();
     }
@@ -732,10 +744,6 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         if (! is_array($decoded) || ! array_is_list($decoded)) {
             throw new InvalidArgumentException('Stored conversation attachments must be a JSON array.');
-        }
-
-        if ($decoded === []) {
-            return collect();
         }
 
         return collect($decoded)
@@ -755,18 +763,34 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     protected function assistantRows(string $conversationId): Builder
     {
-        return $this->table($this->messagesTable())
+        return $this->messages()
             ->where('conversation_id', $conversationId)
             ->where('role', 'assistant')
             ->orderByDesc('id');
     }
 
     /**
-     * Get a query builder for the given table using the configured connection.
+     * Get a query builder for the conversation messages table.
      */
-    protected function table(string $table): Builder
+    protected function messages(): Builder
     {
-        return DB::connection($this->connection)->table($table);
+        return $this->connection()->table($this->messagesTable());
+    }
+
+    /**
+     * Get a query builder for the conversations table.
+     */
+    protected function conversations(): Builder
+    {
+        return $this->connection()->table($this->conversationsTable());
+    }
+
+    /**
+     * Get the database connection the conversations are stored on.
+     */
+    protected function connection(): ConnectionInterface
+    {
+        return DB::connection($this->connection);
     }
 
     /**

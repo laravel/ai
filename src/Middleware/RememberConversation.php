@@ -76,7 +76,7 @@ class RememberConversation
 
         // A stream fails while it is being consumed, long after this pipeline returned, so it reports back here...
         if ($response instanceof StreamableAgentResponse) {
-            $response->catch(fn (Throwable $exception) => $this->releaseTurn($prompt, $turn, $exception));
+            $response->catch(fn (Throwable $exception) => $this->releaseTurn($prompt, $turn, $exception, retryable: ! $response->hasYielded()));
         }
 
         return $response->then(function (AgentResponse $completedResponse) use ($prompt, $agent, $turn): void {
@@ -131,12 +131,12 @@ class RememberConversation
     /**
      * Close the turn a run died on, leaving the rows to a failover retry of the same invocation.
      */
-    protected function releaseTurn(AgentPrompt $prompt, RecordedTurn $turn, Throwable $exception): void
+    protected function releaseTurn(AgentPrompt $prompt, RecordedTurn $turn, Throwable $exception, bool $retryable = true): void
     {
         /** @var Agent&RemembersConversations $agent */
         $agent = $prompt->agent;
 
-        if ($exception instanceof FailoverableException && ! $prompt->isFinalAttempt()) {
+        if ($retryable && $exception instanceof FailoverableException && ! $prompt->isFinalAttempt()) {
             $turn->markFailed($exception);
 
             return;
