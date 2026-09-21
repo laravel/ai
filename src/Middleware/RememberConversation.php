@@ -69,14 +69,14 @@ class RememberConversation
         try {
             $response = $next($prompt);
         } catch (Throwable $exception) {
-            // A failover retry of this invocation still needs the rows, so only a terminal failure lets go of them...
-            if (! $exception instanceof FailoverableException || $prompt->isFinalAttempt()) {
-                $this->store->failAssistantMessage($turn->assistantMessageId, $exception);
-
-                $agent->recordTurn(null);
-            }
+            $this->releaseTurn($prompt, $turn, $exception);
 
             throw $exception;
+        }
+
+        // A stream fails while it is being consumed, long after this pipeline returned, so it reports back here...
+        if ($response instanceof StreamableAgentResponse) {
+            $response->catch(fn (Throwable $exception) => $this->releaseTurn($prompt, $turn, $exception));
         }
 
         return $response->then(function (AgentResponse $completedResponse) use ($prompt, $agent, $turn): void {
@@ -114,6 +114,10 @@ class RememberConversation
         }
 
         // The retry starts the turn over, so the steps a failed attempt recorded stay on their own row rather than reading as one run...
+        if (($failure = $attempted->failure()) !== null) {
+            $this->store->failAssistantMessage($attempted->assistantMessageId, $failure);
+        }
+
         [$participantType, $participantId] = $this->participantFor($agent);
 
         return new RecordedTurn(
@@ -122,6 +126,25 @@ class RememberConversation
             $attempted->userMessageId,
             $attempted->startedConversation,
         );
+    }
+
+    /**
+     * Close the turn a run died on, leaving the rows to a failover retry of the same invocation.
+     */
+    protected function releaseTurn(AgentPrompt $prompt, RecordedTurn $turn, Throwable $exception): void
+    {
+        /** @var Agent&RemembersConversations $agent */
+        $agent = $prompt->agent;
+
+        if ($exception instanceof FailoverableException && ! $prompt->isFinalAttempt()) {
+            $turn->markFailed($exception);
+
+            return;
+        }
+
+        $this->store->failAssistantMessage($turn->assistantMessageId, $exception);
+
+        $agent->recordTurn(null);
     }
 
     /**

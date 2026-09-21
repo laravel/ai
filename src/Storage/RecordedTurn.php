@@ -2,9 +2,13 @@
 
 namespace Laravel\Ai\Storage;
 
+use Throwable;
+
 class RecordedTurn
 {
     protected bool $stepped = false;
+
+    protected ?Throwable $exception = null;
 
     public function __construct(
         public readonly ?string $invocationId,
@@ -27,5 +31,21 @@ class RecordedTurn
     public function hasSteps(): bool
     {
         return $this->stepped;
+    }
+
+    /**
+     * Note the failure the attempt on these rows died with, so a retry can close the row it abandons.
+     */
+    public function markFailed(Throwable $exception): void
+    {
+        $this->exception = $exception;
+    }
+
+    /**
+     * Get the failure the attempt on these rows died with, if it has ended.
+     */
+    public function failure(): ?Throwable
+    {
+        return $this->exception;
     }
 }

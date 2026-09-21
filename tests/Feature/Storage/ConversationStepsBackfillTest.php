@@ -39,7 +39,10 @@ test('it moves a result recorded on a later row onto the step that made the call
 
     $rows = DB::table('agent_conversation_messages')->orderBy('id')->get()->keyBy('id');
 
+    $status = collect(Schema::getColumns('agent_conversation_messages'))->firstWhere('name', 'status');
+
     expect(Schema::hasColumns('agent_conversation_messages', ['tool_calls', 'tool_results', 'approval_state']))->toBeFalse()
+        ->and($status['nullable'])->toBeFalse()
         ->and($rows['message-1']->steps)->toBe('[]')
         ->and($rows->pluck('status')->all())->toBe(['completed', 'completed', 'completed'])
         ->and($rows['message-2']->steps)->json()->toHaveCount(1)->{'0'}->toMatchArray([

@@ -57,6 +57,11 @@ class FakeConversationStore implements ConversationStore
         //
     }
 
+    public function storePendingApprovals(string $messageId, array $approvals): void
+    {
+        //
+    }
+
     public function failAssistantMessage(string $messageId, Throwable $exception): void
     {
         //

@@ -160,20 +160,25 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     public function resumeAssistantMessage(string $conversationId, string $provider, array $decided): ?string
     {
-        $paused = $this->pausedRowFor($conversationId, $decided);
+        return DB::connection($this->connection)->transaction(function () use ($conversationId, $provider, $decided): ?string {
+            $paused = $this->pausedRowFor($conversationId, $decided);
 
-        if ($paused === null || $this->pausedCallIds($paused) === []) {
-            return null;
-        }
+            if ($paused === null || $this->pausedCallIds($paused) === []) {
+                return null;
+            }
 
-        // Raw blocks are only valid verbatim on the provider that produced them, so another provider's resume rebuilds the paused steps generically...
-        if (($this->decoded($paused->meta)['provider'] ?? null) !== $provider) {
-            $this->table($this->messagesTable())->where('id', $paused->id)->update([
-                'steps' => $this->withoutReplayBlocks($this->decodedSteps($paused))->toJson(),
-            ]);
-        }
+            $steps = ($this->decoded($paused->meta)['provider'] ?? null) === $provider
+                ? []
+                : ['steps' => $this->withoutReplayBlocks($this->decodedSteps($paused))->toJson()];
 
-        return $paused->id;
+            // A turn already running elsewhere is left alone, so two resumes of one pause cannot both execute its tools...
+            $claimed = $this->table($this->messagesTable())
+                ->where('id', $paused->id)
+                ->whereIn('status', [MessageStatus::Paused, MessageStatus::Failed])
+                ->update([...$steps, 'status' => MessageStatus::Started, 'updated_at' => now()]);
+
+            return $claimed === 0 ? null : $paused->id;
+        });
     }
 
     /**
@@ -253,7 +258,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             $recorded = $this->decodedSteps($row);
 
             // A turn nothing recorded as it ran, such as one remembered only once it paused, is written from the response in full...
-            $steps = $this->withApprovalReasons($recorded->isEmpty() ? $this->stepsFor($response) : $recorded, $response);
+            $steps = $this->withApprovalReasons($recorded->isEmpty() ? $this->stepsFor($response) : $recorded, $this->pendingReasonsFor($response));
 
             if (! $response->hasPendingApprovals()) {
                 $steps = $this->withoutReplayBlocks($steps);
@@ -299,6 +304,30 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         }
 
         return $this->pendingApprovalsIn($newest)->isNotEmpty() ? $newest : null;
+    }
+
+    /**
+     * Record the approvals an open assistant turn paused on, before the pause reaches the caller.
+     *
+     * @param  array<int, PendingApproval>  $approvals
+     */
+    public function storePendingApprovals(string $messageId, array $approvals): void
+    {
+        if ($approvals === []) {
+            return;
+        }
+
+        $reasons = collect($approvals)->mapWithKeys(fn (PendingApproval $approval): array => [$approval->id => $approval->reason]);
+
+        DB::connection($this->connection)->transaction(function () use ($messageId, $reasons): void {
+            $row = $this->lockedMessage($messageId);
+
+            $this->table($this->messagesTable())->where('id', $messageId)->update([
+                'steps' => $this->withApprovalReasons($this->decodedSteps($row), $reasons)->toJson(),
+                'status' => MessageStatus::Paused,
+                'updated_at' => now(),
+            ]);
+        });
     }
 
     /**
@@ -385,15 +414,14 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Mark the tool calls a response paused on with the reason they await, so the steps carry the pause themselves.
+     * Mark the tool calls a turn paused on with the reason they await, so the steps carry the pause themselves.
      *
      * @param  Collection<int, array{content: string, tool_calls: array, reasoning: string, replay_blocks: array, provider_tool_calls: array}>  $steps
+     * @param  Collection<string, ?string>  $reasons
      * @return Collection<int, array{content: string, tool_calls: array, reasoning: string, replay_blocks: array, provider_tool_calls: array}>
      */
-    protected function withApprovalReasons(Collection $steps, AgentResponse $response): Collection
+    protected function withApprovalReasons(Collection $steps, Collection $reasons): Collection
     {
-        $reasons = $this->pendingReasonsFor($response);
-
         if ($reasons->isEmpty()) {
             return $steps;
         }

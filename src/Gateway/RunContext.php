@@ -3,6 +3,8 @@
 namespace Laravel\Ai\Gateway;
 
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Support\Collection;
+use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -52,6 +54,18 @@ class RunContext
     {
         if ($this->turn !== null && $toolResults !== []) {
             $this->store->storeToolResults($this->turn->assistantMessageId, $toolResults);
+        }
+    }
+
+    /**
+     * Write the approvals a turn paused on onto its stored row, when the turn is being recorded.
+     *
+     * @param  Collection<int, PendingApproval>  $approvals
+     */
+    public function recordPendingApprovals(Collection $approvals): void
+    {
+        if ($this->turn !== null && $approvals->isNotEmpty()) {
+            $this->store->storePendingApprovals($this->turn->assistantMessageId, $approvals->all());
         }
     }
 

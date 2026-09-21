@@ -39,6 +39,7 @@ class BackfillConversationSteps extends AiMigration
 
         Schema::connection($this->getConnection())->table($table, function (Blueprint $blueprint) {
             $blueprint->longText('steps')->nullable(false)->change();
+            $blueprint->string('status', 25)->nullable(false)->change();
             $blueprint->dropColumn(['tool_calls', 'tool_results', 'approval_state']);
         });
     }

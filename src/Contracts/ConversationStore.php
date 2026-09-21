@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Contracts;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -38,7 +39,7 @@ interface ConversationStore
     public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, string $agent, UserMessage $message): string;
 
     /**
-     * Open an assistant turn that is about to run and return its message ID, failing any turn of the conversation's that is still open.
+     * Open an assistant turn that is about to run and return its message ID.
      *
      * @param  class-string<Agent>  $agent
      */
@@ -67,6 +68,13 @@ interface ConversationStore
      * Close an open assistant turn with the response the run returned.
      */
     public function completeAssistantMessage(string $messageId, AgentPrompt $prompt, AgentResponse $response): void;
+
+    /**
+     * Record the approvals an open assistant turn paused on, before the pause reaches the caller.
+     *
+     * @param  array<int, PendingApproval>  $approvals
+     */
+    public function storePendingApprovals(string $messageId, array $approvals): void;
 
     /**
      * Record the error a run failed with on its turn.

@@ -48,11 +48,15 @@ interface RemembersConversations extends Conversational
 
     /**
      * Remember the rows the current turn is being recorded on, or forget them once it completes.
+     *
+     * @internal
      */
     public function recordTurn(?RecordedTurn $turn): static;
 
     /**
      * Get the rows the given invocation is being recorded on, if this agent opened them.
+     *
+     * @internal
      */
     public function recordedTurn(?string $invocationId): ?RecordedTurn;
 }

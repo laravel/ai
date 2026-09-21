@@ -77,6 +77,11 @@ test('it threads the participant type into latestConversationId when continuing 
             //
         }
 
+        public function storePendingApprovals(string $messageId, array $approvals): void
+        {
+            //
+        }
+
         public function failAssistantMessage(string $messageId, Throwable $exception): void
         {
             //
@@ -147,6 +152,11 @@ test('it continues the last conversation through a store that ignores the partic
         }
 
         public function completeAssistantMessage(string $messageId, AgentPrompt $prompt, AgentResponse $response): void
+        {
+            //
+        }
+
+        public function storePendingApprovals(string $messageId, array $approvals): void
         {
             //
         }
@@ -230,6 +240,11 @@ test('it resolves the participant id via getKey for models with custom primary k
         }
 
         public function completeAssistantMessage(string $messageId, AgentPrompt $prompt, AgentResponse $response): void
+        {
+            //
+        }
+
+        public function storePendingApprovals(string $messageId, array $approvals): void
         {
             //
         }

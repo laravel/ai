@@ -163,12 +163,12 @@ class TextGenerationLoop
 
             $prepared = $attempt?->step ?? $pending;
 
+            // Recorded before the tools run, and before a listener can throw, so a killed step still leaves its calls on record...
+            $context?->recordStep($this->buildStep($lastResult));
+
             $this->stepCompleted($context, $attempt, $lastResult);
 
             $accumulatedUsage = $accumulatedUsage->add($lastResult->usage);
-
-            // Recorded before the tools run so a process killed mid-tool still leaves the call it was executing on record...
-            $context?->recordStep($this->buildStep($lastResult));
 
             [$toolResults, $pendingApprovals] = $this->stepToolResultsWithOptions($lastResult, $prepared->isFinalStep, $prepared->tools, $prepared->options, $context);
 
@@ -341,12 +341,13 @@ class TextGenerationLoop
                 throw $exception;
             }
 
+            // Recorded before the tools run, and before a listener can throw, so a killed step still leaves its calls on record...
+            $context?->recordStep($this->buildStep($result));
+
             $this->stepCompleted($context, $attempt, $result);
 
             $accumulatedUsage = $accumulatedUsage->add($result->usage);
             $finalReason = $result->finishReason;
-
-            $context?->recordStep($this->buildStep($result));
 
             $toolStream = $this->streamedStepToolResults(
                 $result, $prepared->isFinalStep, $prepared->tools, $invocationId, $prepared->options, $context,
@@ -378,6 +379,9 @@ class TextGenerationLoop
             }
 
             if ($pendingApprovals->isNotEmpty()) {
+                // Recorded before the event leaves, so a consumer that stops iterating here still leaves a resumable pause...
+                $context?->recordPendingApprovals($pendingApprovals);
+
                 yield (new ToolApprovalRequest(
                     $this->generateEventId(),
                     $pendingApprovals,

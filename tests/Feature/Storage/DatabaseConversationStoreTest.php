@@ -574,7 +574,7 @@ test('a resume writes onto the paused row and completes it in place', function (
     $row = DB::table('agent_conversation_messages')->where('id', 'paused-1')->first();
 
     expect($messageId)->toBe('paused-1')
-        ->and($reopened->status)->toBe('paused')
+        ->and($reopened->status)->toBe('started')
         ->and($inProgress->status)->toBe('started')
         ->and($row->status)->toBe('completed')
         ->and($row->steps)->json()->{'0'}->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-1', 'approval_reason' => null, 'denied' => true])
@@ -1798,3 +1798,30 @@ function storeAssistantTurn(DatabaseConversationStore $store, string $conversati
 
     return $messageId;
 }
+
+test('a pause already being resumed is not claimed a second time', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Approval conversation');
+
+    insertAssistantTurn($conversationId, 'paused-1', '', [
+        assistantStep([['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []]]),
+    ], ['call-1' => 'Deletes a file'], ['provider' => 'anthropic']);
+
+    expect($store->resumeAssistantMessage($conversationId, 'anthropic', ['call-1']))->toBe('paused-1')
+        ->and($store->resumeAssistantMessage($conversationId, 'anthropic', ['call-1']))->toBeNull()
+        ->and(DB::table('agent_conversation_messages')->where('id', 'paused-1')->value('status'))->toBe('started');
+});
+
+test('a resume reclaims the pause an earlier resume failed on', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Approval conversation');
+
+    insertAssistantTurn($conversationId, 'paused-1', '', [
+        assistantStep([['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []]]),
+    ], ['call-1' => 'Deletes a file'], ['provider' => 'anthropic']);
+
+    $store->resumeAssistantMessage($conversationId, 'anthropic', ['call-1']);
+    $store->failAssistantMessage('paused-1', new RuntimeException('The provider blew up.'));
+
+    expect($store->resumeAssistantMessage($conversationId, 'anthropic', ['call-1']))->toBe('paused-1');
+});

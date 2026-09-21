@@ -5,6 +5,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Concerns\RemembersConversations;
@@ -12,6 +13,7 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Tools\Request as ToolRequest;
@@ -209,6 +211,8 @@ test('a failover after a recorded step leaves that attempt on its own row and an
     $rows = DB::table('agent_conversation_messages')->where('conversation_id', $response->conversationId)->orderBy('id')->get();
 
     expect($rows->pluck('role')->all())->toBe(['user', 'assistant', 'assistant'])
+        ->and($rows[1]->status)->toBe('failed')
+        ->and(json_decode($rows[1]->meta, true)['error'])->not->toBeEmpty()
         ->and($rows[1]->steps)->json()->toHaveCount(1)->{'0'}->tool_calls->{'0'}->toMatchArray(['id' => 'call_1', 'result' => 72019])
         ->and($rows[2]->id)->toBe($response->assistantMessageId)
         ->and($rows[2]->content)->toBe('Hello from backup')
@@ -349,3 +353,43 @@ class ExplodingTool implements Tool
         return [];
     }
 }
+
+test('a stream that dies mid-flight marks the turn failed and records the error', function (): void {
+    Config::set('ai.conversations.generate_title', false);
+    Config::set('ai.providers.anthropic.key', 'test-key');
+
+    Http::fake(['api.anthropic.com/*' => Http::response(status: 500)]);
+
+    $agent = (new RememberingAssistantAgent)->forUser((object) ['id' => 1]);
+
+    expect(function () use ($agent): void {
+        foreach ($agent->stream('Hello', provider: 'anthropic') as $event) {
+            //
+        }
+    })->toThrow(RequestException::class);
+
+    $row = assistantRowFor(DB::table('agent_conversations')->value('id'));
+
+    expect($row->status)->toBe('failed')
+        ->and(json_decode($row->meta, true)['error'] ?? null)->not->toBeEmpty();
+});
+
+test('a step is on record even when a listener of its completed event throws', function (): void {
+    Config::set('ai.conversations.generate_title', false);
+    Config::set('ai.providers.anthropic.key', 'test-key');
+
+    Http::fake(['api.anthropic.com/*' => Http::response(anthropicTurn([['type' => 'text', 'text' => 'Hello there.']], 'end_turn'))]);
+
+    Event::listen(StepCompleted::class, function (): void {
+        throw new RuntimeException('The listener blew up.');
+    });
+
+    $agent = (new RememberingAssistantAgent)->forUser((object) ['id' => 1]);
+
+    expect(fn () => $agent->prompt('Hello', provider: 'anthropic'))->toThrow(RuntimeException::class, 'The listener blew up.');
+
+    $row = assistantRowFor(DB::table('agent_conversations')->value('id'));
+
+    expect($row->status)->toBe('failed')
+        ->and($row->steps)->json()->toHaveCount(1)->{'0'}->content->toBe('Hello there.');
+});

@@ -183,6 +183,8 @@ class AgentPrompt extends Prompt
 
     /**
      * Determine whether this prompt is a resume whose decisions run against the real (non-faked) gateway.
+     *
+     * @internal
      */
     public function resumesAgainstRealGateway(): bool
     {
