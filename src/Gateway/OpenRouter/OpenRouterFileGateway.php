@@ -8,6 +8,7 @@ use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\PreparesStorableFiles;
+use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\FileResponse;
 use Laravel\Ai\Responses\StoredFileResponse;
 
@@ -55,6 +56,14 @@ class OpenRouterFileGateway implements FileGateway
         );
 
         return new StoredFileResponse($response->json('id'));
+    }
+
+    /**
+     * Get the base URL for the Files API, which rejects the in-region endpoints with a 403.
+     */
+    protected function baseUrl(Provider $provider): string
+    {
+        return 'https://openrouter.ai/api/v1';
     }
 
     /**

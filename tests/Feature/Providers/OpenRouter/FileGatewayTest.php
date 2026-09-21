@@ -28,7 +28,15 @@ test('get file sends correct request and exposes the mime type', function (): vo
         && $request->hasHeader('Authorization', 'Bearer test-key'));
 });
 
-test('put file sends a multipart upload without a purpose', function (): void {
+test('get file exposes a null mime type when the provider omits it', function (): void {
+    Http::fake([
+        'openrouter.ai/*' => Http::response(['id' => 'or_file_abc123']),
+    ]);
+
+    expect(Files::get('or_file_abc123', provider: 'openrouter')->mimeType())->toBeNull();
+});
+
+test('put file sends the file as a multipart upload', function (): void {
     Http::fake([
         'openrouter.ai/*' => Http::response(['id' => 'or_file_uploaded123']),
     ]);
@@ -40,11 +48,13 @@ test('put file sends a multipart upload without a purpose', function (): void {
     expect($response->id)->toBe('or_file_uploaded123');
 
     $request = sentRequest();
+    $file = collect($request->data())->firstWhere('name', 'file');
 
     expect($request->method())->toBe('POST')
         ->and($request->url())->toBe('https://openrouter.ai/api/v1/files')
         ->and($request->header('Content-Type')[0] ?? '')->toContain('multipart/form-data')
-        ->and(multipartField($request, 'purpose'))->toBeNull()
+        ->and($file['contents'])->toBe('Hello, World!')
+        ->and($file['filename'])->toBe('hello.txt')
         ->and($request->hasHeader('Authorization', 'Bearer test-key'))->toBeTrue();
 });
 
