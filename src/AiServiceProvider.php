@@ -8,6 +8,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Support\Stringable;
 use Laravel\Ai\Agents\SummarizeAgent;
+use Laravel\Ai\Classification\Boolean;
 use Laravel\Ai\Console\Commands\ChatCommand;
 use Laravel\Ai\Console\Commands\MakeAgentCommand;
 use Laravel\Ai\Console\Commands\MakeAgentMiddlewareCommand;
@@ -118,6 +119,34 @@ class AiServiceProvider extends ServiceProvider
             ?int $timeout = null,
         ): string => (new SummarizeAgent($sentences))
             ->prompt($value, provider: $provider, model: $model, timeout: $timeout)->text);
+
+        // Decision macros...
+        Stringable::macro('decide', fn (
+            string $question,
+            array $criteria = [],
+            float $threshold = 0.5,
+            Lab|array|string|null $provider = null,
+            ?string $model = null,
+            ?int $timeout = null,
+        ): bool => Str::decide($this->value(), $question, $criteria, $threshold, $provider, $model, $timeout));
+
+        Str::macro('decide', function (
+            string $value,
+            string $question,
+            array $criteria = [],
+            float $threshold = 0.5,
+            Lab|array|string|null $provider = null,
+            ?string $model = null,
+            ?int $timeout = null,
+        ): bool {
+            $request = Classification::of($value)->question('decision', new Boolean($question, $criteria ?: null));
+
+            if (! is_null($timeout)) {
+                $request->timeout($timeout);
+            }
+
+            return $request->classify($provider, $model)->answer('decision')->isTrue($threshold);
+        });
 
         // Reranking macro...
         Collection::macro('rerank', function (
