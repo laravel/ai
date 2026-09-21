@@ -11,7 +11,9 @@ use Laravel\Ai\Providers\Provider;
 class OpenRouterClassificationGateway implements ClassificationGateway
 {
     use AnswersQuestions;
-    use Concerns\CreatesOpenRouterClient;
+    use Concerns\CreatesOpenRouterClient {
+        baseUrl as openRouterBaseUrl;
+    }
     use HandlesFailoverErrors;
 
     /**
@@ -19,7 +21,7 @@ class OpenRouterClassificationGateway implements ClassificationGateway
      */
     protected function classificationEndpoint(): string
     {
-        return 'alpha/decisions';
+        return '/alpha/decisions';
     }
 
     /**
@@ -27,6 +29,6 @@ class OpenRouterClassificationGateway implements ClassificationGateway
      */
     protected function baseUrl(Provider $provider): string
     {
-        return Str::chopEnd(rtrim($provider->additionalConfiguration()['url'] ?? 'https://openrouter.ai/api/v1', '/'), '/v1');
+        return Str::chopEnd($this->openRouterBaseUrl($provider), '/v1');
     }
 }
