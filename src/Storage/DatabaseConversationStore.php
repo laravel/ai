@@ -16,6 +16,7 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\PaginatesConversations;
 use Laravel\Ai\Contracts\ResolvesPendingApprovals;
 use Laravel\Ai\Contracts\VerifiesConversationOwnership;
+use Laravel\Ai\Enums\MessageStatus;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
@@ -107,8 +108,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'steps' => '[]',
             'usage' => '[]',
             'meta' => '[]',
-            'approval_requested_at' => null,
-            'completed_at' => $now,
+            'status' => MessageStatus::Completed,
         ]));
 
         $this->touchConversation($conversationId, $now);
@@ -136,6 +136,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         $messageId = (string) Str::uuid7();
 
         $now = now();
+
         $this->table($this->messagesTable())->insert($this->messageAttributes($messageId, $conversationId, $participantType, $participantId, $now, [
             'agent' => $agent,
             'role' => 'assistant',
@@ -144,8 +145,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'steps' => '[]',
             'usage' => '[]',
             'meta' => '[]',
-            'approval_requested_at' => null,
-            'completed_at' => null,
+            'status' => MessageStatus::Started,
         ]));
 
         $this->touchConversation($conversationId, $now);
@@ -166,14 +166,12 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             return null;
         }
 
-        $steps = $this->decodedSteps($paused);
-
         // Raw blocks are only valid verbatim on the provider that produced them, so another provider's resume rebuilds the paused steps generically...
         if (($this->decoded($paused->meta)['provider'] ?? null) !== $provider) {
-            $steps = $this->withoutReplayBlocks($steps);
+            $this->table($this->messagesTable())->where('id', $paused->id)->update([
+                'steps' => $this->withoutReplayBlocks($this->decodedSteps($paused))->toJson(),
+            ]);
         }
-
-        $this->table($this->messagesTable())->where('id', $paused->id)->update(['steps' => $steps->toJson()]);
 
         return $paused->id;
     }
@@ -217,7 +215,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
             $this->table($this->messagesTable())->where('id', $messageId)->update([
                 'steps' => $revise($this->decodedSteps($row))->toJson(),
-                'completed_at' => null,
+                'status' => MessageStatus::Started,
                 'updated_at' => now(),
             ]);
         });
@@ -266,8 +264,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 'steps' => $steps->toJson(),
                 'usage' => json_encode(TextUsage::fromArray($this->decoded($row->usage))->add($response->usage)),
                 'meta' => json_encode($this->mergedMeta($row, $response)),
-                'approval_requested_at' => $response->hasPendingApprovals() ? $now : null,
-                'completed_at' => $now,
+                'status' => $response->hasPendingApprovals() ? MessageStatus::Paused : MessageStatus::Completed,
                 'updated_at' => $now,
             ]);
 
@@ -287,7 +284,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     protected function pausedRowFor(string $conversationId, array $decided): ?object
     {
         $named = $this->assistantRows($conversationId)
-            ->whereNotNull('approval_requested_at')
+            ->where('status', '!=', MessageStatus::Completed)
             ->get()
             ->first(fn (object $record): bool => array_intersect($this->gatedCallIds($record), $decided) !== []);
 
@@ -297,22 +294,25 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         $newest = $this->assistantRows($conversationId)->first();
 
-        return $newest?->approval_requested_at === null ? null : $newest;
+        if ($newest === null || $newest->status === MessageStatus::Completed->value) {
+            return null;
+        }
+
+        return $this->pendingApprovalsIn($newest)->isNotEmpty() ? $newest : null;
     }
 
     /**
-     * Record the error a run failed with on its turn, keeping whatever it recorded.
+     * Record the error a run failed with on its turn.
      */
     public function failAssistantMessage(string $messageId, Throwable $exception): void
     {
-        $now = now();
-
-        DB::connection($this->connection)->transaction(function () use ($messageId, $exception, $now): void {
+        DB::connection($this->connection)->transaction(function () use ($messageId, $exception): void {
             $row = $this->lockedMessage($messageId);
 
             $this->table($this->messagesTable())->where('id', $messageId)->update([
                 'meta' => json_encode([...$this->decoded($row->meta), 'error' => $exception->getMessage()]),
-                'updated_at' => $now,
+                'status' => MessageStatus::Failed,
+                'updated_at' => now(),
             ]);
         });
     }
@@ -442,7 +442,6 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     {
         $this->table($this->messagesTable())
             ->where('conversation_id', $conversationId)
-            ->whereNotNull('approval_requested_at')
             ->get(['id', 'steps'])
             ->each(function (object $record): void {
                 $steps = $this->decodedSteps($record);
@@ -598,7 +597,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     {
         $pending = $this->pausedCallIds($record);
         $provider = $this->decoded($record->meta)['provider'] ?? null;
-        $interrupted = $record->completed_at === null;
+        $interrupted = MessageStatus::from($record->status)->isInterrupted();
 
         return $this->decodedSteps($record)->flatMap(function (array $step) use ($pending, $provider, $interrupted): array {
             $content = $step['content'];
@@ -687,9 +686,9 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         $newest = $this->table($this->messagesTable())
             ->where('conversation_id', $conversationId)
             ->orderByDesc('id')
-            ->first(['role', 'steps', 'approval_requested_at']);
+            ->first(['role', 'steps', 'status']);
 
-        return $newest === null || $newest->role !== 'assistant' || $newest->approval_requested_at === null
+        return $newest === null || $newest->role !== 'assistant' || $newest->status === MessageStatus::Completed->value
             ? []
             : $this->pendingApprovalsIn($newest)->all();
     }

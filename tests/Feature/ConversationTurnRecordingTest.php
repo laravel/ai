@@ -96,7 +96,7 @@ test('the conversation, the user message and an open assistant row exist before 
         // The rows were open on the first request and the request itself carried the prompt once, not once stored and once live...
         ->and($seen[0]['title'])->toBe('Generate a number')
         ->and($seen[0]['user_rows'])->toBe(1)
-        ->and($seen[0]['assistant']->completed_at)->toBeNull()
+        ->and($seen[0]['assistant']->status)->toBe('started')
         ->and($seen[0]['assistant']->steps)->toBe('[]')
         ->and($seen[0]['prompt_messages'])->toBe(1)
         // The second request already saw the first step and its result on the row...
@@ -104,7 +104,7 @@ test('the conversation, the user message and an open assistant row exist before 
         ->and($seen[1]['prompt_messages'])->toBe(2)
         // The completing write closed the row and retitled the conversation...
         ->and($row->id)->toBe($response->assistantMessageId)
-        ->and($row->completed_at)->not->toBeNull()
+        ->and($row->status)->toBe('completed')
         ->and($row->content)->toBe('The number is 72019.')
         ->and($row->steps)->json()->toHaveCount(2)
         ->and(DB::table('agent_conversations')->value('title'))->toBe('Number generation')
@@ -177,7 +177,7 @@ test('a failover attempt continues on the rows the first attempt opened', functi
         ->and($rows->pluck('role')->all())->toBe(['user', 'assistant'])
         ->and($rows[1]->id)->toBe($response->assistantMessageId)
         ->and($rows[1]->content)->toBe('Hello from backup')
-        ->and($rows[1]->completed_at)->not->toBeNull()
+        ->and($rows[1]->status)->toBe('completed')
         ->and(json_decode($rows[1]->meta, true)['provider'])->toBe('backup');
 });
 
@@ -209,7 +209,6 @@ test('a failover after a recorded step leaves that attempt on its own row and an
     $rows = DB::table('agent_conversation_messages')->where('conversation_id', $response->conversationId)->orderBy('id')->get();
 
     expect($rows->pluck('role')->all())->toBe(['user', 'assistant', 'assistant'])
-        ->and($rows[1]->completed_at)->toBeNull()
         ->and($rows[1]->steps)->json()->toHaveCount(1)->{'0'}->tool_calls->{'0'}->toMatchArray(['id' => 'call_1', 'result' => 72019])
         ->and($rows[2]->id)->toBe($response->assistantMessageId)
         ->and($rows[2]->content)->toBe('Hello from backup')
@@ -278,7 +277,7 @@ test('a step whose last tool throws keeps the results of the tools that finished
 
     $row = assistantRowFor(DB::table('agent_conversations')->value('id'));
 
-    expect($row->completed_at)->toBeNull()
+    expect($row->status)->toBe('failed')
         ->and(json_decode($row->meta, true)['error'])->toBe('The tool blew up.')
         ->and($row->steps)->json()->toHaveCount(1)->{'0'}->tool_calls->toHaveCount(3)
         ->and(json_decode($row->steps, true)[0]['tool_calls'])->sequence(

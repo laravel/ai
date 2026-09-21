@@ -939,7 +939,7 @@ test('a resume folds its result and reply into the paused row instead of writing
 
     expect($newerRows)->toBe(0)
         ->and($pausedRow->content)->toBe('The number is 72019.')
-        ->and($pausedRow->completed_at)->not->toBeNull()
+        ->and($pausedRow->status)->toBe('completed')
         ->and($pausedRow->steps)->json()->toHaveCount(2)
         ->and(json_decode($pausedRow->usage, true)['input_tokens'])->toBe(20)
         ->and($store->pendingApprovalsFor($paused->conversationId))->toBe([]);

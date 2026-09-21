@@ -16,6 +16,7 @@ use Laravel\Ai\Contracts\PaginatesConversations;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\ResolvesPendingApprovals;
 use Laravel\Ai\Contracts\VerifiesConversationOwnership;
+use Laravel\Ai\Enums\MessageStatus;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -161,7 +162,7 @@ test('it decodes the stored JSON columns', function (): void {
         ->and($message->toolCalls()[0]['name'])->toBe('save_note')
         ->and($message->usage['input_tokens'])->toBe(12)
         ->and($message->toolResults())->toBe([])
-        ->and($message->approvalRequestedAt)->toBeNull()
+        ->and($message->status)->toBe(MessageStatus::Completed)
         ->and($message->createdAt)->toBeInstanceOf(CarbonInterface::class);
 });
 
@@ -573,9 +574,9 @@ test('a resume writes onto the paused row and completes it in place', function (
     $row = DB::table('agent_conversation_messages')->where('id', 'paused-1')->first();
 
     expect($messageId)->toBe('paused-1')
-        ->and($reopened->completed_at)->not->toBeNull()
-        ->and($inProgress->completed_at)->toBeNull()
-        ->and($row->completed_at)->not->toBeNull()
+        ->and($reopened->status)->toBe('paused')
+        ->and($inProgress->status)->toBe('started')
+        ->and($row->status)->toBe('completed')
         ->and($row->steps)->json()->{'0'}->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-1', 'approval_reason' => null, 'denied' => true])
         ->and($store->pendingApprovalsFor($conversationId))->toBe([])
         ->and(DB::table('agent_conversation_messages')->where('role', 'assistant')->count())->toBe(1)
@@ -658,7 +659,7 @@ test('a resume does not reopen a settled row once a newer plain turn follows it'
     insertAssistantTurn($conversationId, 'plain-2', 'Hi.', [assistantStep()]);
 
     expect($store->resumeAssistantMessage($conversationId, 'anthropic', ['call-9']))->toBeNull()
-        ->and(DB::table('agent_conversation_messages')->where('id', 'paused-1')->value('completed_at'))->not->toBeNull();
+        ->and(DB::table('agent_conversation_messages')->where('id', 'paused-1')->value('status'))->toBe('paused');
 });
 
 test('a resume on another provider drops the paused replay blocks when it reopens the row', function (): void {
@@ -689,7 +690,7 @@ test('a turn that never completed replays its interrupted call with a placeholde
         assistantStep([['id' => 'call-2', 'name' => 'edit_file', 'arguments' => ['path' => 'b']]]),
     ]);
 
-    DB::table('agent_conversation_messages')->where('id', 'message-1')->update(['completed_at' => null]);
+    DB::table('agent_conversation_messages')->where('id', 'message-1')->update(['status' => MessageStatus::Started]);
 
     $messages = $store->getLatestConversationMessages($conversationId, 10);
 
@@ -825,7 +826,7 @@ test('completing a turn drops the replay blocks its steps recorded', function ()
         [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'text', 'text' => 'Deleted b.']],
     ])->and(array_column(json_decode($row->steps, true), 'replay_blocks'))->toBe([[], []])
         ->and($row->content)->toBe('Deleted b.')
-        ->and($row->approval_requested_at)->toBeNull();
+        ->and($row->status)->toBe('completed');
 });
 
 test('a turn that pauses again keeps the replay blocks of every step it recorded', function (): void {
@@ -856,7 +857,7 @@ test('a turn that pauses again keeps the replay blocks of every step it recorded
     expect(array_column(json_decode($row->steps, true), 'replay_blocks'))->toBe([
         [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
         [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'tool_use', 'id' => 'call-2']],
-    ])->and($row->approval_requested_at)->not->toBeNull()
+    ])->and($row->status)->toBe('paused')
         ->and($store->pendingApprovalsFor($conversationId))->toHaveCount(1)->{'0'}->toMatchObject(['id' => 'call-2', 'reason' => 'Deletes a file']);
 });
 
@@ -884,9 +885,9 @@ test('a resume folds into the paused row holding its decided call rather than th
 
     expect($messageId)->toBe('paused-1')
         ->and($rows['paused-1']->content)->toBe('Deleted a.')
-        ->and($rows['paused-1']->approval_requested_at)->toBeNull()
+        ->and($rows['paused-1']->status)->toBe('completed')
         ->and($rows['paused-2']->content)->toBe('')
-        ->and($rows['paused-2']->approval_requested_at)->not->toBeNull();
+        ->and($rows['paused-2']->status)->toBe('paused');
 });
 
 test('it skips a step that has nothing left to say once its unexecuted calls are dropped', function (): void {
@@ -999,7 +1000,7 @@ test('it writes the steps of a paused turn with their replay blocks and keeps re
         ->and($record->steps)->json()->{'0'}->tool_calls->toHaveCount(1)
         ->and($record->meta)->json()->toBe(['provider' => 'anthropic', 'model' => null, 'citations' => []])
         ->and($record->steps)->json()->{'1'}->tool_calls->{'0'}->approval_reason->toBe('Deletes a file')
-        ->and($record->approval_requested_at)->not->toBeNull();
+        ->and($record->status)->toBe('paused');
 });
 
 test('it writes the steps a paused stream carried on its approval request', function (): void {
@@ -1074,7 +1075,7 @@ test('a resume that matches no paused call reports the approvals that are actual
         ]),
     ], ['call-1' => 'Destructive operation.']);
 
-    DB::table('agent_conversation_messages')->where('id', 'message-1')->update(['approval_requested_at' => null]);
+    DB::table('agent_conversation_messages')->where('id', 'message-1')->update(['status' => MessageStatus::Completed]);
 
     expect($store->resumeAssistantMessage($conversationId, 'anthropic', ['call-9']))->toBeNull()
         ->and($store->pendingApprovalsFor($conversationId))->toBe([]);
@@ -1230,6 +1231,7 @@ test('user messages with stored attachments are rehydrated as UserMessage', func
         'steps' => '[]',
         'usage' => '[]',
         'meta' => '[]',
+        'status' => MessageStatus::Completed,
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -1263,6 +1265,7 @@ test('user messages with multiple attachment types are all rehydrated', function
         'steps' => '[]',
         'usage' => '[]',
         'meta' => '[]',
+        'status' => MessageStatus::Completed,
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -1292,6 +1295,7 @@ test('user messages with no attachments are returned as plain Message', function
         'steps' => '[]',
         'usage' => '[]',
         'meta' => '[]',
+        'status' => MessageStatus::Completed,
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -1318,6 +1322,7 @@ test('malformed stored attachment JSON fails loudly', function (): void {
         'steps' => '[]',
         'usage' => '[]',
         'meta' => '[]',
+        'status' => MessageStatus::Completed,
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -1344,6 +1349,7 @@ test('malformed known stored attachments fail loudly', function (): void {
         'steps' => '[]',
         'usage' => '[]',
         'meta' => '[]',
+        'status' => MessageStatus::Completed,
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -1390,6 +1396,7 @@ test('it scopes conversations by participant type so shared ids no longer collid
         'steps' => '[]',
         'usage' => '[]',
         'meta' => '[]',
+        'status' => MessageStatus::Completed,
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -1623,8 +1630,7 @@ function createConversationSchema(?string $connection = null): void
         $table->text('steps');
         $table->text('usage');
         $table->text('meta');
-        $table->timestamp('approval_requested_at')->nullable();
-        $table->timestamp('completed_at')->nullable();
+        $table->string('status', 25);
         $table->timestamps();
     });
 }
@@ -1644,7 +1650,7 @@ function storedConversationMessageAttributes(string $id, string $conversationId,
         'steps' => '[]',
         'usage' => '[]',
         'meta' => '[]',
-        'completed_at' => now(),
+        'status' => MessageStatus::Completed,
         'created_at' => now(),
         'updated_at' => now(),
     ];
@@ -1691,7 +1697,7 @@ function insertAssistantTurn(string $conversationId, string $id, string $content
         'role' => 'assistant',
         'steps' => json_encode($steps),
         'meta' => json_encode($meta),
-        'approval_requested_at' => $pending === null ? null : now(),
+        'status' => $pending === null ? MessageStatus::Completed : MessageStatus::Paused,
     ]);
 }
 

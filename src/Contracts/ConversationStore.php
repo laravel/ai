@@ -69,7 +69,7 @@ interface ConversationStore
     public function completeAssistantMessage(string $messageId, AgentPrompt $prompt, AgentResponse $response): void;
 
     /**
-     * Record the error a run failed with on its turn, keeping whatever it recorded.
+     * Record the error a run failed with on its turn.
      */
     public function failAssistantMessage(string $messageId, Throwable $exception): void;
 
