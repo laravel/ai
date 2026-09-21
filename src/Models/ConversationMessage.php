@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Carbon;
 
 /**
  * @property string $id
@@ -17,7 +18,7 @@ use Illuminate\Support\Arr;
  * @property-read array $tool_calls
  * @property-read array $provider_tool_calls
  * @property-read array $tool_results
- * @property ?array $approval_state
+ * @property ?Carbon $approval_requested_at
  */
 #[WithoutIncrementing]
 class ConversationMessage extends Model
@@ -53,7 +54,7 @@ class ConversationMessage extends Model
         'steps' => 'array',
         'usage' => 'array',
         'meta' => 'array',
-        'approval_state' => 'array',
+        'approval_requested_at' => 'datetime',
     ];
 
     /**

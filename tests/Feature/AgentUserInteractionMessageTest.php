@@ -322,8 +322,7 @@ describe('hydrating AG-UI from stored messages', function () {
             yield new ConversationMessage([
                 'id' => 'msg-2',
                 'role' => 'assistant',
-                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt']]]]],
-                'approval_state' => ['pending' => ['call-1' => 'Deletes a file.']],
+                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt'], 'approval_reason' => 'Deletes a file.']]]],
             ]);
         })());
 
@@ -411,7 +410,6 @@ describe('hydrating AG-UI from stored messages', function () {
                 'id' => 'msg-2',
                 'role' => 'assistant',
                 'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt'], 'result' => null, 'denied' => true]]]],
-                'approval_state' => ['pending' => []],
             ]),
         ])['messages'];
 
@@ -439,10 +437,9 @@ describe('hydrating AG-UI from stored messages', function () {
                 'id' => 'msg-2',
                 'role' => 'assistant',
                 'steps' => [['tool_calls' => [
-                    ['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt']],
-                    ['id' => 'call-2', 'name' => 'DeleteFile', 'arguments' => ['path' => 'b.txt']],
+                    ['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => ['path' => 'a.txt'], 'approval_reason' => 'Deletes a file.'],
+                    ['id' => 'call-2', 'name' => 'DeleteFile', 'arguments' => ['path' => 'b.txt'], 'approval_reason' => null],
                 ]]],
-                'approval_state' => ['pending' => ['call-1' => 'Deletes a file.', 'call-2' => null]],
             ]),
         ]);
 
@@ -481,7 +478,7 @@ describe('hydrating AG-UI from stored messages', function () {
         ])->and(AgentUserInteraction::toInterrupts([new ConversationMessage([
             'id' => 'msg-2',
             'role' => 'assistant',
-            'approval_state' => ['pending' => ['call-1' => null]],
+            'steps' => [['tool_calls' => [['id' => 'call-1', 'approval_reason' => null]]]],
         ])])[0]['metadata'])->toEqual(['kind' => 'approval', 'toolName' => '', 'input' => (object) []]);
     });
 

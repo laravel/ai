@@ -123,12 +123,8 @@ class Vercel
             }
         }
 
-        $pending = $message instanceof ConversationMessage
-            ? (array) (($message->approval_state ?? [])['pending'] ?? [])
-            : [];
-
         foreach (static::toolCallArraysFrom($message) as $toolCall) {
-            $isPending = array_key_exists($toolCall['id'], $pending);
+            $isPending = array_key_exists('approval_reason', $toolCall) && ! array_key_exists('result', $toolCall);
 
             $parts[] = [
                 'type' => 'tool-'.$toolCall['name'],
@@ -136,7 +132,7 @@ class Vercel
                 'state' => $isPending ? 'approval-requested' : 'input-available',
                 'input' => $toolCall['arguments'],
                 ...($isPending
-                    ? ['approval' => ['id' => $toolCall['id'], 'reason' => $pending[$toolCall['id']]]]
+                    ? ['approval' => ['id' => $toolCall['id'], 'reason' => $toolCall['approval_reason']]]
                     : []),
             ];
         }

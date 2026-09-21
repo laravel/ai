@@ -224,16 +224,14 @@ class AgentUserInteraction
                 continue;
             }
 
-            $calls = (new Collection($message->tool_calls ?? []))
-                ->filter(fn ($call) => is_array($call) && isset($call['id']))
-                ->keyBy('id');
-
-            foreach (($message->approval_state ?? [])['pending'] ?? [] as $callId => $reason) {
-                $call = $calls[(string) $callId] ?? null;
+            foreach ($message->tool_calls ?? [] as $call) {
+                if (! is_array($call) || ! isset($call['id']) || ! array_key_exists('approval_reason', $call) || array_key_exists('result', $call)) {
+                    continue;
+                }
 
                 $interrupts[] = static::interrupt(
-                    (string) $callId,
-                    is_string($reason) ? $reason : null,
+                    (string) $call['id'],
+                    is_string($call['approval_reason']) ? $call['approval_reason'] : null,
                     is_string($call['name'] ?? null) ? $call['name'] : null,
                     is_array($call['arguments'] ?? null) ? $call['arguments'] : [],
                 );

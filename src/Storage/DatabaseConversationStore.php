@@ -26,6 +26,7 @@ use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\ProviderToolCall;
 use Laravel\Ai\Responses\Data\Step;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 
@@ -106,7 +107,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'steps' => '[]',
             'usage' => '[]',
             'meta' => '[]',
-            'approval_state' => null,
+            'approval_requested_at' => null,
         ]));
 
         $this->touchConversation($conversationId, $now);
@@ -115,10 +116,18 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Store a new assistant message for the given conversation, or null when nothing was stored.
+     * Store the assistant turn for the given conversation, folding a resumed run into the row it paused on.
      */
     public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
     {
+        if ($prompt->hasApprovalDecisions()) {
+            $newest = $this->assistantRows($conversationId, $participantType, $participantId)->first();
+
+            if ($newest?->approval_requested_at !== null) {
+                return $this->resumePausedRow($conversationId, $newest, $prompt, $response);
+            }
+        }
+
         $messageId = (string) Str::uuid7();
 
         $now = now();
@@ -137,7 +146,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'steps' => $steps->toJson(),
             'usage' => json_encode($response->usage),
             'meta' => json_encode($response->meta),
-            'approval_state' => $this->approvalState($response),
+            'approval_requested_at' => $response->hasPendingApprovals() ? $now : null,
         ]));
 
         if (! $response->hasPendingApprovals()) {
@@ -150,16 +159,69 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
+     * Append the steps a resumed run made to the row its turn paused on.
+     */
+    protected function resumePausedRow(string $conversationId, object $paused, AgentPrompt $prompt, AgentResponse $response): string
+    {
+        $steps = $this->decodedSteps($paused);
+
+        if (($this->decoded($paused->meta)['provider'] ?? null) !== $response->meta->provider) {
+            $steps = $steps->map(fn (array $step): array => [...$step, 'replay_blocks' => []]);
+        }
+
+        if ($response->steps->isNotEmpty()) {
+            $steps = $steps->concat($this->stepsFor($prompt, $response));
+        }
+
+        $now = now();
+
+        $this->table($this->messagesTable())->where('id', $paused->id)->update([
+            'content' => blank($response->text) ? $paused->content : $response->text,
+            'steps' => $steps->toJson(),
+            'usage' => json_encode($this->usageFrom($paused)->add($response->usage)),
+            'meta' => json_encode($response->meta),
+            ...$response->hasPendingApprovals() ? ['approval_requested_at' => $now] : [],
+            'updated_at' => $now,
+        ]);
+
+        if (! $response->hasPendingApprovals()) {
+            $this->forgetReplayBlocks($conversationId);
+        }
+
+        $this->touchConversation($conversationId, $now);
+
+        return $paused->id;
+    }
+
+    /**
+     * Rebuild the usage a stored row recorded.
+     */
+    protected function usageFrom(object $record): TextUsage
+    {
+        $usage = $this->decoded($record->usage);
+
+        return new TextUsage(
+            $usage['input_tokens'] ?? 0,
+            $usage['output_tokens'] ?? 0,
+            $usage['cache_read_input_tokens'] ?? null,
+            $usage['cache_write_input_tokens'] ?? null,
+            $usage['reasoning_tokens'] ?? null,
+        );
+    }
+
+    /**
      * Serialize the turn's steps, one entry per model round-trip.
      *
      * @return Collection<int, array{content: string, tool_calls: array, reasoning: string, replay_blocks: array, provider_tool_calls: array}>
      */
     protected function stepsFor(AgentPrompt $prompt, AgentResponse $response): Collection
     {
+        $reasons = $this->pendingReasonsFor($response);
+
         if ($response->steps->isNotEmpty()) {
             return $response->steps->values()->map(fn (Step $step): array => [
                 'content' => $step->text,
-                'tool_calls' => $this->toolCallsFor($step->toolCalls, $step->toolResults),
+                'tool_calls' => $this->toolCallsFor($step->toolCalls, $step->toolResults, $reasons),
                 'reasoning' => $step->reasoning,
                 'replay_blocks' => $response->hasPendingApprovals() ? $step->replayBlocks : [],
                 'provider_tool_calls' => array_map(fn (ProviderToolCall $call): array => $call->toArray(), $step->providerToolCalls),
@@ -172,6 +234,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'tool_calls' => $this->toolCallsFor(
                 $response->toolCalls->all(),
                 $prompt->hasApprovalDecisions() ? [] : $response->toolResults->all(),
+                $reasons,
             ),
             'reasoning' => $response->reasoning,
             'replay_blocks' => [],
@@ -180,17 +243,18 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Pair a step's tool calls with the results they were answered by, one entry per call.
+     * Pair a step's tool calls with the results they were answered by, marking those awaiting approval with their reason.
      *
      * @param  iterable<int, ToolCall>  $toolCalls
      * @param  iterable<int, ToolResult>  $toolResults
+     * @param  Collection<string, string|null>  $reasons
      * @return list<array<string, mixed>>
      */
-    protected function toolCallsFor(iterable $toolCalls, iterable $toolResults): array
+    protected function toolCallsFor(iterable $toolCalls, iterable $toolResults, Collection $reasons = new Collection): array
     {
         $results = collect($toolResults)->keyBy(fn (ToolResult $result): string => $result->id);
 
-        return collect($toolCalls)->map(function (ToolCall $toolCall) use ($results): array {
+        return collect($toolCalls)->map(function (ToolCall $toolCall) use ($results, $reasons): array {
             $result = $results->get($toolCall->id);
 
             $stored = Arr::except($toolCall->toArray(), ['reasoning_id', 'reasoning_summary', 'reasoning_encrypted_content']);
@@ -201,6 +265,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
             return [
                 ...$stored,
+                ...$reasons->has($toolCall->id) ? ['approval_reason' => $reasons[$toolCall->id]] : [],
                 ...$result === null ? [] : Arr::only($result->toArray(), ['result', 'denied', 'failed']),
             ];
         })->values()->all();
@@ -213,7 +278,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     {
         $this->table($this->messagesTable())
             ->where('conversation_id', $conversationId)
-            ->whereNotNull('approval_state')
+            ->whereNotNull('approval_requested_at')
             ->get(['id', 'steps'])
             ->each(function (object $record): void {
                 $steps = $this->decodedSteps($record);
@@ -239,17 +304,23 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Mark a paused assistant row with the tool-call IDs pending a decision, or null when the turn is not a pause.
+     * Determine whether a stored tool call is still awaiting an approval decision.
+     *
+     * @param  array<string, mixed>  $toolCall
      */
-    protected function approvalState(AgentResponse $response): ?string
+    protected function isPendingApproval(array $toolCall): bool
     {
-        if (! $response->hasPendingApprovals()) {
-            return null;
-        }
+        return array_key_exists('approval_reason', $toolCall) && ! $this->isAnswered($toolCall);
+    }
 
-        return json_encode([
-            'pending' => $response->pendingApprovals->mapWithKeys(fn ($approval) => [$approval->id => $approval->reason])->all(),
-        ]);
+    /**
+     * The reasons a response paused on, keyed by tool call ID.
+     *
+     * @return Collection<string, string|null>
+     */
+    protected function pendingReasonsFor(AgentResponse $response): Collection
+    {
+        return $response->pendingApprovals->mapWithKeys(fn (PendingApproval $approval) => [$approval->id => $approval->reason]);
     }
 
     /**
@@ -263,18 +334,6 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * The reasons a stored row is still awaiting a decision on, keyed by tool call ID.
-     *
-     * @return Collection<string, string>
-     */
-    protected function pendingReasons(object $record): Collection
-    {
-        $pending = $this->decoded($record->approval_state)['pending'] ?? [];
-
-        return collect(is_array($pending) ? $pending : []);
-    }
-
-    /**
      * Determine whether a stored row is an assistant turn still awaiting a decision.
      */
     protected function awaitsDecision(?object $record): bool
@@ -283,13 +342,13 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Get the tool-call IDs a stored row recorded as pending a decision.
+     * Get the tool-call IDs a stored row is still awaiting a decision on.
      *
      * @return array<int, string>
      */
     protected function pausedCallIds(object $record): array
     {
-        return $this->pendingReasons($record)->keys()->all();
+        return $this->pendingApprovalsIn($record)->map(fn (PendingApproval $approval) => $approval->id)->all();
     }
 
     /**
@@ -299,15 +358,13 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     protected function pendingApprovalsIn(object $record): Collection
     {
-        $reasons = $this->pendingReasons($record);
-
         return $this->decodedSteps($record)->flatMap(fn (array $step) => $step['tool_calls'])
-            ->filter(fn (array $toolCall) => $reasons->has($toolCall['id'] ?? ''))
+            ->filter($this->isPendingApproval(...))
             ->map(fn (array $toolCall) => new PendingApproval(
                 $toolCall['id'],
                 $toolCall['name'],
                 $toolCall['arguments'],
-                $reasons[$toolCall['id']],
+                $toolCall['approval_reason'],
             ))->values();
     }
 
@@ -446,22 +503,9 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         $newest = $this->table($this->messagesTable())
             ->where('conversation_id', $conversationId)
             ->orderByDesc('id')
-            ->first(['role', 'steps', 'approval_state']);
+            ->first(['role', 'steps']);
 
-        if (! $this->awaitsDecision($newest)) {
-            return [];
-        }
-
-        $answered = $this->decodedSteps($newest)
-            ->flatMap(fn (array $step) => $step['tool_calls'])
-            ->filter($this->isAnswered(...))
-            ->pluck('id')
-            ->all();
-
-        return $this->pendingApprovalsIn($newest)
-            ->reject(fn (PendingApproval $approval) => in_array($approval->id, $answered, true))
-            ->values()
-            ->all();
+        return $newest === null || $newest->role !== 'assistant' ? [] : $this->pendingApprovalsIn($newest)->all();
     }
 
     /**
@@ -509,14 +553,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         $resultIds = array_map(fn (ToolResult $result) => $result->id, $toolResults);
 
         DB::connection($this->connection)->transaction(function () use ($conversationId, $participantType, $participantId, $toolResults, $resultIds) {
-            $paused = $this->table($this->messagesTable())
-                ->where('conversation_id', $conversationId)
-                ->when($participantId === null,
-                    fn ($query) => $query->whereNull('participant_type')->whereNull('participant_id'),
-                    fn ($query) => $query->where('participant_type', $participantType)->where('participant_id', $participantId))
-                ->where('role', 'assistant')
-                ->whereNotNull('approval_state')
-                ->orderByDesc('id')
+            $paused = $this->assistantRows($conversationId, $participantType, $participantId)
+                ->whereNotNull('approval_requested_at')
                 ->lockForUpdate()
                 ->get();
 
@@ -544,16 +582,24 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 return $step;
             });
 
-            $pending = $this->pendingReasons($row)->except($resultIds);
-
             $this->table($this->messagesTable())
                 ->where('id', $row->id)
-                ->update([
-                    'steps' => $steps->toJson(),
-                    'approval_state' => json_encode(['pending' => $pending->all()]),
-                    'updated_at' => now(),
-                ]);
+                ->update(['steps' => $steps->toJson(), 'updated_at' => now()]);
         });
+    }
+
+    /**
+     * Query the participant's assistant rows in the conversation, newest first.
+     */
+    protected function assistantRows(string $conversationId, ?string $participantType, string|int|null $participantId): Builder
+    {
+        return $this->table($this->messagesTable())
+            ->where('conversation_id', $conversationId)
+            ->when($participantId === null,
+                fn ($query) => $query->whereNull('participant_type')->whereNull('participant_id'),
+                fn ($query) => $query->where('participant_type', $participantType)->where('participant_id', $participantId))
+            ->where('role', 'assistant')
+            ->orderByDesc('id');
     }
 
     /**

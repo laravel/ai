@@ -20,7 +20,6 @@ class StoredMessage implements Arrayable, JsonSerializable
      * @param  array<string, mixed>  $usage
      * @param  array<string, mixed>  $meta
      * @param  list<array<string, mixed>>  $steps
-     * @param  array<string, mixed>|null  $approvalState
      * @param  list<array<string, mixed>>  $attachments
      */
     public function __construct(
@@ -31,7 +30,7 @@ class StoredMessage implements Arrayable, JsonSerializable
         public array $usage = [],
         public array $meta = [],
         public array $steps = [],
-        public ?array $approvalState = null,
+        public ?CarbonInterface $approvalRequestedAt = null,
         public array $attachments = [],
     ) {}
 
@@ -50,7 +49,7 @@ class StoredMessage implements Arrayable, JsonSerializable
             usage: static::decoded($record['usage'] ?? null),
             meta: static::decoded($record['meta'] ?? null),
             steps: array_values(static::decoded($record['steps'] ?? null)),
-            approvalState: blank($record['approval_state'] ?? null) ? null : static::decoded($record['approval_state']),
+            approvalRequestedAt: blank($record['approval_requested_at'] ?? null) ? null : Carbon::parse($record['approval_requested_at']),
             attachments: array_values(static::decoded($record['attachments'] ?? null)),
         );
     }
@@ -70,7 +69,7 @@ class StoredMessage implements Arrayable, JsonSerializable
             'usage' => $this->usage,
             'meta' => $this->meta,
             'steps' => $this->steps,
-            'approval_state' => $this->approvalState,
+            'approval_requested_at' => $this->approvalRequestedAt?->toJSON(),
             'attachments' => $this->attachments,
         ];
     }

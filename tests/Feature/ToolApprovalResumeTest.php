@@ -883,7 +883,6 @@ test('a resume settles the paused row before the run writes a newer one', functi
         ->continue($paused->conversationId, $user)
         ->prompt(Decisions::from(['toolu_1' => true, 'toolu_2' => true]), provider: 'anthropic');
 
-    // Only the newest row is read for pending approvals, so a resume that settled some calls and left others behind on an older row would report a finished turn while the user still owed a decision...
     $pausedRow = DB::table('agent_conversation_messages')->where('id', $pausedRowId)->first();
 
     $newerRows = DB::table('agent_conversation_messages')
@@ -891,8 +890,9 @@ test('a resume settles the paused row before the run writes a newer one', functi
         ->where('id', '>', $pausedRowId)
         ->count();
 
-    expect($newerRows)->toBeGreaterThan(0)
-        ->and(json_decode($pausedRow->approval_state, true)['pending'])->toBe([])
+    expect($newerRows)->toBe(0)
+        ->and($pausedRow->content)->toBe('The number is 72019.')
+        ->and($pausedRow->steps)->json()->toHaveCount(2)
         ->and($store->pendingApprovalsFor($paused->conversationId))->toBe([]);
 });
 
