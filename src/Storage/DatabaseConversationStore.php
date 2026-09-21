@@ -120,10 +120,10 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     /**
      * Store the assistant turn for the given conversation, folding a resumed run into the row it paused on.
      */
-    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
+    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response, ?Throwable $exception = null): ?string
     {
         if ($prompt->hasApprovalDecisions() && ($paused = $this->pausedRowFor($conversationId, $prompt)) !== null) {
-            return $this->resumePausedRow($conversationId, $paused, $prompt, $response);
+            return $this->resumePausedRow($conversationId, $paused, $prompt, $response, $exception);
         }
 
         $messageId = (string) Str::uuid7();
@@ -143,8 +143,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'attachments' => '[]',
             'steps' => $steps->toJson(),
             'usage' => json_encode($response->usage),
-            'meta' => json_encode($response->meta),
-            'status' => $response->hasPendingApprovals() ? MessageStatus::Paused : MessageStatus::Completed,
+            'meta' => json_encode($this->metaFor($response, $exception)),
+            'status' => $this->statusFor($response, $exception),
         ]));
 
         if (! $response->hasPendingApprovals()) {
@@ -157,98 +157,27 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Store the steps a run completed before it failed, along with the error it died with.
-     *
-     * @param  array<int, Step>  $steps
+     * The status the turn is stored under, given how it ended.
      */
-    public function storeFailedAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, array $steps, Throwable $exception): string
+    protected function statusFor(AgentResponse $response, ?Throwable $exception): MessageStatus
     {
-        if ($prompt->hasApprovalDecisions() && ($paused = $this->pausedRowFor($conversationId, $prompt)) !== null) {
-            return $this->failPausedRow($conversationId, $paused, $steps, $exception);
-        }
-
-        $messageId = (string) Str::uuid7();
-
-        $now = now();
-
-        $this->table($this->messagesTable())->insert($this->messageAttributes($messageId, $conversationId, $participantType, $participantId, $now, [
-            'agent' => $prompt->agent::class,
-            'role' => 'assistant',
-            'content' => $this->lastStepText($steps),
-            'attachments' => '[]',
-            'steps' => $this->failedStepsFor($steps)->toJson(),
-            'usage' => json_encode($this->usageAcross($steps)),
-            'meta' => json_encode(['provider' => $prompt->provider()->name(), 'error' => $exception->getMessage()]),
-            'status' => MessageStatus::Failed,
-        ]));
-
-        $this->touchConversation($conversationId, $now);
-
-        return $messageId;
+        return match (true) {
+            $exception !== null => MessageStatus::Failed,
+            $response->hasPendingApprovals() => MessageStatus::Paused,
+            default => MessageStatus::Completed,
+        };
     }
 
     /**
-     * Fail the row a resumed run paused on, keeping the turn in the single row it started as.
+     * The meta the turn is stored under, carrying the error it died with.
      *
-     * @param  array<int, Step>  $steps
+     * @return array<string, mixed>
      */
-    protected function failPausedRow(string $conversationId, object $paused, array $steps, Throwable $exception): string
+    protected function metaFor(AgentResponse $response, ?Throwable $exception): array
     {
-        $now = now();
-
-        $text = $this->lastStepText($steps);
-
-        $this->table($this->messagesTable())->where('id', $paused->id)->update([
-            'content' => $text === '' ? $paused->content : $text,
-            'steps' => $this->withoutReplayBlocks($this->decodedSteps($paused))->concat($this->failedStepsFor($steps))->toJson(),
-            'usage' => json_encode(TextUsage::fromArray($this->decoded($paused->usage))->add($this->usageAcross($steps))),
-            'meta' => json_encode([...$this->decoded($paused->meta), 'error' => $exception->getMessage()]),
-            'status' => MessageStatus::Failed,
-            'updated_at' => $now,
-        ]);
-
-        $this->forgetReplayBlocks($conversationId);
-
-        $this->touchConversation($conversationId, $now);
-
-        return $paused->id;
-    }
-
-    /**
-     * The text the run had produced by the step it died on.
-     *
-     * @param  array<int, Step>  $steps
-     */
-    protected function lastStepText(array $steps): string
-    {
-        return $steps === [] ? '' : end($steps)->text;
-    }
-
-    /**
-     * Serialize the steps a failed run completed, without the raw blocks no later turn can replay.
-     *
-     * @param  array<int, Step>  $steps
-     * @return Collection<int, array<string, mixed>>
-     */
-    protected function failedStepsFor(array $steps): Collection
-    {
-        return collect($steps)->map(fn (Step $step): array => [
-            'content' => $step->text,
-            'tool_calls' => $this->toolCallsFor($step->toolCalls, $step->toolResults, collect()),
-            'reasoning' => $step->reasoning,
-            'replay_blocks' => [],
-            'provider_tool_calls' => array_map(fn (ProviderToolCall $call): array => $call->toArray(), $step->providerToolCalls),
-        ])->values();
-    }
-
-    /**
-     * Total the usage the steps a failed run completed reported.
-     *
-     * @param  array<int, Step>  $steps
-     */
-    protected function usageAcross(array $steps): TextUsage
-    {
-        return collect($steps)->reduce(fn (TextUsage $total, Step $step): TextUsage => $total->add($step->usage), new TextUsage);
+        return $exception === null
+            ? $response->meta->toArray()
+            : [...$response->meta->toArray(), 'error' => $exception->getMessage()];
     }
 
     /**
@@ -275,7 +204,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     /**
      * Append the steps a resumed run made to the row its turn paused on.
      */
-    protected function resumePausedRow(string $conversationId, object $paused, AgentPrompt $prompt, AgentResponse $response): string
+    protected function resumePausedRow(string $conversationId, object $paused, AgentPrompt $prompt, AgentResponse $response, ?Throwable $exception = null): string
     {
         $steps = $this->decodedSteps($paused);
 
@@ -297,8 +226,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'content' => blank($response->text) ? $paused->content : $response->text,
             'steps' => $steps->toJson(),
             'usage' => json_encode(TextUsage::fromArray($this->decoded($paused->usage))->add($response->usage)),
-            'meta' => json_encode($this->mergedMeta($paused, $response)),
-            'status' => $response->hasPendingApprovals() ? MessageStatus::Paused : MessageStatus::Completed,
+            'meta' => json_encode($this->mergedMeta($paused, $response, $exception)),
+            'status' => $this->statusFor($response, $exception),
             'updated_at' => $now,
         ]);
 
@@ -316,10 +245,10 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      *
      * @return array<string, mixed>
      */
-    protected function mergedMeta(object $paused, AgentResponse $response): array
+    protected function mergedMeta(object $paused, AgentResponse $response, ?Throwable $exception = null): array
     {
         return [
-            ...$response->meta->toArray(),
+            ...$this->metaFor($response, $exception),
             'citations' => [...$this->decoded($paused->meta)['citations'] ?? [], ...$response->meta->citations->all()],
         ];
     }

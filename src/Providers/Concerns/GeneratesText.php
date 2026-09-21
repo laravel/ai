@@ -191,7 +191,10 @@ trait GeneratesText
      */
     protected function runContextFor(string $invocationId, AgentPrompt $prompt): RunContext
     {
-        return $prompt->runContext = new RunContext($invocationId, $prompt->agent, $this, $prompt->model, $this->events);
+        return tap(
+            new RunContext($invocationId, $prompt->agent, $this, $prompt->model, $this->events),
+            fn (RunContext $context) => $prompt->setRunContext($context),
+        );
     }
 
     /**

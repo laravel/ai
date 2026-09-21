@@ -44,12 +44,7 @@ class AgentPrompt extends Prompt
 
     protected readonly bool $isFinalAttempt;
 
-    /**
-     * The context the run dispatched for this prompt is recording its steps on.
-     *
-     * @internal
-     */
-    public ?RunContext $runContext = null;
+    protected ?RunContext $runContext = null;
 
     /**
      * @param  bool  $isFinalAttempt  Whether the caller has run out of providers to retry this prompt against.
@@ -188,6 +183,26 @@ class AgentPrompt extends Prompt
     public function isFinalAttempt(): bool
     {
         return $this->isFinalAttempt;
+    }
+
+    /**
+     * Set the context the run dispatched for this prompt records its steps on.
+     *
+     * @internal
+     */
+    public function setRunContext(?RunContext $context): void
+    {
+        $this->runContext = $context;
+    }
+
+    /**
+     * The context the run dispatched for this prompt is recording its steps on.
+     *
+     * @internal
+     */
+    public function runContext(): ?RunContext
+    {
+        return $this->runContext;
     }
 
     /**

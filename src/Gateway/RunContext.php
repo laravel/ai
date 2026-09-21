@@ -13,7 +13,10 @@ use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Step;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Throwable;
 
@@ -51,13 +54,18 @@ class RunContext
     }
 
     /**
-     * The steps the run completed before it ended, however it ended.
-     *
-     * @return array<int, Step>
+     * The response the run had built by the time it ended, however it ended.
      */
-    public function recordedSteps(): array
+    public function recordedResponse(): AgentResponse
     {
-        return $this->steps;
+        $last = $this->steps === [] ? null : $this->steps[array_key_last($this->steps)];
+
+        return tap(new AgentResponse(
+            $this->invocationId,
+            $last?->text ?? '',
+            collect($this->steps)->reduce(fn (TextUsage $total, Step $step): TextUsage => $total->add($step->usage), new TextUsage),
+            $last?->meta ?? new Meta($this->provider->name(), $this->model),
+        ), fn (AgentResponse $response) => $response->withSteps(collect($this->steps)));
     }
 
     /**

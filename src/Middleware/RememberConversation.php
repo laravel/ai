@@ -77,7 +77,9 @@ class RememberConversation
                 return;
             }
 
-            [$participant, $userMessageId] = $this->openTurn($agent, $prompt, $pendingConversationId);
+            $participant = $agent->conversationParticipant();
+
+            $userMessageId = $this->openTurn($agent, $prompt, $pendingConversationId);
 
             [$participantType, $participantId] = $this->participantKeys($participant);
 
@@ -110,11 +112,18 @@ class RememberConversation
             return;
         }
 
-        $steps = $prompt->runContext?->recordedSteps() ?? [];
+        $context = $prompt->runContext();
 
-        $prompt->runContext = null;
+        $prompt->setRunContext(null);
 
-        if ($steps === [] || ! $this->shouldRememberTurn($agent, $prompt)) {
+        if ($context === null || ! $this->shouldRememberTurn($agent, $prompt)) {
+            return;
+        }
+
+        $response = $context->recordedResponse();
+
+        // A resume that died before its first step still has to fail the row its approvals were written to...
+        if ($response->steps->isEmpty() && ! $prompt->hasApprovalDecisions()) {
             return;
         }
 
@@ -122,12 +131,12 @@ class RememberConversation
 
         [$participantType, $participantId] = $this->participantKeys($agent->conversationParticipant());
 
-        $this->store->storeFailedAssistantMessage(
+        $this->store->storeAssistantMessage(
             $agent->currentConversation(),
             $participantType,
             $participantId,
             $prompt,
-            $steps,
+            $response,
             $exception,
         );
     }
@@ -136,9 +145,8 @@ class RememberConversation
      * Open the conversation this turn belongs to and record the prompt that started it.
      *
      * @param  Agent&RemembersConversations  $agent
-     * @return array{?object, ?string}
      */
-    protected function openTurn(Agent $agent, AgentPrompt $prompt, ?string $pendingConversationId): array
+    protected function openTurn(Agent $agent, AgentPrompt $prompt, ?string $pendingConversationId): ?string
     {
         $participant = $agent->conversationParticipant();
 
@@ -154,15 +162,13 @@ class RememberConversation
         }
 
         // A resume continues the turn its decisions answer, so it adds no message of its own...
-        $userMessageId = $prompt->hasApprovalDecisions() ? null : $this->store->storeUserMessage(
+        return $prompt->hasApprovalDecisions() ? null : $this->store->storeUserMessage(
             $agent->currentConversation(),
             $participantType,
             $participantId,
             $agent::class,
             new UserMessage($prompt->prompt, $prompt->attachments),
         );
-
-        return [$participant, $userMessageId];
     }
 
     /**

@@ -26,7 +26,7 @@ class FakeConversationStore implements ConversationStore
         return 'user-message-123';
     }
 
-    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
+    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response, ?Throwable $exception = null): ?string
     {
         return 'assistant-message-123';
     }
@@ -39,10 +39,5 @@ class FakeConversationStore implements ConversationStore
     public function storeApprovalResults(string $conversationId, array $toolResults): void
     {
         //
-    }
-
-    public function storeFailedAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, array $steps, Throwable $exception): string
-    {
-        return 'failed-assistant-message-123';
     }
 }

@@ -48,7 +48,7 @@ class InMemoryConversationStore implements ConversationStore
         return $id;
     }
 
-    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
+    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response, ?Throwable $exception = null): ?string
     {
         $id = (string) Str::uuid7();
 
@@ -73,10 +73,5 @@ class InMemoryConversationStore implements ConversationStore
     public function storeApprovalResults(string $conversationId, array $toolResults): void
     {
         //
-    }
-
-    public function storeFailedAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, array $steps, Throwable $exception): string
-    {
-        return 'failed-assistant-message';
     }
 }

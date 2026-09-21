@@ -47,14 +47,9 @@ test('it threads the participant type into latestConversationId when continuing 
             return 'user-1';
         }
 
-        public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
+        public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response, ?Throwable $exception = null): ?string
         {
             return 'assistant-1';
-        }
-
-        public function storeFailedAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, array $steps, Throwable $exception): string
-        {
-            return 'failed-assistant-message';
         }
 
         public function getLatestConversationMessages(string $conversationId, int $limit): Collection
@@ -101,14 +96,9 @@ test('it continues the last conversation through a store that ignores the partic
             return 'user-1';
         }
 
-        public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
+        public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response, ?Throwable $exception = null): ?string
         {
             return 'assistant-1';
-        }
-
-        public function storeFailedAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, array $steps, Throwable $exception): string
-        {
-            return 'failed-assistant-message';
         }
 
         public function getLatestConversationMessages(string $conversationId, int $limit): Collection
@@ -164,14 +154,9 @@ test('it resolves the participant id via getKey for models with custom primary k
             return 'user-1';
         }
 
-        public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
+        public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response, ?Throwable $exception = null): ?string
         {
             return 'assistant-1';
-        }
-
-        public function storeFailedAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, array $steps, Throwable $exception): string
-        {
-            return 'failed-assistant-message';
         }
 
         public function getLatestConversationMessages(string $conversationId, int $limit): Collection

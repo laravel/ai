@@ -164,7 +164,9 @@ class TextGenerationLoop
             $prepared = $attempt?->step ?? $pending;
 
             // Recorded before the tools run so a step that dies partway is still kept as far as it got...
-            $context?->recordStep($this->buildStep($lastResult));
+            $steps->push($completedStep = $this->buildStep($lastResult));
+
+            $context?->recordStep($completedStep);
 
             $this->stepCompleted($context, $attempt, $lastResult);
 
@@ -172,7 +174,7 @@ class TextGenerationLoop
 
             [$toolResults, $pendingApprovals] = $this->stepToolResultsWithOptions($lastResult, $prepared->isFinalStep, $prepared->tools, $prepared->options, $context);
 
-            $steps->push($this->buildStep($lastResult, $toolResults));
+            $completedStep->toolResults = $toolResults;
 
             $assistantMessage = $this->buildAssistantMessage($lastResult);
             $allMessages[] = $assistantMessage;
@@ -341,7 +343,10 @@ class TextGenerationLoop
                 throw $exception;
             }
 
-            $context?->recordStep($this->buildStep($result));
+            // Recorded before the tools run so a step that dies partway is still kept as far as it got...
+            $steps->push($completedStep = $this->buildStep($result));
+
+            $context?->recordStep($completedStep);
 
             $this->stepCompleted($context, $attempt, $result);
 
@@ -359,7 +364,7 @@ class TextGenerationLoop
 
             [$toolResults, $pendingApprovals] = $toolStream->getReturn();
 
-            $steps->push($this->buildStep($result, $toolResults));
+            $completedStep->toolResults = $toolResults;
 
             foreach ($toolResults as $toolResult) {
                 yield (new ToolResultEvent(
@@ -994,15 +999,12 @@ class TextGenerationLoop
         );
     }
 
-    /**
-     * @param  ToolResult[]  $toolResults
-     */
-    protected function buildStep(StepResponse $result, array $toolResults = []): Step
+    protected function buildStep(StepResponse $result): Step
     {
         return (new Step(
             $result->text,
             $result->toolCalls,
-            $toolResults,
+            [],
             $result->finishReason,
             $result->usage,
             $result->meta,
