@@ -17,13 +17,13 @@ The `tool_calls` and `tool_results` columns on the `agent_conversation_messages`
 
 The `participant_index` on the same table now also includes the `agent` column.
 
-The `approval_state` column has been replaced by a nullable `approval_requested_at` timestamp. The reason a call is waiting on a decision is now stored on the call itself as `approval_reason`, so a stored call carrying that key without a `result` is one still pending:
+The `approval_state` column has been replaced by a `status` column holding a `Laravel\Ai\Enums\MessageStatus` value, either `completed` or `paused`. The reason a call is waiting on a decision is now stored on the call itself as `approval_reason`, so a stored call carrying that key without a `result` is one still pending:
 
 ```json
 {"id": "call_1", "name": "delete_file", "arguments": {"path": "a"}, "approval_reason": "Destructive."}
 ```
 
-The package's existing migration will not run again during an upgrade. If you have already migrated the conversation tables, create a new migration containing the code below, then run `php artisan migrate` before deploying the new version of your application. The migration adds the `steps` and `approval_requested_at` columns, rewrites every existing row, and drops the old columns:
+The package's existing migration will not run again during an upgrade. If you have already migrated the conversation tables, create a new migration containing the code below, then run `php artisan migrate` before deploying the new version of your application. The migration adds the `steps` and `status` columns, rewrites every existing row, and drops the old columns:
 
 <details>
 <summary>Backfill migration</summary>
@@ -36,6 +36,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Laravel\Ai\Enums\MessageStatus;
 use Laravel\Ai\Migrations\AiMigration;
 
 return new class extends AiMigration
@@ -49,7 +50,7 @@ return new class extends AiMigration
 
         Schema::connection($this->getConnection())->table($table, function (Blueprint $blueprint) {
             $blueprint->longText('steps')->nullable();
-            $blueprint->timestamp('approval_requested_at')->nullable();
+            $blueprint->string('status', 25)->default(MessageStatus::Completed->value);
         });
 
         $this->query($table)->where('role', 'user')->update(['steps' => '[]']);
@@ -130,7 +131,7 @@ return new class extends AiMigration
             $this->query($table)->where('id', $row->id)->update([
                 'steps' => json_encode($steps),
                 'meta' => json_encode($meta),
-                'approval_requested_at' => blank($this->decoded($row->approval_state)['pending'] ?? []) ? null : $row->created_at,
+                'status' => blank($this->decoded($row->approval_state)['pending'] ?? []) ? MessageStatus::Completed : MessageStatus::Paused,
             ]);
         }
     }
@@ -230,7 +231,7 @@ $message->providerToolCalls();
 
 The `StoredMessage` constructor now accepts a `steps` argument in place of `toolCalls` and `toolResults`, and `toArray()` emits a `steps` key in their place. Update any code that constructs a `StoredMessage` manually.
 
-Its `$approvalState` array has also been replaced by an `$approvalRequestedAt` date, and `toArray()` emits an `approval_requested_at` key in place of `approval_state`. Read the pending calls from the steps instead:
+Its `$approvalState` array has also been replaced by a `$status` enum, and `toArray()` emits a `status` key in place of `approval_state`. Read the pending calls from the steps instead:
 
 ```php
 // Before...
@@ -240,7 +241,7 @@ $message->approvalState['pending'];
 array_filter($message->toolCalls(), fn (array $call) => PendingApproval::isPending($call));
 ```
 
-The `approval_state` cast on the `Laravel\Ai\Models\ConversationMessage` model has been replaced by an `approval_requested_at` date cast.
+The `approval_state` cast on the `Laravel\Ai\Models\ConversationMessage` model has been replaced by a `status` cast to the same enum.
 
 ### Agent Middleware Wraps Each Generation Step
 
