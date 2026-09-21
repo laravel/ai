@@ -8,8 +8,11 @@ use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Exceptions\FailoverableException;
+use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Providers\Tools\ProviderTool;
+use Throwable;
 
 class AgentPrompt extends Prompt
 {
@@ -40,6 +43,13 @@ class AgentPrompt extends Prompt
     public readonly ?string $parentToolInvocationId;
 
     protected readonly bool $isFinalAttempt;
+
+    /**
+     * The context the run dispatched for this prompt is recording its steps on.
+     *
+     * @internal
+     */
+    public ?RunContext $runContext = null;
 
     /**
      * @param  bool  $isFinalAttempt  Whether the caller has run out of providers to retry this prompt against.
@@ -178,5 +188,15 @@ class AgentPrompt extends Prompt
     public function isFinalAttempt(): bool
     {
         return $this->isFinalAttempt;
+    }
+
+    /**
+     * Determine whether the caller will retry this prompt against another provider.
+     *
+     * @internal
+     */
+    public function willRetry(Throwable $exception): bool
+    {
+        return $exception instanceof FailoverableException && ! $this->isFinalAttempt;
     }
 }

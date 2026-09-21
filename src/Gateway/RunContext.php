@@ -14,6 +14,7 @@ use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Responses\Data\Step;
+use Laravel\Ai\Responses\Data\ToolResult;
 use Throwable;
 
 class RunContext
@@ -38,13 +39,15 @@ class RunContext
     }
 
     /**
-     * Replace the step being worked on with the same step once its tools have answered.
+     * Answer the step being worked on, one tool at a time, so a step that dies partway keeps the tools that ran.
      */
-    public function recordStepResults(Step $step): void
+    public function recordToolResult(ToolResult $result): void
     {
-        array_pop($this->steps);
+        $step = array_key_last($this->steps);
 
-        $this->steps[] = $step;
+        if ($step !== null) {
+            $this->steps[$step]->toolResults[] = $result;
+        }
     }
 
     /**

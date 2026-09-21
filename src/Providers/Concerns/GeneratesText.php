@@ -11,7 +11,6 @@ use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
-use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentPrompted;
@@ -19,7 +18,6 @@ use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\ToolApprovalRequested;
 use Laravel\Ai\Events\ToolApprovalResolved;
 use Laravel\Ai\Exceptions\ApprovalNotResumableException;
-use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
@@ -193,16 +191,7 @@ trait GeneratesText
      */
     protected function runContextFor(string $invocationId, AgentPrompt $prompt): RunContext
     {
-        $context = new RunContext($invocationId, $prompt->agent, $this, $prompt->model, $this->events);
-
-        if (RememberConversation::appliesTo($prompt->agent)) {
-            /** @var Agent&RemembersConversationsContract $agent */
-            $agent = $prompt->agent;
-
-            $agent->recordRunContext($context);
-        }
-
-        return $context;
+        return $prompt->runContext = new RunContext($invocationId, $prompt->agent, $this, $prompt->model, $this->events);
     }
 
     /**
@@ -211,9 +200,7 @@ trait GeneratesText
     protected function recordAgentFailure(string $invocationId, AgentPrompt $prompt, Throwable $exception, bool $retryable = true): void
     {
         // A failoverable exception is only terminal once the caller has run out of providers to try...
-        if ($retryable &&
-            ! $prompt->isFinalAttempt() &&
-            $exception instanceof FailoverableException) {
+        if ($retryable && $prompt->willRetry($exception)) {
             return;
         }
 

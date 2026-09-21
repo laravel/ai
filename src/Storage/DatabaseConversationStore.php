@@ -163,6 +163,10 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     public function storeFailedAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, array $steps, Throwable $exception): string
     {
+        if ($prompt->hasApprovalDecisions() && ($paused = $this->pausedRowFor($conversationId, $prompt)) !== null) {
+            return $this->failPausedRow($conversationId, $paused, $steps, $exception);
+        }
+
         $messageId = (string) Str::uuid7();
 
         $now = now();
@@ -170,7 +174,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         $this->table($this->messagesTable())->insert($this->messageAttributes($messageId, $conversationId, $participantType, $participantId, $now, [
             'agent' => $prompt->agent::class,
             'role' => 'assistant',
-            'content' => '',
+            'content' => $this->lastStepText($steps),
             'attachments' => '[]',
             'steps' => $this->failedStepsFor($steps)->toJson(),
             'usage' => json_encode($this->usageAcross($steps)),
@@ -181,6 +185,43 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         $this->touchConversation($conversationId, $now);
 
         return $messageId;
+    }
+
+    /**
+     * Fail the row a resumed run paused on, keeping the turn in the single row it started as.
+     *
+     * @param  array<int, Step>  $steps
+     */
+    protected function failPausedRow(string $conversationId, object $paused, array $steps, Throwable $exception): string
+    {
+        $now = now();
+
+        $text = $this->lastStepText($steps);
+
+        $this->table($this->messagesTable())->where('id', $paused->id)->update([
+            'content' => $text === '' ? $paused->content : $text,
+            'steps' => $this->withoutReplayBlocks($this->decodedSteps($paused))->concat($this->failedStepsFor($steps))->toJson(),
+            'usage' => json_encode(TextUsage::fromArray($this->decoded($paused->usage))->add($this->usageAcross($steps))),
+            'meta' => json_encode([...$this->decoded($paused->meta), 'error' => $exception->getMessage()]),
+            'status' => MessageStatus::Failed,
+            'updated_at' => $now,
+        ]);
+
+        $this->forgetReplayBlocks($conversationId);
+
+        $this->touchConversation($conversationId, $now);
+
+        return $paused->id;
+    }
+
+    /**
+     * The text the run had produced by the step it died on.
+     *
+     * @param  array<int, Step>  $steps
+     */
+    protected function lastStepText(array $steps): string
+    {
+        return $steps === [] ? '' : end($steps)->text;
     }
 
     /**
@@ -551,7 +592,6 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             $toolCall['name'],
             $toolCall['arguments'] ?? [],
             'This tool call was interrupted before a result was recorded, so it may or may not have run.',
-            $toolCall['result_id'] ?? null,
         );
     }
 

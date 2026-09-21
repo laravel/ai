@@ -221,7 +221,12 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
                 yield $event;
             }
         } catch (Throwable $exception) {
-            foreach ($this->catchCallbacks as $callback) {
+            // Taken before invoking so a re-iterated stream does not report the same failure twice...
+            $callbacks = $this->catchCallbacks;
+
+            $this->catchCallbacks = [];
+
+            foreach ($callbacks as $callback) {
                 $callback($exception);
             }
 
