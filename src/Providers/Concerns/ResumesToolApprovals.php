@@ -86,13 +86,13 @@ trait ResumesToolApprovals
         }
 
         /** @var Agent&RemembersConversationsContract $agent */
-        if ($agent->currentConversation() === null) {
+        $conversationId = $agent->currentConversation();
+
+        if ($conversationId === null) {
             return null;
         }
 
         $store = app(ConversationStore::class);
-
-        $conversationId = $agent->currentConversation();
 
         return fn (array $toolResults) => $store->storeApprovalResults($conversationId, $toolResults);
     }
