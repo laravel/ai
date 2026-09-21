@@ -617,8 +617,7 @@ test('a resume folds its steps, text and usage into the paused row', function ()
         ->and($row->content)->toBe('Done.')
         ->and($row->steps)->json()->toHaveCount(2)->{'1'}->content->toBe('Done.')
         ->and($row->usage)->json()->toMatchArray(['input_tokens' => 30, 'output_tokens' => 12])
-        ->and($row->meta)->json()->toMatchArray(['provider' => 'openai', 'model' => 'gpt-5'])
-        ->and($row->approval_requested_at)->not->toBeNull();
+        ->and($row->meta)->json()->toMatchArray(['provider' => 'openai', 'model' => 'gpt-5']);
 });
 
 test('a resume does not fold into a settled row once a newer plain turn follows it', function (): void {

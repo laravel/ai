@@ -250,7 +250,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      * @param  Collection<string, string|null>  $reasons
      * @return list<array<string, mixed>>
      */
-    protected function toolCallsFor(iterable $toolCalls, iterable $toolResults, Collection $reasons = new Collection): array
+    protected function toolCallsFor(iterable $toolCalls, iterable $toolResults, Collection $reasons): array
     {
         $results = collect($toolResults)->keyBy(fn (ToolResult $result): string => $result->id);
 
@@ -331,14 +331,6 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     protected function decoded(?string $json): array
     {
         return is_array($decoded = json_decode($json ?? '', true)) ? $decoded : [];
-    }
-
-    /**
-     * Determine whether a stored row is an assistant turn still awaiting a decision.
-     */
-    protected function awaitsDecision(?object $record): bool
-    {
-        return $record?->role === 'assistant' && $this->pausedCallIds($record) !== [];
     }
 
     /**

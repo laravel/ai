@@ -829,7 +829,7 @@ test('a resume that fails after the tool runs does not re-execute the tool on re
     expect(ApprovableNumberGenerator::$invocations)->toBe(1);
 });
 
-test('a resume settles the paused row before the run writes a newer one', function () {
+test('a resume folds its result and reply into the paused row instead of writing a newer one', function () {
     Config::set('ai.conversations.generate_title', false);
 
     Http::fake([
