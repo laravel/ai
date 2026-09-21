@@ -9,11 +9,11 @@ class Response implements Stringable
     /**
      * Create a new tool response.
      *
-     * @param  array<string, mixed>|null  $meta
+     * @param  array<string, mixed>|null  $data
      */
     public function __construct(
         public readonly Stringable|string $text,
-        public readonly ?array $meta = null,
+        public readonly ?array $data = null,
     ) {}
 
     /**

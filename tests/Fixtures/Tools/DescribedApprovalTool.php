@@ -30,6 +30,6 @@ class DescribedApprovalTool implements Approvable, Tool
 
     protected function needsApproval(Request $request): Approval|bool
     {
-        return Approval::required('Deletes the account.', meta: ['scope' => 'account:delete']);
+        return Approval::required('Deletes the account.', data: ['scope' => 'account:delete']);
     }
 }

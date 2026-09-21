@@ -5,39 +5,51 @@ namespace Laravel\Ai\Approvals;
 class Approval
 {
     /**
-     * @param  array<string, mixed>|null  $meta
+     * @param  array<string, mixed>|null  $schema
+     * @param  array<string, mixed>|null  $data
      */
     public function __construct(
         public readonly ?string $reason = null,
-        public readonly ?array $meta = null,
-        public readonly bool $interactive = false,
+        public readonly ?array $schema = null,
+        public readonly ?array $data = null,
     ) {}
 
     /**
      * Create a required approval, optionally carrying a payload for the client to render.
      *
-     * @param  array<string, mixed>|null  $meta
+     * @param  array<string, mixed>|null  $data
      */
-    public static function required(?string $reason = null, ?array $meta = null): self
+    public static function required(?string $reason = null, ?array $data = null): self
     {
-        return new self($reason, $meta);
+        return new self($reason, data: $data);
     }
 
     /**
-     * Create a pause carrying a payload for the client, answered with a submission rather than an approval.
+     * Create a pause waiting on the values the given schema describes.
      *
-     * @param  array<string, mixed>  $meta
+     * @param  array<string, mixed>  $schema
+     * @param  array<string, mixed>|null  $data
      */
-    public static function input(array $meta): self
+    public static function input(array $schema, ?array $data = null): self
     {
-        return new self(null, $meta, interactive: true);
+        return new self(schema: $schema, data: $data);
     }
 
     /**
-     * Determine whether the pause is waiting on a client submission.
+     * Determine whether the pause is waiting on values rather than a decision.
      */
     public function isInteractive(): bool
     {
-        return $this->interactive;
+        return $this->schema !== null;
+    }
+
+    /**
+     * Get the keys a submission must provide.
+     *
+     * @return array<int, string>
+     */
+    public function requiredKeys(): array
+    {
+        return $this->schema['required'] ?? [];
     }
 }

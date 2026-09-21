@@ -32,7 +32,7 @@ beforeEach(function () {
     Config::set('ai.conversations.generate_title', false);
 });
 
-test('an interactive tool pauses carrying the payload its ask returned', function () {
+test('a call missing the values a tool needs pauses carrying its schema', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::response(interactiveToolCall('InteractiveChoiceTool', [
             'question' => 'Which plan?', 'options' => ['Basic', 'Pro'],
@@ -41,14 +41,16 @@ test('an interactive tool pauses carrying the payload its ask returned', functio
 
     $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
+    $pending = $paused->pendingApprovals->sole();
+
     expect($paused->hasPendingApprovals())->toBeTrue()
-        ->and($paused->pendingApprovals->sole()->meta)->toBe([
-            'question' => 'Which plan?',
-            'options' => ['Basic', 'Pro'],
-        ]);
+        ->and($pending->isInteractive())->toBeTrue()
+        ->and($pending->schema['required'])->toBe(['answer'])
+        ->and($pending->schema['properties']['answer']['enum'])->toBe(['Basic', 'Pro'])
+        ->and($pending->arguments)->toBe(['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]);
 });
 
-test('an ask that returns null runs the tool without a round-trip', function () {
+test('a call already carrying the values runs without a round-trip', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence()
             ->push(interactiveToolCall('SilentGeolocationTool', ['latitude' => '48.85']))
@@ -61,7 +63,7 @@ test('an ask that returns null runs the tool without a round-trip', function () 
         ->and($response->toolResults->sole()->result)->toBe('at: 48.85');
 });
 
-test('an ask that returns an empty payload still pauses', function () {
+test('a null value counts as missing', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::response(interactiveToolCall('SilentGeolocationTool', ['latitude' => null])),
     ]);
@@ -69,7 +71,7 @@ test('an ask that returns an empty payload still pauses', function () {
     $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Where am I?', provider: 'anthropic');
 
     expect($paused->hasPendingApprovals())->toBeTrue()
-        ->and($paused->pendingApprovals->sole()->meta)->toBe([]);
+        ->and($paused->pendingApprovals->sole()->schema['required'])->toBe(['latitude']);
 });
 
 test('a submission changes only the keys it names, leaving the rest of the call intact', function () {
@@ -79,11 +81,7 @@ test('a submission changes only the keys it names, leaving the rest of the call 
             ->push(interactiveText('Good choice.')),
     ]);
 
-    $agent = new RememberingInteractiveAgent;
-
-    $paused = $agent->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
-
-    expect($paused->hasPendingApprovals())->toBeTrue();
+    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
     $resumed = (new RememberingInteractiveAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
@@ -101,7 +99,7 @@ test('a submission changes only the keys it names, leaving the rest of the call 
         ]);
 });
 
-test('the client submits arguments, so the meta a tool returns never reaches the model', function () {
+test('the data a tool returns reaches the client but never the model', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence()
             ->push(interactiveToolCall('ReceiptTool', ['total' => '$41.00']))
@@ -113,7 +111,7 @@ test('the client submits arguments, so the meta a tool returns never reaches the
     $result = $response->toolResults->sole();
 
     expect($result->result)->toBe('Total: $41.00')
-        ->and($result->meta)->toBe(['total' => '$41.00']);
+        ->and($result->data)->toBe(['total' => '$41.00']);
 
     $sent = collect(Http::recorded())->last()[0]->data();
 
@@ -126,48 +124,56 @@ test('the client submits arguments, so the meta a tool returns never reaches the
         ->and(json_encode($toolResult))->not->toContain('"total"');
 });
 
-test('an interactive pause refuses a bare approval', function () {
+test('a pause waiting on values refuses a bare approval', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::response(interactiveToolCall('InteractiveChoiceTool', [
             'question' => 'Which plan?', 'options' => ['Basic', 'Pro'],
         ])),
     ]);
 
-    $agent = new RememberingInteractiveAgent;
-
-    $paused = $agent->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
     (new RememberingInteractiveAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
         ->prompt(Decisions::from(['toolu_1' => true]), provider: 'anthropic');
-})->throws(ApprovalMismatchException::class, 'Interactive tool calls must be answered with a submission.');
+})->throws(ApprovalMismatchException::class, 'Approval decisions are missing values the tool asked for.');
 
-test('an interactive pause refuses a wildcard approval', function () {
+test('a pause waiting on values refuses a wildcard approval', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::response(interactiveToolCall('InteractiveChoiceTool', [
             'question' => 'Which plan?', 'options' => ['Basic', 'Pro'],
         ])),
     ]);
 
-    $agent = new RememberingInteractiveAgent;
-
-    $paused = $agent->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
     (new RememberingInteractiveAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
         ->prompt(Decision::approveAll(), provider: 'anthropic');
-})->throws(ApprovalMismatchException::class, 'Interactive tool calls must be answered with a submission.');
+})->throws(ApprovalMismatchException::class, 'Approval decisions are missing values the tool asked for.');
 
-test('an interactive pause may still be rejected', function () {
+test('a pause waiting on values refuses a submission that skips one', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(interactiveToolCall('InteractiveChoiceTool', [
+            'question' => 'Which plan?', 'options' => ['Basic', 'Pro'],
+        ])),
+    ]);
+
+    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+
+    (new RememberingInteractiveAgent)
+        ->continue($paused->conversationId, (object) ['id' => 1])
+        ->prompt(Decisions::from(['toolu_1' => Decision::submit(['note' => 'later'])]), provider: 'anthropic');
+})->throws(ApprovalMismatchException::class, 'Approval decisions are missing values the tool asked for.');
+
+test('a pause waiting on values may still be rejected', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence()
             ->push(interactiveToolCall('InteractiveChoiceTool', ['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]))
             ->push(interactiveText('No problem.')),
     ]);
 
-    $agent = new RememberingInteractiveAgent;
-
-    $paused = $agent->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
     $resumed = (new RememberingInteractiveAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
@@ -176,11 +182,7 @@ test('an interactive pause may still be rejected', function () {
     expect($resumed->toolResults->sole()->result)->toBe('Cancelled.');
 });
 
-test('the wildcard decision may not submit', function () {
-    Decision::normalize(['*' => Decision::submit(['answer' => 'Pro'])]);
-})->throws(InvalidArgumentException::class, 'The wildcard decision may only approve or reject.');
-
-test('an approvable tool may describe its approval with a meta without requiring a submission', function () {
+test('an approvable tool may describe its approval with data without waiting on values', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence()
             ->push(interactiveToolCall('DescribedApprovalTool', []))
@@ -190,7 +192,8 @@ test('an approvable tool may describe its approval with a meta without requiring
     $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Delete my account.', provider: 'anthropic');
 
     expect($paused->pendingApprovals->sole()->reason)->toBe('Deletes the account.')
-        ->and($paused->pendingApprovals->sole()->meta)->toBe(['scope' => 'account:delete']);
+        ->and($paused->pendingApprovals->sole()->data)->toBe(['scope' => 'account:delete'])
+        ->and($paused->pendingApprovals->sole()->isInteractive())->toBeFalse();
 
     $resumed = (new RememberingInteractiveAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
@@ -199,7 +202,7 @@ test('an approvable tool may describe its approval with a meta without requiring
     expect($resumed->toolResults->sole()->result)->toBe('deleted');
 });
 
-test('an interactive tool whose ask returns null still requests approval when it is approvable', function () {
+test('a tool that needs both values and approval asks for approval once it has them', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence()
             ->push(interactiveToolCall('GuardedGeolocationTool', ['latitude' => '48.85']))
@@ -209,7 +212,8 @@ test('an interactive tool whose ask returns null still requests approval when it
     $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Where am I?', provider: 'anthropic');
 
     expect($paused->hasPendingApprovals())->toBeTrue()
-        ->and($paused->pendingApprovals->sole()->meta)->toBeNull();
+        ->and($paused->pendingApprovals->sole()->isInteractive())->toBeFalse()
+        ->and($paused->pendingApprovals->sole()->reason)->toBe('Uses your location.');
 
     $resumed = (new RememberingInteractiveAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
@@ -218,7 +222,18 @@ test('an interactive tool whose ask returns null still requests approval when it
     expect($resumed->toolResults->sole()->result)->toBe('at: 48.85');
 });
 
-test('a streamed tool result event carries the meta the tool returned', function () {
+test('a tool that needs both values and approval asks for the values first', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(interactiveToolCall('GuardedGeolocationTool', [])),
+    ]);
+
+    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Where am I?', provider: 'anthropic');
+
+    expect($paused->pendingApprovals->sole()->isInteractive())->toBeTrue()
+        ->and($paused->pendingApprovals->sole()->reason)->toBeNull();
+});
+
+test('a streamed tool result event carries the data the tool returned', function () {
     InteractiveAgent::fake([
         new ToolCall('call_1', 'ReceiptTool', ['total' => '$41.00']),
         'Thanks.',
@@ -229,6 +244,6 @@ test('a streamed tool result event carries the meta the tool returned', function
 
     $event = collect($response->events)->first(fn ($event): bool => $event instanceof ToolResultEvent);
 
-    expect($event->toArray()['meta'])->toBe(['total' => '$41.00'])
+    expect($event->toArray()['data'])->toBe(['total' => '$41.00'])
         ->and($event->toArray()['result'])->toBe('Total: $41.00');
 });

@@ -3,14 +3,15 @@
 namespace Tests\Fixtures\Tools;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Ai\Approvals\Approval;
 use Laravel\Ai\Concerns\InteractsWithApprovals;
 use Laravel\Ai\Contracts\Approvable;
-use Laravel\Ai\Contracts\Interactive;
+use Laravel\Ai\Contracts\NeedsInput;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 use Stringable;
 
-class GuardedGeolocationTool implements Approvable, Interactive, Tool
+class GuardedGeolocationTool implements Approvable, NeedsInput, Tool
 {
     use InteractsWithApprovals;
 
@@ -19,9 +20,9 @@ class GuardedGeolocationTool implements Approvable, Interactive, Tool
         return 'Reads the browser location unless it already has one, and always asks before using it.';
     }
 
-    public function ask(Request $request): ?array
+    public function needsInput(JsonSchema $schema, Request $request): array
     {
-        return $request['latitude'] === null ? [] : null;
+        return ['latitude' => $schema->string()->required()];
     }
 
     public function handle(Request $request): Stringable|string
@@ -32,5 +33,10 @@ class GuardedGeolocationTool implements Approvable, Interactive, Tool
     public function schema(JsonSchema $schema): array
     {
         return [];
+    }
+
+    protected function needsApproval(Request $request): Approval|bool
+    {
+        return Approval::required('Uses your location.');
     }
 }

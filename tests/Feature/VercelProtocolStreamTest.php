@@ -198,12 +198,12 @@ test('a paused stream emits an approval request part for each pending approval',
     ]);
 });
 
-test('an interactive pause emits its payload as the approval descriptor', function () {
+test('a pause emits its payload as the approval descriptor', function () {
     $parts = vercelProtocolParts([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new ToolCall('event-1', new Data\ToolCall('call-1', 'PickPlan', []), time()),
         new ToolApprovalRequest('event-2', collect([
-            new PendingApproval('call-1', 'PickPlan', [], meta: ['options' => ['Basic', 'Pro']]),
+            new PendingApproval('call-1', 'PickPlan', [], data: ['options' => ['Basic', 'Pro']]),
         ]), time()),
         new StreamEnd('event-3', 'tool_calls', new Usage, time()),
     ]);
@@ -217,11 +217,11 @@ test('an interactive pause emits its payload as the approval descriptor', functi
     ]);
 });
 
-test('a tool result carrying a meta streams the meta as the tool output', function () {
+test('a tool result carrying data streams the data as the tool output', function () {
     $parts = vercelProtocolParts([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new ToolCall('event-1', new Data\ToolCall('call-1', 'Receipt', []), time()),
-        new ToolResult('event-2', new Data\ToolResult('call-1', 'Receipt', [], 'Total: $41.00', meta: ['total' => '$41.00']), true, null, time()),
+        new ToolResult('event-2', new Data\ToolResult('call-1', 'Receipt', [], 'Total: $41.00', data: ['total' => '$41.00']), true, null, time()),
         new StreamEnd('event-3', 'stop', new Usage, time()),
     ]);
 

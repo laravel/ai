@@ -17,7 +17,7 @@ class ReceiptTool implements Tool
 
     public function handle(Request $request): Stringable|string
     {
-        return new Response("Total: {$request['total']}", meta: ['total' => $request['total']]);
+        return new Response("Total: {$request['total']}", data: ['total' => $request['total']]);
     }
 
     public function schema(JsonSchema $schema): array

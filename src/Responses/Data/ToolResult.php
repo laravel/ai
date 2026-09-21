@@ -9,7 +9,7 @@ class ToolResult implements Arrayable, JsonSerializable
 {
     /**
      * @param  array<string, mixed>  $arguments
-     * @param  array<string, mixed>|null  $meta
+     * @param  array<string, mixed>|null  $data
      */
     public function __construct(
         public string $id,
@@ -19,7 +19,7 @@ class ToolResult implements Arrayable, JsonSerializable
         public ?string $resultId = null,
         public bool $denied = false,
         public bool $failed = false,
-        public ?array $meta = null,
+        public ?array $data = null,
     ) {}
 
     /**
@@ -35,7 +35,7 @@ class ToolResult implements Arrayable, JsonSerializable
             resultId: $data['result_id'] ?? null,
             denied: $data['denied'] ?? false,
             failed: $data['failed'] ?? false,
-            meta: $data['meta'] ?? null,
+            data: $data['data'] ?? null,
         );
     }
 
@@ -68,7 +68,7 @@ class ToolResult implements Arrayable, JsonSerializable
             'result_id' => $this->resultId,
             ...($this->denied ? ['denied' => true] : []),
             ...($this->failed ? ['failed' => true] : []),
-            ...($this->meta === null ? [] : ['meta' => $this->meta]),
+            ...($this->data === null ? [] : ['data' => $this->data]),
         ];
     }
 

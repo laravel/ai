@@ -173,7 +173,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         return json_encode([
             'pending' => $response->pendingApprovals->mapWithKeys(fn ($approval) => [$approval->id => $approval->reason])->all(),
-            'meta' => $response->pendingApprovals->whereNotNull('meta')->mapWithKeys(fn ($approval) => [$approval->id => $approval->meta])->all(),
+            'schema' => $response->pendingApprovals->whereNotNull('schema')->mapWithKeys(fn ($approval) => [$approval->id => $approval->schema])->all(),
+            'data' => $response->pendingApprovals->whereNotNull('data')->mapWithKeys(fn ($approval) => [$approval->id => $approval->data])->all(),
         ]);
     }
 
@@ -323,7 +324,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         $state = json_decode($newest->approval_state ?? '{}', true);
 
         $reasons = collect(data_get($state, 'pending'));
-        $meta = collect(data_get($state, 'meta'));
+        $schemas = collect(data_get($state, 'schema'));
+        $data = collect(data_get($state, 'data'));
 
         if ($reasons->isEmpty()) {
             return [];
@@ -339,7 +341,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 $toolCall->name,
                 $toolCall->arguments,
                 $reasons->get($toolCall->id),
-                $meta->get($toolCall->id),
+                $schemas->get($toolCall->id),
+                $data->get($toolCall->id),
             ))
             ->values()
             ->all();

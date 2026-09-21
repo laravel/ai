@@ -238,8 +238,8 @@ test('it reports the payload a paused interactive turn is waiting on', function 
 
     $pending = $store->pendingApprovalsFor($conversationId);
 
-    expect($pending[0]->meta)->toBe(['options' => ['Basic', 'Pro']])
-        ->and($pending[1]->meta)->toBeNull();
+    expect($pending[0]->data)->toBe(['options' => ['Basic', 'Pro']])
+        ->and($pending[1]->data)->toBeNull();
 });
 
 test('it keeps the payload of the calls still pending after another is resolved', function (): void {
@@ -259,8 +259,8 @@ test('it keeps the payload of the calls still pending after another is resolved'
     $state = json_decode(DB::table('agent_conversation_messages')->where('id', 'message-001')->value('approval_state'), true);
 
     expect(collect($pending)->pluck('id')->all())->toBe(['call-2'])
-        ->and($pending[0]->meta)->toBe(['options' => ['Home']])
-        ->and($state['meta'])->toBe(['call-2' => ['options' => ['Home']]]);
+        ->and($pending[0]->data)->toBe(['options' => ['Home']])
+        ->and($state['data'])->toBe(['call-2' => ['options' => ['Home']]]);
 });
 
 test('it persists the payload of a paused interactive turn from a remembered agent prompt', function (): void {
@@ -279,7 +279,8 @@ test('it persists the payload of a paused interactive turn from a remembered age
     $pending = (new DatabaseConversationStore)->pendingApprovalsFor($paused->conversationId);
 
     expect($pending)->toHaveCount(1)
-        ->and($pending[0]->meta)->toBe(['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]);
+        ->and($pending[0]->schema['required'])->toBe(['answer'])
+        ->and($pending[0]->schema['properties']['answer']['enum'])->toBe(['Basic', 'Pro']);
 });
 
 test('it drops a call that already has a result', function (): void {
@@ -1513,12 +1514,12 @@ function insertStoredConversationMessages(string $conversationId, array $ids): v
 }
 
 /** @param  list<array<string, mixed>>  $toolCalls */
-function insertPausedConversationTurn(string $conversationId, string $id, array $toolCalls, array $pending, array $meta = []): void
+function insertPausedConversationTurn(string $conversationId, string $id, array $toolCalls, array $pending, array $data = [], array $schema = []): void
 {
     DB::table('agent_conversation_messages')->insert([
         ...storedConversationMessageAttributes($id, $conversationId, 'Waiting on you.'),
         'role' => 'assistant',
         'tool_calls' => json_encode($toolCalls),
-        'approval_state' => json_encode(['pending' => $pending, 'meta' => $meta]),
+        'approval_state' => json_encode(['pending' => $pending, 'schema' => $schema, 'data' => $data]),
     ]);
 }

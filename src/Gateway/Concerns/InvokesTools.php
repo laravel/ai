@@ -46,7 +46,7 @@ trait InvokesTools
 
             $context?->toolInvoked($tool, $arguments, $result, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
 
-            return new Response((string) $result, $result instanceof Response ? $result->meta : null);
+            return new Response((string) $result, $result instanceof Response ? $result->data : null);
         });
     }
 

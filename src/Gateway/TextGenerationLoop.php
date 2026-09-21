@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway;
 
 use Closure;
 use Generator;
+use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Approvals\Approval;
@@ -12,7 +13,7 @@ use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Attributes\RepairToolCalls;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
-use Laravel\Ai\Contracts\Interactive;
+use Laravel\Ai\Contracts\NeedsInput;
 use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
@@ -25,6 +26,7 @@ use Laravel\Ai\Gateway\Concerns\MeasuresDuration;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -402,13 +404,7 @@ class TextGenerationLoop
             $approval = $tool instanceof Tool ? $this->approvalForTool($tool, $toolCall) : null;
 
             if ($approval instanceof Approval) {
-                $pendingApprovals->push(new PendingApproval(
-                    $toolCall->id,
-                    $toolCall->name,
-                    $toolCall->arguments,
-                    $approval->reason,
-                    $approval->meta,
-                ));
+                $pendingApprovals->push($this->pendingApproval($toolCall, $approval));
 
                 continue;
             }
@@ -436,7 +432,7 @@ class TextGenerationLoop
                 (string) $result,
                 $toolCall->resultId,
                 failed: ! $tool instanceof Tool || $isFinalStep,
-                meta: $result->meta,
+                data: $result->data,
             );
         }, $resolved);
 
@@ -541,7 +537,7 @@ class TextGenerationLoop
                 (string) $result,
                 $toolCall->resultId,
                 failed: $failed,
-                meta: $result->meta,
+                data: $result->data,
             );
         }
 
@@ -608,15 +604,19 @@ class TextGenerationLoop
             throw new ApprovalMismatchException('There are no tool calls pending approval.', collect());
         }
 
-        $approved = $gated->filter(
-            fn (ToolCall $toolCall) => $approvals[$toolCall->id]->isInteractive()
-                && (($approval[$toolCall->id] ?? $approval['*'] ?? null)?->isApproved() ?? false)
-        );
+        $incomplete = $gated->filter(function (ToolCall $toolCall) use ($approval, $approvals) {
+            $decision = $approval[$toolCall->id] ?? $approval['*'] ?? null;
 
-        if ($approved->isNotEmpty()) {
+            return $decision?->isRejected() === false && array_diff(
+                $approvals[$toolCall->id]->requiredKeys(),
+                array_keys($decision->arguments ?? []),
+            ) !== [];
+        });
+
+        if ($incomplete->isNotEmpty()) {
             throw new ApprovalMismatchException(
-                'Interactive tool calls must be answered with a submission.',
-                $this->pendingApprovalsFor($approved, $approvals),
+                'Approval decisions are missing values the tool asked for.',
+                $this->pendingApprovalsFor($incomplete, $approvals),
             );
         }
 
@@ -630,13 +630,45 @@ class TextGenerationLoop
     {
         $request = new Request($toolCall->arguments, $toolCall->id);
 
-        if ($tool instanceof Interactive && ($meta = $tool->ask($request)) !== null) {
-            return Approval::input($meta);
+        if ($tool instanceof NeedsInput && ($schema = $this->outstandingInput($tool, $request)) !== null) {
+            return Approval::input($schema);
         }
 
         return $tool instanceof Approvable
             ? $tool->shouldRequestApproval($request)
             : null;
+    }
+
+    /**
+     * Get the input schema of a tool still missing values, or null once the call carries them all.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function outstandingInput(NeedsInput $tool, Request $request): ?array
+    {
+        $schema = (new ObjectSchema($tool->needsInput(new JsonSchemaTypeFactory, $request)))->toSchema();
+
+        $outstanding = array_filter(
+            $schema['required'] ?? [],
+            fn (string $key) => ($request[$key] ?? null) === null,
+        );
+
+        return $outstanding === [] ? null : $schema;
+    }
+
+    /**
+     * Build the pending approval handed to the caller.
+     */
+    protected function pendingApproval(ToolCall $toolCall, Approval $approval): PendingApproval
+    {
+        return new PendingApproval(
+            $toolCall->id,
+            $toolCall->name,
+            $toolCall->arguments,
+            $approval->reason,
+            $approval->schema,
+            $approval->data,
+        );
     }
 
     /**
