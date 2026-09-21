@@ -8,6 +8,7 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
+use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Files\Base64Audio;
@@ -224,16 +225,14 @@ class AgentUserInteraction
                 continue;
             }
 
-            $calls = (new Collection($message->tool_calls ?? []))
-                ->filter(fn ($call) => is_array($call) && isset($call['id']))
-                ->keyBy('id');
-
-            foreach (($message->approval_state ?? [])['pending'] ?? [] as $callId => $reason) {
-                $call = $calls[(string) $callId] ?? null;
+            foreach ($message->tool_calls ?? [] as $call) {
+                if (! is_array($call) || ! isset($call['id']) || ! PendingApproval::isPending($call)) {
+                    continue;
+                }
 
                 $interrupts[] = static::interrupt(
-                    (string) $callId,
-                    is_string($reason) ? $reason : null,
+                    (string) $call['id'],
+                    is_string($call['approval_reason']) ? $call['approval_reason'] : null,
                     is_string($call['name'] ?? null) ? $call['name'] : null,
                     is_array($call['arguments'] ?? null) ? $call['arguments'] : [],
                 );

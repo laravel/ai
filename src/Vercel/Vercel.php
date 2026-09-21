@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Base64Audio;
 use Laravel\Ai\Files\Base64Document;
@@ -123,12 +124,8 @@ class Vercel
             }
         }
 
-        $pending = $message instanceof ConversationMessage
-            ? (array) (($message->approval_state ?? [])['pending'] ?? [])
-            : [];
-
         foreach (static::toolCallArraysFrom($message) as $toolCall) {
-            $isPending = array_key_exists($toolCall['id'], $pending);
+            $isPending = PendingApproval::isPending($toolCall);
 
             $parts[] = [
                 'type' => 'tool-'.$toolCall['name'],
@@ -136,7 +133,7 @@ class Vercel
                 'state' => $isPending ? 'approval-requested' : 'input-available',
                 'input' => $toolCall['arguments'],
                 ...($isPending
-                    ? ['approval' => ['id' => $toolCall['id'], 'reason' => $pending[$toolCall['id']]]]
+                    ? ['approval' => ['id' => $toolCall['id'], 'reason' => $toolCall['approval_reason']]]
                     : []),
             ];
         }

@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Carbon;
+use Laravel\Ai\Approvals\PendingApproval;
 
 /**
  * @property string $id
@@ -17,7 +19,7 @@ use Illuminate\Support\Arr;
  * @property-read array $tool_calls
  * @property-read array $provider_tool_calls
  * @property-read array $tool_results
- * @property ?array $approval_state
+ * @property ?Carbon $approval_requested_at
  */
 #[WithoutIncrementing]
 class ConversationMessage extends Model
@@ -53,7 +55,7 @@ class ConversationMessage extends Model
         'steps' => 'array',
         'usage' => 'array',
         'meta' => 'array',
-        'approval_state' => 'array',
+        'approval_requested_at' => 'datetime',
     ];
 
     /**
@@ -79,7 +81,7 @@ class ConversationMessage extends Model
     {
         return Attribute::get(fn (): array => array_values(array_map(
             fn (array $toolCall): array => Arr::only($toolCall, ['id', 'name', 'arguments', 'result', 'result_id', 'denied', 'failed']),
-            array_filter($this->tool_calls, fn (array $toolCall): bool => array_key_exists('result', $toolCall)),
+            array_filter($this->tool_calls, PendingApproval::isAnswered(...)),
         )));
     }
 

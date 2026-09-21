@@ -39,8 +39,10 @@ test('it moves a result recorded on a later row onto the step that made the call
 
     $rows = DB::table('agent_conversation_messages')->orderBy('id')->get()->keyBy('id');
 
-    expect(Schema::hasColumns('agent_conversation_messages', ['tool_calls', 'tool_results']))->toBeFalse()
+    expect(Schema::hasColumns('agent_conversation_messages', ['tool_calls', 'tool_results', 'approval_state']))->toBeFalse()
         ->and($rows['message-1']->steps)->toBe('[]')
+        ->and($rows['message-2']->approval_requested_at)->toBeNull()
+        ->and($rows['message-3']->approval_requested_at)->toBeNull()
         ->and($rows['message-2']->steps)->json()->toHaveCount(1)->{'0'}->toMatchArray([
             'tool_calls' => [answeredToolCall('call-1')],
             'replay_blocks' => [['type' => 'tool_use', 'id' => 'call-1']],
@@ -87,9 +89,10 @@ test('it keeps answered and pending calls and drops the call that never ran', fu
 
     (new BackfillConversationSteps)->up();
 
-    $steps = DB::table('agent_conversation_messages')->value('steps');
+    $row = DB::table('agent_conversation_messages')->first();
 
-    expect($steps)->json()->{'0'}->tool_calls->toBe([answeredToolCall('call-1'), legacyCall('call-2')]);
+    expect($row->steps)->json()->{'0'}->tool_calls->toBe([answeredToolCall('call-1'), [...legacyCall('call-2'), 'approval_reason' => 'Destructive.']])
+        ->and($row->approval_requested_at)->not->toBeNull();
 });
 
 test('it splits a row per provider step and moves the turn reasoning blob onto the last', function (): void {
@@ -109,7 +112,7 @@ test('it splits a row per provider step and moves the turn reasoning blob onto t
 
     expect($row->steps)->json()->toBe([
         ['content' => '', 'tool_calls' => [answeredToolCall('call-1')], 'reasoning' => '', 'replay_blocks' => [['type' => 'thinking', 'signature' => 'sig-1']], 'provider_tool_calls' => []],
-        ['content' => 'Now b.', 'tool_calls' => [legacyCall('call-2')], 'reasoning' => 'Deleting b next.', 'replay_blocks' => [['type' => 'thinking', 'signature' => 'sig-2']], 'provider_tool_calls' => []],
+        ['content' => 'Now b.', 'tool_calls' => [[...legacyCall('call-2'), 'approval_reason' => null]], 'reasoning' => 'Deleting b next.', 'replay_blocks' => [['type' => 'thinking', 'signature' => 'sig-2']], 'provider_tool_calls' => []],
     ])->and($row->meta)->json()->toBe(['provider' => 'anthropic', 'model' => 'claude-sonnet-4-6']);
 });
 

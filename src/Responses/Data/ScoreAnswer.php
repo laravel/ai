@@ -24,7 +24,9 @@ class ScoreAnswer extends Answer
      */
     public function level(): int
     {
-        return (int) array_search(max($this->probabilities), $this->probabilities, true);
+        return $this->probabilities === []
+            ? (int) round($this->score)
+            : (int) array_search(max($this->probabilities), $this->probabilities, true);
     }
 
     /**

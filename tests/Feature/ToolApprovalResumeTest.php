@@ -876,7 +876,7 @@ test('a resume that fails after the tool runs does not re-execute the tool on re
     expect(ApprovableNumberGenerator::$invocations)->toBe(1);
 });
 
-test('a resume settles the paused row before the run writes a newer one', function () {
+test('a resume folds its result and reply into the paused row instead of writing a newer one', function () {
     Config::set('ai.conversations.generate_title', false);
 
     Http::fake([
@@ -930,7 +930,6 @@ test('a resume settles the paused row before the run writes a newer one', functi
         ->continue($paused->conversationId, $user)
         ->prompt(Decisions::from(['toolu_1' => true, 'toolu_2' => true]), provider: 'anthropic');
 
-    // Only the newest row is read for pending approvals, so a resume that settled some calls and left others behind on an older row would report a finished turn while the user still owed a decision...
     $pausedRow = DB::table('agent_conversation_messages')->where('id', $pausedRowId)->first();
 
     $newerRows = DB::table('agent_conversation_messages')
@@ -938,8 +937,9 @@ test('a resume settles the paused row before the run writes a newer one', functi
         ->where('id', '>', $pausedRowId)
         ->count();
 
-    expect($newerRows)->toBeGreaterThan(0)
-        ->and(json_decode($pausedRow->approval_state, true)['pending'])->toBe([])
+    expect($newerRows)->toBe(0)
+        ->and($pausedRow->content)->toBe('The number is 72019.')
+        ->and($pausedRow->steps)->json()->toHaveCount(2)
         ->and($store->pendingApprovalsFor($paused->conversationId))->toBe([]);
 });
 
@@ -1059,4 +1059,63 @@ test('a turn that pauses twice replays every step of the turn with its replay bl
         fn ($message) => $message->toMatchArray(['role' => 'assistant'])->content->{'0'}->toMatchArray(['type' => 'thinking', 'signature' => 'signature-2']),
         fn ($message) => $message->toMatchArray(['role' => 'user'])->content->each->toMatchArray(['type' => 'tool_result', 'tool_use_id' => 'toolu_2']),
     );
+});
+
+test('a plain call sharing a step with a gated call runs at the pause and both results land on the paused row', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [
+                    ['type' => 'tool_use', 'id' => 'toolu_plain', 'name' => 'FixedNumberGenerator', 'input' => (object) []],
+                    ['type' => 'tool_use', 'id' => 'toolu_gated', 'name' => 'ApprovableNumberGenerator', 'input' => (object) []],
+                ],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            Http::response([
+                'id' => 'msg_2',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'Both done.']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingMultiStepApprovableAgent)->forUser($user)->prompt('Go', provider: 'anthropic');
+
+    $store = new DatabaseConversationStore;
+
+    $pausedCalls = collect(json_decode(DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps'), true)[0]['tool_calls'])->keyBy('id');
+
+    expect($pausedCalls['toolu_plain'])->toHaveKey('result')->not->toHaveKey('approval_reason')
+        ->and($pausedCalls['toolu_gated'])->toHaveKey('approval_reason')->not->toHaveKey('result')
+        ->and($store->pendingApprovalsFor($paused->conversationId))->toHaveCount(1)->{'0'}->id->toBe('toolu_gated');
+
+    (new RememberingMultiStepApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(Decisions::from(['toolu_gated' => true]), provider: 'anthropic');
+
+    $sentResultIds = collect(collect(Http::recorded())->last()[0]->data()['messages'])
+        ->flatMap(fn (array $message) => is_array($message['content']) ? $message['content'] : [])
+        ->where('type', 'tool_result')
+        ->pluck('tool_use_id')
+        ->all();
+
+    $row = DB::table('agent_conversation_messages')->where('role', 'assistant')->sole();
+    $calls = collect(json_decode($row->steps, true)[0]['tool_calls'])->keyBy('id');
+
+    expect($sentResultIds)->toBe(['toolu_plain', 'toolu_gated'])
+        ->and($calls['toolu_gated'])->toHaveKey('result')
+        ->and($store->pendingApprovalsFor($paused->conversationId))->toBe([]);
 });

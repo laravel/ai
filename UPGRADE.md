@@ -17,7 +17,13 @@ The `tool_calls` and `tool_results` columns on the `agent_conversation_messages`
 
 The `participant_index` on the same table now also includes the `agent` column.
 
-The package's existing migration will not run again during an upgrade. If you have already migrated the conversation tables, create a new migration containing the code below, then run `php artisan migrate` before deploying the new version of your application. The migration adds the `steps` column, rewrites every existing row, and drops the old columns:
+The `approval_state` column has been replaced by a nullable `approval_requested_at` timestamp. The reason a call is waiting on a decision is now stored on the call itself as `approval_reason`, so a stored call carrying that key without a `result` is one still pending:
+
+```json
+{"id": "call_1", "name": "delete_file", "arguments": {"path": "a"}, "approval_reason": "Destructive."}
+```
+
+The package's existing migration will not run again during an upgrade. If you have already migrated the conversation tables, create a new migration containing the code below, then run `php artisan migrate` before deploying the new version of your application. The migration adds the `steps` and `approval_requested_at` columns, rewrites every existing row, and drops the old columns:
 
 <details>
 <summary>Backfill migration</summary>
@@ -43,6 +49,7 @@ return new class extends AiMigration
 
         Schema::connection($this->getConnection())->table($table, function (Blueprint $blueprint) {
             $blueprint->longText('steps')->nullable();
+            $blueprint->timestamp('approval_requested_at')->nullable();
         });
 
         $this->query($table)->where('role', 'user')->update(['steps' => '[]']);
@@ -59,7 +66,7 @@ return new class extends AiMigration
 
         Schema::connection($this->getConnection())->table($table, function (Blueprint $blueprint) {
             $blueprint->longText('steps')->nullable(false)->change();
-            $blueprint->dropColumn(['tool_calls', 'tool_results']);
+            $blueprint->dropColumn(['tool_calls', 'tool_results', 'approval_state']);
             $blueprint->dropIndex('participant_index');
             $blueprint->index(['participant_type', 'participant_id', 'agent'], 'participant_index');
         });
@@ -87,7 +94,7 @@ return new class extends AiMigration
                 }
             }
 
-            $pending = [...$pending, ...array_keys($this->decoded($row->approval_state)['pending'] ?? [])];
+            $pending = [...$pending, ...$this->decoded($row->approval_state)['pending'] ?? []];
         }
 
         foreach ($rows as $row) {
@@ -99,14 +106,19 @@ return new class extends AiMigration
                 foreach ($step['tool_calls'] as $toolCall) {
                     $result = $results[$toolCall['id'] ?? ''] ?? null;
 
-                    if ($result === null && ! in_array($toolCall['id'] ?? null, $pending, true)) {
+                    $awaiting = array_key_exists($toolCall['id'] ?? '', $pending);
+
+                    if ($result === null && ! $awaiting) {
                         continue;
                     }
 
-                    $toolCalls[] = $result === null ? $toolCall : [
+                    $toolCalls[] = [
                         ...$toolCall,
-                        'result' => $result['result'] ?? null,
-                        ...array_filter(['denied' => $result['denied'] ?? false, 'failed' => $result['failed'] ?? false]),
+                        ...$awaiting ? ['approval_reason' => $pending[$toolCall['id']]] : [],
+                        ...$result === null ? [] : [
+                            'result' => $result['result'] ?? null,
+                            ...array_filter(['denied' => $result['denied'] ?? false, 'failed' => $result['failed'] ?? false]),
+                        ],
                     ];
                 }
 
@@ -118,6 +130,7 @@ return new class extends AiMigration
             $this->query($table)->where('id', $row->id)->update([
                 'steps' => json_encode($steps),
                 'meta' => json_encode($meta),
+                'approval_requested_at' => blank($this->decoded($row->approval_state)['pending'] ?? []) ? null : $row->created_at,
             ]);
         }
     }
@@ -200,7 +213,7 @@ If you read a message's reasoning or replay state from the `meta` column, update
 - `meta.reasoning` is now `steps[].reasoning`.
 - `meta.provider_steps` and `meta.provider_content_blocks` are now `steps[].replay_blocks`.
 
-Replay blocks are only retained while a turn is paused for tool approval and are cleared when the turn completes. Each stored tool call contains only the `id`, `name`, `arguments`, `result`, `result_id`, `denied`, and `failed` keys, plus `thought_signature` when Gemini provides one. Provider-specific reasoning keys such as `reasoning_id` and `reasoning_encrypted_content` are no longer stored.
+Replay blocks are only retained while a turn is paused for tool approval and are cleared when the turn completes. Each stored tool call contains only the `id`, `name`, `arguments`, `result`, `result_id`, `denied`, and `failed` keys, plus `approval_reason` when the call was gated behind an approval and `thought_signature` when Gemini provides one. Provider-specific reasoning keys such as `reasoning_id` and `reasoning_encrypted_content` are no longer stored.
 
 If you use the `Laravel\Ai\Storage\StoredMessage` class, replace the removed `$toolCalls` and `$toolResults` properties with the new `toolCalls()` and `toolResults()` methods:
 
@@ -216,6 +229,18 @@ $message->providerToolCalls();
 ```
 
 The `StoredMessage` constructor now accepts a `steps` argument in place of `toolCalls` and `toolResults`, and `toArray()` emits a `steps` key in their place. Update any code that constructs a `StoredMessage` manually.
+
+Its `$approvalState` array has also been replaced by an `$approvalRequestedAt` date, and `toArray()` emits an `approval_requested_at` key in place of `approval_state`. Read the pending calls from the steps instead:
+
+```php
+// Before...
+$message->approvalState['pending'];
+
+// After...
+array_filter($message->toolCalls(), fn (array $call) => PendingApproval::isPending($call));
+```
+
+The `approval_state` cast on the `Laravel\Ai\Models\ConversationMessage` model has been replaced by an `approval_requested_at` date cast.
 
 ### Agent Middleware Wraps Each Generation Step
 
@@ -335,6 +360,14 @@ Reported values have also changed in three places:
 - Anthropic streams read the cumulative usage reported on `message_delta`, so a run using a server tool such as web search reports a higher input token count than before.
 - Anthropic populates `reasoningTokens` from the thinking token breakdown rather than always reporting `0`.
 - Cohere embeddings on Bedrock report the input token count returned by the API rather than always reporting `0`.
+
+### Resumed Turns Fold Into The Message They Paused On
+
+**Likelihood Of Impact: Medium**
+
+Resuming a paused turn now appends the steps the resumed run made to the assistant message the turn paused on, rather than storing a second assistant message. The turn's usage is summed and its citations are merged, and `storeAssistantMessage()` returns the ID of the message it folded into.
+
+A conversation that paused for an approval therefore holds one assistant message per turn instead of one per request. If you render a transcript or count messages, expect the resumed half of a turn to appear on the message that requested the approval.
 
 ### Text Responses Report A `TextUsage` Object
 

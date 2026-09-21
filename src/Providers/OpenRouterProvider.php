@@ -4,6 +4,7 @@ namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\AudioGateway;
+use Laravel\Ai\Contracts\Gateway\ClassificationGateway;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
@@ -11,6 +12,7 @@ use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
+use Laravel\Ai\Contracts\Providers\ClassificationProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
@@ -20,19 +22,22 @@ use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Gateway\OpenRouter\OpenRouterClassificationGateway;
 use Laravel\Ai\Gateway\OpenRouter\OpenRouterFileGateway;
 use Laravel\Ai\Gateway\OpenRouter\OpenRouterGateway;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class OpenRouterProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, ImageProvider, RerankingProvider, SupportsWebFetch, SupportsWebSearch, TextProvider, TranscriptionProvider
+class OpenRouterProvider extends Provider implements AudioProvider, ClassificationProvider, EmbeddingProvider, FileProvider, ImageProvider, RerankingProvider, SupportsWebFetch, SupportsWebSearch, TextProvider, TranscriptionProvider
 {
+    use Concerns\Classifies;
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
     use Concerns\GeneratesTranscriptions;
     use Concerns\HasAudioGateway;
+    use Concerns\HasClassificationGateway;
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasFileGateway;
     use Concerns\HasImageGateway;
@@ -215,6 +220,22 @@ class OpenRouterProvider extends Provider implements AudioProvider, EmbeddingPro
     public function fileGateway(): FileGateway
     {
         return $this->fileGateway ??= new OpenRouterFileGateway;
+    }
+
+    /**
+     * Get the provider's classification gateway.
+     */
+    public function classificationGateway(): ClassificationGateway
+    {
+        return $this->classificationGateway ??= new OpenRouterClassificationGateway;
+    }
+
+    /**
+     * Get the name of the default classification model.
+     */
+    public function defaultClassificationModel(): string
+    {
+        return $this->config['models']['classification']['default'] ?? '~typesafe/jev-latest';
     }
 
     /**

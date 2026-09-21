@@ -20,6 +20,7 @@ class BackfillConversationSteps extends AiMigration
 
         Schema::connection($this->getConnection())->table($table, function (Blueprint $blueprint) {
             $blueprint->longText('steps')->nullable();
+            $blueprint->timestamp('approval_requested_at')->nullable();
         });
 
         $this->query($table)->where('role', 'user')->update(['steps' => '[]']);
@@ -36,7 +37,7 @@ class BackfillConversationSteps extends AiMigration
 
         Schema::connection($this->getConnection())->table($table, function (Blueprint $blueprint) {
             $blueprint->longText('steps')->nullable(false)->change();
-            $blueprint->dropColumn(['tool_calls', 'tool_results']);
+            $blueprint->dropColumn(['tool_calls', 'tool_results', 'approval_state']);
         });
     }
 
@@ -62,7 +63,7 @@ class BackfillConversationSteps extends AiMigration
                 }
             }
 
-            $pending = [...$pending, ...array_keys($this->decoded($row->approval_state)['pending'] ?? [])];
+            $pending = [...$pending, ...$this->decoded($row->approval_state)['pending'] ?? []];
         }
 
         foreach ($rows as $row) {
@@ -74,14 +75,19 @@ class BackfillConversationSteps extends AiMigration
                 foreach ($step['tool_calls'] as $toolCall) {
                     $result = $results[$toolCall['id'] ?? ''] ?? null;
 
-                    if ($result === null && ! in_array($toolCall['id'] ?? null, $pending, true)) {
+                    $awaiting = array_key_exists($toolCall['id'] ?? '', $pending);
+
+                    if ($result === null && ! $awaiting) {
                         continue;
                     }
 
-                    $toolCalls[] = $result === null ? $toolCall : [
+                    $toolCalls[] = [
                         ...$toolCall,
-                        'result' => $result['result'] ?? null,
-                        ...array_filter(['denied' => $result['denied'] ?? false, 'failed' => $result['failed'] ?? false]),
+                        ...$awaiting ? ['approval_reason' => $pending[$toolCall['id']]] : [],
+                        ...$result === null ? [] : [
+                            'result' => $result['result'] ?? null,
+                            ...array_filter(['denied' => $result['denied'] ?? false, 'failed' => $result['failed'] ?? false]),
+                        ],
                     ];
                 }
 
@@ -93,6 +99,7 @@ class BackfillConversationSteps extends AiMigration
             $this->query($table)->where('id', $row->id)->update([
                 'steps' => json_encode($steps),
                 'meta' => json_encode($meta),
+                'approval_requested_at' => blank($this->decoded($row->approval_state)['pending'] ?? []) ? null : $row->created_at,
             ]);
         }
     }
