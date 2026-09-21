@@ -2,6 +2,8 @@
 
 namespace Laravel\Ai\Contracts;
 
+use Laravel\Ai\Gateway\RunContext;
+
 interface RemembersConversations extends Conversational
 {
     /**
@@ -43,4 +45,18 @@ interface RemembersConversations extends Conversational
      * Get the user having the current conversation.
      */
     public function conversationParticipant(): ?object;
+
+    /**
+     * Remember the context the current run is recording its steps on.
+     *
+     * @internal
+     */
+    public function recordRunContext(?RunContext $context): static;
+
+    /**
+     * Get the context the given invocation is recording its steps on, if this agent opened it.
+     *
+     * @internal
+     */
+    public function recordedRunContext(?string $invocationId): ?RunContext;
 }

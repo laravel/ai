@@ -192,7 +192,13 @@ trait GeneratesText
      */
     protected function runContextFor(string $invocationId, AgentPrompt $prompt): RunContext
     {
-        return new RunContext($invocationId, $prompt->agent, $this, $prompt->model, $this->events);
+        $context = new RunContext($invocationId, $prompt->agent, $this, $prompt->model, $this->events);
+
+        if (RememberConversation::appliesTo($prompt->agent)) {
+            $prompt->agent->recordRunContext($context);
+        }
+
+        return $context;
     }
 
     /**

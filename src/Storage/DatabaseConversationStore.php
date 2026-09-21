@@ -30,6 +30,7 @@ use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
+use Throwable;
 
 class DatabaseConversationStore implements ConversationStore, PaginatesConversations, ResolvesPendingApprovals, VerifiesConversationOwnership
 {
@@ -153,6 +154,60 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         $this->touchConversation($conversationId, $now);
 
         return $messageId;
+    }
+
+    /**
+     * Store the steps a run completed before it failed, along with the error it died with.
+     *
+     * @param  array<int, Step>  $steps
+     */
+    public function storeFailedAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, array $steps, Throwable $exception): string
+    {
+        $messageId = (string) Str::uuid7();
+
+        $now = now();
+
+        $this->table($this->messagesTable())->insert($this->messageAttributes($messageId, $conversationId, $participantType, $participantId, $now, [
+            'agent' => $prompt->agent::class,
+            'role' => 'assistant',
+            'content' => '',
+            'attachments' => '[]',
+            'steps' => $this->failedStepsFor($steps)->toJson(),
+            'usage' => json_encode($this->usageAcross($steps)),
+            'meta' => json_encode(['provider' => $prompt->provider()->name(), 'error' => $exception->getMessage()]),
+            'status' => MessageStatus::Failed,
+        ]));
+
+        $this->touchConversation($conversationId, $now);
+
+        return $messageId;
+    }
+
+    /**
+     * Serialize the steps a failed run completed, without the raw blocks no later turn can replay.
+     *
+     * @param  array<int, Step>  $steps
+     * @return Collection<int, array<string, mixed>>
+     */
+    protected function failedStepsFor(array $steps): Collection
+    {
+        return collect($steps)->map(fn (Step $step): array => [
+            'content' => $step->text,
+            'tool_calls' => $this->toolCallsFor($step->toolCalls, $step->toolResults, collect()),
+            'reasoning' => $step->reasoning,
+            'replay_blocks' => [],
+            'provider_tool_calls' => array_map(fn (ProviderToolCall $call): array => $call->toArray(), $step->providerToolCalls),
+        ])->values();
+    }
+
+    /**
+     * Total the usage the steps a failed run completed reported.
+     *
+     * @param  array<int, Step>  $steps
+     */
+    protected function usageAcross(array $steps): TextUsage
+    {
+        return collect($steps)->reduce(fn (TextUsage $total, Step $step): TextUsage => $total->add($step->usage), new TextUsage);
     }
 
     /**
@@ -452,16 +507,22 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     {
         $pending = $this->pausedCallIds($record);
         $provider = $this->decoded($record->meta)['provider'] ?? null;
+        $failed = MessageStatus::from($record->status) === MessageStatus::Failed;
 
-        return $this->decodedSteps($record)->flatMap(function (array $step) use ($pending, $provider): array {
+        return $this->decodedSteps($record)->flatMap(function (array $step) use ($pending, $provider, $failed): array {
             $content = $step['content'];
 
             $replayed = collect($step['tool_calls'])
-                ->filter(fn (array $toolCall) => PendingApproval::isAnswered($toolCall) || in_array($toolCall['id'] ?? null, $pending, true))
+                ->filter(fn (array $toolCall) => $failed || PendingApproval::isAnswered($toolCall) || in_array($toolCall['id'] ?? null, $pending, true))
                 ->values();
 
             $toolCalls = $replayed->map(ToolCall::fromArray(...));
-            $toolResults = $replayed->filter(PendingApproval::isAnswered(...))->map(ToolResult::fromArray(...))->values();
+
+            // A failed turn died with calls it never answered, so the model is told which one it may have run rather than shown a call with no result...
+            $toolResults = $replayed
+                ->filter(fn (array $toolCall) => PendingApproval::isAnswered($toolCall) || $failed)
+                ->map(fn (array $toolCall) => PendingApproval::isAnswered($toolCall) ? ToolResult::fromArray($toolCall) : $this->interruptedResultFor($toolCall))
+                ->values();
 
             // Raw blocks still name a dropped call, so a step missing one rebuilds generically rather than replaying a call no result answers...
             $replayBlocks = $replayed->count() === count($step['tool_calls']) ? $step['replay_blocks'] : [];
@@ -476,6 +537,22 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
             return $messages;
         })->all();
+    }
+
+    /**
+     * The result a failed turn's unanswered call replays with.
+     *
+     * @param  array<string, mixed>  $toolCall
+     */
+    protected function interruptedResultFor(array $toolCall): ToolResult
+    {
+        return new ToolResult(
+            $toolCall['id'],
+            $toolCall['name'],
+            $toolCall['arguments'] ?? [],
+            'This tool call was interrupted before a result was recorded, so it may or may not have run.',
+            $toolCall['result_id'] ?? null,
+        );
     }
 
     /**

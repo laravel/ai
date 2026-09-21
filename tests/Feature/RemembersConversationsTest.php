@@ -8,6 +8,7 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
+use Throwable;
 
 test('it threads the participant type into latestConversationId when continuing the last conversation', function () {
     $participant = new class extends Model
@@ -49,6 +50,11 @@ test('it threads the participant type into latestConversationId when continuing 
         public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
         {
             return 'assistant-1';
+        }
+
+        public function storeFailedAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, array $steps, Throwable $exception): string
+        {
+            return 'failed-assistant-message';
         }
 
         public function getLatestConversationMessages(string $conversationId, int $limit): Collection
@@ -98,6 +104,11 @@ test('it continues the last conversation through a store that ignores the partic
         public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
         {
             return 'assistant-1';
+        }
+
+        public function storeFailedAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, array $steps, Throwable $exception): string
+        {
+            return 'failed-assistant-message';
         }
 
         public function getLatestConversationMessages(string $conversationId, int $limit): Collection
@@ -156,6 +167,11 @@ test('it resolves the participant id via getKey for models with custom primary k
         public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
         {
             return 'assistant-1';
+        }
+
+        public function storeFailedAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, array $steps, Throwable $exception): string
+        {
+            return 'failed-assistant-message';
         }
 
         public function getLatestConversationMessages(string $conversationId, int $limit): Collection

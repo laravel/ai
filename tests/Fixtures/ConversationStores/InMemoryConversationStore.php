@@ -8,6 +8,7 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
+use Throwable;
 
 class InMemoryConversationStore implements ConversationStore
 {
@@ -72,5 +73,10 @@ class InMemoryConversationStore implements ConversationStore
     public function storeApprovalResults(string $conversationId, array $toolResults): void
     {
         //
+    }
+
+    public function storeFailedAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, array $steps, Throwable $exception): string
+    {
+        return 'failed-assistant-message';
     }
 }

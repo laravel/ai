@@ -163,13 +163,18 @@ class TextGenerationLoop
 
             $prepared = $attempt?->step ?? $pending;
 
+            // Kept before a listener or a tool can throw, so a run that dies mid-step is still recorded as far as it got...
+            $context?->recordStep($this->buildStep($lastResult));
+
             $this->stepCompleted($context, $attempt, $lastResult);
 
             $accumulatedUsage = $accumulatedUsage->add($lastResult->usage);
 
             [$toolResults, $pendingApprovals] = $this->stepToolResultsWithOptions($lastResult, $prepared->isFinalStep, $prepared->tools, $prepared->options, $context);
 
-            $steps->push($this->buildStep($lastResult, $toolResults));
+            $steps->push($completedStep = $this->buildStep($lastResult, $toolResults));
+
+            $context?->recordStepResults($completedStep);
 
             $assistantMessage = $this->buildAssistantMessage($lastResult);
             $allMessages[] = $assistantMessage;
@@ -338,6 +343,9 @@ class TextGenerationLoop
                 throw $exception;
             }
 
+            // Kept before a listener or a tool can throw, so a stream that dies mid-step is still recorded as far as it got...
+            $context?->recordStep($this->buildStep($result));
+
             $this->stepCompleted($context, $attempt, $result);
 
             $accumulatedUsage = $accumulatedUsage->add($result->usage);
@@ -354,7 +362,9 @@ class TextGenerationLoop
 
             [$toolResults, $pendingApprovals] = $toolStream->getReturn();
 
-            $steps->push($this->buildStep($result, $toolResults));
+            $steps->push($completedStep = $this->buildStep($result, $toolResults));
+
+            $context?->recordStepResults($completedStep);
 
             foreach ($toolResults as $toolResult) {
                 yield (new ToolResultEvent(

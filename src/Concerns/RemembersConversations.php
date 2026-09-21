@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Concerns;
 
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Models\Conversation;
 
 trait RemembersConversations
@@ -10,6 +11,8 @@ trait RemembersConversations
     protected ?string $conversationId = null;
 
     protected ?object $conversationUser = null;
+
+    protected ?RunContext $runContext = null;
 
     /**
      * Start a new conversation for the given participant.
@@ -110,5 +113,27 @@ trait RemembersConversations
     public function conversationParticipant(): ?object
     {
         return $this->conversationUser;
+    }
+
+    /**
+     * Remember the context the current run is recording its steps on.
+     *
+     * @internal
+     */
+    public function recordRunContext(?RunContext $context): static
+    {
+        $this->runContext = $context;
+
+        return $this;
+    }
+
+    /**
+     * Get the context the given invocation is recording its steps on, if this agent opened it.
+     *
+     * @internal
+     */
+    public function recordedRunContext(?string $invocationId): ?RunContext
+    {
+        return $this->runContext?->invocationId === $invocationId ? $this->runContext : null;
     }
 }

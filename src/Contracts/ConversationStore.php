@@ -8,7 +8,9 @@ use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\ToolResult;
+use Throwable;
 
 interface ConversationStore
 {
@@ -42,6 +44,13 @@ interface ConversationStore
      * @return Collection<int, Message>
      */
     public function getLatestConversationMessages(string $conversationId, int $limit): Collection;
+
+    /**
+     * Store the steps a run completed before it failed, along with the error it died with.
+     *
+     * @param  array<int, Step>  $steps
+     */
+    public function storeFailedAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, array $steps, Throwable $exception): string;
 
     /**
      * Durably record resolved approval results on the paused turn before the run continues.

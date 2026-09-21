@@ -13,10 +13,14 @@ use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Responses\Data\Step;
 use Throwable;
 
 class RunContext
 {
+    /** @var array<int, Step> */
+    protected array $steps = [];
+
     public function __construct(
         public readonly string $invocationId,
         public readonly Agent $agent,
@@ -24,6 +28,34 @@ class RunContext
         public readonly string $model,
         protected readonly Dispatcher $events,
     ) {}
+
+    /**
+     * Keep the step the model just produced, so a run that dies later can still be recorded as far as it got.
+     */
+    public function recordStep(Step $step): void
+    {
+        $this->steps[] = $step;
+    }
+
+    /**
+     * Replace the step being worked on with the same step once its tools have answered.
+     */
+    public function recordStepResults(Step $step): void
+    {
+        array_pop($this->steps);
+
+        $this->steps[] = $step;
+    }
+
+    /**
+     * The steps the run completed before it ended, however it ended.
+     *
+     * @return array<int, Step>
+     */
+    public function recordedSteps(): array
+    {
+        return $this->steps;
+    }
 
     /**
      * Report that a generation step is about to start.
