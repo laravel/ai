@@ -104,7 +104,7 @@ test('reasoning conversation roundtrips through database storage', function (): 
     $firstResponse = $agent->prompt(
         $firstPrompt,
         provider: 'openai',
-        model: 'gpt-5.4-nano',
+        model: 'gpt-6-luna',
     );
 
     expect($firstResponse->toolCalls)->toHaveCount(1)

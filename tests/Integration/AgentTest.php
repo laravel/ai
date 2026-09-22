@@ -412,7 +412,7 @@ test('openai replays echoed output blocks on a store=false tool-call continuatio
     $response = (new ToolUsingAgent(fixed: true))->prompt(
         'Give me a random number.',
         provider: 'openai',
-        model: 'gpt-5.4',
+        model: 'gpt-6-sol',
     );
 
     expect($response['number'])->toBe(72019)

@@ -76,46 +76,46 @@ dataset('agent-providers', [
     'groq' => ['groq', 'GROQ_API_KEY', 'openai/gpt-oss-20b'],
     'mistral' => ['mistral', 'MISTRAL_API_KEY', 'mistral-small-latest'],
     'ollama' => ['ollama', 'OLLAMA_API_KEY', 'gpt-oss:20b'],
-    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano'],
+    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-6-luna'],
     'openrouter' => ['openrouter', 'OPENROUTER_API_KEY', 'anthropic/claude-haiku-4.5'],
     'xai' => ['xai', 'XAI_API_KEY', 'grok-4.20-non-reasoning'],
 ]);
 
 dataset('tool-search-providers', [
     'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001'],
-    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4'],
+    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-6-sol'],
 ]);
 
 dataset('agent-document-providers', [
     'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001'],
-    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano'],
+    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-6-luna'],
     'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite'],
     'mistral' => ['mistral', 'MISTRAL_API_KEY', 'mistral-small-latest'],
 ]);
 
 dataset('agent-image-providers', [
-    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano'],
+    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-6-luna'],
     'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite'],
     'xai' => ['xai', 'XAI_API_KEY', 'grok-4.20-non-reasoning'],
 ]);
 
 dataset('tool-replay-providers', [
     // Reasoning model
-    'openai-gpt-5-4-nano' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano', true],
+    'openai-gpt-6-luna' => ['openai', 'OPENAI_API_KEY', 'gpt-6-luna', true],
     // Non-reasoning model (backward compatibility)
     'openai-gpt-4-1' => ['openai', 'OPENAI_API_KEY', 'gpt-4.1', false],
 ]);
 
 dataset('code-execution-providers', [
     'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001'],
-    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4'],
+    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-6-sol'],
     'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite'],
     'xai' => ['xai', 'XAI_API_KEY', 'grok-4.6'],
 ]);
 
 dataset('reasoning-providers', [
     'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001', ['thinking' => ['type' => 'enabled', 'budget_tokens' => 2000], 'max_tokens' => 4000]],
-    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano', ['reasoning' => ['effort' => 'high', 'summary' => 'auto']]],
+    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-6-luna', ['reasoning' => ['effort' => 'high', 'summary' => 'auto']]],
     'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.5-flash', ['thinking_level' => 'high', 'thinking_summaries' => 'auto']],
     'xai' => ['xai', 'XAI_API_KEY', 'grok-4.6', ['reasoning' => ['summary' => 'auto']]],
     'deepseek' => ['deepseek', 'DEEPSEEK_API_KEY', 'deepseek-reasoner', []],
