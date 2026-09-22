@@ -2,7 +2,7 @@
 
 ## Upgrading To 1.0 From 0.11
 
-### Conversation Messages Store Steps
+### Conversation Messages Now Store Steps
 
 **Likelihood Of Impact: High**
 
@@ -23,7 +23,9 @@ The `approval_state` column has been replaced by a `status` column holding a `La
 {"id": "call_1", "name": "delete_file", "arguments": {"path": "a"}, "approval_reason": "Destructive."}
 ```
 
-The package's existing migration will not run again during an upgrade. If you have already migrated the conversation tables, create a new migration containing the code below, then run `php artisan migrate` before deploying the new version of your application. The migration adds the `steps` and `status` columns, rewrites every existing row, and drops the old columns:
+The package's existing migration will not run again during an upgrade. If you have already migrated the conversation tables, create a new migration containing the code below, then run `php artisan migrate` before deploying the new version of your application. The migration adds the `steps` and `status` columns, rewrites every existing row, and drops the old columns.
+
+A turn that is still paused waiting on a tool approval cannot be resumed once its `approval_state` is gone, so resolve or abandon any pending approvals before running the migration. A turn that is still paused keeps its history, but loses the call that was waiting:
 
 <details>
 <summary>Backfill migration</summary>
@@ -61,7 +63,7 @@ return new class extends AiMigration
             ->orderBy('conversation_id')
             ->chunk(100, function (Collection $conversations) use ($table) {
                 foreach ($conversations as $conversation) {
-                    $this->backfillConversation($table, $conversation->conversation_id);
+                    $this->backfill($table, $conversation->conversation_id);
                 }
             });
 
@@ -74,9 +76,9 @@ return new class extends AiMigration
     }
 
     /**
-     * Rewrite every assistant row of one conversation as steps, each result landing on the invocation that made its call.
+     * Rewrite one conversation's assistant rows as steps, each result landing on the call that made it.
      */
-    protected function backfillConversation(string $table, string $conversationId): void
+    protected function backfill(string $table, string $conversationId): void
     {
         $rows = $this->query($table)
             ->where('conversation_id', $conversationId)
@@ -84,110 +86,53 @@ return new class extends AiMigration
             ->orderBy('id')
             ->get();
 
-        // Results are gathered across the conversation because an approval resolved on a later request used to be recorded on that request's row...
-        $results = [];
-        $pending = [];
+        // A result was recorded on the row of the request that produced it, which may be a later row than its call...
+        $results = $rows->flatMap(fn (object $row) => $this->decoded($row->tool_results))->keyBy('id');
 
         foreach ($rows as $row) {
-            foreach ($this->decoded($row->tool_results) as $result) {
-                if (isset($result['id'])) {
-                    $results[$result['id']] ??= $result;
-                }
-            }
+            $meta = $this->decoded($row->meta);
 
-            $pending = [...$pending, ...$this->decoded($row->approval_state)['pending'] ?? []];
-        }
+            $calls = collect($this->decoded($row->tool_calls))
+                ->filter(fn (array $call) => $results->has($call['id'] ?? ''))
+                ->map(fn (array $call) => [
+                    ...$call,
+                    'result' => $results[$call['id']]['result'] ?? null,
+                    ...array_filter([
+                        'denied' => $results[$call['id']]['denied'] ?? false,
+                        'failed' => $results[$call['id']]['failed'] ?? false,
+                    ]),
+                ])
+                ->values()
+                ->all();
 
-        foreach ($rows as $row) {
-            [$steps, $meta] = $this->stepsFrom($row);
+            $content = (string) $row->content;
 
-            $steps = array_map(function (array $step) use ($results, $pending): array {
-                $toolCalls = [];
+            $steps = $calls !== [] && $content !== ''
+                ? [$this->step('', $calls), $this->step($content, [], $meta['reasoning'] ?? '')]
+                : [$this->step($content, $calls, $meta['reasoning'] ?? '')];
 
-                foreach ($step['tool_calls'] as $toolCall) {
-                    $result = $results[$toolCall['id'] ?? ''] ?? null;
-
-                    $awaiting = array_key_exists($toolCall['id'] ?? '', $pending);
-
-                    if ($result === null && ! $awaiting) {
-                        continue;
-                    }
-
-                    $toolCalls[] = [
-                        ...$toolCall,
-                        ...$awaiting ? ['approval_reason' => $pending[$toolCall['id']]] : [],
-                        ...$result === null ? [] : [
-                            'result' => $result['result'] ?? null,
-                            ...array_filter(['denied' => $result['denied'] ?? false, 'failed' => $result['failed'] ?? false]),
-                        ],
-                    ];
-                }
-
-                $step['tool_calls'] = $toolCalls;
-
-                return $step;
-            }, $steps);
+            unset($meta['provider_steps'], $meta['provider_content_blocks'], $meta['reasoning']);
 
             $this->query($table)->where('id', $row->id)->update([
                 'steps' => json_encode($steps),
                 'meta' => json_encode($meta),
-                'status' => blank($this->decoded($row->approval_state)['pending'] ?? []) ? MessageStatus::Completed : MessageStatus::Paused,
             ]);
         }
     }
 
     /**
-     * Split a flat assistant row into steps of unanswered tool calls, moving any replay and reasoning state out of its meta.
-     *
-     * @return array{0: list<array<string, mixed>>, 1: array<string, mixed>}
+     * @param  list<array<string, mixed>>  $calls
+     * @return array<string, mixed>
      */
-    protected function stepsFrom(object $row): array
+    protected function step(string $content, array $calls = [], string $reasoning = ''): array
     {
-        $meta = $this->decoded($row->meta);
-        $calls = array_values($this->decoded($row->tool_calls));
-
-        $providerSteps = $meta['provider_steps'] ?? null;
-
-        if (is_array($providerSteps) && $providerSteps !== []) {
-            $steps = [];
-
-            foreach ($providerSteps as $providerStep) {
-                $ids = $providerStep['tool_call_ids'] ?? [];
-
-                $steps[] = [
-                    'content' => '',
-                    'tool_calls' => array_values(array_filter($calls, fn (array $call) => in_array($call['id'] ?? null, $ids, true))),
-                    'reasoning' => '',
-                    'replay_blocks' => $providerStep['blocks'] ?? [],
-                    'provider_tool_calls' => [],
-                ];
-            }
-        } else {
-            $steps = [[
-                'content' => '',
-                'tool_calls' => $calls,
-                'reasoning' => '',
-                'replay_blocks' => $meta['provider_content_blocks'] ?? [],
-                'provider_tool_calls' => [],
-            ]];
-
-            // A completed turn's text was produced after its results, so it replays as a step of its own...
-            if ($calls !== [] && $row->approval_state === null && (string) $row->content !== '') {
-                $steps[] = ['content' => '', 'tool_calls' => [], 'reasoning' => '', 'replay_blocks' => [], 'provider_tool_calls' => []];
-            }
-        }
-
-        // Raw provider blocks are replayed only while a turn is paused, so a completed turn keeps none...
-        if ($row->approval_state === null) {
-            $steps = array_map(fn (array $step): array => [...$step, 'replay_blocks' => []], $steps);
-        }
-
-        $steps[array_key_last($steps)]['content'] = (string) $row->content;
-        $steps[array_key_last($steps)]['reasoning'] = (string) ($meta['reasoning'] ?? '');
-
-        unset($meta['provider_steps'], $meta['provider_content_blocks'], $meta['reasoning']);
-
-        return [$steps, $meta];
+        return [
+            'content' => $content,
+            'tool_calls' => $calls,
+            'reasoning' => $reasoning,
+            'replay_blocks' => [],
+            'provider_tool_calls' => [],
+        ];
     }
 
     /**
@@ -207,41 +152,33 @@ return new class extends AiMigration
 
 </details>
 
-If you run raw queries against the conversation tables, update them to read the `steps` column instead of `tool_calls` or `tool_results`. The `tool_calls` and `tool_results` attributes on the `Laravel\Ai\Models\ConversationMessage` model are still available as read-only attributes, and a `provider_tool_calls` attribute has been added. To modify a stored message, write to the `steps` attribute instead.
+Raw queries against the conversation tables should read the `steps` column in place of `tool_calls` and `tool_results`.
 
-If you read a message's reasoning or replay state from the `meta` column, update your code to read it from the steps instead:
+On the `Laravel\Ai\Models\ConversationMessage` model, `tool_calls` and `tool_results` remain as read-only attributes, joined by a new `provider_tool_calls` attribute. Write to the `steps` attribute to modify a stored message. The `approval_state` cast has been replaced by a `status` cast to the same `MessageStatus` enum.
+
+Reasoning and replay state have moved out of the `meta` column:
 
 - `meta.reasoning` is now `steps[].reasoning`.
-- `meta.provider_steps` and `meta.provider_content_blocks` are now `steps[].replay_blocks`.
+- `meta.provider_steps` and `meta.provider_content_blocks` are now `steps[].replay_blocks`, which are kept only while a turn is paused for tool approval and cleared once it completes.
 
-Replay blocks are only retained while a turn is paused for tool approval and are cleared when the turn completes. Each stored tool call contains only the `id`, `name`, `arguments`, `result`, `result_id`, `denied`, and `failed` keys, plus `approval_reason` when the call was gated behind an approval and `thought_signature` when Gemini provides one. Provider-specific reasoning keys such as `reasoning_id` and `reasoning_encrypted_content` are no longer stored.
+A stored tool call holds the `id`, `name`, `arguments`, `result`, `result_id`, `denied`, and `failed` keys, plus `approval_reason` while a decision is pending and `thought_signature` when Gemini provides one. Provider reasoning keys such as `reasoning_id` and `reasoning_encrypted_content` are no longer stored.
 
-If you use the `Laravel\Ai\Storage\StoredMessage` class, replace the removed `$toolCalls` and `$toolResults` properties with the new `toolCalls()` and `toolResults()` methods:
+The `Laravel\Ai\Storage\StoredMessage` class replaces its `$toolCalls` and `$toolResults` properties with methods, and its `$approvalState` array with a `$status` enum:
 
 ```php
 // Before...
 $message->toolCalls;
 $message->toolResults;
+$message->approvalState['pending'];
 
 // After...
 $message->toolCalls();
 $message->toolResults();
 $message->providerToolCalls();
-```
-
-The `StoredMessage` constructor now accepts a `steps` argument in place of `toolCalls` and `toolResults`, and `toArray()` emits a `steps` key in their place. Update any code that constructs a `StoredMessage` manually.
-
-Its `$approvalState` array has also been replaced by a `$status` enum, and `toArray()` emits a `status` key in place of `approval_state`. Read the pending calls from the steps instead:
-
-```php
-// Before...
-$message->approvalState['pending'];
-
-// After...
 array_filter($message->toolCalls(), fn (array $call) => PendingApproval::isPending($call));
 ```
 
-The `approval_state` cast on the `Laravel\Ai\Models\ConversationMessage` model has been replaced by a `status` cast to the same enum.
+Its constructor accepts a `steps` argument in place of `toolCalls` and `toolResults`, and `toArray()` emits `steps` and `status` keys in place of `tool_calls`, `tool_results`, and `approval_state`. Update any code that constructs a `StoredMessage` manually.
 
 ### Agent Middleware Wraps Each Generation Step
 
@@ -386,6 +323,22 @@ $conversation->messages()->where('status', MessageStatus::Completed);
 
 Streamed runs report their failure through a new `catch()` callback on `StreamableAgentResponse`, which receives the exception before it is rethrown.
 
+### Last Conversations Are Scoped To The Agent
+
+**Likelihood Of Impact: Medium**
+
+`continueLastConversation()` now resolves the participant's last conversation *with the agent it is called on*, rather than their last conversation with any agent. An application where one user talks to several remembering agents will resume a different conversation than before:
+
+```php
+// Before... the user's newest conversation, whichever agent wrote it.
+// After... the user's newest conversation with this agent.
+(new SupportAgent)->continueLastConversation($user)->prompt('...');
+```
+
+The lookup is served by the `participant_index`, which now includes the `agent` column. The backfill migration above rebuilds the index; a conversation table created by the package's own migration on this version already has it.
+
+If you relied on the old behavior, resolve the ID yourself and pass it to `continue()`.
+
 ### Gemini Uses The Interactions API
 
 **Likelihood Of Impact: Medium**
@@ -414,6 +367,8 @@ A `generationConfig` or `generation_config` key is still unwrapped into the gene
 **Likelihood Of Impact: Medium**
 
 The `Laravel\Ai\Responses\Data\Usage` class now holds only `inputTokens` and `outputTokens`. The `cacheReadInputTokens`, `cacheWriteInputTokens`, and `reasoningTokens` properties, along with the `add()` and `uncachedInputTokens()` methods, have moved to a new `Laravel\Ai\Responses\Data\TextUsage` subclass. Text, agent, step, and stream responses report a `TextUsage` object.
+
+`StreamEnd::combineUsage()` returns a `TextUsage` as well.
 
 No changes are needed if you only read usage from a response. If you construct a `TextResponse`, `StepResponse`, `Step`, or `StreamEnd` by hand, such as a fake in a test suite, pass a `TextUsage` instance. Note the new argument order:
 
@@ -688,6 +643,27 @@ Reranking::of($documents)->timeout(60)->rerank('...');
 **Likelihood Of Impact: Low**
 
 The `$provider` argument of `Laravel\Ai\Streaming\Events\ProviderToolEvent` is now a required `string` rather than an optional `?string`. If you construct this event directly, pass the provider name.
+
+### New Configuration Options
+
+**Likelihood Of Impact: Low**
+
+The `config/ai.php` file gained a `default_for_classification` key and a `typesafe` connection. If you have published the configuration file, add them to classify text:
+
+```php
+'default_for_classification' => 'typesafe',
+
+'providers' => [
+    'typesafe' => [
+        'driver' => 'typesafe',
+        'key' => env('TYPESAFE_API_KEY'),
+    ],
+],
+```
+
+No changes are needed if you do not classify text or have not published the configuration file.
+
+The package also registers `Str::decide()` and `Stringable::decide()` macros. If your application defines a macro of that name on either class, rename yours to keep it.
 
 ## Upgrading To 0.11 From 0.10
 
