@@ -658,12 +658,6 @@ Reranking::of($documents)->timeout(60)->rerank('...');
 
 This change only affects applications that construct `Laravel\Ai\Streaming\Events\ProviderToolEvent` directly. Its `$provider` argument is now a required `string`; pass the provider name when constructing the event.
 
-### `Str::decide()` And `Stringable::decide()` Macros
-
-**Likelihood Of Impact: Low**
-
-Laravel AI now registers `Str::decide()` and `Stringable::decide()` macros. If your application defines a macro with either name, rename your macro to avoid the collision.
-
 ## Upgrading To 0.11 From 0.10
 
 ### Connection Failures Throw `ProviderConnectionException`
