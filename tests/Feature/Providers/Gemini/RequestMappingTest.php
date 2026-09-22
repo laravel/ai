@@ -268,8 +268,7 @@ describe('usage parsing', function (): void {
     })->with([
         'completed maps to Stop' => ['completed', FinishReason::Stop],
         'incomplete maps to Length' => ['incomplete', FinishReason::Length],
-        'budget_exceeded maps to Length' => ['budget_exceeded', FinishReason::Length],
-        'cancelled maps to Unknown' => ['cancelled', FinishReason::Unknown],
+        'requires_action maps to ToolCalls' => ['requires_action', FinishReason::ToolCalls],
     ]);
 
     test('a safety error maps to the content filter finish reason', function (): void {

@@ -43,6 +43,7 @@ test('audio request includes model, prompt text, and voice name', function (): v
             'model' => 'gemini-3.1-flash-tts-preview',
             'input' => 'Hello world',
             'response_format' => ['type' => 'audio'],
+            'store' => false,
         ])
         ->and(sentRequest()->data()['generation_config']['speech_config'])->toBe([['voice' => 'Kore']]);
 });

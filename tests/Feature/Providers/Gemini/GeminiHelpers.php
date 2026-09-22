@@ -126,7 +126,7 @@ trait GeminiHelpers
 
     protected function argumentsDelta(int $index, string $partial): array
     {
-        return ['event_type' => 'step.delta', 'index' => $index, 'delta' => ['type' => 'arguments', 'partial_arguments' => $partial]];
+        return ['event_type' => 'step.delta', 'index' => $index, 'delta' => ['type' => 'arguments_delta', 'arguments' => $partial]];
     }
 
     protected function stepStop(int $index): array

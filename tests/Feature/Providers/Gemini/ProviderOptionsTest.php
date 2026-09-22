@@ -159,6 +159,28 @@ test('top level fields spelled in camel case are still hoisted', function (): vo
         ->and(sentRequest()->data()['safety_settings'][0])->toMatchArray(['threshold' => 'BLOCK_NONE']);
 });
 
+test('user metadata is placed at the top level of the request body', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    geminiOptionsAgent(['user_metadata' => ['tenant' => 'acme']])->prompt('Hi', provider: 'gemini');
+
+    expect(sentRequest()->data())->toMatchArray(['user_metadata' => ['tenant' => 'acme']])
+        ->not->toHaveKey('generation_config');
+});
+
+test('a generation config spelled in camel case is flattened too', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    geminiOptionsAgent(['generationConfig' => ['thinking_level' => 'high']])->prompt('Hi', provider: 'gemini');
+
+    expect(sentRequest()->data()['generation_config'])->toBe(['thinking_level' => 'high'])
+        ->and(sentRequest()->data())->not->toHaveKey('generationConfig');
+});
+
 test('a store option overrides the stateless default', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse(),

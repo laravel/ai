@@ -40,6 +40,17 @@ trait ParsesTextResponses
                 $data['error']['message'] ?? 'Unknown Gemini error.',
             ));
         }
+
+        $errors = $data['errors'] ?? [];
+
+        // A withheld answer is reported as a finish reason rather than thrown...
+        if (in_array($data['status'] ?? '', ['failed', 'cancelled'], true) && ! $this->wasBlocked($errors)) {
+            throw new AiException(sprintf(
+                'Gemini Error: [%s] %s',
+                $errors[0]['code'] ?? $data['status'],
+                $errors[0]['message'] ?? 'The Gemini interaction did not complete.',
+            ));
+        }
     }
 
     /**
@@ -285,7 +296,7 @@ trait ParsesTextResponses
 
         return match ($data['status'] ?? '') {
             'completed' => FinishReason::Stop,
-            'incomplete', 'budget_exceeded' => FinishReason::Length,
+            'incomplete' => FinishReason::Length,
             'requires_action' => FinishReason::ToolCalls,
             default => FinishReason::Unknown,
         };

@@ -406,6 +406,5 @@ describe('usage tracking', function (): void {
     })->with([
         'completed maps to Stop' => ['completed', FinishReason::Stop],
         'incomplete maps to Length' => ['incomplete', FinishReason::Length],
-        'budget_exceeded maps to Length' => ['budget_exceeded', FinishReason::Length],
     ]);
 });

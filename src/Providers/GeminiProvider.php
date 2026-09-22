@@ -166,7 +166,7 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultTranscriptionModel(): string
     {
-        return $this->config['models']['transcription']['default'] ?? 'gemini-3.5-flash';
+        return $this->config['models']['transcription']['default'] ?? 'gemini-3.5-transcribe';
     }
 
     /**

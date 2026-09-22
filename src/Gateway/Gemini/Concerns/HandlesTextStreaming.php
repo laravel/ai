@@ -90,7 +90,7 @@ trait HandlesTextStreaming
 
                 // Gemini streams the rest of a step's payload as delta keys: thought signatures,
                 // provider tool arguments and their results all arrive this way...
-                foreach (Arr::except($delta, ['type', 'text', 'content', 'partial_arguments']) as $key => $value) {
+                foreach (Arr::except($delta, ['type', 'text', 'content']) as $key => $value) {
                     $steps[$index][$key] = $value;
                 }
 
@@ -156,8 +156,9 @@ trait HandlesTextStreaming
                             time(),
                         ))->withInvocationId($invocationId);
                     }
-                } elseif ($deltaType === 'arguments') {
-                    $partialArguments[$index] = ($partialArguments[$index] ?? '').($delta['partial_arguments'] ?? '');
+                } elseif ($deltaType === 'arguments_delta') {
+                    // Gemini splits function call arguments across deltas as partial JSON strings...
+                    $partialArguments[$index] = ($partialArguments[$index] ?? '').($delta['arguments'] ?? '');
 
                     $steps[$index]['type'] = 'function_call';
                     $steps[$index]['arguments'] = $partialArguments[$index];

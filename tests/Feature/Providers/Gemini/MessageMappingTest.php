@@ -197,6 +197,21 @@ test('local image attachment without explicit mime type detects mime from file',
     expect(geminiInputBlock('image'))->toMatchArray(['mime_type' => 'image/png']);
 });
 
+test('an attachment only message sends no text block', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('I see an image'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        '',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'gemini',
+    );
+
+    expect(geminiRequestBody()['input'][0]['content'])->toHaveCount(1)
+        ->and(geminiRequestBody()['input'][0]['content'][0]['type'])->toBe('image');
+});
+
 test('base64 pdf document maps to a document block', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('I see a PDF'),

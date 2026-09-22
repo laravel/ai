@@ -35,7 +35,8 @@ trait MapsMessages
      */
     protected function mapUserMessage(UserMessage|Message $message, array &$input): void
     {
-        $content = [['type' => 'text', 'text' => $message->content]];
+        // Gemini rejects a text block without text, so an attachment-only message sends none...
+        $content = filled($message->content) ? [['type' => 'text', 'text' => $message->content]] : [];
 
         if ($message instanceof UserMessage && $message->attachments->isNotEmpty()) {
             $content = array_merge($content, $this->mapAttachments($message->attachments));

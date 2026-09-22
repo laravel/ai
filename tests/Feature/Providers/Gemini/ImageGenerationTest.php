@@ -47,7 +47,7 @@ test('image request posts the prompt to the interactions endpoint', function ():
     Image::of('A red apple')->generate(provider: 'gemini', model: 'gemini-3.1-flash-image-preview');
 
     expect(sentRequest()->url())->toEndWith('/interactions')
-        ->and(sentRequest()->data())->toMatchArray(['model' => 'gemini-3.1-flash-image-preview'])
+        ->and(sentRequest()->data())->toMatchArray(['model' => 'gemini-3.1-flash-image-preview', 'store' => false])
         ->and(sentRequest()->data()['input'][0])->toMatchArray(['type' => 'text', 'text' => 'A red apple']);
 });
 

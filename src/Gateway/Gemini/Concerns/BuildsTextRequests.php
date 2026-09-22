@@ -19,7 +19,7 @@ trait BuildsTextRequests
     protected array $topLevelInteractionKeys = [
         'agent', 'agent_config', 'background', 'environment', 'labels',
         'previous_interaction_id', 'response_format', 'safety_settings',
-        'service_tier', 'store', 'webhook_config',
+        'service_tier', 'store', 'user_metadata', 'webhook_config',
     ];
 
     /**
@@ -102,11 +102,13 @@ trait BuildsTextRequests
 
         $providerOptions = $options?->providerOptions($provider->driver()) ?? [];
 
-        if (is_array($providerOptions['generation_config'] ?? null)) {
-            $providerOptions = array_merge(
-                Arr::except($providerOptions, 'generation_config'),
-                $providerOptions['generation_config'],
-            );
+        foreach (['generation_config', 'generationConfig'] as $key) {
+            if (is_array($providerOptions[$key] ?? null)) {
+                $providerOptions = array_merge(
+                    Arr::except($providerOptions, $key),
+                    $providerOptions[$key],
+                );
+            }
         }
 
         foreach ($providerOptions as $key => $value) {

@@ -33,6 +33,28 @@ function fakeGeminiTranscriptionResponse(): PromiseInterface
     ]);
 }
 
+function fakeGeminiWordTranscriptionResponse(): PromiseInterface
+{
+    return Http::response([
+        'id' => 'int_transcription',
+        'status' => 'completed',
+        'steps' => [[
+            'type' => 'model_output',
+            'content' => [[
+                'type' => 'text',
+                'text' => 'Hello there. How are you?',
+                'annotations' => [
+                    ['type' => 'word_info', 'text' => 'Hello', 'speaker' => 'spk:0', 'start_offset' => '0.100s', 'end_offset' => '0.400s'],
+                    ['type' => 'word_info', 'text' => 'there.', 'speaker' => 'spk:0', 'start_offset' => '0.400s', 'end_offset' => '1s'],
+                    ['type' => 'word_info', 'text' => 'How', 'speaker' => 'spk:1', 'start_offset' => '1.200s', 'end_offset' => '1.400s'],
+                    ['type' => 'word_info', 'text' => 'you?', 'speaker' => 'spk:1', 'start_offset' => '1.400s', 'end_offset' => '2s'],
+                ],
+            ]],
+        ]],
+        'usage' => ['total_input_tokens' => 55, 'total_output_tokens' => 8, 'total_tokens' => 63],
+    ]);
+}
+
 function fakeGeminiDiarizedTranscriptionResponse(?array $segments = null): PromiseInterface
 {
     $segments ??= [
@@ -98,7 +120,83 @@ test('transcription uses default model when none specified', function (): void {
 
     Transcription::of(base64_encode('fake-audio'))->generate(provider: 'gemini');
 
-    expect(sentRequest()->data())->toMatchArray(['model' => 'gemini-3.5-flash']);
+    expect(sentRequest()->data())->toMatchArray(['model' => 'gemini-3.5-transcribe']);
+});
+
+test('a transcribe model is configured instead of prompted', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiTranscriptionResponse(),
+    ]);
+
+    Transcription::of(base64_encode('fake-audio'))
+        ->language('en-US')
+        ->generate(provider: 'gemini', model: 'gemini-3.5-transcribe');
+
+    expect(sentRequest()->data()['input'])->toHaveCount(1)
+        ->and(sentRequest()->data()['input'][0]['type'])->toBe('audio')
+        ->and(sentRequest()->data()['generation_config']['transcription_config'])->toBe(['language_codes' => ['en-US']])
+        ->and(sentRequest()->data())->toMatchArray(['store' => false])
+        ->and(sentRequest()->data())->not->toHaveKey('response_format');
+});
+
+test('a transcribe request without a language omits the generation config', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiTranscriptionResponse(),
+    ]);
+
+    Transcription::of(base64_encode('fake-audio'))->generate(provider: 'gemini', model: 'gemini-3.5-transcribe');
+
+    expect(sentRequest()->data())->not->toHaveKey('generation_config');
+});
+
+test('a diarized transcribe request asks for speaker labels and word timestamps', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiWordTranscriptionResponse(),
+    ]);
+
+    Transcription::of(base64_encode('fake-audio'))
+        ->diarize()
+        ->generate(provider: 'gemini', model: 'gemini-3.5-transcribe');
+
+    expect(sentRequest()->data()['generation_config']['transcription_config']['mode'])->toBe([
+        'type' => 'verbatim',
+        'diarization_mode' => 'speaker',
+        'timestamp_granularities' => ['word'],
+    ]);
+});
+
+test('a diarized transcribe response groups consecutive words into speaker segments', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiWordTranscriptionResponse(),
+    ]);
+
+    $response = Transcription::of(base64_encode('fake-audio'))
+        ->diarize()
+        ->generate(provider: 'gemini', model: 'gemini-3.5-transcribe');
+
+    expect($response->text)->toBe('Hello there. How are you?')
+        ->and($response->segments)->toHaveCount(2)
+        ->and($response->segments[0]->text)->toBe('Hello there.')
+        ->and($response->segments[0]->speaker)->toBe('spk:0')
+        ->and($response->segments[0]->startSeconds)->toBe(0.1)
+        ->and($response->segments[0]->endSeconds)->toBe(1.0)
+        ->and($response->segments[1]->text)->toBe('How you?')
+        ->and($response->segments[1]->speaker)->toBe('spk:1')
+        ->and($response->segments[1]->startSeconds)->toBe(1.2)
+        ->and($response->segments[1]->endSeconds)->toBe(2.0)
+        ->and($response->usage->inputTokens)->toBe(55);
+});
+
+test('a general purpose model still transcribes through a prompt', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => fakeGeminiTranscriptionResponse(),
+    ]);
+
+    Transcription::of(base64_encode('fake-audio'))
+        ->generate(provider: 'gemini', model: 'gemini-3.7-flash');
+
+    expect(sentRequest()->data()['input'][0]['text'])->toContain('Transcribe this audio')
+        ->and(sentRequest()->data())->not->toHaveKey('generation_config');
 });
 
 test('diarized transcription request sends a json response format', function (): void {

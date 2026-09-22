@@ -116,7 +116,7 @@ dataset('code-execution-providers', [
 dataset('reasoning-providers', [
     'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001', ['thinking' => ['type' => 'enabled', 'budget_tokens' => 2000], 'max_tokens' => 4000]],
     'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano', ['reasoning' => ['effort' => 'high', 'summary' => 'auto']]],
-    'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.5-flash-lite', ['thinking_level' => 'high', 'thinking_summaries' => 'auto']],
+    'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.5-flash', ['thinking_level' => 'high', 'thinking_summaries' => 'auto']],
     'xai' => ['xai', 'XAI_API_KEY', 'grok-4.6', ['reasoning' => ['summary' => 'auto']]],
     'deepseek' => ['deepseek', 'DEEPSEEK_API_KEY', 'deepseek-reasoner', []],
     'groq' => ['groq', 'GROQ_API_KEY', 'openai/gpt-oss-20b', []],
