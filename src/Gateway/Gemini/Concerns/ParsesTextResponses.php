@@ -22,6 +22,11 @@ trait ParsesTextResponses
     use DecodesStructuredOutput, JoinsReasoning;
 
     /**
+     * The step types Gemini derives from our own request rather than the model's turn.
+     */
+    private const REQUEST_STEP_TYPES = ['user_input', 'function_result'];
+
+    /**
      * Validate the Gemini response data.
      *
      * @throws AiException
@@ -35,6 +40,17 @@ trait ParsesTextResponses
                 $data['error']['message'] ?? 'Unknown Gemini error.',
             ));
         }
+
+        $errors = $data['errors'] ?? [];
+
+        // A withheld answer is reported as a finish reason rather than thrown...
+        if (in_array($data['status'] ?? '', ['failed', 'cancelled'], true) && ! $this->wasBlocked($errors)) {
+            throw new AiException(sprintf(
+                'Gemini Error: [%s] %s',
+                $errors[0]['code'] ?? $data['status'],
+                $errors[0]['message'] ?? 'The Gemini interaction did not complete.',
+            ));
+        }
     }
 
     /**
@@ -46,196 +62,185 @@ trait ParsesTextResponses
         string $model,
         bool $structured,
     ): StepResponse {
-        $candidate = $data['candidates'][0] ?? [];
-        $parts = $candidate['content']['parts'] ?? [];
+        $steps = $data['steps'] ?? [];
 
-        $text = $this->extractText($parts);
-        $functionCallParts = $this->extractFunctionCallParts($parts);
+        $text = $this->extractText($steps);
+        $functionCallSteps = $this->extractFunctionCallSteps($steps);
 
         return new StepResponse(
             text: $text,
-            toolCalls: $this->mapToolCalls($functionCallParts),
-            finishReason: $this->extractFinishReason($data, $functionCallParts),
+            toolCalls: $this->mapToolCalls($functionCallSteps, $this->thoughtSignature($steps)),
+            finishReason: $this->extractFinishReason($data, $functionCallSteps),
             usage: $this->extractUsage($data),
-            meta: new Meta($provider->name(), $model, $this->extractCitations($data)),
+            meta: new Meta($provider->name(), $model, $this->extractCitations($steps)),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
-            replayBlocks: $this->sanitizeRequestParts($this->excludeThinkingParts($parts)),
-            reasoning: $this->extractReasoning($parts),
-            providerToolCalls: $this->extractProviderToolCalls($parts),
+            replayBlocks: $this->replayableSteps($steps),
+            reasoning: $this->extractReasoning($steps),
+            providerToolCalls: $this->extractProviderToolCalls($steps),
         );
     }
 
     /**
-     * Extract the code execution parts, which Gemini emits without an identifier.
+     * Get the steps that must be replayed verbatim on the next request.
+     */
+    protected function replayableSteps(array $steps): array
+    {
+        return array_values(array_filter(
+            $steps,
+            fn (array $step): bool => ! in_array($step['type'] ?? '', self::REQUEST_STEP_TYPES, true),
+        ));
+    }
+
+    /**
+     * Extract the provider-executed tool steps, such as search and code execution.
      *
      * @return array<int, ProviderToolCall>
      */
-    protected function extractProviderToolCalls(array $parts): array
+    protected function extractProviderToolCalls(array $steps): array
     {
         return array_values(array_map(
-            fn (array $part): ProviderToolCall => new ProviderToolCall('', 'code_execution', $part),
-            array_filter($parts, fn (array $part): bool => isset($part['executableCode']) || isset($part['codeExecutionResult'])),
+            fn (array $step): ProviderToolCall => new ProviderToolCall(
+                (string) ($step['id'] ?? ''),
+                (string) preg_replace('/_(call|result)$/', '', $step['type']),
+                $step,
+            ),
+            array_filter($steps, fn (array $step): bool => $this->isProviderToolStep($step)),
         ));
     }
 
     /**
-     * Extract the reasoning text from the response parts.
+     * Determine if the given step was executed by Gemini rather than by us.
      */
-    protected function extractReasoning(array $parts): string
+    protected function isProviderToolStep(array $step): bool
     {
-        $blocks = [];
-        $current = '';
+        $type = $step['type'] ?? '';
 
-        foreach ($parts as $part) {
-            if (! isset($part['text'])) {
-                continue;
-            }
-
-            if ($this->isThinkingPart($part)) {
-                $current .= $part['text'];
-
-                continue;
-            }
-
-            $blocks[] = $current;
-            $current = '';
-        }
-
-        return static::joinReasoning([...$blocks, $current]);
+        return ! in_array($type, ['function_call', 'function_result'], true)
+            && preg_match('/_(call|result)$/', $type) === 1;
     }
 
     /**
-     * Determine if a response part is a thinking/thought part.
+     * Determine if a step carries the model's reasoning.
      */
-    protected function isThinkingPart(array $part): bool
+    protected function isThinkingStep(array $step): bool
     {
-        return $part['thought'] ?? false;
+        return ($step['type'] ?? '') === 'thought';
     }
 
     /**
-     * Sanitize functionCall parts so they can be sent back to Gemini as conversation history.
+     * Extract the reasoning text from the response steps.
      */
-    protected function sanitizeRequestParts(array $parts): array
+    protected function extractReasoning(array $steps): string
     {
-        return array_map(function (array $part) {
-            if (! isset($part['functionCall'])) {
-                return $part;
-            }
-
-            $functionCall = ['name' => $part['functionCall']['name'] ?? ''];
-
-            $args = $part['functionCall']['args'] ?? null;
-
-            if (filled($args)) {
-                $functionCall['args'] = $args;
-            }
-
-            $part['functionCall'] = $functionCall;
-
-            return $part;
-        }, $parts);
-    }
-
-    /**
-     * Filter out thinking parts from the response, keeping only text and functionCall parts.
-     */
-    protected function excludeThinkingParts(array $parts): array
-    {
-        return array_values(array_filter(
-            $parts,
-            fn (array $part): bool => ! $this->isThinkingPart($part),
+        return static::joinReasoning(array_map(
+            fn (array $step): string => $this->textOf($step),
+            array_values(array_filter($steps, fn (array $step): bool => $this->isThinkingStep($step))),
         ));
     }
 
     /**
-     * Extract the text content from the response parts, excluding thinking parts.
+     * Extract the answer text from the model output steps.
      */
-    protected function extractText(array $parts): string
+    protected function extractText(array $steps): string
     {
-        $textParts = [];
-
-        foreach ($parts as $part) {
-            if (isset($part['text']) && ! $this->isThinkingPart($part)) {
-                $textParts[] = $part['text'];
-            }
-        }
-
-        return implode('', $textParts);
+        return implode('', array_map(
+            fn (array $step): string => $this->textOf($step),
+            array_filter($steps, fn (array $step): bool => ($step['type'] ?? '') === 'model_output'),
+        ));
     }
 
     /**
-     * Extract the parts carrying function calls from the response parts.
+     * Concatenate the text blocks of the given step, which thought steps carry as a summary.
      */
-    protected function extractFunctionCallParts(array $parts): array
+    protected function textOf(array $step): string
+    {
+        return implode('', array_map(
+            fn (array $block): string => (string) ($block['text'] ?? ''),
+            array_filter(
+                $step['summary'] ?? $step['content'] ?? [],
+                fn ($block): bool => is_array($block) && isset($block['text']),
+            ),
+        ));
+    }
+
+    /**
+     * Extract the steps carrying function calls.
+     */
+    protected function extractFunctionCallSteps(array $steps): array
     {
         return array_values(
-            array_filter($parts, fn (array $part): bool => isset($part['functionCall']))
+            array_filter($steps, fn (array $step): bool => ($step['type'] ?? '') === 'function_call')
         );
     }
 
     /**
-     * Map function call parts to ToolCall DTOs.
+     * Map function call steps to ToolCall DTOs.
      *
      * @return array<ToolCall>
      */
-    protected function mapToolCalls(array $functionCallParts): array
+    protected function mapToolCalls(array $functionCallSteps, ?string $thoughtSignature = null): array
     {
-        return array_map(function (array $part): ToolCall {
-            $functionCall = $part['functionCall'];
-
-            $id = $functionCall['id'] ?? (string) Str::uuid7();
+        return array_map(function (array $step) use ($thoughtSignature): ToolCall {
+            $id = $step['id'] ?? (string) Str::uuid7();
 
             return new ToolCall(
                 $id,
-                $functionCall['name'] ?? '',
-                $functionCall['args'] ?? [],
+                $step['name'] ?? '',
+                $this->decodeArguments($step['arguments'] ?? []),
                 $id,
-                thoughtSignature: $part['thoughtSignature'] ?? null,
+                thoughtSignature: $thoughtSignature,
             );
-        }, $functionCallParts);
+        }, $functionCallSteps);
     }
 
     /**
-     * Extract citations from the response data.
+     * Get the signature of the turn's last thought step, which the next request must replay beside its calls.
      */
-    protected function extractCitations(array $data): Collection
+    protected function thoughtSignature(array $steps): ?string
+    {
+        $signatures = array_filter(array_map(
+            fn (array $step): string => $this->isThinkingStep($step) ? (string) ($step['signature'] ?? '') : '',
+            $steps,
+        ));
+
+        return end($signatures) ?: null;
+    }
+
+    /**
+     * Normalize function call arguments, which stream as a partial JSON string.
+     */
+    protected function decodeArguments(mixed $arguments): array
+    {
+        if (is_array($arguments)) {
+            return $arguments;
+        }
+
+        return is_string($arguments) && trim($arguments) !== ''
+            ? (json_decode($arguments, true) ?: [])
+            : [];
+    }
+
+    /**
+     * Extract citations from the annotations Gemini attaches to its text blocks.
+     */
+    protected function extractCitations(array $steps): Collection
     {
         $citations = new Collection;
 
-        $candidate = $data['candidates'][0] ?? [];
+        foreach ($steps as $step) {
+            // A stream parks its annotations on the step rather than on the text block they belong to...
+            $annotations = array_merge($step['annotations'] ?? [], ...array_map(
+                fn ($block): array => is_array($block) ? ($block['annotations'] ?? []) : [],
+                $step['content'] ?? [],
+            ));
 
-        // Legacy citation metadata format...
-        $sources = $candidate['citationMetadata']['citationSources'] ?? [];
-
-        foreach ($sources as $source) {
-            if (isset($source['uri'])) {
-                $citations->push(new UrlCitation(
-                    $source['uri'],
-                    $source['title'] ?? null,
-                ));
-            }
-        }
-
-        // Grounding metadata format (Google Search grounding)...
-        $groundingChunks = $candidate['groundingMetadata']['groundingChunks'] ?? [];
-        $groundingSupports = $candidate['groundingMetadata']['groundingSupports'] ?? [];
-
-        $referencedIndices = [];
-
-        foreach ($groundingSupports as $support) {
-            foreach ($support['groundingChunkIndices'] ?? [] as $index) {
-                $referencedIndices[$index] = true;
-            }
-        }
-
-        foreach (array_keys($referencedIndices) as $index) {
-            $web = $groundingChunks[$index]['web'] ?? [];
-
-            if (isset($web['uri'])) {
-                $citations->push(new UrlCitation(
-                    $web['uri'],
-                    $web['title'] ?? null,
-                ));
+            foreach ($annotations as $annotation) {
+                if (($annotation['type'] ?? '') === 'url_citation') {
+                    $citations->push(new UrlCitation(
+                        $annotation['url'] ?? '',
+                        $annotation['title'] ?? null,
+                    ));
+                }
             }
         }
 
@@ -247,15 +252,15 @@ trait ParsesTextResponses
      */
     protected function extractUsage(array $data): TextUsage
     {
-        $usage = $data['usageMetadata'] ?? [];
+        $usage = $data['usage'] ?? [];
 
-        $reasoningTokens = $usage['thoughtsTokenCount'] ?? null;
+        $reasoningTokens = $usage['total_thought_tokens'] ?? null;
 
-        // Gemini reports thought tokens outside the candidate token count...
+        // Gemini reports thought tokens outside the output token count...
         return new TextUsage(
-            inputTokens: $usage['promptTokenCount'] ?? 0,
-            outputTokens: ($usage['candidatesTokenCount'] ?? 0) + ($reasoningTokens ?? 0),
-            cacheReadInputTokens: $usage['cachedContentTokenCount'] ?? null,
+            inputTokens: $usage['total_input_tokens'] ?? 0,
+            outputTokens: ($usage['total_output_tokens'] ?? 0) + ($reasoningTokens ?? 0),
+            cacheReadInputTokens: $usage['total_cached_tokens'] ?? null,
             reasoningTokens: $reasoningTokens,
         );
     }
@@ -265,7 +270,7 @@ trait ParsesTextResponses
      */
     protected function extractImageUsage(array $data): ImageUsage
     {
-        $usage = $data['usageMetadata'] ?? [];
+        $usage = $data['usage'] ?? [];
 
         $text = $this->extractUsage($data);
 
@@ -275,8 +280,8 @@ trait ParsesTextResponses
             $text->cacheReadInputTokens,
             $text->cacheWriteInputTokens,
             $text->reasoningTokens,
-            $this->modalityTokens($usage['promptTokensDetails'] ?? [], 'IMAGE'),
-            $this->modalityTokens($usage['candidatesTokensDetails'] ?? [], 'IMAGE'),
+            $this->modalityTokens($usage['input_tokens_by_modality'] ?? [], 'IMAGE'),
+            $this->modalityTokens($usage['output_tokens_by_modality'] ?? [], 'IMAGE'),
         );
     }
 
@@ -285,26 +290,49 @@ trait ParsesTextResponses
      */
     protected function modalityTokens(array $details, string $modality): ?int
     {
-        return collect($details)->firstWhere('modality', $modality)['tokenCount'] ?? null;
+        foreach ($details as $detail) {
+            if (strcasecmp((string) ($detail['modality'] ?? ''), $modality) === 0) {
+                return $detail['tokens'] ?? null;
+            }
+        }
+
+        return null;
     }
 
     /**
      * Extract and map the finish reason from the Gemini response.
      */
-    protected function extractFinishReason(array $data, array $functionCallParts): FinishReason
+    protected function extractFinishReason(array $data, array $functionCallSteps): FinishReason
     {
-        if (filled($functionCallParts)) {
+        if (filled($functionCallSteps)) {
             return FinishReason::ToolCalls;
         }
 
-        $candidate = $data['candidates'][0] ?? [];
-        $reason = $candidate['finishReason'] ?? '';
+        if ($this->wasBlocked($data['errors'] ?? [])) {
+            return FinishReason::ContentFilter;
+        }
 
-        return match ($reason) {
-            'STOP' => FinishReason::Stop,
-            'MAX_TOKENS' => FinishReason::Length,
-            'SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII', 'MALFORMED_FUNCTION_CALL' => FinishReason::ContentFilter,
+        return match ($data['status'] ?? '') {
+            'completed' => FinishReason::Stop,
+            'incomplete' => FinishReason::Length,
+            'requires_action' => FinishReason::ToolCalls,
             default => FinishReason::Unknown,
         };
+    }
+
+    /**
+     * Determine if the interaction failed because Gemini withheld the content.
+     */
+    protected function wasBlocked(array $errors): bool
+    {
+        foreach ($errors as $error) {
+            $haystack = strtolower(($error['code'] ?? '').' '.($error['message'] ?? ''));
+
+            if (Str::contains($haystack, ['safety', 'blocked', 'blocklist', 'prohibited', 'recitation'])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

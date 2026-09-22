@@ -69,7 +69,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", $body),
+            fn () => $this->client($provider, $timeout)->post('interactions', $body),
         );
 
         $data = $response->json();
@@ -100,7 +100,7 @@ class GeminiGateway implements Gateway, StepTextGateway
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->withOptions(['stream' => true])
-                ->post("models/{$model}:streamGenerateContent?alt=sse", $body),
+                ->post('interactions?alt=sse', array_merge($body, ['stream' => true])),
         );
 
         return yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody());
@@ -124,38 +124,35 @@ class GeminiGateway implements Gateway, StepTextGateway
         ?int $timeout = null,
         array $providerOptions = [],
     ): ImageResponse {
-        $parts = [['text' => $prompt]];
+        $content = [['type' => 'text', 'text' => $prompt]];
 
         if (filled($attachments)) {
-            $parts = array_merge($parts, $this->mapAttachments(collect($attachments)));
+            $content = array_merge($content, $this->mapAttachments(collect($attachments)));
         }
 
         $imageOptions = $provider->defaultImageOptions($size, $quality);
 
-        $body = array_merge($providerOptions, [
-            'contents' => [['role' => 'user', 'parts' => $parts]],
-            'generationConfig' => array_replace_recursive($providerOptions['generationConfig'] ?? [], array_filter([
-                'responseModalities' => ['IMAGE', 'TEXT'],
-                'imageConfig' => array_filter([
-                    'imageSize' => $imageOptions['image_size'] ?? null,
-                    'aspectRatio' => $imageOptions['aspect_ratio'] ?? null,
-                ]),
+        $body = array_merge(['store' => false], $providerOptions, [
+            'model' => $model,
+            'input' => $content,
+            'response_format' => array_replace_recursive($providerOptions['response_format'] ?? [], array_filter([
+                'type' => 'image',
+                'image_size' => $imageOptions['image_size'] ?? null,
+                'aspect_ratio' => $imageOptions['aspect_ratio'] ?? null,
             ])),
         ]);
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout ?? 120)->post("models/{$model}:generateContent", $body),
+            fn () => $this->client($provider, $timeout ?? 120)->post('interactions', $body),
         );
 
         $data = $response->json();
 
-        $images = (new Collection($data['candidates'][0]['content']['parts'] ?? []))
-            ->filter(fn ($part): bool => isset($part['inlineData']))
-            ->values()
-            ->map(fn ($part): GeneratedImage => new GeneratedImage(
-                $part['inlineData']['data'],
-                $part['inlineData']['mimeType'],
+        $images = (new Collection($this->outputBlocks($data, 'image')))
+            ->map(fn ($block): GeneratedImage => new GeneratedImage(
+                $block['data'],
+                $block['mime_type'] ?? 'image/png',
             ));
 
         return new ImageResponse(
@@ -163,6 +160,18 @@ class GeminiGateway implements Gateway, StepTextGateway
             $this->extractImageUsage($data),
             new Meta($provider->name(), $model),
         );
+    }
+
+    /**
+     * Get the content blocks of the given type from an interaction response.
+     */
+    protected function outputBlocks(array $data, string $type): array
+    {
+        return (new Collection($data['steps'] ?? []))
+            ->flatMap(fn (array $step): array => $step['content'] ?? [])
+            ->filter(fn ($block): bool => is_array($block) && ($block['type'] ?? '') === $type && isset($block['data']))
+            ->values()
+            ->all();
     }
 
     /**
@@ -216,42 +225,33 @@ class GeminiGateway implements Gateway, StepTextGateway
         int $timeout = 30,
         array $providerOptions = [],
     ): AudioResponse {
-        $generationConfig = array_replace_recursive($providerOptions['generationConfig'] ?? [], [
-            'speechConfig' => [
-                'voiceConfig' => [
-                    'prebuiltVoiceConfig' => [
-                        'voiceName' => match ($voice) {
-                            'default-female' => 'Kore',
-                            'default-male' => 'Puck',
-                            default => $voice,
-                        },
-                    ],
-                ],
-            ],
-        ]);
-
-        $generationConfig['responseModalities'] = ['AUDIO'];
-
-        $body = array_merge($providerOptions, [
-            'contents' => [[
-                'role' => 'user',
-                'parts' => [[
-                    'text' => $instructions !== null && trim($instructions) !== ''
-                        ? trim($instructions)."\n\n".$text
-                        : $text,
+        $body = array_merge(['store' => false], $providerOptions, [
+            'model' => $model,
+            'input' => $instructions !== null && trim($instructions) !== ''
+                ? trim($instructions)."\n\n".$text
+                : $text,
+            'response_format' => ['type' => 'audio'],
+            'generation_config' => array_replace_recursive($providerOptions['generation_config'] ?? [], [
+                'speech_config' => [[
+                    'voice' => match ($voice) {
+                        'default-female' => 'Kore',
+                        'default-male' => 'Puck',
+                        default => $voice,
+                    },
                 ]],
-            ]],
-            'generationConfig' => $generationConfig,
+            ]),
         ]);
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", $body),
+            fn () => $this->client($provider, $timeout)->post('interactions', $body),
         );
 
         $data = $response->json();
 
-        $encodedAudio = $data['candidates'][0]['content']['parts'][0]['inlineData']['data'] ?? null;
+        $audio = $this->outputBlocks($data, 'audio')[0] ?? [];
+
+        $encodedAudio = $audio['data'] ?? null;
 
         if (! is_string($encodedAudio) || $encodedAudio === '') {
             throw new RuntimeException('No audio data received from Gemini API.');
@@ -264,7 +264,7 @@ class GeminiGateway implements Gateway, StepTextGateway
         }
 
         return new AudioResponse(
-            base64_encode($this->pcmToWav($pcm)),
+            base64_encode($this->pcmToWav($pcm, $audio['sample_rate'] ?? 24000, $audio['channels'] ?? 1)),
             $this->extractUsage($data),
             new Meta($provider->name(), $model),
             'audio/wav',
@@ -285,11 +285,135 @@ class GeminiGateway implements Gateway, StepTextGateway
         int $timeout = 30,
         array $providerOptions = [],
     ): TranscriptionResponse {
-        $inlineData = ['inlineData' => [
-            'mimeType' => $audio->mimeType() ?? 'audio/mp3',
+        $audioBlock = [
+            'type' => 'audio',
+            'mime_type' => $audio->mimeType() ?? 'audio/mp3',
             'data' => base64_encode($audio->content()),
-        ]];
+        ];
 
+        // Only the transcribe models accept a transcription config; the rest are asked in prose...
+        return str_contains($model, 'transcribe')
+            ? $this->transcribeWithConfig($provider, $model, $audioBlock, $language, $diarize, $timeout, $providerOptions)
+            : $this->transcribeWithPrompt($provider, $model, $audioBlock, $language, $diarize, $timeout, $providerOptions);
+    }
+
+    /**
+     * Transcribe the given audio using the Gemini transcription config.
+     *
+     * @param  array<string, mixed>  $providerOptions
+     */
+    protected function transcribeWithConfig(
+        TranscriptionProvider $provider,
+        string $model,
+        array $audioBlock,
+        ?string $language,
+        bool $diarize,
+        int $timeout,
+        array $providerOptions,
+    ): TranscriptionResponse {
+        $transcriptionConfig = Arr::whereNotNull([
+            'language_codes' => $language !== null ? [$language] : null,
+            'mode' => $diarize ? [
+                'type' => 'verbatim',
+                'diarization_mode' => 'speaker',
+                'timestamp_granularities' => ['word'],
+            ] : null,
+        ]);
+
+        $generationConfig = array_replace_recursive(
+            $providerOptions['generation_config'] ?? [],
+            filled($transcriptionConfig) ? ['transcription_config' => $transcriptionConfig] : [],
+        );
+
+        $body = array_merge(['store' => false], $providerOptions, array_filter([
+            'model' => $model,
+            'input' => [$audioBlock],
+            'generation_config' => $generationConfig ?: null,
+        ]));
+
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)->post('interactions', $body),
+        );
+
+        $data = $response->json();
+
+        $steps = $data['steps'] ?? [];
+
+        return new TranscriptionResponse(
+            trim($this->extractText($steps)),
+            $this->speakerSegments($steps),
+            TranscriptionUsage::from($this->extractUsage($data)),
+            new Meta($provider->name(), $model),
+        );
+    }
+
+    /**
+     * Group the word annotations Gemini returns into one segment per speaker turn.
+     *
+     * @return Collection<int, TranscriptionSegment>
+     */
+    protected function speakerSegments(array $steps): Collection
+    {
+        $segments = new Collection;
+
+        foreach ($this->wordAnnotations($steps) as $word) {
+            $text = (string) ($word['text'] ?? '');
+            $speaker = (string) ($word['speaker'] ?? '');
+            $last = $segments->last();
+
+            if ($last instanceof TranscriptionSegment && $last->speaker === $speaker) {
+                $last->text = trim($last->text.' '.$text);
+                $last->endSeconds = $this->offsetToSeconds($word['end_offset'] ?? '');
+
+                continue;
+            }
+
+            $segments->push(new TranscriptionSegment(
+                $text,
+                $speaker,
+                $this->offsetToSeconds($word['start_offset'] ?? ''),
+                $this->offsetToSeconds($word['end_offset'] ?? ''),
+            ));
+        }
+
+        return $segments;
+    }
+
+    /**
+     * Get the word annotations Gemini attached to the transcribed text.
+     */
+    protected function wordAnnotations(array $steps): array
+    {
+        return (new Collection($steps))
+            ->flatMap(fn (array $step): array => $step['content'] ?? [])
+            ->flatMap(fn ($block): array => is_array($block) ? ($block['annotations'] ?? []) : [])
+            ->filter(fn ($annotation): bool => is_array($annotation) && ($annotation['type'] ?? '') === 'word_info')
+            ->all();
+    }
+
+    /**
+     * Convert a Gemini duration offset, such as "1.500s", to seconds.
+     */
+    protected function offsetToSeconds(string $offset): float
+    {
+        return $this->timestampToSeconds(rtrim($offset, 's'));
+    }
+
+    /**
+     * Transcribe the given audio by asking a general purpose model for the text.
+     *
+     * @param  array<string, mixed>  $providerOptions
+     */
+    protected function transcribeWithPrompt(
+        TranscriptionProvider $provider,
+        string $model,
+        array $audioBlock,
+        ?string $language,
+        bool $diarize,
+        int $timeout,
+        array $providerOptions,
+    ): TranscriptionResponse {
         if ($diarize) {
             $prompt = $language !== null
                 ? "Transcribe this audio with timestamps in {$language}. Return the full transcript and a list of segments. Use MM:SS or HH:MM:SS timestamps, with optional fractional seconds, for start_time and end_time."
@@ -297,24 +421,24 @@ class GeminiGateway implements Gateway, StepTextGateway
 
             $response = $this->withErrorHandling(
                 $provider->name(),
-                fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", array_merge($providerOptions, [
-                    'contents' => [[
-                        'parts' => [['text' => $prompt], $inlineData],
-                    ]],
-                    'generationConfig' => [
-                        'responseMimeType' => 'application/json',
-                        'responseSchema' => [
-                            'type' => 'OBJECT',
+                fn () => $this->client($provider, $timeout)->post('interactions', array_merge(['store' => false], $providerOptions, [
+                    'model' => $model,
+                    'input' => [['type' => 'text', 'text' => $prompt], $audioBlock],
+                    'response_format' => [
+                        'type' => 'text',
+                        'mime_type' => 'application/json',
+                        'schema' => [
+                            'type' => 'object',
                             'properties' => [
-                                'transcript' => ['type' => 'STRING'],
+                                'transcript' => ['type' => 'string'],
                                 'segments' => [
-                                    'type' => 'ARRAY',
+                                    'type' => 'array',
                                     'items' => [
-                                        'type' => 'OBJECT',
+                                        'type' => 'object',
                                         'properties' => [
-                                            'text' => ['type' => 'STRING'],
-                                            'start_time' => ['type' => 'STRING'],
-                                            'end_time' => ['type' => 'STRING'],
+                                            'text' => ['type' => 'string'],
+                                            'start_time' => ['type' => 'string'],
+                                            'end_time' => ['type' => 'string'],
                                         ],
                                         'required' => ['text', 'start_time', 'end_time'],
                                     ],
@@ -326,7 +450,9 @@ class GeminiGateway implements Gateway, StepTextGateway
                 ])),
             );
 
-            $data = json_decode($response->json('candidates.0.content.parts.0.text') ?? '{}', true);
+            $payload = $response->json();
+
+            $data = json_decode($this->extractText($payload['steps'] ?? []) ?: '{}', true);
 
             $text = $data['transcript'] ?? '';
 
@@ -343,14 +469,15 @@ class GeminiGateway implements Gateway, StepTextGateway
 
             $response = $this->withErrorHandling(
                 $provider->name(),
-                fn () => $this->client($provider, $timeout)->post("models/{$model}:generateContent", array_merge($providerOptions, [
-                    'contents' => [[
-                        'parts' => [['text' => $prompt], $inlineData],
-                    ]],
+                fn () => $this->client($provider, $timeout)->post('interactions', array_merge(['store' => false], $providerOptions, [
+                    'model' => $model,
+                    'input' => [['type' => 'text', 'text' => $prompt], $audioBlock],
                 ])),
             );
 
-            $text = $response->json('candidates.0.content.parts.0.text') ?? '';
+            $payload = $response->json();
+
+            $text = $this->extractText($payload['steps'] ?? []);
 
             $segments = new Collection;
         }
@@ -358,9 +485,7 @@ class GeminiGateway implements Gateway, StepTextGateway
         return new TranscriptionResponse(
             trim((string) $text),
             $segments,
-            TranscriptionUsage::from(
-                $this->extractUsage(['usageMetadata' => $response->json('usageMetadata') ?? []]),
-            ),
+            TranscriptionUsage::from($this->extractUsage($payload)),
             new Meta($provider->name(), $model),
         );
     }

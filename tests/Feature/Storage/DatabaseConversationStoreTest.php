@@ -280,37 +280,30 @@ test('it reports nothing when the newest turn is not paused', function (): void 
         ->and($store->pendingApprovalsFor('missing-conversation'))->toBe([]);
 });
 
+function storeTestGeminiInteraction(array $steps): array
+{
+    return [
+        'id' => 'int_store',
+        'model' => 'gemini-3.5-flash',
+        'status' => 'completed',
+        'steps' => $steps,
+        'usage' => ['total_input_tokens' => 10, 'total_output_tokens' => 5, 'total_tokens' => 15],
+    ];
+}
+
 test('it stores one step per model round-trip from a remembered agent prompt', function (): void {
     Http::fake([
         '*' => Http::sequence([
-            Http::response([
-                'candidates' => [[
-                    'content' => [
-                        'parts' => [[
-                            'functionCall' => [
-                                'id' => 'call_123',
-                                'name' => 'FixedNumberGenerator',
-                                'args' => (object) [],
-                            ],
-                        ]],
-                        'role' => 'model',
-                    ],
-                    'finishReason' => 'STOP',
-                ]],
-                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
-                'modelVersion' => 'gemini-3.5-flash',
-            ]),
-            Http::response([
-                'candidates' => [[
-                    'content' => [
-                        'parts' => [['text' => 'The number is 72019']],
-                        'role' => 'model',
-                    ],
-                    'finishReason' => 'STOP',
-                ]],
-                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
-                'modelVersion' => 'gemini-3.5-flash',
-            ]),
+            Http::response(storeTestGeminiInteraction([[
+                'type' => 'function_call',
+                'id' => 'call_123',
+                'name' => 'FixedNumberGenerator',
+                'arguments' => (object) [],
+            ]])),
+            Http::response(storeTestGeminiInteraction([[
+                'type' => 'model_output',
+                'content' => [['type' => 'text', 'text' => 'The number is 72019']],
+            ]])),
         ]),
     ]);
 
@@ -334,36 +327,18 @@ test('it stores one step per model round-trip from a remembered agent prompt', f
 test('it preserves the gemini thought signature across a persisted tool conversation', function (): void {
     Http::fake([
         '*' => Http::sequence([
-            Http::response([
-                'candidates' => [[
-                    'content' => [
-                        'parts' => [[
-                            'functionCall' => ['id' => 'call_123', 'name' => 'FixedNumberGenerator', 'args' => (object) []],
-                            'thoughtSignature' => 'sig_persist_777',
-                        ]],
-                        'role' => 'model',
-                    ],
-                    'finishReason' => 'STOP',
-                ]],
-                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
-                'modelVersion' => 'gemini-3.6-flash',
-            ]),
-            Http::response([
-                'candidates' => [[
-                    'content' => ['parts' => [['text' => 'The number is 72019']], 'role' => 'model'],
-                    'finishReason' => 'STOP',
-                ]],
-                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
-                'modelVersion' => 'gemini-3.6-flash',
-            ]),
-            Http::response([
-                'candidates' => [[
-                    'content' => ['parts' => [['text' => 'The second number is 99']], 'role' => 'model'],
-                    'finishReason' => 'STOP',
-                ]],
-                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
-                'modelVersion' => 'gemini-3.6-flash',
-            ]),
+            Http::response(storeTestGeminiInteraction([
+                ['type' => 'thought', 'summary' => [['type' => 'text', 'text' => 'Thinking.']], 'signature' => 'sig_persist_777'],
+                ['type' => 'function_call', 'id' => 'call_123', 'name' => 'FixedNumberGenerator', 'arguments' => (object) []],
+            ])),
+            Http::response(storeTestGeminiInteraction([[
+                'type' => 'model_output',
+                'content' => [['type' => 'text', 'text' => 'The number is 72019']],
+            ]])),
+            Http::response(storeTestGeminiInteraction([[
+                'type' => 'model_output',
+                'content' => [['type' => 'text', 'text' => 'The second number is 99']],
+            ]])),
         ]),
     ]);
 
@@ -373,29 +348,17 @@ test('it preserves the gemini thought signature across a persisted tool conversa
     (new RememberingToolUsingAgent)->continue($conversationId, $user)->prompt('Generate a random number', provider: 'gemini');
 
     $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
-    $storedCall = json_decode((string) $record->steps, true)[0]['tool_calls'][0];
 
-    expect($storedCall['thought_signature'])->toBe('sig_persist_777')
-        ->and(json_decode((string) $record->steps, true)[0]['replay_blocks'])->toBe([]);
+    expect(json_decode((string) $record->steps, true)[0]['tool_calls'][0]['thought_signature'])->toBe('sig_persist_777');
 
     (new RememberingToolUsingAgent)->continue($conversationId, $user)->prompt('Generate another', provider: 'gemini');
 
     $recorded = Http::recorded();
-    $followUpContents = $recorded[count($recorded) - 1][0]->data()['contents'];
+    $signatures = array_column(array_filter(
+        $recorded[count($recorded) - 1][0]->data()['input'],
+        fn (array $step): bool => $step['type'] === 'thought',
+    ), 'signature');
 
-    $signatures = [];
-
-    foreach ($followUpContents as $content) {
-        if (($content['role'] ?? null) === 'model') {
-            foreach ($content['parts'] as $part) {
-                if (isset($part['functionCall'])) {
-                    $signatures[] = $part['thoughtSignature'] ?? null;
-                }
-            }
-        }
-    }
-
-    // Replayed to Gemini on the second turn, without which the request 400s...
     expect($signatures)->toBe(['sig_persist_777']);
 });
 

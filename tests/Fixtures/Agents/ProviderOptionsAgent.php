@@ -59,9 +59,7 @@ class ProviderOptionsAgent implements Agent, HasProviderOptions
                 'presence_penalty' => 0.3,
             ],
             Lab::Gemini => [
-                'thinkingConfig' => [
-                    'thinkingBudget' => 10000,
-                ],
+                'thinking_level' => 'high',
             ],
             Lab::DeepSeek => [
                 'frequency_penalty' => 0.5,

@@ -3,11 +3,10 @@
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
 
-test('prompt reads thought parts off the response', function (): void {
+test('prompt reads thought steps off the response', function (): void {
     Http::fake(['*' => $this->fakeThinkingResponse([
-        ['text' => 'Let me ', 'thought' => true],
-        ['text' => 'think...', 'thought' => true],
-        ['text' => 'Hello'],
+        $this->thoughtStep('Let me think...'),
+        $this->modelOutput('Hello'),
     ])]);
 
     expect((new AssistantAgent)->prompt('Hi', provider: 'gemini')->reasoning)->toBe('Let me think...');
@@ -15,11 +14,14 @@ test('prompt reads thought parts off the response', function (): void {
 
 test('prompt separates thought runs interrupted by an answer with a blank line', function (): void {
     Http::fake(['*' => $this->fakeThinkingResponse([
-        ['text' => 'First.', 'thought' => true],
-        ['text' => 'Partial answer. '],
-        ['text' => 'Second.', 'thought' => true],
-        ['text' => 'Rest of the answer.'],
+        $this->thoughtStep('First.'),
+        $this->modelOutput('Partial answer. '),
+        $this->thoughtStep('Second.'),
+        $this->modelOutput('Rest of the answer.'),
     ])]);
 
-    expect((new AssistantAgent)->prompt('Hi', provider: 'gemini')->reasoning)->toBe("First.\n\nSecond.");
+    $response = (new AssistantAgent)->prompt('Hi', provider: 'gemini');
+
+    expect($response->reasoning)->toBe("First.\n\nSecond.")
+        ->and($response->text)->toBe('Partial answer. Rest of the answer.');
 });

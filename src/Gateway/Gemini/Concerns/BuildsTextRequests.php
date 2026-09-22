@@ -14,6 +14,17 @@ use Laravel\Ai\ToolChoice;
 trait BuildsTextRequests
 {
     /**
+     * The request keys Gemini expects beside the generation config rather than within it.
+     *
+     * @var array<int, string>
+     */
+    private const TOP_LEVEL_INTERACTION_KEYS = [
+        'agent', 'agent_config', 'background', 'environment', 'labels',
+        'previous_interaction_id', 'response_format', 'safety_settings',
+        'service_tier', 'store', 'user_metadata', 'webhook_config',
+    ];
+
+    /**
      * Build the request body for the current text generation step.
      */
     protected function buildStepBody(
@@ -26,85 +37,85 @@ trait BuildsTextRequests
         ?TextGenerationOptions $options,
         StepContext $stepContext,
     ): array {
-        return $this->buildTextRequestBody($provider, $instructions, $messages, $tools, $schema, $options);
+        return $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
     }
 
     /**
-     * Build the request body for the Gemini generateContent API.
+     * Build the request body for the Gemini Interactions API.
      */
     protected function buildTextRequestBody(
         Provider $provider,
+        string $model,
         ?string $instructions,
         array $messages,
         array $tools,
         ?array $schema,
         ?TextGenerationOptions $options,
     ): array {
-        $contents = $this->mapMessagesToContents($messages);
+        $input = $this->mapMessagesToInput($messages);
 
-        return $this->assembleRequestBody($contents, $instructions, $tools, $schema, $options, $provider);
+        return $this->assembleRequestBody($model, $input, $instructions, $tools, $schema, $options, $provider);
     }
 
     /**
      * Assemble the Gemini request body from the given components.
      */
     private function assembleRequestBody(
-        array $contents,
+        string $model,
+        array $input,
         ?string $instructions,
         array $tools,
         ?array $schema,
         ?TextGenerationOptions $options,
         Provider $provider,
     ): array {
-        $body = ['contents' => $contents];
+        $body = [
+            'model' => $model,
+            'input' => $input,
+            // Conversation history is replayed from our own store, so Gemini need not retain it...
+            'store' => false,
+        ];
 
         if (filled($instructions)) {
-            $body['system_instruction'] = [
-                'parts' => [['text' => $instructions]],
-            ];
+            $body['system_instruction'] = $instructions;
         }
 
         if (filled($tools)) {
             $body['tools'] = $this->mapTools($tools, $provider);
-
-            if ($options?->toolChoice instanceof ToolChoice) {
-                $body['toolConfig'] = [
-                    'functionCallingConfig' => $this->functionCallingConfig($options->toolChoice),
-                ];
-            }
         }
-
-        $generationConfig = [];
 
         if (filled($schema)) {
-            $generationConfig['response_mime_type'] = 'application/json';
-            $generationConfig['response_json_schema'] = $this->buildResponseSchema($schema);
+            $body['response_format'] = [
+                'type' => 'text',
+                'mime_type' => 'application/json',
+                'schema' => $this->buildResponseSchema($schema),
+            ];
         }
 
-        if (! is_null($options?->maxTokens)) {
-            $generationConfig['maxOutputTokens'] = $options->maxTokens;
-        }
-
-        $generationConfig = array_merge($generationConfig, Arr::whereNotNull([
+        $generationConfig = Arr::whereNotNull([
+            'max_output_tokens' => $options?->maxTokens,
             'temperature' => $options?->temperature,
-            'topP' => $options?->topP,
-        ]));
+            'top_p' => $options?->topP,
+        ]);
+
+        if ($options?->toolChoice instanceof ToolChoice) {
+            $generationConfig['tool_choice'] = $this->toolChoiceConfig($options->toolChoice);
+        }
 
         $providerOptions = $options?->providerOptions($provider->driver()) ?? [];
 
-        if (is_array($providerOptions['generationConfig'] ?? null)) {
-            $providerOptions = array_merge(
-                Arr::except($providerOptions, 'generationConfig'),
-                $providerOptions['generationConfig'],
-            );
+        foreach (['generation_config', 'generationConfig'] as $key) {
+            if (is_array($providerOptions[$key] ?? null)) {
+                $providerOptions = array_merge(
+                    Arr::except($providerOptions, $key),
+                    $providerOptions[$key],
+                );
+            }
         }
 
-        // Hoist keys that need to be passed at top level, as everything else is passed in generationConfig
-        $topLevelKeys = ['cachedContent', 'safetySettings', 'toolConfig', 'serviceTier', 'store'];
-
         foreach ($providerOptions as $key => $value) {
-            if (in_array($camelKey = Str::camel($key), $topLevelKeys, true)) {
-                $body[$camelKey] = $value;
+            if (in_array($snakeKey = Str::snake($key), self::TOP_LEVEL_INTERACTION_KEYS, true)) {
+                $body[$snakeKey] = $value;
                 unset($providerOptions[$key]);
             }
         }
@@ -114,34 +125,25 @@ trait BuildsTextRequests
         }
 
         if (filled($generationConfig)) {
-            $body['generationConfig'] = $generationConfig;
+            $body['generation_config'] = $generationConfig;
         }
 
         return $body;
     }
 
     /**
-     * Build function response parts from tool results for the Gemini API.
+     * Build function result steps from tool results for the Gemini API.
      *
      * @param  array<ToolResult>  $toolResults
      */
-    protected function buildFunctionResponseParts(array $toolResults): array
+    protected function buildFunctionResultSteps(array $toolResults): array
     {
-        return array_values(array_map(function ($result): array {
-            $functionResponse = [
-                'name' => $result->name,
-                'response' => [
-                    'name' => $result->name,
-                    'content' => $result->text(),
-                ],
-            ];
-
-            if ($result->id !== null) {
-                $functionResponse['id'] = $result->id;
-            }
-
-            return ['functionResponse' => $functionResponse];
-        }, $toolResults));
+        return array_values(array_map(fn ($result): array => array_filter([
+            'type' => 'function_result',
+            'name' => $result->name,
+            'call_id' => $result->id,
+            'result' => [['type' => 'text', 'text' => $result->text()]],
+        ], fn ($value): bool => $value !== null), $toolResults));
     }
 
     /**
@@ -153,19 +155,19 @@ trait BuildsTextRequests
     }
 
     /**
-     * Map a tool choice to the Gemini functionCallingConfig block.
-     *
-     * @return array<string, mixed>
+     * Map a tool choice to the Gemini tool choice configuration.
      */
-    protected function functionCallingConfig(ToolChoice $choice): array
+    protected function toolChoiceConfig(ToolChoice $choice): string|array
     {
         return match ($choice->mode) {
-            ToolChoice::auto => ['mode' => 'AUTO'],
-            ToolChoice::none => ['mode' => 'NONE'],
-            ToolChoice::required => ['mode' => 'ANY'],
+            ToolChoice::auto => 'auto',
+            ToolChoice::none => 'none',
+            ToolChoice::required => 'any',
             ToolChoice::tool => [
-                'mode' => 'ANY',
-                'allowedFunctionNames' => [$choice->toolName],
+                'allowed_tools' => [
+                    'mode' => 'any',
+                    'tools' => [$choice->toolName],
+                ],
             ],
         };
     }
