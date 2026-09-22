@@ -386,6 +386,43 @@ $conversation->messages()->where('status', MessageStatus::Completed);
 
 Streamed runs report their failure through a new `catch()` callback on `StreamableAgentResponse`, which receives the exception before it is rethrown.
 
+### Gemini Uses The Interactions API
+
+**Likelihood Of Impact: Medium**
+
+Gemini text generation, streaming, tools, structured output, image generation, speech, and transcription now post to `v1beta/interactions` rather than `models/{model}:generateContent`. Embeddings, files, and vector stores keep their own endpoints. No configuration change is needed, as the base URL is unchanged.
+
+Raw provider options are passed to Gemini as given, so any you send must use the Interactions names:
+
+```php
+// Before...
+$agent->withProviderOptions(['thinkingConfig' => ['thinkingBudget' => 1024]]);
+
+// After...
+$agent->withProviderOptions(['thinking_level' => 'high']);
+```
+
+- `thinkingConfig` is now `thinking_level` and `thinking_summaries`.
+- `toolConfig` is now `tool_choice`, inside the generation config.
+- `cachedContent` no longer exists.
+- `safetySettings`, `serviceTier`, and `store` are still sent beside the generation config, under their snake case names.
+
+A `generationConfig` or `generation_config` key is still unwrapped into the generation config, so only the names inside it need to change. The [migration guide](https://ai.google.dev/gemini-api/docs/migrate-to-interactions) lists the new name for every other field.
+
+The default Gemini transcription model is now `gemini-3.5-transcribe` instead of `gemini-3.5-flash`. To stay on the previous model, pin it in your provider configuration:
+
+```php
+'gemini' => [
+    'driver' => 'gemini',
+    'key' => env('GEMINI_API_KEY'),
+    'models' => [
+        'transcription' => [
+            'default' => 'gemini-3.5-flash',
+        ],
+    ],
+],
+```
+
 ### Text Responses Report A `TextUsage` Object
 
 **Likelihood Of Impact: Medium**
