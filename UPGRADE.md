@@ -17,7 +17,7 @@ The `tool_calls` and `tool_results` columns on the `agent_conversation_messages`
 
 The `participant_index` on the same table now also includes the `agent` column.
 
-The `approval_state` column has been replaced by a `status` column holding a `Laravel\Ai\Enums\MessageStatus` value, either `completed` or `paused`. The reason a call is waiting on a decision is now stored on the call itself as `approval_reason`, so a stored call carrying that key without a `result` is one still pending:
+The `approval_state` column has been replaced by a `status` column holding a `Laravel\Ai\Enums\MessageStatus` value: `completed`, `paused`, or `failed`. The reason a call is waiting on a decision is now stored on the call itself as `approval_reason`, so a stored call carrying that key without a `result` is one still pending:
 
 ```json
 {"id": "call_1", "name": "delete_file", "arguments": {"path": "a"}, "approval_reason": "Destructive."}
@@ -370,6 +370,22 @@ Resuming a paused turn now appends the steps the resumed run made to the assista
 
 A conversation that paused for an approval therefore holds one assistant message per turn instead of one per request. If you render a transcript or count messages, expect the resumed half of a turn to appear on the message that requested the approval.
 
+### Failed Turns Are Recorded
+
+**Likelihood Of Impact: Medium**
+
+A remembered run that throws now stores the steps it completed before it died, as an assistant message with a `failed` status carrying the error message in `meta.error`. Previously the turn was lost and the conversation kept only the user message.
+
+The turn is recorded once the run is out of providers to fail over to, so a run that fails over and then succeeds stores only the successful turn. A run that died before its first step stores nothing, unless it was resuming a paused turn, which is failed in place.
+
+If you render a transcript or count messages, expect an assistant message where a failed run previously left none. Filter them out by status:
+
+```php
+$conversation->messages()->where('status', MessageStatus::Completed);
+```
+
+Streamed runs report their failure through a new `catch()` callback on `StreamableAgentResponse`, which receives the exception before it is rethrown.
+
 ### Text Responses Report A `TextUsage` Object
 
 **Likelihood Of Impact: Medium**
@@ -581,7 +597,18 @@ public function storeApprovalResults(
 ): void;
 ```
 
-`storeAssistantMessage()` is unchanged.
+`storeAssistantMessage()` accepts the error a run died with as a trailing argument, so a turn that failed can be stored alongside the steps it completed. Store the turn with a `failed` status and record the message when one is passed:
+
+```php
+public function storeAssistantMessage(
+    string $conversationId,
+    ?string $participantType,
+    string|int|null $participantId,
+    AgentPrompt $prompt,
+    AgentResponse $response,
+    ?Throwable $exception = null,
+): ?string;
+```
 
 ### The `RemembersConversations` Contract Adds `continueOrStart()`
 
