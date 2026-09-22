@@ -161,6 +161,7 @@ trait BuildsTextRequests
     protected function isReasoningModel(string $model): bool
     {
         return (str_starts_with($model, 'gpt-5') && ! str_starts_with($model, 'gpt-5-chat'))
+            || str_starts_with($model, 'gpt-6')
             || str_starts_with($model, 'o4-mini')
             || str_starts_with($model, 'o3')
             || str_starts_with($model, 'o1');
