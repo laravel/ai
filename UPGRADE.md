@@ -10,7 +10,7 @@ You can automate your upgrade using [Laravel Boost](https://github.com/laravel/b
 
 **Likelihood Of Impact: High**
 
-This change affects applications that use remembered conversations. The `tool_calls` and `tool_results` columns on the `agent_conversation_messages` table have been replaced by a single `steps` column. Each assistant message now stores one entry per model round-trip, and each tool result is stored on the tool call that produced it:
+This change affects applications that use remembered conversations. The `tool_calls` and `tool_results` columns on the `agent_conversation_messages` table have been replaced by a single `steps` column. Each assistant message now stores one entry for each model round trip, and each tool result is stored on the tool call that produced it:
 
 ```json
 [
@@ -19,15 +19,15 @@ This change affects applications that use remembered conversations. The `tool_ca
 ]
 ```
 
-The `approval_state` column has been replaced by a `status` column holding a `Laravel\Ai\Enums\MessageStatus` value: `completed`, `paused`, or `failed`. The reason a call is waiting on a decision is now stored on the call itself as `approval_reason`, so a stored call carrying that key without a `result` is one still pending:
+The `approval_state` column has been replaced by a `status` column containing a `Laravel\Ai\Enums\MessageStatus` value: `completed`, `paused`, or `failed`. The reason a call is waiting for a decision is now stored on the call itself as `approval_reason`. A stored call with that key and no `result` is still pending:
 
 ```json
 {"id": "call_1", "name": "delete_file", "arguments": {"path": "a"}, "approval_reason": "Destructive."}
 ```
 
-The package's existing migration will not run again during an upgrade. If you have already migrated the conversation tables, create a new migration containing the code below. The migration adds the `steps` and `status` columns, migrates existing messages, drops the old columns, and adds the `agent` column to the `participant_index`.
+The package's existing migration will not run again during an upgrade. If you have already migrated the conversation tables, create a new migration containing the code below. This migration adds the `steps` and `status` columns, migrates existing messages, drops the old columns, and adds the `agent` column to the `participant_index`.
 
-Before running the migration, resolve or abandon any turns that are waiting for tool approval. Pending turns cannot be resumed after their `approval_state` data has been removed.
+Before running the migration, resolve or abandon any turns that are waiting for tool approval. Pending turns cannot be resumed after their `approval_state` data is removed.
 
 <details>
 <summary>Backfill migration</summary>
@@ -123,6 +123,8 @@ return new class extends AiMigration
     }
 
     /**
+     * Build a conversation step from its content, tool calls, and reasoning.
+     *
      * @param  list<array<string, mixed>>  $calls
      * @return array<string, mixed>
      */
@@ -138,6 +140,8 @@ return new class extends AiMigration
     }
 
     /**
+     * Decode a JSON value into an array, returning an empty array for invalid or empty input.
+     *
      * @return array<string, mixed>
      */
     protected function decoded(?string $json): array
@@ -145,6 +149,9 @@ return new class extends AiMigration
         return is_array($decoded = json_decode($json ?? '', true)) ? $decoded : [];
     }
 
+    /**
+     * Create a query builder for the conversation messages table.
+     */
     protected function query(string $table): Builder
     {
         return DB::connection($this->getConnection())->table($table);
@@ -160,7 +167,7 @@ Run the migration before deploying Laravel AI 1.0:
 php artisan migrate
 ```
 
-If your application reads the conversation tables directly, use `steps` instead of `tool_calls` and `tool_results`.
+If your application reads the conversation tables directly, use `steps` instead of `tool_calls` or `tool_results`.
 
 On `Laravel\Ai\Models\ConversationMessage`, `tool_calls`, `tool_results`, and `provider_tool_calls` are read-only. To update a message, write to `steps`. The `approval_state` attribute has been replaced by `status`, which is a `MessageStatus` value.
 
@@ -173,7 +180,7 @@ Replay blocks are only stored while a turn is waiting for tool approval. They ar
 
 If your application reads stored tool calls directly, each call now contains its own result. A pending approval has an `approval_reason` but no `result`. The provider-specific `reasoning_id` and `reasoning_encrypted_content` values are no longer stored.
 
-If your application uses `Laravel\Ai\Storage\StoredMessage` directly, replace the `$toolCalls`, `$toolResults`, and `$approvalState` properties:
+If your application uses `Laravel\Ai\Storage\StoredMessage` directly, replace accesses to the `$toolCalls`, `$toolResults`, and `$approvalState` properties:
 
 ```php
 // Before...
@@ -194,7 +201,7 @@ When creating a `StoredMessage`, pass `steps` instead of `toolCalls` and `toolRe
 
 **Likelihood Of Impact: High**
 
-This change affects applications with custom agent middleware. Middleware now wraps each generation step instead of the entire agent run. Therefore, a run with three generation steps invokes each middleware three times.
+This change affects applications with custom agent middleware. Middleware now wraps each generation step instead of the entire agent run. A run with three generation steps therefore invokes each middleware three times.
 
 Update each middleware `handle()` method to accept a `Laravel\Ai\PendingStep` and return the `Laravel\Ai\Gateway\StepResult` produced by `$next($step)`:
 
@@ -230,7 +237,7 @@ class LogTheRun
 }
 ```
 
-You may modify a step by creating a copy before passing it to the next middleware:
+You can modify a step by creating a copy before passing it to the next middleware:
 
 ```php
 public function handle(PendingStep $step, Closure $next)
@@ -245,7 +252,7 @@ public function handle(PendingStep $step, Closure $next)
 
 `PendingStep` provides the `withModel()`, `withInstructions()`, `withMessages()`, `withTools()`, `onlyTools()`, `withoutTools()`, `withToolChoice()`, `withMaxTokens()`, and `withProviderOptions()` methods, along with `isFirstStep()` and the `$isFinalStep` property.
 
-Middleware may return a `StepResponse` to answer the step without calling the model. Returning any other value throws a `LogicException`.
+Middleware may return a `StepResponse` to answer a step without calling the model. Returning any other value throws a `LogicException`.
 
 The `AgentPrompted`, `AgentStreamed`, and `AgentFailed` events now carry the original `AgentPrompt` passed to the provider rather than a prompt modified by run middleware. If you relied on a listener receiving the modified prompt, move that logic into the middleware itself.
 
@@ -253,7 +260,7 @@ The `AgentPrompted`, `AgentStreamed`, and `AgentFailed` events now carry the ori
 
 **Likelihood Of Impact: High**
 
-This change affects applications that add files to Gemini vector stores. `addFile()` now waits for the import to finish instead of returning when the import is requested:
+This change affects applications that add files to Gemini vector stores. `addFile()` now waits for the import to finish instead of returning as soon as the import is requested:
 
 ```php
 $store->addFile($fileId);
@@ -275,11 +282,11 @@ composer require aws/aws-sdk-php
 
 Resolving the Bedrock provider without the SDK installed throws a `RuntimeException`.
 
-### Token Usage Is Reported Inclusively
+### Token Usage Includes All Tokens
 
 **Likelihood Of Impact: High**
 
-This change affects applications that read or serialize token usage. `Usage::$promptTokens` and `Usage::$completionTokens` have been renamed to `Usage::$inputTokens` and `Usage::$outputTokens`:
+This change affects applications that read or serialize token usage. `Usage::$promptTokens` and `Usage::$completionTokens` are now named `Usage::$inputTokens` and `Usage::$outputTokens`:
 
 ```php
 // Before...
@@ -291,9 +298,9 @@ $response->usage->inputTokens;
 $response->usage->outputTokens;
 ```
 
-The new properties contain the provider's complete counts. `inputTokens` includes cached and cache-written tokens, while `outputTokens` includes reasoning tokens. These token categories were previously excluded from the totals.
+The new properties contain the provider's complete counts. `inputTokens` includes cached and cache-written tokens, while `outputTokens` includes reasoning tokens. These categories were previously excluded from the totals.
 
-If you previously calculated input token costs by applying a single rate to `promptTokens`, calculate each category separately: apply the base rate to `uncachedInputTokens()`, the cache read rate to `cacheReadInputTokens`, and the cache write rate to `cacheWriteInputTokens`. For example:
+If you previously calculated input token costs by applying a single rate to `promptTokens`, calculate each category separately: apply the base rate to `uncachedInputTokens()`, the cache-read rate to `cacheReadInputTokens`, and the cache-write rate to `cacheWriteInputTokens`. For example:
 
 ```php
 $usage = $response->usage;
@@ -303,7 +310,7 @@ $cost = $usage->uncachedInputTokens() * $baseRate
     + ($usage->cacheWriteInputTokens ?? 0) * $cacheWriteRate;
 ```
 
-The `Usage::toArray()` method and new values stored in the `usage` column now use the `input_tokens` and `output_tokens` keys. Existing database rows retain the old keys, so reporting code that reads historical rows should support both formats.
+The `Usage::toArray()` method and newly stored values in the `usage` column now use the `input_tokens` and `output_tokens` keys. Existing database rows retain the old keys, so reporting code that reads historical rows should support both formats.
 
 Reported values have also changed in three places:
 
@@ -315,7 +322,7 @@ Reported values have also changed in three places:
 
 **Likelihood Of Impact: Medium**
 
-This change affects applications that inspect messages for conversations using tool approval. Resuming a paused turn now appends the resumed steps to the assistant message that originally paused instead of storing a second assistant message. The turn's usage is summed, its citations are merged, and `storeAssistantMessage()` returns the ID of the original message.
+This change affects applications that inspect messages in conversations using tool approval. Resuming a paused turn now appends the resumed steps to the assistant message where the pause occurred instead of storing a second assistant message. The turn's usage is summed, its citations are merged, and `storeAssistantMessage()` returns the ID of the original message.
 
 Update transcript rendering and message-counting logic to expect one assistant message per turn, including turns that paused for approval.
 
@@ -323,7 +330,7 @@ Update transcript rendering and message-counting logic to expect one assistant m
 
 **Likelihood Of Impact: Medium**
 
-This change affects applications that render or count remembered conversation messages. A remembered run that throws now stores its completed steps as an assistant message with a `failed` status. The error message is stored in `meta.error`. Previously, the failed turn was not stored.
+This change affects applications that render or count messages in remembered conversations. A remembered run that throws now stores its completed steps as an assistant message with a `failed` status. The error message is stored in `meta.error`. Previously, the failed turn was not stored.
 
 The turn is recorded once the run is out of providers to fail over to, so a run that fails over and then succeeds stores only the successful turn. A run that died before its first step stores nothing, unless it was resuming a paused turn, which is failed in place.
 
@@ -335,11 +342,11 @@ $conversation->messages()->where('status', MessageStatus::Completed);
 
 Streamed runs report their failure through a new `catch()` callback on `StreamableAgentResponse`, which receives the exception before it is rethrown.
 
-### Last Conversations Are Scoped To The Agent
+### Latest Conversations Are Scoped To The Agent
 
 **Likelihood Of Impact: Medium**
 
-This change affects applications where a participant uses more than one remembering agent. `continueLastConversation()` now resolves the participant's latest conversation with the current agent instead of their latest conversation with any agent:
+This change affects applications where a participant uses more than one agent that remembers conversations. `continueLastConversation()` now resolves the participant's latest conversation with the current agent instead of the latest conversation with any agent:
 
 ```php
 // Before... the user's newest conversation, whichever agent wrote it.
@@ -355,7 +362,7 @@ The conversation migration above updates the required index. If your application
 
 This change affects applications that pass raw provider options to Gemini. Gemini text generation, streaming, tools, structured output, image generation, speech, and transcription now use the Interactions API. The base URL is unchanged, and embeddings, files, and vector stores continue to use their existing endpoints.
 
-Raw provider options are passed to Gemini as given, so any you send must use the Interactions names:
+Raw provider options are passed to Gemini as given, so any options you send must use the names expected by the Interactions API:
 
 ```php
 // Before...
@@ -372,11 +379,11 @@ $agent->withProviderOptions(['thinking_level' => 'high']);
 
 Refer to Gemini's [Interactions API migration guide](https://ai.google.dev/gemini-api/docs/migrate-to-interactions) for other renamed fields.
 
-### Text Responses Report A `TextUsage` Object
+### Text Responses Include A `TextUsage` Object
 
 **Likelihood Of Impact: Medium**
 
-This change affects applications that construct response or stream objects directly. The `Laravel\Ai\Responses\Data\Usage` class now only contains `inputTokens` and `outputTokens`. Text-specific properties and methods have moved to `Laravel\Ai\Responses\Data\TextUsage`:
+This change affects applications that construct response or stream objects directly. The `Laravel\Ai\Responses\Data\Usage` class now contains only `inputTokens` and `outputTokens`. Text-specific properties and methods have moved to `Laravel\Ai\Responses\Data\TextUsage`:
 
 - `cacheReadInputTokens`
 - `cacheWriteInputTokens`
@@ -402,11 +409,11 @@ new TextUsage($inputTokens, $outputTokens, $cacheReadInputTokens, $cacheWriteInp
 
 The cache read and cache write arguments have swapped positions. The three optional counts are now nullable and contain `null` when the provider does not report them. Use the null coalescing operator when treating these values as numbers.
 
-### Usage Is Reported On Every Response
+### Usage Is Reported For Every Response
 
 **Likelihood Of Impact: Medium**
 
-This change affects applications that read `EmbeddingsResponse::$tokens` or construct response objects directly. The `$tokens` property has been replaced by a `$usage` object:
+This change affects applications that read `EmbeddingsResponse::$tokens` or construct response objects directly. The `$tokens` property has been replaced with a `$usage` object:
 
 ```php
 // Before...
@@ -469,7 +476,7 @@ The completed response's `text`, `reasoning`, `citations`, and `usage` now inclu
 
 **Likelihood Of Impact: Medium**
 
-This change affects stream consumers that track `TextStart` and `TextEnd` events or key content by message ID. Each streamed generation step now emits one `TextStart` / `TextEnd` pair. Previously, each content block emitted its own pair with a distinct message ID.
+This change affects stream consumers that track `TextStart` and `TextEnd` events or associate content with a message ID. Each streamed generation step now emits one `TextStart` / `TextEnd` pair. Previously, each content block emitted its own pair with a distinct message ID.
 
 Update stream consumers to expect one pair per generation step. `TextDelta::combine()` now separates text by step instead of message ID.
 
@@ -493,7 +500,7 @@ If your application constructs `Laravel\Ai\Streaming\Events\ToolApprovalRequest`
 
 **Likelihood Of Impact: Low**
 
-This change only affects applications that construct response data objects directly or read raw provider state from a message. The raw provider state carried through a turn has been renamed from "provider content blocks" to "replay blocks".
+This change only affects applications that construct response data objects directly or read raw provider state from a message. The raw provider state carried through a turn is now called "replay blocks" instead of "provider content blocks".
 
 If you read or construct an `AssistantMessage`, rename the properties and constructor arguments:
 
@@ -538,7 +545,7 @@ This change affects stream consumers that render reasoning from OpenAI or xAI. M
 This change only affects custom providers and gateways that override Laravel AI's protected hooks. Update the following method names and signatures:
 
 - `Providers\Concerns\GeneratesText::resolveTools()` and `throwIfNotResumable()` receive an `AgentPrompt` instead of an `Agent`.
-- `Providers\Concerns\GeneratesText::recordAgentFailure()` dropped its `?AgentPrompt $processedPrompt` argument, so `bool $retryable` moved from the fifth position to the fourth.
+- `Providers\Concerns\GeneratesText::recordAgentFailure()` no longer accepts its `?AgentPrompt $processedPrompt` argument, so `bool $retryable` moved from the fifth position to the fourth.
 - `Providers\Concerns\GeneratesText::agentCanResumeApprovals()` was removed.
 - `PendingResponses\Concerns\ResolvesProviderOptions::resolveProviderOptions()` and `Gateway\Concerns\PreparesStorableFiles::resolveProviderOptions()` are now `resolveProviderOptionsAndHeaders()`, returning the options and the headers as a tuple.
 - `Gateway\RunContext::startingStep()`, `stepCompleted()`, and `stepFailed()` accept a trailing `?string $model`, and the latter two accept a nullable `StepContext`.
@@ -570,7 +577,7 @@ public function storeConversation(
 ): string;
 ```
 
-`storeUserMessage()` receives the agent class name and a `UserMessage` in place of an `AgentPrompt`, so a message may be stored before a provider has been resolved. Read `$message->content` and `$message->attachments` in place of `$prompt->prompt` and `$prompt->attachments`:
+`storeUserMessage()` receives the agent class name and a `UserMessage` instead of an `AgentPrompt`, so a message can be stored before a provider has been resolved. Read `$message->content` and `$message->attachments` instead of `$prompt->prompt` and `$prompt->attachments`:
 
 ```php
 public function storeUserMessage(
@@ -582,7 +589,7 @@ public function storeUserMessage(
 ): string;
 ```
 
-`storeApprovalResults()` no longer receives the participant. Look up the paused turn by conversation ID. Since the package no longer scopes this lookup to a participant, authorize the resuming participant in your application before passing decisions to the agent:
+`storeApprovalResults()` no longer receives the participant. Look up the paused turn by conversation ID. Since the package no longer scopes this lookup to a participant, authorize the participant who is resuming the run in your application before passing decisions to the agent:
 
 ```php
 public function storeApprovalResults(
@@ -591,7 +598,7 @@ public function storeApprovalResults(
 ): void;
 ```
 
-`storeAssistantMessage()` accepts the error a run died with as a trailing argument, so a turn that failed can be stored alongside the steps it completed. Store the turn with a `failed` status and record the message when one is passed:
+`storeAssistantMessage()` accepts the exception that caused a run to fail as a trailing argument, so a failed turn can be stored alongside the steps it completed. Store the turn with a `failed` status and record the exception message when one is passed:
 
 ```php
 public function storeAssistantMessage(
@@ -608,7 +615,7 @@ public function storeAssistantMessage(
 
 **Likelihood Of Impact: Low**
 
-This change only affects agents that implement `Laravel\Ai\Contracts\RemembersConversations` directly. The interface now includes a `continueOrStart()` method, which continues the given conversation or starts a new one when the ID is `null`:
+This change only affects agents that implement `Laravel\Ai\Contracts\RemembersConversations` directly. The interface now includes a `continueOrStart()` method, which continues the given conversation or starts a new one when its ID is not `null`, or starts a new conversation when the ID is `null`:
 
 ```php
 public function continueOrStart(?string $conversationId, object $as): static;
@@ -634,7 +641,7 @@ No changes are required for agents that use the `Promptable` trait. Otherwise, w
 
 **Likelihood Of Impact: Low**
 
-This change only affects custom providers and gateways. Image, audio, and reranking methods now accept provider options, while reranking methods also accept a timeout:
+This change only affects custom providers and gateways. Image, audio, and reranking methods now accept provider options, and reranking methods also accept a timeout:
 
 ```php
 public function image(string $prompt, array $attachments = [], ?string $size = null, ?string $quality = null, ?string $model = null, ?int $timeout = null, array $providerOptions = []): ImageResponse;
@@ -644,7 +651,7 @@ public function audio(string $text, string $voice = 'default-female', ?string $i
 public function rerank(array $documents, string $query, ?int $limit = null, ?string $model = null, int $timeout = 30, array $providerOptions = []): RerankingResponse;
 ```
 
-Update the corresponding `ImageGateway`, `AudioGateway`, and `RerankingGateway` method signatures with the applicable `$providerOptions` and `$timeout` arguments. The `Laravel\Ai\Contracts\Providers\Provider` contract also includes a `withHeaders()` method. Providers extending `Laravel\Ai\Providers\Provider` inherit this method and require no additional change.
+Update the corresponding `ImageGateway`, `AudioGateway`, and `RerankingGateway` method signatures with the applicable `$providerOptions` and `$timeout` arguments. The `Laravel\Ai\Contracts\Providers\Provider` contract also includes a `withHeaders()` method. Providers extending `Laravel\Ai\Providers\Provider` inherit this method and require no additional changes.
 
 Reranking requests now use a 30-second timeout by default. Bedrock previously used the AWS SDK default, so a long reranking call may now time out. Raise it with the new `timeout()` method:
 
@@ -656,7 +663,7 @@ Reranking::of($documents)->timeout(60)->rerank('...');
 
 **Likelihood Of Impact: Low**
 
-This change only affects applications that construct `Laravel\Ai\Streaming\Events\ProviderToolEvent` directly. Its `$provider` argument is now a required `string`; pass the provider name when constructing the event.
+This change only affects applications that construct `Laravel\Ai\Streaming\Events\ProviderToolEvent` directly. The event's `$provider` argument is now a required `string`; pass the provider name when constructing the event.
 
 ## Upgrading To 0.11 From 0.10
 
