@@ -409,20 +409,6 @@ $agent->withProviderOptions(['thinking_level' => 'high']);
 
 A `generationConfig` or `generation_config` key is still unwrapped into the generation config, so only the names inside it need to change. The [migration guide](https://ai.google.dev/gemini-api/docs/migrate-to-interactions) lists the new name for every other field.
 
-The default Gemini transcription model is now `gemini-3.5-transcribe` instead of `gemini-3.5-flash`. To stay on the previous model, pin it in your provider configuration:
-
-```php
-'gemini' => [
-    'driver' => 'gemini',
-    'key' => env('GEMINI_API_KEY'),
-    'models' => [
-        'transcription' => [
-            'default' => 'gemini-3.5-flash',
-        ],
-    ],
-],
-```
-
 ### Text Responses Report A `TextUsage` Object
 
 **Likelihood Of Impact: Medium**
