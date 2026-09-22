@@ -54,6 +54,7 @@ dataset('store-providers', [
 dataset('file-search-providers', [
     'openai' => ['openai', 'OPENAI_API_KEY'],
     'azure' => ['azure', 'AZURE_OPENAI_API_KEY'],
+    'gemini' => ['gemini', 'GEMINI_API_KEY'],
 ]);
 
 dataset('reranking-providers', [
@@ -71,7 +72,7 @@ dataset('agent-providers', [
     'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001'],
     'azure' => ['azure', 'AZURE_OPENAI_API_KEY', 'gpt-5.4-mini'],
     'deepseek' => ['deepseek', 'DEEPSEEK_API_KEY', 'deepseek-v4-pro'],
-    'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite'],
+    'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.5-flash-lite'],
     'groq' => ['groq', 'GROQ_API_KEY', 'openai/gpt-oss-20b'],
     'mistral' => ['mistral', 'MISTRAL_API_KEY', 'mistral-small-latest'],
     'ollama' => ['ollama', 'OLLAMA_API_KEY', 'gpt-oss:20b'],
@@ -115,7 +116,7 @@ dataset('code-execution-providers', [
 dataset('reasoning-providers', [
     'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001', ['thinking' => ['type' => 'enabled', 'budget_tokens' => 2000], 'max_tokens' => 4000]],
     'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-5.4-nano', ['reasoning' => ['effort' => 'high', 'summary' => 'auto']]],
-    'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.1-flash-lite', ['thinkingConfig' => ['includeThoughts' => true, 'thinkingBudget' => 2048]]],
+    'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.5-flash-lite', ['thinking_level' => 'high', 'thinking_summaries' => 'auto']],
     'xai' => ['xai', 'XAI_API_KEY', 'grok-4.6', ['reasoning' => ['summary' => 'auto']]],
     'deepseek' => ['deepseek', 'DEEPSEEK_API_KEY', 'deepseek-reasoner', []],
     'groq' => ['groq', 'GROQ_API_KEY', 'openai/gpt-oss-20b', []],

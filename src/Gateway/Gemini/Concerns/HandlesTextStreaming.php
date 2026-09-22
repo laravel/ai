@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Gemini\Concerns;
 
 use Generator;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
@@ -40,14 +41,14 @@ trait HandlesTextStreaming
         $textStartEmitted = false;
         $inReasoning = false;
         $currentText = '';
-        $pendingToolCalls = [];
-        $modelParts = [];
-        $usage = null;
-        $data = [];
-        $citationData = [];
+        $steps = [];
+        $partialArguments = [];
+        $final = [];
 
         foreach ($this->parseServerSentEvents($streamBody) as $data) {
-            if (isset($data['error'])) {
+            $event = $data['event_type'] ?? '';
+
+            if ($event === 'error' || isset($data['error'])) {
                 yield (new Error(
                     $this->generateEventId(),
                     $data['error']['code'] ?? 'unknown_error',
@@ -65,25 +66,41 @@ trait HandlesTextStreaming
                 yield (new StreamStart(
                     $this->generateEventId(),
                     $provider->name(),
-                    $data['modelVersion'] ?? $model,
+                    $data['model'] ?? $model,
                     time(),
                 ))->withInvocationId($invocationId);
             }
 
-            $candidate = $data['candidates'][0] ?? [];
-            $parts = $candidate['content']['parts'] ?? [];
+            if ($event === 'interaction.completed') {
+                $final = $data['interaction'] ?? $data;
 
-            // Citation metadata may arrive on any chunk, not necessarily the last...
-            if (isset($candidate['groundingMetadata']) || isset($candidate['citationMetadata'])) {
-                $citationData = $data;
+                continue;
             }
 
-            foreach ($parts as $part) {
-                if (isset($part['text']) && $this->isThinkingPart($part)) {
-                    $modelParts[] = $part;
-                    $delta = $part['text'];
+            $index = $data['index'] ?? 0;
 
-                    if ($delta !== '') {
+            if (isset($data['step']) && is_array($data['step'])) {
+                $steps[$index] = array_merge($steps[$index] ?? [], $data['step']);
+            }
+
+            $delta = $data['delta'] ?? null;
+
+            if (is_array($delta)) {
+                $deltaType = $delta['type'] ?? '';
+
+                // Gemini streams the rest of a step's payload as delta keys: thought signatures,
+                // provider tool arguments and their results all arrive this way...
+                foreach (Arr::except($delta, ['type', 'text', 'content', 'partial_arguments']) as $key => $value) {
+                    $steps[$index][$key] = $value;
+                }
+
+                if ($deltaType === 'thought' || $deltaType === 'thought_summary') {
+                    // A thought summary nests its text one level deeper than a plain text delta...
+                    $reasoningDelta = (string) ($delta['content']['text'] ?? $delta['text'] ?? '');
+
+                    $this->appendStepText($steps, $index, 'thought', $reasoningDelta, 'summary');
+
+                    if ($reasoningDelta !== '') {
                         if (! $inReasoning) {
                             $inReasoning = true;
                             $reasoningId = $this->generateEventId();
@@ -98,16 +115,14 @@ trait HandlesTextStreaming
                         yield (new ReasoningDelta(
                             $this->generateEventId(),
                             $reasoningId,
-                            $delta,
+                            $reasoningDelta,
                             time(),
                         ))->withInvocationId($invocationId);
                     }
+                } elseif ($deltaType === 'text') {
+                    $textDelta = (string) ($delta['text'] ?? '');
 
-                    continue;
-                }
-
-                if (isset($part['text'])) {
-                    $modelParts[] = $part;
+                    $this->appendStepText($steps, $index, 'model_output', $textDelta);
 
                     if ($inReasoning) {
                         $inReasoning = false;
@@ -120,8 +135,6 @@ trait HandlesTextStreaming
 
                         $reasoningId = '';
                     }
-
-                    $textDelta = $part['text'];
 
                     if ($textDelta !== '') {
                         if (! $textStartEmitted) {
@@ -143,44 +156,27 @@ trait HandlesTextStreaming
                             time(),
                         ))->withInvocationId($invocationId);
                     }
+                } elseif ($deltaType === 'arguments') {
+                    $partialArguments[$index] = ($partialArguments[$index] ?? '').($delta['partial_arguments'] ?? '');
 
-                    continue;
-                }
-
-                if (isset($part['functionCall'])) {
-                    $pendingToolCalls[] = $part;
-                    $modelParts[] = $part;
-
-                    continue;
-                }
-
-                if (isset($part['executableCode']) || isset($part['codeExecutionResult'])) {
-                    $modelParts[] = $part;
-
-                    yield (new ProviderToolEvent(
-                        $this->generateEventId(),
-                        '',
-                        'code_execution',
-                        $part,
-                        isset($part['executableCode']) ? 'completed' : 'result_received',
-                        time(),
-                        provider: $provider->name(),
-                    ))->withInvocationId($invocationId);
-
-                    continue;
-                }
-
-                if (isset($part['thoughtSignature'])) {
-                    $modelParts[] = $part;
+                    $steps[$index]['type'] = 'function_call';
+                    $steps[$index]['arguments'] = $partialArguments[$index];
                 }
             }
 
-            if (isset($data['usageMetadata'])) {
-                $usage = $this->extractUsage($data);
+            if ($event === 'step.stop' && $this->isProviderToolStep($steps[$index] ?? [])) {
+                yield (new ProviderToolEvent(
+                    $this->generateEventId(),
+                    (string) ($steps[$index]['id'] ?? ''),
+                    (string) preg_replace('/_(call|result)$/', '', $steps[$index]['type']),
+                    $steps[$index],
+                    str_ends_with($steps[$index]['type'], '_result') ? 'result_received' : 'completed',
+                    time(),
+                    provider: $provider->name(),
+                ))->withInvocationId($invocationId);
             }
         }
 
-        // End reasoning if still open...
         if ($inReasoning) {
             yield (new ReasoningEnd(
                 $this->generateEventId(),
@@ -189,7 +185,6 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        // End text if it was started...
         if ($textStartEmitted) {
             yield (new TextEnd(
                 $this->generateEventId(),
@@ -198,23 +193,21 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        // Map and emit any pending tool calls...
-        $toolCalls = [];
+        // The completed event carries the authoritative steps when it lists them at all...
+        $steps = filled($final['steps'] ?? null) ? $final['steps'] : array_values($steps);
 
-        if (filled($pendingToolCalls)) {
-            $toolCalls = $this->mapToolCalls($pendingToolCalls);
+        $functionCallSteps = $this->extractFunctionCallSteps($steps);
+        $toolCalls = $this->mapToolCalls($functionCallSteps);
 
-            foreach ($toolCalls as $toolCall) {
-                yield (new ToolCallEvent(
-                    $this->generateEventId(),
-                    $toolCall,
-                    time(),
-                ))->withInvocationId($invocationId);
-            }
+        foreach ($toolCalls as $toolCall) {
+            yield (new ToolCallEvent(
+                $this->generateEventId(),
+                $toolCall,
+                time(),
+            ))->withInvocationId($invocationId);
         }
 
-        // Emit citations from the last chunk that carried citation metadata...
-        foreach ($this->extractCitations($citationData) as $citation) {
+        foreach ($this->extractCitations($steps) as $citation) {
             yield (new CitationEvent(
                 $this->generateEventId(),
                 $messageId,
@@ -224,14 +217,25 @@ trait HandlesTextStreaming
         }
 
         return new StepResponse(
-            text: $currentText,
+            text: $currentText !== '' ? $currentText : $this->extractText($steps),
             toolCalls: $toolCalls,
-            finishReason: $this->extractFinishReason($data, $pendingToolCalls),
-            usage: $usage ?? new TextUsage(0, 0),
+            finishReason: $this->extractFinishReason($final, $functionCallSteps),
+            usage: filled($final) ? $this->extractUsage($final) : new TextUsage(0, 0),
             meta: new Meta($provider->name(), $model),
-            replayBlocks: $this->sanitizeRequestParts($this->excludeThinkingParts($modelParts)),
-            providerToolCalls: $this->extractProviderToolCalls($modelParts),
+            replayBlocks: $this->replayableSteps($steps),
+            reasoning: $this->extractReasoning($steps),
+            providerToolCalls: $this->extractProviderToolCalls($steps),
         );
+    }
+
+    /**
+     * Append streamed text to the step being accumulated at the given index.
+     */
+    protected function appendStepText(array &$steps, int|string $index, string $type, string $text, string $key = 'content'): void
+    {
+        $steps[$index]['type'] ??= $type;
+        $steps[$index][$key][0]['type'] ??= 'text';
+        $steps[$index][$key][0]['text'] = ($steps[$index][$key][0]['text'] ?? '').$text;
     }
 
     /**

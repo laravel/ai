@@ -49,8 +49,8 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
     public function fileSearchToolOptions(FileSearch $search): array
     {
         return array_filter([
-            'fileSearchStoreNames' => $search->ids(),
-            'metadataFilter' => $search->filters === []
+            'file_search_store_names' => $search->ids(),
+            'metadata_filter' => $search->filters === []
                 ? null
                 : $this->formatMetadataFilter($search->filters),
         ]);

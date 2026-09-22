@@ -17,6 +17,21 @@ trait MapsEmbeddingInputs
      */
     protected function mapEmbeddingInput(mixed $input): array
     {
-        return is_string($input) ? ['text' => $input] : $this->mapAttachment($input);
+        if (is_string($input)) {
+            return ['text' => $input];
+        }
+
+        $block = $this->mapAttachment($input);
+
+        // The embeddings endpoint predates the Interactions API and still takes content parts...
+        return isset($block['uri'])
+            ? ['fileData' => array_filter([
+                'mimeType' => $block['mime_type'] ?? null,
+                'fileUri' => $block['uri'],
+            ])]
+            : ['inlineData' => array_filter([
+                'mimeType' => $block['mime_type'] ?? null,
+                'data' => $block['data'] ?? null,
+            ])];
     }
 }

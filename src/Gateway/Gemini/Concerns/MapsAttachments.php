@@ -29,7 +29,7 @@ use Laravel\Ai\Files\StoredVideo;
 trait MapsAttachments
 {
     /**
-     * Map the given Laravel attachments to Gemini content parts.
+     * Map the given Laravel attachments to Gemini content blocks.
      */
     protected function mapAttachments(Collection $attachments): array
     {
@@ -37,7 +37,7 @@ trait MapsAttachments
     }
 
     /**
-     * Map a Laravel attachment to a Gemini content part.
+     * Map a Laravel attachment to a Gemini content block.
      */
     protected function mapAttachment(mixed $attachment): array
     {
@@ -49,131 +49,124 @@ trait MapsAttachments
 
         return match (true) {
             $attachment instanceof ProviderImage => [
-                'fileData' => [
-                    'fileUri' => $attachment->id,
-                ],
+                'type' => 'image',
+                'uri' => $attachment->id,
             ],
             $attachment instanceof Base64Image => [
-                'inlineData' => [
-                    'mimeType' => $attachment->mime,
-                    'data' => $attachment->base64,
-                ],
+                'type' => 'image',
+                'mime_type' => $attachment->mime,
+                'data' => $attachment->base64,
             ],
             $attachment instanceof RemoteImage => [
-                'inlineData' => [
-                    'mimeType' => $attachment->mimeType() ?? 'image/png',
-                    'data' => base64_encode($attachment->content()),
-                ],
+                'type' => 'image',
+                'mime_type' => $attachment->mimeType() ?? 'image/png',
+                'data' => base64_encode($attachment->content()),
             ],
             $attachment instanceof LocalImage => [
-                'inlineData' => [
-                    'mimeType' => $attachment->mimeType() ?? 'image/png',
-                    'data' => base64_encode(file_get_contents($attachment->path)),
-                ],
+                'type' => 'image',
+                'mime_type' => $attachment->mimeType() ?? 'image/png',
+                'data' => base64_encode(file_get_contents($attachment->path)),
             ],
             $attachment instanceof StoredImage => [
-                'inlineData' => [
-                    'mimeType' => $attachment->mimeType() ?? 'image/png',
-                    'data' => base64_encode(
-                        (string) Storage::disk($attachment->disk)->get($attachment->path)
-                    ),
-                ],
+                'type' => 'image',
+                'mime_type' => $attachment->mimeType() ?? 'image/png',
+                'data' => base64_encode(
+                    (string) Storage::disk($attachment->disk)->get($attachment->path)
+                ),
             ],
             $attachment instanceof ProviderDocument => [
-                'fileData' => [
-                    'fileUri' => $attachment->id,
-                ],
+                'type' => 'document',
+                'uri' => $attachment->id,
             ],
             $attachment instanceof Base64Document => [
-                'inlineData' => [
-                    'mimeType' => $attachment->mime,
-                    'data' => $attachment->base64,
-                ],
+                'type' => 'document',
+                'mime_type' => $attachment->mime,
+                'data' => $attachment->base64,
             ],
             $attachment instanceof LocalDocument => [
-                'inlineData' => [
-                    'mimeType' => $attachment->mimeType() ?? 'application/octet-stream',
-                    'data' => base64_encode(file_get_contents($attachment->path)),
-                ],
+                'type' => 'document',
+                'mime_type' => $attachment->mimeType() ?? 'application/octet-stream',
+                'data' => base64_encode(file_get_contents($attachment->path)),
             ],
             $attachment instanceof RemoteDocument => [
-                'inlineData' => [
-                    'mimeType' => $attachment->mimeType() ?? 'application/octet-stream',
-                    'data' => base64_encode($attachment->content()),
-                ],
+                'type' => 'document',
+                'mime_type' => $attachment->mimeType() ?? 'application/octet-stream',
+                'data' => base64_encode($attachment->content()),
             ],
             $attachment instanceof StoredDocument => [
-                'inlineData' => [
-                    'mimeType' => $attachment->mimeType() ?? 'application/octet-stream',
-                    'data' => base64_encode(
-                        (string) Storage::disk($attachment->disk)->get($attachment->path)
-                    ),
-                ],
+                'type' => 'document',
+                'mime_type' => $attachment->mimeType() ?? 'application/octet-stream',
+                'data' => base64_encode(
+                    (string) Storage::disk($attachment->disk)->get($attachment->path)
+                ),
             ],
             $attachment instanceof Base64Audio => [
-                'inlineData' => [
-                    'mimeType' => $attachment->mime ?? 'audio/mp3',
-                    'data' => $attachment->base64,
-                ],
+                'type' => 'audio',
+                'mime_type' => $attachment->mime ?? 'audio/mp3',
+                'data' => $attachment->base64,
             ],
             $attachment instanceof LocalAudio => [
-                'inlineData' => [
-                    'mimeType' => $attachment->mimeType() ?? 'audio/mp3',
-                    'data' => base64_encode(file_get_contents($attachment->path)),
-                ],
+                'type' => 'audio',
+                'mime_type' => $attachment->mimeType() ?? 'audio/mp3',
+                'data' => base64_encode(file_get_contents($attachment->path)),
             ],
             $attachment instanceof StoredAudio => [
-                'inlineData' => [
-                    'mimeType' => $attachment->mimeType() ?? 'audio/mp3',
-                    'data' => base64_encode(
-                        (string) Storage::disk($attachment->disk)->get($attachment->path)
-                    ),
-                ],
+                'type' => 'audio',
+                'mime_type' => $attachment->mimeType() ?? 'audio/mp3',
+                'data' => base64_encode(
+                    (string) Storage::disk($attachment->disk)->get($attachment->path)
+                ),
             ],
             $attachment instanceof RemoteAudio => [
-                'inlineData' => [
-                    'mimeType' => $attachment->mimeType() ?? 'audio/mp3',
-                    'data' => base64_encode($attachment->content()),
-                ],
+                'type' => 'audio',
+                'mime_type' => $attachment->mimeType() ?? 'audio/mp3',
+                'data' => base64_encode($attachment->content()),
             ],
             $attachment instanceof Base64Video => [
-                'inlineData' => [
-                    'mimeType' => $attachment->mime ?? 'video/mp4',
-                    'data' => $attachment->base64,
-                ],
+                'type' => 'video',
+                'mime_type' => $attachment->mime ?? 'video/mp4',
+                'data' => $attachment->base64,
             ],
             $attachment instanceof LocalVideo => [
-                'inlineData' => [
-                    'mimeType' => $attachment->mimeType() ?? 'video/mp4',
-                    'data' => base64_encode(file_get_contents($attachment->path)),
-                ],
+                'type' => 'video',
+                'mime_type' => $attachment->mimeType() ?? 'video/mp4',
+                'data' => base64_encode(file_get_contents($attachment->path)),
             ],
             $attachment instanceof StoredVideo => [
-                'inlineData' => [
-                    'mimeType' => $attachment->mimeType() ?? 'video/mp4',
-                    'data' => base64_encode(
-                        (string) Storage::disk($attachment->disk)->get($attachment->path)
-                    ),
-                ],
+                'type' => 'video',
+                'mime_type' => $attachment->mimeType() ?? 'video/mp4',
+                'data' => base64_encode(
+                    (string) Storage::disk($attachment->disk)->get($attachment->path)
+                ),
             ],
-            $attachment instanceof RemoteVideo => $this->isYouTubeUrl($attachment->url) ? [
-                'fileData' => array_filter([
-                    'mimeType' => $attachment->mime,
-                    'fileUri' => $attachment->url,
-                ]),
-            ] : [
-                'inlineData' => [
-                    'mimeType' => $attachment->mimeType() ?? 'video/mp4',
-                    'data' => base64_encode($attachment->content()),
-                ],
+            $attachment instanceof RemoteVideo => $this->isYouTubeUrl($attachment->url) ? array_filter([
+                'type' => 'video',
+                'mime_type' => $attachment->mime,
+                'uri' => $attachment->url,
+            ]) : [
+                'type' => 'video',
+                'mime_type' => $attachment->mimeType() ?? 'video/mp4',
+                'data' => base64_encode($attachment->content()),
             ],
             $attachment instanceof UploadedFile => [
-                'inlineData' => [
-                    'mimeType' => $attachment->getClientMimeType(),
-                    'data' => base64_encode($attachment->get()),
-                ],
+                'type' => $this->contentTypeFor($attachment->getClientMimeType()),
+                'mime_type' => $attachment->getClientMimeType(),
+                'data' => base64_encode($attachment->get()),
             ],
             default => throw new InvalidArgumentException('Unsupported attachment type ['.get_debug_type($attachment).']'),
+        };
+    }
+
+    /**
+     * Resolve the Gemini content block type for the given MIME type.
+     */
+    protected function contentTypeFor(?string $mime): string
+    {
+        return match (strtok((string) $mime, '/')) {
+            'image' => 'image',
+            'audio' => 'audio',
+            'video' => 'video',
+            default => 'document',
         };
     }
 

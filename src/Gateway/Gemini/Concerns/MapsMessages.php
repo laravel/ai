@@ -11,104 +11,89 @@ use Laravel\Ai\Messages\UserMessage;
 trait MapsMessages
 {
     /**
-     * Map the given Laravel messages to Gemini contents format.
+     * Map the given Laravel messages to Gemini interaction input steps.
      */
-    protected function mapMessagesToContents(array $messages): array
+    protected function mapMessagesToInput(array $messages): array
     {
-        $contents = [];
+        $input = [];
 
         foreach ($messages as $message) {
             $message = Message::tryFrom($message);
 
             match ($message->role) {
-                MessageRole::User => $this->mapUserMessage($message, $contents),
-                MessageRole::Assistant => $this->mapAssistantMessage($message, $contents),
-                MessageRole::ToolResult => $this->mapToolResultMessage($message, $contents),
+                MessageRole::User => $this->mapUserMessage($message, $input),
+                MessageRole::Assistant => $this->mapAssistantMessage($message, $input),
+                MessageRole::ToolResult => $this->mapToolResultMessage($message, $input),
             };
         }
 
-        return $contents;
+        return $input;
     }
 
     /**
-     * Map a user message to Gemini format.
+     * Map a user message to a Gemini user input step.
      */
-    protected function mapUserMessage(UserMessage|Message $message, array &$contents): void
+    protected function mapUserMessage(UserMessage|Message $message, array &$input): void
     {
-        $parts = [['text' => $message->content]];
+        $content = [['type' => 'text', 'text' => $message->content]];
 
         if ($message instanceof UserMessage && $message->attachments->isNotEmpty()) {
-            $parts = array_merge($parts, $this->mapAttachments($message->attachments));
+            $content = array_merge($content, $this->mapAttachments($message->attachments));
         }
 
-        $contents[] = [
-            'role' => 'user',
-            'parts' => $parts,
+        $input[] = [
+            'type' => 'user_input',
+            'content' => $content,
         ];
     }
 
     /**
-     * Map an assistant message to Gemini format.
+     * Map an assistant message to the Gemini steps that produced it.
      */
-    protected function mapAssistantMessage(AssistantMessage|Message $message, array &$contents): void
+    protected function mapAssistantMessage(AssistantMessage|Message $message, array &$input): void
     {
+        // Gemini requires its own steps, thought steps included, replayed exactly as it returned them...
         if ($message instanceof AssistantMessage && filled($message->replayBlocks)) {
-            $contents[] = [
-                'role' => 'model',
-                'parts' => $message->replayBlocks,
-            ];
+            foreach ($message->replayBlocks as $step) {
+                // Gemini rejects the empty array PHP decodes an argument-less call's object into...
+                $input[] = isset($step['arguments'])
+                    ? [...$step, 'arguments' => (object) $step['arguments']]
+                    : $step;
+            }
 
             return;
         }
 
-        $parts = [];
-
         if (filled($message->content)) {
-            $parts[] = ['text' => $message->content];
-        }
-
-        if ($message instanceof AssistantMessage && $message->toolCalls->isNotEmpty()) {
-            foreach ($message->toolCalls as $toolCall) {
-                $functionCall = ['name' => $toolCall->name];
-
-                if (filled($toolCall->arguments)) {
-                    $functionCall['args'] = $toolCall->arguments;
-                }
-
-                $part = ['functionCall' => $functionCall];
-
-                if (filled($toolCall->thoughtSignature)) {
-                    $part['thoughtSignature'] = $toolCall->thoughtSignature;
-                }
-
-                $parts[] = $part;
-            }
-        }
-
-        if (filled($parts)) {
-            $contents[] = [
-                'role' => 'model',
-                'parts' => $parts,
+            $input[] = [
+                'type' => 'model_output',
+                'content' => [['type' => 'text', 'text' => $message->content]],
             ];
+        }
+
+        if ($message instanceof AssistantMessage) {
+            foreach ($message->toolCalls as $toolCall) {
+                $input[] = [
+                    'type' => 'function_call',
+                    'id' => $toolCall->id,
+                    'name' => $toolCall->name,
+                    'arguments' => (object) $toolCall->arguments,
+                ];
+            }
         }
     }
 
     /**
-     * Map a tool result message to Gemini format.
+     * Map a tool result message to Gemini function result steps.
      */
-    protected function mapToolResultMessage(ToolResultMessage|Message $message, array &$contents): void
+    protected function mapToolResultMessage(ToolResultMessage|Message $message, array &$input): void
     {
         if (! $message instanceof ToolResultMessage) {
             return;
         }
 
-        $parts = $this->buildFunctionResponseParts($message->toolResults->all());
-
-        if (filled($parts)) {
-            $contents[] = [
-                'role' => 'user',
-                'parts' => $parts,
-            ];
+        foreach ($this->buildFunctionResultSteps($message->toolResults->all()) as $step) {
+            $input[] = $step;
         }
     }
 }

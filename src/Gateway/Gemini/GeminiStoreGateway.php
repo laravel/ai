@@ -148,9 +148,9 @@ class GeminiStoreGateway implements StoreGateway
         $storeId = $this->normalizeStoreId($storeId);
         $documentId = $this->normalizeDocumentId($storeId, $documentId);
 
-        $this->withErrorHandling($provider->name(), fn () => $this->client($provider)->delete($this->baseUrl($provider)."/{$documentId}", [
-            'force' => true,
-        ])->throw());
+        // Gemini only accepts force as a query parameter, and refuses to delete a document that still has chunks without it...
+        $this->withErrorHandling($provider->name(), fn () => $this->client($provider)
+            ->delete($this->baseUrl($provider)."/{$documentId}?force=true")->throw());
 
         return true;
     }
@@ -164,7 +164,7 @@ class GeminiStoreGateway implements StoreGateway
 
         $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider)->delete($this->baseUrl($provider)."/{$storeId}")->throw(),
+            fn () => $this->client($provider)->delete($this->baseUrl($provider)."/{$storeId}?force=true")->throw(),
         );
 
         return true;

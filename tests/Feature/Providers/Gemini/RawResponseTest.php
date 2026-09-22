@@ -15,5 +15,5 @@ test('gemini text responses expose the raw http response', function (): void {
     );
 
     expect($response->raw)->toBeInstanceOf(Response::class)
-        ->and($response->raw->json('candidates.0.content.parts.0.text'))->toBe('Hello there');
+        ->and($response->raw->json('steps.0.content.0.text'))->toBe('Hello there');
 });

@@ -26,32 +26,21 @@ trait MapsTools
      */
     protected function mapTools(array $tools, Provider $provider): array
     {
-        $functionDeclarations = [];
-        $providerTools = [];
+        $mapped = [];
 
         foreach ($tools as $tool) {
             if ($tool instanceof ProviderTool) {
                 $providerTool = $this->mapProviderTool($tool, $provider);
 
                 if (filled($providerTool)) {
-                    $providerTools[] = $providerTool;
+                    $mapped[] = $providerTool;
                 }
             } elseif ($tool instanceof Tool) {
-                $functionDeclarations[] = $this->mapTool($tool);
+                $mapped[] = $this->mapTool($tool);
             }
         }
 
-        $toolsArray = [];
-
-        if (filled($functionDeclarations)) {
-            $toolsArray[] = ['function_declarations' => $functionDeclarations];
-        }
-
-        foreach ($providerTools as $providerTool) {
-            $toolsArray[] = $providerTool;
-        }
-
-        return $toolsArray;
+        return $mapped;
     }
 
     /**
@@ -62,6 +51,7 @@ trait MapsTools
         $schema = $tool->schema(new JsonSchemaTypeFactory);
 
         $definition = [
+            'type' => 'function',
             'name' => ToolNameResolver::resolve($tool),
             'description' => (string) $tool->description(),
         ];
@@ -135,9 +125,7 @@ trait MapsTools
             throw new RuntimeException('Provider ['.$provider->name().'] does not support code execution.');
         }
 
-        return [
-            'code_execution' => (object) $provider->codeExecutionToolOptions($tool),
-        ];
+        return array_merge(['type' => 'code_execution'], $provider->codeExecutionToolOptions($tool));
     }
 
     /**
@@ -149,9 +137,7 @@ trait MapsTools
             throw new RuntimeException('Provider ['.$provider->name().'] does not support file search.');
         }
 
-        return [
-            'fileSearch' => $provider->fileSearchToolOptions($tool),
-        ];
+        return array_merge(['type' => 'file_search'], $provider->fileSearchToolOptions($tool));
     }
 
     /**
@@ -163,9 +149,7 @@ trait MapsTools
             throw new RuntimeException('Provider ['.$provider->name().'] does not support web fetch.');
         }
 
-        return [
-            'url_context' => (object) $provider->webFetchToolOptions($tool),
-        ];
+        return array_merge(['type' => 'url_context'], $provider->webFetchToolOptions($tool));
     }
 
     /**
@@ -177,8 +161,6 @@ trait MapsTools
             throw new RuntimeException('Provider ['.$provider->name().'] does not support web search.');
         }
 
-        return [
-            'google_search' => (object) $provider->webSearchToolOptions($tool),
-        ];
+        return array_merge(['type' => 'google_search'], $provider->webSearchToolOptions($tool));
     }
 }

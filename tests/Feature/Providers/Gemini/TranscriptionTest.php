@@ -1,7 +1,6 @@
 <?php
 
 use GuzzleHttp\Promise\PromiseInterface;
-use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Transcription;
 
@@ -12,7 +11,42 @@ beforeEach(function (): void {
     ]]);
 });
 
-test('transcription request sends audio as inline data with correct mime type', function (): void {
+function fakeGeminiTranscriptionInteraction(string $text, array $usage): PromiseInterface
+{
+    return Http::response([
+        'id' => 'int_transcription',
+        'status' => 'completed',
+        'steps' => [[
+            'type' => 'model_output',
+            'content' => [['type' => 'text', 'text' => $text]],
+        ]],
+        'usage' => $usage,
+    ]);
+}
+
+function fakeGeminiTranscriptionResponse(): PromiseInterface
+{
+    return fakeGeminiTranscriptionInteraction('Hello world', [
+        'total_input_tokens' => 10,
+        'total_output_tokens' => 5,
+        'total_tokens' => 15,
+    ]);
+}
+
+function fakeGeminiDiarizedTranscriptionResponse(?array $segments = null): PromiseInterface
+{
+    $segments ??= [
+        ['text' => 'Hello', 'start_time' => '0:00', 'end_time' => '0:02'],
+        ['text' => 'world', 'start_time' => '0:02', 'end_time' => '0:04'],
+    ];
+
+    return fakeGeminiTranscriptionInteraction(
+        json_encode(['transcript' => 'Hello world', 'segments' => $segments]),
+        ['total_input_tokens' => 42, 'total_output_tokens' => 20, 'total_tokens' => 62],
+    );
+}
+
+test('transcription request sends audio as an audio block with correct mime type', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiTranscriptionResponse(),
     ]);
@@ -20,14 +54,13 @@ test('transcription request sends audio as inline data with correct mime type', 
     Transcription::of(base64_encode('fake-audio'))
         ->generate(provider: 'gemini', model: 'gemini-3.7-flash');
 
-    Http::assertSent(function (Request $request): bool {
-        $body = $request->data();
-        $parts = $body['contents'][0]['parts'];
-
-        return str_contains($request->url(), 'models/gemini-3.7-flash:generateContent')
-            && $parts[1]['inlineData']['mimeType'] === 'audio/mp3'
-            && $parts[1]['inlineData']['data'] === base64_encode('fake-audio');
-    });
+    expect(sentRequest()->url())->toEndWith('/interactions')
+        ->and(sentRequest()->data())->toMatchArray(['model' => 'gemini-3.7-flash'])
+        ->and(sentRequest()->data()['input'][1])->toMatchArray([
+            'type' => 'audio',
+            'mime_type' => 'audio/mp3',
+            'data' => base64_encode('fake-audio'),
+        ]);
 });
 
 test('transcription request includes language in prompt when specified', function (): void {
@@ -39,10 +72,7 @@ test('transcription request includes language in prompt when specified', functio
         ->language('fr')
         ->generate(provider: 'gemini', model: 'gemini-3.7-flash');
 
-    Http::assertSent(fn (Request $request): bool => str_contains(
-        (string) $request->data()['contents'][0]['parts'][0]['text'],
-        'fr'
-    ));
+    expect(sentRequest()->data()['input'][0]['text'])->toContain('fr');
 });
 
 test('transcription response returns text with correct meta', function (): void {
@@ -68,10 +98,10 @@ test('transcription uses default model when none specified', function (): void {
 
     Transcription::of(base64_encode('fake-audio'))->generate(provider: 'gemini');
 
-    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), 'models/gemini-3.5-flash:generateContent'));
+    expect(sentRequest()->data())->toMatchArray(['model' => 'gemini-3.5-flash']);
 });
 
-test('diarized transcription request sends json schema in generation config', function (): void {
+test('diarized transcription request sends a json response format', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => fakeGeminiDiarizedTranscriptionResponse(),
     ]);
@@ -80,14 +110,10 @@ test('diarized transcription request sends json schema in generation config', fu
         ->diarize()
         ->generate(provider: 'gemini', model: 'gemini-3.7-flash');
 
-    Http::assertSent(function (Request $request): bool {
-        $body = $request->data();
-
-        return isset($body['generationConfig']['responseMimeType'])
-            && $body['generationConfig']['responseMimeType'] === 'application/json'
-            && isset($body['generationConfig']['responseSchema']['properties']['segments'])
-            && str_contains((string) $body['contents'][0]['parts'][0]['text'], 'MM:SS or HH:MM:SS');
-    });
+    expect(sentRequest()->data()['response_format'])
+        ->toMatchArray(['type' => 'text', 'mime_type' => 'application/json'])
+        ->and(sentRequest()->data()['response_format']['schema']['properties'])->toHaveKey('segments')
+        ->and(sentRequest()->data()['input'][0]['text'])->toContain('MM:SS or HH:MM:SS');
 });
 
 test('diarized transcription response returns text and segments', function (): void {
@@ -128,47 +154,3 @@ test('diarized transcription parses srt and hour timestamp formats', function ()
         ->and($response->segments[1]->startSeconds)->toBe(3723.75)
         ->and($response->segments[1]->endSeconds)->toBe(3724.25);
 });
-
-function fakeGeminiTranscriptionResponse(): PromiseInterface
-{
-    return Http::response([
-        'candidates' => [[
-            'content' => [
-                'parts' => [['text' => 'Hello world']],
-                'role' => 'model',
-            ],
-            'finishReason' => 'STOP',
-        ]],
-        'usageMetadata' => [
-            'promptTokenCount' => 10,
-            'candidatesTokenCount' => 5,
-            'totalTokenCount' => 15,
-        ],
-    ]);
-}
-
-function fakeGeminiDiarizedTranscriptionResponse(?array $segments = null): PromiseInterface
-{
-    $segments ??= [
-        ['text' => 'Hello', 'start_time' => '0:00', 'end_time' => '0:02'],
-        ['text' => 'world', 'start_time' => '0:02', 'end_time' => '0:04'],
-    ];
-
-    return Http::response([
-        'candidates' => [[
-            'content' => [
-                'parts' => [['text' => json_encode([
-                    'transcript' => 'Hello world',
-                    'segments' => $segments,
-                ])]],
-                'role' => 'model',
-            ],
-            'finishReason' => 'STOP',
-        ]],
-        'usageMetadata' => [
-            'promptTokenCount' => 42,
-            'candidatesTokenCount' => 20,
-            'totalTokenCount' => 62,
-        ],
-    ]);
-}

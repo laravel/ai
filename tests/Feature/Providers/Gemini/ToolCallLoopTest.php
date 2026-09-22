@@ -7,6 +7,14 @@ use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\NamedToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
+function geminiFollowUpSteps(iterable $recorded, string $type): array
+{
+    return array_values(array_filter(
+        $recorded[1][0]->data()['input'],
+        fn (array $step): bool => ($step['type'] ?? null) === $type,
+    ));
+}
+
 test('tool calls trigger follow up request', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
@@ -15,40 +23,16 @@ test('tool calls trigger follow up request', function (): void {
         ]),
     ]);
 
-    $response = (new ToolUsingAgent(fixed: true))->prompt(
+    (new ToolUsingAgent(fixed: true))->prompt(
         'Generate a random number',
         provider: 'gemini',
     );
 
     $recorded = Http::recorded();
 
-    expect($recorded)->toHaveCount(2);
-
-    $followUpContents = $recorded[1][0]->data()['contents'];
-
-    $hasModelWithFunctionCall = false;
-    $hasFunctionResponse = false;
-
-    foreach ($followUpContents as $content) {
-        if ($content['role'] === 'model') {
-            foreach ($content['parts'] as $part) {
-                if (isset($part['functionCall'])) {
-                    $hasModelWithFunctionCall = true;
-                }
-            }
-        }
-
-        if ($content['role'] === 'user') {
-            foreach ($content['parts'] ?? [] as $part) {
-                if (isset($part['functionResponse'])) {
-                    $hasFunctionResponse = true;
-                }
-            }
-        }
-    }
-
-    expect($hasModelWithFunctionCall)->toBeTrue('Follow-up request should include model message with functionCall')
-        ->and($hasFunctionResponse)->toBeTrue('Follow-up request should include user message with functionResponse');
+    expect($recorded)->toHaveCount(2)
+        ->and(geminiFollowUpSteps($recorded, 'function_call'))->toHaveCount(1)
+        ->and(geminiFollowUpSteps($recorded, 'function_result'))->toHaveCount(1);
 });
 
 test('max steps limits tool call depth', function (): void {
@@ -63,14 +47,12 @@ test('max steps limits tool call depth', function (): void {
         ]),
     ]);
 
-    $response = (new ToolUsingAgent(fixed: true))->prompt(
+    (new ToolUsingAgent(fixed: true))->prompt(
         'Generate numbers',
         provider: 'gemini',
     );
 
-    $recorded = Http::recorded();
-
-    expect(count($recorded))->toBeLessThanOrEqual(3);
+    expect(count(Http::recorded()))->toBeLessThanOrEqual(3);
 });
 
 test('multi step tool loop returns accumulated response shape', function (): void {
@@ -108,7 +90,7 @@ test('unregistered tool call throws', function (): void {
         ->toThrow(NoSuchToolException::class);
 });
 
-test('function response includes id for gemini 3', function (): void {
+test('function result carries the originating call id', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
             $this->fakeToolCallResponse('FixedNumberGenerator', 'call_abc123'),
@@ -122,40 +104,21 @@ test('function response includes id for gemini 3', function (): void {
 
     expect($recorded)->toHaveCount(2);
 
-    $followUpContents = $recorded[1][0]->data()['contents'];
+    $result = geminiFollowUpSteps($recorded, 'function_result')[0] ?? null;
 
-    $functionResponsePart = null;
-
-    foreach ($followUpContents as $content) {
-        foreach ($content['parts'] ?? [] as $part) {
-            if (isset($part['functionResponse'])) {
-                $functionResponsePart = $part['functionResponse'];
-            }
-        }
-    }
-
-    expect($functionResponsePart)->not->toBeNull('Follow-up should include functionResponse')
-        ->and($functionResponsePart['name'])->toBe('FixedNumberGenerator')
-        ->and($functionResponsePart)->toHaveKeys(['id', 'response'])
-        ->and($functionResponsePart['response'])->toHaveKeys(['name', 'content']);
+    expect($result)->not->toBeNull('Follow-up should include a function_result step')
+        ->and($result['name'])->toBe('FixedNumberGenerator')
+        ->and($result['call_id'])->toBe('call_abc123')
+        ->and($result['result'][0]['type'])->toBe('text');
 });
 
 test('parallel function calls preserve unique ids', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
-            Http::response([
-                'candidates' => [[
-                    'content' => [
-                        'parts' => [
-                            ['functionCall' => ['id' => 'call_1', 'name' => 'FixedNumberGenerator', 'args' => (object) []]],
-                            ['functionCall' => ['id' => 'call_2', 'name' => 'FixedNumberGenerator', 'args' => (object) []]],
-                        ],
-                        'role' => 'model',
-                    ],
-                    'finishReason' => 'STOP',
-                ]],
-                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5, 'totalTokenCount' => 15],
-            ]),
+            Http::response($this->fakeInteraction([
+                $this->functionCallStep('FixedNumberGenerator', [], 'call_1'),
+                $this->functionCallStep('FixedNumberGenerator', [], 'call_2'),
+            ])),
             $this->fakeTextResponse('Done'),
         ]),
     ]);
@@ -166,19 +129,9 @@ test('parallel function calls preserve unique ids', function (): void {
 
     expect($recorded)->toHaveCount(2);
 
-    $followUpContents = $recorded[1][0]->data()['contents'];
+    $ids = array_column(geminiFollowUpSteps($recorded, 'function_result'), 'call_id');
 
-    $functionResponseIds = [];
-
-    foreach ($followUpContents as $content) {
-        foreach ($content['parts'] ?? [] as $part) {
-            if (isset($part['functionResponse']['id'])) {
-                $functionResponseIds[] = $part['functionResponse']['id'];
-            }
-        }
-    }
-
-    expect($functionResponseIds)->toHaveCount(2)
+    expect($ids)->toHaveCount(2)
         ->toContain('call_1')
         ->toContain('call_2');
 });
@@ -194,40 +147,28 @@ test('tool declaring a name() method routes the function call back to itself', f
     (new NamedToolAgent('aliased_tool'))->prompt('Search', provider: 'gemini');
 
     $recorded = Http::recorded();
+
     expect($recorded)->toHaveCount(2);
 
-    $followUpContents = $recorded[1][0]->data()['contents'];
+    $result = geminiFollowUpSteps($recorded, 'function_result')[0] ?? null;
 
-    $functionResponsePart = null;
-
-    foreach ($followUpContents as $content) {
-        foreach ($content['parts'] ?? [] as $part) {
-            if (isset($part['functionResponse'])) {
-                $functionResponsePart = $part['functionResponse'];
-            }
-        }
-    }
-
-    expect($functionResponsePart)->not->toBeNull('Follow-up should include a functionResponse for the declared tool name')
-        ->and($functionResponsePart['name'])->toBe('aliased_tool');
+    expect($result)->not->toBeNull('Follow-up should include a function_result for the declared tool name')
+        ->and($result['name'])->toBe('aliased_tool');
 });
 
-test('thinking parts are excluded from tool call continuation', function (): void {
+test('thought steps are replayed verbatim across the tool call continuation', function (): void {
+    $thought = [
+        'type' => 'thought',
+        'summary' => [['type' => 'text', 'text' => 'Let me generate that...']],
+        'thought_signature' => 'sig_abc_123',
+    ];
+
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
-            Http::response([
-                'candidates' => [[
-                    'content' => [
-                        'parts' => [
-                            ['text' => 'Let me think about this...', 'thought' => true],
-                            ['functionCall' => ['id' => 'call_1', 'name' => 'FixedNumberGenerator', 'args' => (object) []]],
-                        ],
-                        'role' => 'model',
-                    ],
-                    'finishReason' => 'STOP',
-                ]],
-                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5],
-            ]),
+            Http::response($this->fakeInteraction([
+                $thought,
+                $this->functionCallStep('FixedNumberGenerator', [], 'call_1'),
+            ])),
             $this->fakeTextResponse('The number is 72019'),
         ]),
     ]);
@@ -235,62 +176,26 @@ test('thinking parts are excluded from tool call continuation', function (): voi
     (new ToolUsingAgent(fixed: true))->prompt('Generate', provider: 'gemini');
 
     $recorded = Http::recorded();
+
     expect($recorded)->toHaveCount(2);
 
-    $followUpContents = $recorded[1][0]->data()['contents'];
-
-    foreach ($followUpContents as $content) {
-        if ($content['role'] === 'model') {
-            foreach ($content['parts'] as $part) {
-                expect($part['thought'] ?? false)->toBeFalse('Thinking parts should be excluded from tool call continuation');
-            }
-        }
-    }
+    // Gemini rejects tool-call history whose thought steps were altered, so they
+    // must survive the round trip byte for byte, signature included.
+    expect(geminiFollowUpSteps($recorded, 'thought'))->toBe([$thought]);
 });
 
-test('thought signature is preserved across the tool call continuation', function (): void {
+test('the user input echoed by gemini is not replayed twice', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
-            Http::response([
-                'candidates' => [[
-                    'content' => [
-                        'parts' => [
-                            ['text' => 'Let me generate that...', 'thought' => true],
-                            [
-                                'functionCall' => ['id' => 'call_1', 'name' => 'FixedNumberGenerator', 'args' => (object) []],
-                                'thoughtSignature' => 'sig_abc_123',
-                            ],
-                        ],
-                        'role' => 'model',
-                    ],
-                    'finishReason' => 'STOP',
-                ]],
-                'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 5],
-            ]),
-            $this->fakeTextResponse('The number is 72019'),
+            Http::response($this->fakeInteraction([
+                ['type' => 'user_input', 'content' => [['type' => 'text', 'text' => 'Generate']]],
+                $this->functionCallStep('FixedNumberGenerator', [], 'call_1'),
+            ])),
+            $this->fakeTextResponse('Done'),
         ]),
     ]);
 
     (new ToolUsingAgent(fixed: true))->prompt('Generate', provider: 'gemini');
 
-    $recorded = Http::recorded();
-    expect($recorded)->toHaveCount(2);
-
-    $followUpContents = $recorded[1][0]->data()['contents'];
-
-    $signature = null;
-
-    foreach ($followUpContents as $content) {
-        if ($content['role'] === 'model') {
-            foreach ($content['parts'] as $part) {
-                if (isset($part['functionCall'])) {
-                    $signature = $part['thoughtSignature'] ?? null;
-                }
-            }
-        }
-    }
-
-    // Gemini 3 rejects tool-call history whose functionCall part is missing its
-    // thoughtSignature, so the signature must survive the round trip verbatim.
-    expect($signature)->toBe('sig_abc_123');
+    expect(geminiFollowUpSteps(Http::recorded(), 'user_input'))->toHaveCount(1);
 });
