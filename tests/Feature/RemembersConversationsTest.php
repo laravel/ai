@@ -8,6 +8,7 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
+use Throwable;
 
 test('it threads the participant type into latestConversationId when continuing the last conversation', function () {
     $participant = new class extends Model
@@ -46,7 +47,7 @@ test('it threads the participant type into latestConversationId when continuing 
             return 'user-1';
         }
 
-        public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
+        public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response, ?Throwable $exception = null): ?string
         {
             return 'assistant-1';
         }
@@ -95,7 +96,7 @@ test('it continues the last conversation through a store that ignores the partic
             return 'user-1';
         }
 
-        public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
+        public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response, ?Throwable $exception = null): ?string
         {
             return 'assistant-1';
         }
@@ -153,7 +154,7 @@ test('it resolves the participant id via getKey for models with custom primary k
             return 'user-1';
         }
 
-        public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
+        public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response, ?Throwable $exception = null): ?string
         {
             return 'assistant-1';
         }

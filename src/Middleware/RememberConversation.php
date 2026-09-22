@@ -47,7 +47,20 @@ class RememberConversation
             ? (string) Str::uuid7()
             : null;
 
-        $response = $next($prompt);
+        try {
+            $response = $next($prompt);
+        } catch (Throwable $exception) {
+            $this->rememberFailedTurn($prompt, $exception, $pendingConversationId);
+
+            throw $exception;
+        }
+
+        // A stream fails while it is being consumed, long after this pipeline returned, so it reports back here...
+        if ($response instanceof StreamableAgentResponse) {
+            $response->catch(fn (Throwable $exception) => $this->rememberFailedTurn(
+                $prompt, $exception, $pendingConversationId, retryable: ! $response->hasYielded(),
+            ));
+        }
 
         // Surface the ID to stream protocols without treating it as an existing conversation...
         if ($pendingConversationId !== null && $response instanceof StreamableAgentResponse) {
@@ -65,33 +78,10 @@ class RememberConversation
             }
 
             $participant = $agent->conversationParticipant();
-            $participantType = $participant === null ? null : Conversation::participantType($participant);
-            $participantId = $participant === null ? null : Conversation::participantKey($participant);
 
-            // Create conversation if necessary...
-            if ($pendingConversationId !== null || ! $agent->currentConversation()) {
-                $conversationId = $this->store->storeConversation(
-                    $participantType,
-                    $participantId,
-                    $this->generateTitle($prompt->prompt),
-                    $pendingConversationId,
-                );
+            $userMessageId = $this->openTurn($agent, $prompt, $pendingConversationId);
 
-                $agent->continue($conversationId, $participant);
-            }
-
-            // Record user message...
-            $userMessageId = null;
-
-            if (! $prompt->hasApprovalDecisions()) {
-                $userMessageId = $this->store->storeUserMessage(
-                    $agent->currentConversation(),
-                    $participantType,
-                    $participantId,
-                    $agent::class,
-                    new UserMessage($prompt->prompt, $prompt->attachments),
-                );
-            }
+            [$participantType, $participantId] = $this->participantKeys($participant);
 
             // Record assistant message...
             $assistantMessageId = $this->store->storeAssistantMessage(
@@ -110,15 +100,109 @@ class RememberConversation
     }
 
     /**
+     * Record the steps a run completed before it died, so the tools it already ran are not lost with it.
+     */
+    protected function rememberFailedTurn(AgentPrompt $prompt, Throwable $exception, ?string $pendingConversationId, bool $retryable = true): void
+    {
+        /** @var Agent&RemembersConversations $agent */
+        $agent = $prompt->agent;
+
+        // A failover retry writes the turn itself, so only the attempt the caller gives up on is recorded...
+        if ($retryable && $prompt->willRetry($exception)) {
+            return;
+        }
+
+        $context = $prompt->runContext();
+
+        $prompt->setRunContext(null);
+
+        if ($context === null || ! $this->shouldRememberTurn($agent, $prompt)) {
+            return;
+        }
+
+        $response = $context->recordedResponse();
+
+        // A resume that died before its first step still has to fail the row its approvals were written to...
+        if ($response->steps->isEmpty() && ! $prompt->hasApprovalDecisions()) {
+            return;
+        }
+
+        $this->openTurn($agent, $prompt, $pendingConversationId);
+
+        [$participantType, $participantId] = $this->participantKeys($agent->conversationParticipant());
+
+        $this->store->storeAssistantMessage(
+            $agent->currentConversation(),
+            $participantType,
+            $participantId,
+            $prompt,
+            $response,
+            $exception,
+        );
+    }
+
+    /**
+     * Open the conversation this turn belongs to and record the prompt that started it.
+     *
+     * @param  Agent&RemembersConversations  $agent
+     */
+    protected function openTurn(Agent $agent, AgentPrompt $prompt, ?string $pendingConversationId): ?string
+    {
+        $participant = $agent->conversationParticipant();
+
+        [$participantType, $participantId] = $this->participantKeys($participant);
+
+        if ($pendingConversationId !== null || ! $agent->currentConversation()) {
+            $agent->continue($this->store->storeConversation(
+                $participantType,
+                $participantId,
+                $this->generateTitle($prompt->prompt),
+                $pendingConversationId,
+            ), $participant);
+        }
+
+        // A resume continues the turn its decisions answer, so it adds no message of its own...
+        return $prompt->hasApprovalDecisions() ? null : $this->store->storeUserMessage(
+            $agent->currentConversation(),
+            $participantType,
+            $participantId,
+            $agent::class,
+            new UserMessage($prompt->prompt, $prompt->attachments),
+        );
+    }
+
+    /**
+     * Split a participant into the type and key it is stored under.
+     *
+     * @return array{?string, string|int|null}
+     */
+    protected function participantKeys(?object $participant): array
+    {
+        return $participant === null
+            ? [null, null]
+            : [Conversation::participantType($participant), Conversation::participantKey($participant)];
+    }
+
+    /**
      * Determine whether this turn should be persisted.
      *
      * @param  Agent&RemembersConversations  $agent
      */
     protected function shouldRemember(Agent $agent, AgentPrompt $prompt, AgentResponse $response): bool
     {
+        return $this->shouldRememberTurn($agent, $prompt)
+            || $response->hasPendingApprovals();
+    }
+
+    /**
+     * Determine whether this turn belongs to a conversation, however it ended.
+     *
+     * @param  Agent&RemembersConversations  $agent
+     */
+    protected function shouldRememberTurn(Agent $agent, AgentPrompt $prompt): bool
+    {
         return $agent->hasConversationParticipant()
             || $agent->currentConversation() !== null
-            || $response->hasPendingApprovals()
             || $prompt->hasApprovalDecisions();
     }
 

@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Approvals\Decisions;
+use Laravel\Ai\Enums\MessageStatus;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -1118,4 +1119,101 @@ test('a plain call sharing a step with a gated call runs at the pause and both r
     expect($sentResultIds)->toBe(['toolu_plain', 'toolu_gated'])
         ->and($calls['toolu_gated'])->toHaveKey('result')
         ->and($store->pendingApprovalsFor($paused->conversationId))->toBe([]);
+});
+
+test('a resume that dies after a step fails the row it paused on instead of writing a newer one', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence()
+            ->push([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'ApprovableNumberGenerator', 'input' => (object) []]],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ])
+            ->push([
+                'id' => 'msg_tool_2',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'tool_use', 'id' => 'toolu_2', 'name' => 'FixedNumberGenerator', 'input' => (object) []]],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ])
+            ->pushStatus(500)
+            ->pushStatus(500)
+            ->pushStatus(500),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingMultiStepApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+
+    $pausedRowId = DB::table('agent_conversation_messages')
+        ->where('conversation_id', $paused->conversationId)
+        ->where('role', 'assistant')
+        ->latest('id')
+        ->value('id');
+
+    expect(fn () => (new RememberingMultiStepApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(Decisions::from(['toolu_1' => true]), provider: 'anthropic')
+    )->toThrow(Exception::class);
+
+    $rows = DB::table('agent_conversation_messages')
+        ->where('conversation_id', $paused->conversationId)
+        ->where('role', 'assistant')
+        ->get();
+
+    expect($rows)->toHaveCount(1)
+        ->and($rows->first()->id)->toBe($pausedRowId)
+        ->and($rows->first()->status)->toBe(MessageStatus::Failed->value)
+        ->and($rows->first()->steps)->json()->toHaveCount(2)
+        ->{'0'}->tool_calls->{'0'}->toMatchArray(['id' => 'toolu_1', 'result' => '72019'])
+        ->{'1'}->tool_calls->{'0'}->toMatchArray(['id' => 'toolu_2', 'result' => '72019']);
+});
+
+test('a resume that dies before its first step still fails the row its approval was written to', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence()
+            ->push([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'ApprovableNumberGenerator', 'input' => (object) []]],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ])
+            ->pushStatus(500)
+            ->pushStatus(500)
+            ->pushStatus(500)
+            ->pushStatus(500),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingMultiStepApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+
+    expect(fn () => (new RememberingMultiStepApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(Decisions::from(['toolu_1' => true]), provider: 'anthropic')
+    )->toThrow(Exception::class);
+
+    $rows = DB::table('agent_conversation_messages')
+        ->where('conversation_id', $paused->conversationId)
+        ->where('role', 'assistant')
+        ->get();
+
+    expect($rows)->toHaveCount(1)
+        ->and($rows->first()->status)->toBe(MessageStatus::Failed->value)
+        ->and(json_decode($rows->first()->meta, true)['error'])->not->toBeEmpty()
+        ->and($rows->first()->steps)->json()->toHaveCount(1)
+        ->{'0'}->tool_calls->{'0'}->toMatchArray(['id' => 'toolu_1', 'result' => '72019']);
 });

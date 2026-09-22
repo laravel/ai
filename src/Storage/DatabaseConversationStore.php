@@ -30,6 +30,7 @@ use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
+use Throwable;
 
 class DatabaseConversationStore implements ConversationStore, PaginatesConversations, ResolvesPendingApprovals, VerifiesConversationOwnership
 {
@@ -119,10 +120,10 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     /**
      * Store the assistant turn for the given conversation, folding a resumed run into the row it paused on.
      */
-    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
+    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response, ?Throwable $exception = null): ?string
     {
         if ($prompt->hasApprovalDecisions() && ($paused = $this->pausedRowFor($conversationId, $prompt)) !== null) {
-            return $this->resumePausedRow($conversationId, $paused, $prompt, $response);
+            return $this->resumePausedRow($conversationId, $paused, $prompt, $response, $exception);
         }
 
         $messageId = (string) Str::uuid7();
@@ -142,8 +143,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'attachments' => '[]',
             'steps' => $steps->toJson(),
             'usage' => json_encode($response->usage),
-            'meta' => json_encode($response->meta),
-            'status' => $response->hasPendingApprovals() ? MessageStatus::Paused : MessageStatus::Completed,
+            'meta' => json_encode($this->metaFor($response, $exception)),
+            'status' => $this->statusFor($response, $exception),
         ]));
 
         if (! $response->hasPendingApprovals()) {
@@ -153,6 +154,30 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         $this->touchConversation($conversationId, $now);
 
         return $messageId;
+    }
+
+    /**
+     * The status the turn is stored under, given how it ended.
+     */
+    protected function statusFor(AgentResponse $response, ?Throwable $exception): MessageStatus
+    {
+        return match (true) {
+            $exception !== null => MessageStatus::Failed,
+            $response->hasPendingApprovals() => MessageStatus::Paused,
+            default => MessageStatus::Completed,
+        };
+    }
+
+    /**
+     * The meta the turn is stored under, carrying the error it died with.
+     *
+     * @return array<string, mixed>
+     */
+    protected function metaFor(AgentResponse $response, ?Throwable $exception): array
+    {
+        return $exception === null
+            ? $response->meta->toArray()
+            : [...$response->meta->toArray(), 'error' => $exception->getMessage()];
     }
 
     /**
@@ -179,7 +204,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     /**
      * Append the steps a resumed run made to the row its turn paused on.
      */
-    protected function resumePausedRow(string $conversationId, object $paused, AgentPrompt $prompt, AgentResponse $response): string
+    protected function resumePausedRow(string $conversationId, object $paused, AgentPrompt $prompt, AgentResponse $response, ?Throwable $exception = null): string
     {
         $steps = $this->decodedSteps($paused);
 
@@ -201,8 +226,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'content' => blank($response->text) ? $paused->content : $response->text,
             'steps' => $steps->toJson(),
             'usage' => json_encode(TextUsage::fromArray($this->decoded($paused->usage))->add($response->usage)),
-            'meta' => json_encode($this->mergedMeta($paused, $response)),
-            'status' => $response->hasPendingApprovals() ? MessageStatus::Paused : MessageStatus::Completed,
+            'meta' => json_encode($this->mergedMeta($paused, $response, $exception)),
+            'status' => $this->statusFor($response, $exception),
             'updated_at' => $now,
         ]);
 
@@ -220,10 +245,10 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      *
      * @return array<string, mixed>
      */
-    protected function mergedMeta(object $paused, AgentResponse $response): array
+    protected function mergedMeta(object $paused, AgentResponse $response, ?Throwable $exception = null): array
     {
         return [
-            ...$response->meta->toArray(),
+            ...$this->metaFor($response, $exception),
             'citations' => [...$this->decoded($paused->meta)['citations'] ?? [], ...$response->meta->citations->all()],
         ];
     }
@@ -452,16 +477,22 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     {
         $pending = $this->pausedCallIds($record);
         $provider = $this->decoded($record->meta)['provider'] ?? null;
+        $failed = MessageStatus::from($record->status) === MessageStatus::Failed;
 
-        return $this->decodedSteps($record)->flatMap(function (array $step) use ($pending, $provider): array {
+        return $this->decodedSteps($record)->flatMap(function (array $step) use ($pending, $provider, $failed): array {
             $content = $step['content'];
 
             $replayed = collect($step['tool_calls'])
-                ->filter(fn (array $toolCall) => PendingApproval::isAnswered($toolCall) || in_array($toolCall['id'] ?? null, $pending, true))
+                ->filter(fn (array $toolCall) => $failed || PendingApproval::isAnswered($toolCall) || in_array($toolCall['id'] ?? null, $pending, true))
                 ->values();
 
             $toolCalls = $replayed->map(ToolCall::fromArray(...));
-            $toolResults = $replayed->filter(PendingApproval::isAnswered(...))->map(ToolResult::fromArray(...))->values();
+
+            // A failed turn died with calls it never answered, so the model is told which one it may have run rather than shown a call with no result...
+            $toolResults = $replayed
+                ->filter(fn (array $toolCall) => PendingApproval::isAnswered($toolCall) || $failed)
+                ->map(fn (array $toolCall) => PendingApproval::isAnswered($toolCall) ? ToolResult::fromArray($toolCall) : $this->interruptedResultFor($toolCall))
+                ->values();
 
             // Raw blocks still name a dropped call, so a step missing one rebuilds generically rather than replaying a call no result answers...
             $replayBlocks = $replayed->count() === count($step['tool_calls']) ? $step['replay_blocks'] : [];
@@ -476,6 +507,21 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
             return $messages;
         })->all();
+    }
+
+    /**
+     * The result a failed turn's unanswered call replays with.
+     *
+     * @param  array<string, mixed>  $toolCall
+     */
+    protected function interruptedResultFor(array $toolCall): ToolResult
+    {
+        return new ToolResult(
+            $toolCall['id'],
+            $toolCall['name'],
+            $toolCall['arguments'] ?? [],
+            'This tool call was interrupted before a result was recorded, so it may or may not have run.',
+        );
     }
 
     /**

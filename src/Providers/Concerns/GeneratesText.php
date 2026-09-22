@@ -18,7 +18,6 @@ use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\ToolApprovalRequested;
 use Laravel\Ai\Events\ToolApprovalResolved;
 use Laravel\Ai\Exceptions\ApprovalNotResumableException;
-use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
@@ -192,7 +191,10 @@ trait GeneratesText
      */
     protected function runContextFor(string $invocationId, AgentPrompt $prompt): RunContext
     {
-        return new RunContext($invocationId, $prompt->agent, $this, $prompt->model, $this->events);
+        return tap(
+            new RunContext($invocationId, $prompt->agent, $this, $prompt->model, $this->events),
+            fn (RunContext $context) => $prompt->setRunContext($context),
+        );
     }
 
     /**
@@ -201,9 +203,7 @@ trait GeneratesText
     protected function recordAgentFailure(string $invocationId, AgentPrompt $prompt, Throwable $exception, bool $retryable = true): void
     {
         // A failoverable exception is only terminal once the caller has run out of providers to try...
-        if ($retryable &&
-            ! $prompt->isFinalAttempt() &&
-            $exception instanceof FailoverableException) {
+        if ($retryable && $prompt->willRetry($exception)) {
             return;
         }
 

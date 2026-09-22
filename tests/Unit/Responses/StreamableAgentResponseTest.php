@@ -9,6 +9,7 @@ use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
+use RuntimeException;
 
 test('top level text and usage ignore the output a still running tool reported', function (): void {
     $response = new StreamableAgentResponse('invocation-1', fn (): Generator => yield from [
@@ -40,4 +41,23 @@ test('streamed response tool aggregates count a tool call once, not its prelimin
         ->and(collect($response->toolCalls)->pluck('id')->all())->toBe(['call-1'])
         ->and(collect($response->toolResults)->pluck('id')->all())->toBe(['call-1'])
         ->and($response->pendingApprovals)->toHaveCount(0);
+});
+
+test('a failure is reported to the catch callbacks once, however often the stream is re-iterated', function (): void {
+    $response = new StreamableAgentResponse('invocation-1', function (): Generator {
+        yield new TextDelta('event-1', 'message-1', 'Hello', time());
+
+        throw new RuntimeException('Boom.');
+    }, new Meta('fake', 'model'));
+
+    $failures = [];
+
+    $response->catch(function (Throwable $exception) use (&$failures): void {
+        $failures[] = $exception->getMessage();
+    });
+
+    expect(fn () => iterator_to_array($response))->toThrow(RuntimeException::class);
+    expect(fn () => iterator_to_array($response))->toThrow(RuntimeException::class);
+
+    expect($failures)->toBe(['Boom.']);
 });

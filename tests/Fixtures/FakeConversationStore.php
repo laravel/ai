@@ -7,6 +7,7 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
+use Throwable;
 
 class FakeConversationStore implements ConversationStore
 {
@@ -25,7 +26,7 @@ class FakeConversationStore implements ConversationStore
         return 'user-message-123';
     }
 
-    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
+    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response, ?Throwable $exception = null): ?string
     {
         return 'assistant-message-123';
     }

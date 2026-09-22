@@ -163,13 +163,18 @@ class TextGenerationLoop
 
             $prepared = $attempt?->step ?? $pending;
 
+            // Recorded before the tools run so a step that dies partway is still kept as far as it got...
+            $steps->push($completedStep = $this->buildStep($lastResult));
+
+            $context?->recordStep($completedStep);
+
             $this->stepCompleted($context, $attempt, $lastResult);
 
             $accumulatedUsage = $accumulatedUsage->add($lastResult->usage);
 
             [$toolResults, $pendingApprovals] = $this->stepToolResultsWithOptions($lastResult, $prepared->isFinalStep, $prepared->tools, $prepared->options, $context);
 
-            $steps->push($this->buildStep($lastResult, $toolResults));
+            $completedStep->toolResults = $toolResults;
 
             $assistantMessage = $this->buildAssistantMessage($lastResult);
             $allMessages[] = $assistantMessage;
@@ -338,6 +343,11 @@ class TextGenerationLoop
                 throw $exception;
             }
 
+            // Recorded before the tools run so a step that dies partway is still kept as far as it got...
+            $steps->push($completedStep = $this->buildStep($result));
+
+            $context?->recordStep($completedStep);
+
             $this->stepCompleted($context, $attempt, $result);
 
             $accumulatedUsage = $accumulatedUsage->add($result->usage);
@@ -354,7 +364,7 @@ class TextGenerationLoop
 
             [$toolResults, $pendingApprovals] = $toolStream->getReturn();
 
-            $steps->push($this->buildStep($result, $toolResults));
+            $completedStep->toolResults = $toolResults;
 
             foreach ($toolResults as $toolResult) {
                 yield (new ToolResultEvent(
@@ -632,7 +642,7 @@ class TextGenerationLoop
 
             yield from $this->preliminaryToolResults($events, $toolCall, $invocationId);
 
-            $toolResults[] = $this->toolResult($toolCall, $events->getReturn());
+            $toolResults[] = $this->recordedToolResult($this->toolResult($toolCall, $events->getReturn()), $context);
         }
 
         return [$toolResults, $pendingApprovals];
@@ -730,7 +740,7 @@ class TextGenerationLoop
      */
     protected function resolvedToolResult(ToolCall $toolCall, ?Tool $tool, bool $isFinalStep, array $tools = [], ?RunContext $context = null): ToolResult
     {
-        return $this->toolResult(
+        return $this->recordedToolResult($this->toolResult(
             $toolCall,
             match (true) {
                 ! $tool instanceof Tool && $this->repairsToolCalls => "Tool '{$toolCall->name}' does not exist. Available tools: {$this->availableToolNames($tools)}.",
@@ -738,7 +748,17 @@ class TextGenerationLoop
                 default => $this->executeTool($tool, $toolCall->arguments, $toolCall->id, $context),
             },
             failed: ! $tool instanceof Tool || $isFinalStep,
-        );
+        ), $context);
+    }
+
+    /**
+     * Answer the recorded step with the result its tool just produced.
+     */
+    protected function recordedToolResult(ToolResult $result, ?RunContext $context): ToolResult
+    {
+        $context?->recordToolResult($result);
+
+        return $result;
     }
 
     /**
@@ -979,15 +999,12 @@ class TextGenerationLoop
         );
     }
 
-    /**
-     * @param  ToolResult[]  $toolResults
-     */
-    protected function buildStep(StepResponse $result, array $toolResults = []): Step
+    protected function buildStep(StepResponse $result): Step
     {
         return (new Step(
             $result->text,
             $result->toolCalls,
-            $toolResults,
+            [],
             $result->finishReason,
             $result->usage,
             $result->meta,

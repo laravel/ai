@@ -20,6 +20,7 @@ use Laravel\Ai\Streaming\Protocols\AgentUserInteractionProtocol;
 use Laravel\Ai\Streaming\Protocols\StreamProtocol;
 use Laravel\Ai\Streaming\Protocols\VercelDataProtocol;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 use Traversable;
 
 class StreamableAgentResponse implements IteratorAggregate, Responsable
@@ -45,6 +46,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     public string $reasoning = '';
 
     protected array $thenCallbacks = [];
+
+    protected array $catchCallbacks = [];
 
     protected ?StreamProtocol $protocol = null;
 
@@ -74,6 +77,16 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
                 break;
             }
         }
+
+        return $this;
+    }
+
+    /**
+     * Provide a callback that should be invoked when the stream fails.
+     */
+    public function catch(callable $callback): self
+    {
+        $this->catchCallbacks[] = $callback;
 
         return $this;
     }
@@ -199,12 +212,25 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         $events = [];
 
         // Resolve the stream of the prompt and yield the events...
-        foreach (call_user_func($this->generator) as $event) {
-            $events[] = $event;
+        try {
+            foreach (call_user_func($this->generator) as $event) {
+                $events[] = $event;
 
-            $this->hasYielded = true;
+                $this->hasYielded = true;
 
-            yield $event;
+                yield $event;
+            }
+        } catch (Throwable $exception) {
+            // Taken before invoking so a re-iterated stream does not report the same failure twice...
+            $callbacks = $this->catchCallbacks;
+
+            $this->catchCallbacks = [];
+
+            foreach ($callbacks as $callback) {
+                $callback($exception);
+            }
+
+            throw $exception;
         }
 
         $this->events = new Collection($events);

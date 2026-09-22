@@ -13,10 +13,18 @@ use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Step;
+use Laravel\Ai\Responses\Data\TextUsage;
+use Laravel\Ai\Responses\Data\ToolResult;
 use Throwable;
 
 class RunContext
 {
+    /** @var array<int, Step> */
+    protected array $steps = [];
+
     public function __construct(
         public readonly string $invocationId,
         public readonly Agent $agent,
@@ -24,6 +32,41 @@ class RunContext
         public readonly string $model,
         protected readonly Dispatcher $events,
     ) {}
+
+    /**
+     * Keep the step the model just produced, so a run that dies later can still be recorded as far as it got.
+     */
+    public function recordStep(Step $step): void
+    {
+        $this->steps[] = $step;
+    }
+
+    /**
+     * Answer the step being worked on, one tool at a time, so a step that dies partway keeps the tools that ran.
+     */
+    public function recordToolResult(ToolResult $result): void
+    {
+        $step = array_key_last($this->steps);
+
+        if ($step !== null) {
+            $this->steps[$step]->toolResults[] = $result;
+        }
+    }
+
+    /**
+     * The response the run had built by the time it ended, however it ended.
+     */
+    public function recordedResponse(): AgentResponse
+    {
+        $last = $this->steps === [] ? null : $this->steps[array_key_last($this->steps)];
+
+        return tap(new AgentResponse(
+            $this->invocationId,
+            $last?->text ?? '',
+            collect($this->steps)->reduce(fn (TextUsage $total, Step $step): TextUsage => $total->add($step->usage), new TextUsage),
+            $last?->meta ?? new Meta($this->provider->name(), $this->model),
+        ), fn (AgentResponse $response) => $response->withSteps(collect($this->steps)));
+    }
 
     /**
      * Report that a generation step is about to start.
