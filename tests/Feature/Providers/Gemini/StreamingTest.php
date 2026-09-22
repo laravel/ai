@@ -96,18 +96,16 @@ describe('text streaming', function (): void {
     });
 
     test('streaming replays provider tool steps when continuing after a function call', function (): void {
-        $completedSteps = [
-            ['type' => 'code_execution_call', 'id' => 'ce_1', 'content' => [['type' => 'text', 'text' => 'print(1)']]],
-            ['type' => 'code_execution_result', 'id' => 'ce_1', 'content' => [['type' => 'text', 'text' => '1']]],
-            ['type' => 'function_call', 'id' => 'call_1', 'name' => 'FixedNumberGenerator', 'arguments' => []],
-        ];
-
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::sequence()
                 ->push(...geminiStream([
-                    $this->stepStart(0, ['type' => 'function_call', 'id' => 'call_1', 'name' => 'FixedNumberGenerator']),
+                    $this->stepStart(0, ['type' => 'code_execution_call', 'id' => 'ce_1', 'content' => [['type' => 'text', 'text' => 'print(1)']]]),
                     $this->stepStop(0),
-                    $this->interactionCompleted($completedSteps),
+                    $this->stepStart(1, ['type' => 'code_execution_result', 'id' => 'ce_1', 'content' => [['type' => 'text', 'text' => '1']]]),
+                    $this->stepStop(1),
+                    $this->stepStart(2, ['type' => 'function_call', 'id' => 'call_1', 'name' => 'FixedNumberGenerator', 'arguments' => []]),
+                    $this->stepStop(2),
+                    $this->interactionCompleted(),
                 ]))
                 ->push(...geminiStream([
                     $this->stepStart(0, ['type' => 'model_output']),
@@ -132,13 +130,11 @@ describe('text streaming', function (): void {
             'generativelanguage.googleapis.com/*' => geminiStreamResponse([
                 $this->stepStart(0, ['type' => 'model_output']),
                 $this->stepDelta(0, 'text', 'Spain won Euro 2024.'),
-                $this->stepStop(0),
-                $this->interactionCompleted([
-                    $this->modelOutput('Spain won Euro 2024.', [
-                        ['uri' => 'https://example.com/euro', 'title' => 'Euro 2024'],
-                        ['uri' => 'https://example.com/spain', 'title' => 'Spain Wins'],
-                    ]),
-                ]),
+                ['event_type' => 'step.stop', 'index' => 0, 'step' => ['annotations' => [
+                    ['type' => 'url_citation', 'url' => 'https://example.com/euro', 'title' => 'Euro 2024'],
+                    ['type' => 'url_citation', 'url' => 'https://example.com/spain', 'title' => 'Spain Wins'],
+                ]]],
+                $this->interactionCompleted(),
             ]),
         ]);
 
@@ -192,7 +188,7 @@ describe('tool calls', function (): void {
                 ->push(...geminiStream([
                     $this->stepStart(0, ['type' => 'function_call', 'id' => 'call_1', 'name' => 'FixedNumberGenerator']),
                     $this->stepStop(0),
-                    $this->interactionCompleted([$this->functionCallStep('FixedNumberGenerator', [], 'call_1')]),
+                    $this->interactionCompleted(),
                 ]))
                 ->push(...geminiStream([
                     $this->stepDelta(0, 'text', 'The number is 72019'),
@@ -232,20 +228,39 @@ describe('tool calls', function (): void {
         expect($toolCall->toolCall->arguments)->toBe(['seed' => 7]);
     });
 
+    test('streamed argument deltas are replayed to gemini as an object', function (): void {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence()
+                ->push(...geminiStream([
+                    $this->stepStart(0, ['type' => 'function_call', 'id' => 'call_1', 'name' => 'FixedNumberGenerator']),
+                    $this->argumentsDelta(0, '{"see'),
+                    $this->argumentsDelta(0, 'd": 7}'),
+                    $this->stepStop(0),
+                    $this->interactionCompleted([], 'requires_action'),
+                ]))
+                ->push(...geminiStream([
+                    $this->stepDelta(0, 'text', 'Done'),
+                    $this->interactionCompleted(),
+                ])),
+        ]);
+
+        $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        expect(Http::recorded()[1][0]->body())
+            ->toContain('"name":"FixedNumberGenerator","arguments":{"seed":7}');
+    });
+
     test('streaming tool loop emits a single stream end with accumulated usage', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::sequence()
                 ->push(...geminiStream([
                     $this->stepStart(0, ['type' => 'function_call', 'id' => 'call_1', 'name' => 'FixedNumberGenerator']),
                     $this->stepStop(0),
-                    $this->interactionCompleted(
-                        [$this->functionCallStep('FixedNumberGenerator', [], 'call_1')],
-                        ['total_input_tokens' => 10, 'total_output_tokens' => 5],
-                    ),
+                    $this->interactionCompleted(['total_input_tokens' => 10, 'total_output_tokens' => 5]),
                 ]))
                 ->push(...geminiStream([
                     $this->stepDelta(0, 'text', 'The number is 72019'),
-                    $this->interactionCompleted([], ['total_input_tokens' => 20, 'total_output_tokens' => 10]),
+                    $this->interactionCompleted(['total_input_tokens' => 20, 'total_output_tokens' => 10]),
                 ])),
         ]);
 
@@ -264,7 +279,7 @@ describe('tool calls', function (): void {
         $thought = [
             'type' => 'thought',
             'summary' => [['type' => 'text', 'text' => 'thinking...']],
-            'thought_signature' => 'sig_stream_555',
+            'signature' => 'sig_stream_555',
         ];
 
         Http::fake([
@@ -272,13 +287,11 @@ describe('tool calls', function (): void {
                 ->push(...geminiStream([
                     $this->stepStart(0, ['type' => 'thought']),
                     $this->stepDelta(0, 'thought_summary', 'thinking...'),
+                    ['event_type' => 'step.delta', 'index' => 0, 'delta' => ['type' => 'thought_signature', 'signature' => 'sig_stream_555']],
                     $this->stepStop(0),
                     $this->stepStart(1, ['type' => 'function_call', 'id' => 'call_1', 'name' => 'FixedNumberGenerator']),
                     $this->stepStop(1),
-                    $this->interactionCompleted([
-                        $thought,
-                        $this->functionCallStep('FixedNumberGenerator', [], 'call_1'),
-                    ]),
+                    $this->interactionCompleted(),
                 ]))
                 ->push(...geminiStream([
                     $this->stepDelta(0, 'text', 'The number is 72019'),
@@ -296,7 +309,7 @@ describe('tool calls', function (): void {
         expect($replayed)->toBe([$thought]);
     });
 
-    test('streaming falls back to the accumulated steps when the completed event carries none', function (): void {
+    test('a completed event sent without an interaction wrapper still closes the stream', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::sequence()
                 ->push(...geminiStream([
@@ -372,7 +385,7 @@ describe('usage tracking', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => geminiStreamResponse([
                 $this->stepDelta(0, 'text', 'Hello'),
-                $this->interactionCompleted([], [
+                $this->interactionCompleted([
                     'total_input_tokens' => 42,
                     'total_output_tokens' => 10,
                     'total_cached_tokens' => 5,
@@ -394,7 +407,7 @@ describe('usage tracking', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => geminiStreamResponse([
                 $this->stepDelta(0, 'text', 'Hello'),
-                $this->interactionCompleted([], [], $status),
+                $this->interactionCompleted([], $status),
             ]),
         ]);
 

@@ -15,8 +15,10 @@ trait BuildsTextRequests
 {
     /**
      * The request keys Gemini expects beside the generation config rather than within it.
+     *
+     * @var array<int, string>
      */
-    protected array $topLevelInteractionKeys = [
+    private const TOP_LEVEL_INTERACTION_KEYS = [
         'agent', 'agent_config', 'background', 'environment', 'labels',
         'previous_interaction_id', 'response_format', 'safety_settings',
         'service_tier', 'store', 'user_metadata', 'webhook_config',
@@ -112,7 +114,7 @@ trait BuildsTextRequests
         }
 
         foreach ($providerOptions as $key => $value) {
-            if (in_array($snakeKey = Str::snake($key), $this->topLevelInteractionKeys, true)) {
+            if (in_array($snakeKey = Str::snake($key), self::TOP_LEVEL_INTERACTION_KEYS, true)) {
                 $body[$snakeKey] = $value;
                 unset($providerOptions[$key]);
             }

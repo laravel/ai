@@ -73,6 +73,11 @@ trait MapsMessages
         }
 
         if ($message instanceof AssistantMessage) {
+            // A signature never rides on a function call, so a persisted turn rebuilds the thought step that held it...
+            if (filled($signature = $message->toolCalls->first()?->thoughtSignature)) {
+                $input[] = ['type' => 'thought', 'signature' => $signature];
+            }
+
             foreach ($message->toolCalls as $toolCall) {
                 $input[] = [
                     'type' => 'function_call',

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Providers\Gemini;
 
 use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\AssistantAgent;
 
@@ -134,11 +135,12 @@ trait GeminiHelpers
         return ['event_type' => 'step.stop', 'index' => $index];
     }
 
-    protected function interactionCompleted(array $steps = [], array $usage = [], string $status = 'completed'): array
+    protected function interactionCompleted(array $usage = [], string $status = 'completed'): array
     {
-        return array_merge(
-            ['event_type' => 'interaction.completed'],
-            $this->fakeInteraction($steps, $usage, $status),
-        );
+        // Gemini's completed event carries the usage and status only, never the steps...
+        return [
+            'event_type' => 'interaction.completed',
+            'interaction' => Arr::except($this->fakeInteraction([], $usage, $status), 'steps'),
+        ];
     }
 }

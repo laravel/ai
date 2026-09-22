@@ -149,7 +149,7 @@ test('prior assistant steps are replayed to gemini verbatim', function (): void 
     ]);
 
     $replayed = [
-        ['type' => 'thought', 'summary' => [['type' => 'text', 'text' => 'Thinking.']], 'thought_signature' => 'sig_123'],
+        ['type' => 'thought', 'summary' => [['type' => 'text', 'text' => 'Thinking.']], 'signature' => 'sig_123'],
         ['type' => 'function_call', 'id' => 'call_123', 'name' => 'FixedNumberGenerator', 'arguments' => []],
     ];
 

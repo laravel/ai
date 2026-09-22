@@ -24,7 +24,7 @@ trait ParsesTextResponses
     /**
      * The step types Gemini derives from our own request rather than the model's turn.
      */
-    protected array $requestStepTypes = ['user_input', 'function_result'];
+    private const REQUEST_STEP_TYPES = ['user_input', 'function_result'];
 
     /**
      * Validate the Gemini response data.
@@ -69,7 +69,7 @@ trait ParsesTextResponses
 
         return new StepResponse(
             text: $text,
-            toolCalls: $this->mapToolCalls($functionCallSteps),
+            toolCalls: $this->mapToolCalls($functionCallSteps, $this->thoughtSignature($steps)),
             finishReason: $this->extractFinishReason($data, $functionCallSteps),
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model, $this->extractCitations($steps)),
@@ -87,7 +87,7 @@ trait ParsesTextResponses
     {
         return array_values(array_filter(
             $steps,
-            fn (array $step): bool => ! in_array($step['type'] ?? '', $this->requestStepTypes, true),
+            fn (array $step): bool => ! in_array($step['type'] ?? '', self::REQUEST_STEP_TYPES, true),
         ));
     }
 
@@ -178,9 +178,9 @@ trait ParsesTextResponses
      *
      * @return array<ToolCall>
      */
-    protected function mapToolCalls(array $functionCallSteps): array
+    protected function mapToolCalls(array $functionCallSteps, ?string $thoughtSignature = null): array
     {
-        return array_map(function (array $step): ToolCall {
+        return array_map(function (array $step) use ($thoughtSignature): ToolCall {
             $id = $step['id'] ?? (string) Str::uuid7();
 
             return new ToolCall(
@@ -188,8 +188,22 @@ trait ParsesTextResponses
                 $step['name'] ?? '',
                 $this->decodeArguments($step['arguments'] ?? []),
                 $id,
+                thoughtSignature: $thoughtSignature,
             );
         }, $functionCallSteps);
+    }
+
+    /**
+     * Get the signature of the turn's last thought step, which the next request must replay beside its calls.
+     */
+    protected function thoughtSignature(array $steps): ?string
+    {
+        $signatures = array_filter(array_map(
+            fn (array $step): string => $this->isThinkingStep($step) ? (string) ($step['signature'] ?? '') : '',
+            $steps,
+        ));
+
+        return end($signatures) ?: null;
     }
 
     /**
@@ -214,14 +228,18 @@ trait ParsesTextResponses
         $citations = new Collection;
 
         foreach ($steps as $step) {
-            foreach ($step['content'] ?? [] as $block) {
-                foreach ($block['annotations'] ?? [] as $annotation) {
-                    if (isset($annotation['uri'])) {
-                        $citations->push(new UrlCitation(
-                            $annotation['uri'],
-                            $annotation['title'] ?? null,
-                        ));
-                    }
+            // A stream parks its annotations on the step rather than on the text block they belong to...
+            $annotations = array_merge($step['annotations'] ?? [], ...array_map(
+                fn ($block): array => is_array($block) ? ($block['annotations'] ?? []) : [],
+                $step['content'] ?? [],
+            ));
+
+            foreach ($annotations as $annotation) {
+                if (($annotation['type'] ?? '') === 'url_citation') {
+                    $citations->push(new UrlCitation(
+                        $annotation['url'] ?? '',
+                        $annotation['title'] ?? null,
+                    ));
                 }
             }
         }

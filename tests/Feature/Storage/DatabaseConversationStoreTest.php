@@ -324,6 +324,44 @@ test('it stores one step per model round-trip from a remembered agent prompt', f
         );
 });
 
+test('it preserves the gemini thought signature across a persisted tool conversation', function (): void {
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response(storeTestGeminiInteraction([
+                ['type' => 'thought', 'summary' => [['type' => 'text', 'text' => 'Thinking.']], 'signature' => 'sig_persist_777'],
+                ['type' => 'function_call', 'id' => 'call_123', 'name' => 'FixedNumberGenerator', 'arguments' => (object) []],
+            ])),
+            Http::response(storeTestGeminiInteraction([[
+                'type' => 'model_output',
+                'content' => [['type' => 'text', 'text' => 'The number is 72019']],
+            ]])),
+            Http::response(storeTestGeminiInteraction([[
+                'type' => 'model_output',
+                'content' => [['type' => 'text', 'text' => 'The second number is 99']],
+            ]])),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+    $conversationId = (new DatabaseConversationStore)->storeConversation('user', $user->id, 'Tool conversation');
+
+    (new RememberingToolUsingAgent)->continue($conversationId, $user)->prompt('Generate a random number', provider: 'gemini');
+
+    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+
+    expect(json_decode((string) $record->steps, true)[0]['tool_calls'][0]['thought_signature'])->toBe('sig_persist_777');
+
+    (new RememberingToolUsingAgent)->continue($conversationId, $user)->prompt('Generate another', provider: 'gemini');
+
+    $recorded = Http::recorded();
+    $signatures = array_column(array_filter(
+        $recorded[count($recorded) - 1][0]->data()['input'],
+        fn (array $step): bool => $step['type'] === 'thought',
+    ), 'signature');
+
+    expect($signatures)->toBe(['sig_persist_777']);
+});
+
 test('it stores a response built without steps as a single step of lists', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');

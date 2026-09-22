@@ -66,7 +66,7 @@ trait HandlesTextStreaming
                 yield (new StreamStart(
                     $this->generateEventId(),
                     $provider->name(),
-                    $data['model'] ?? $model,
+                    $data['interaction']['model'] ?? $data['model'] ?? $model,
                     time(),
                 ))->withInvocationId($invocationId);
             }
@@ -88,8 +88,7 @@ trait HandlesTextStreaming
             if (is_array($delta)) {
                 $deltaType = $delta['type'] ?? '';
 
-                // Gemini streams the rest of a step's payload as delta keys: thought signatures,
-                // provider tool arguments and their results all arrive this way...
+                // Thought signatures, provider tool arguments and their results all arrive as delta keys...
                 foreach (Arr::except($delta, ['type', 'text', 'content']) as $key => $value) {
                     $steps[$index][$key] = $value;
                 }
@@ -160,8 +159,8 @@ trait HandlesTextStreaming
                     // Gemini splits function call arguments across deltas as partial JSON strings...
                     $partialArguments[$index] = ($partialArguments[$index] ?? '').($delta['arguments'] ?? '');
 
-                    $steps[$index]['type'] = 'function_call';
-                    $steps[$index]['arguments'] = $partialArguments[$index];
+                    $steps[$index]['type'] ??= 'function_call';
+                    $steps[$index]['arguments'] = $this->decodeArguments($partialArguments[$index]);
                 }
             }
 
@@ -194,11 +193,10 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        // The completed event carries the authoritative steps when it lists them at all...
-        $steps = filled($final['steps'] ?? null) ? $final['steps'] : array_values($steps);
+        $steps = array_values($steps);
 
         $functionCallSteps = $this->extractFunctionCallSteps($steps);
-        $toolCalls = $this->mapToolCalls($functionCallSteps);
+        $toolCalls = $this->mapToolCalls($functionCallSteps, $this->thoughtSignature($steps));
 
         foreach ($toolCalls as $toolCall) {
             yield (new ToolCallEvent(

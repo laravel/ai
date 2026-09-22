@@ -160,7 +160,7 @@ test('thought steps are replayed verbatim across the tool call continuation', fu
     $thought = [
         'type' => 'thought',
         'summary' => [['type' => 'text', 'text' => 'Let me generate that...']],
-        'thought_signature' => 'sig_abc_123',
+        'signature' => 'sig_abc_123',
     ];
 
     Http::fake([

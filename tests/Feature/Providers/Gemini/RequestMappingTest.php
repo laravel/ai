@@ -291,8 +291,8 @@ describe('citations', function (): void {
             'generativelanguage.googleapis.com/*' => Http::response($this->fakeInteraction([
                 ['type' => 'google_search_call', 'content' => [['type' => 'text', 'text' => 'who won euro 2024']]],
                 $this->modelOutput('Spain won Euro 2024.', [
-                    ['start_index' => 0, 'end_index' => 20, 'uri' => 'https://example.com/euro', 'title' => 'Euro 2024'],
-                    ['start_index' => 0, 'end_index' => 20, 'uri' => 'https://example.com/spain', 'title' => 'Spain Wins'],
+                    ['type' => 'url_citation', 'start_index' => 0, 'end_index' => 20, 'url' => 'https://example.com/euro', 'title' => 'Euro 2024'],
+                    ['type' => 'url_citation', 'start_index' => 0, 'end_index' => 20, 'url' => 'https://example.com/spain', 'title' => 'Spain Wins'],
                 ]),
             ])),
         ]);
@@ -309,8 +309,8 @@ describe('citations', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::response($this->fakeInteraction([
                 $this->modelOutput('Content.', [
-                    ['uri' => 'https://example.com/same', 'title' => 'Title A'],
-                    ['uri' => 'https://example.com/same', 'title' => 'Title B'],
+                    ['type' => 'url_citation', 'url' => 'https://example.com/same', 'title' => 'Title A'],
+                    ['type' => 'url_citation', 'url' => 'https://example.com/same', 'title' => 'Title B'],
                 ]),
             ])),
         ]);
