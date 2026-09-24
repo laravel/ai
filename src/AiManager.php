@@ -77,17 +77,13 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Get a provider instance by name.
+     * Get an audio provider instance by name.
      *
      * @throws LogicException
      */
     public function audioProvider(?string $name = null): AudioProvider
     {
-        return tap($this->instance($name), function ($instance): void {
-            if (! $instance instanceof AudioProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support audio generation.');
-            }
-        });
+        return $this->ensureProviderSupports(AudioProvider::class, 'audio generation', $name);
     }
 
     /**
@@ -111,11 +107,7 @@ class AiManager extends MultipleInstanceManager
      */
     public function classificationProvider(?string $name = null): ClassificationProvider
     {
-        return tap($this->instance($name), function ($instance): void {
-            if (! $instance instanceof ClassificationProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support classification.');
-            }
-        });
+        return $this->ensureProviderSupports(ClassificationProvider::class, 'classification', $name);
     }
 
     /**
@@ -133,17 +125,13 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Get a provider instance by name.
+     * Get an embedding provider instance by name.
      *
      * @throws LogicException
      */
     public function embeddingProvider(?string $name = null): EmbeddingProvider
     {
-        return tap($this->instance($name), function ($instance): void {
-            if (! $instance instanceof EmbeddingProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support embedding generation.');
-            }
-        });
+        return $this->ensureProviderSupports(EmbeddingProvider::class, 'embedding generation', $name);
     }
 
     /**
@@ -167,11 +155,7 @@ class AiManager extends MultipleInstanceManager
      */
     public function rerankingProvider(?string $name = null): RerankingProvider
     {
-        return tap($this->instance($name), function ($instance): void {
-            if (! $instance instanceof RerankingProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support reranking.');
-            }
-        });
+        return $this->ensureProviderSupports(RerankingProvider::class, 'reranking', $name);
     }
 
     /**
@@ -189,17 +173,13 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Get a provider instance by name.
+     * Get an image provider instance by name.
      *
      * @throws LogicException
      */
     public function imageProvider(?string $name = null): ImageProvider
     {
-        return tap($this->instance($name), function ($instance): void {
-            if (! $instance instanceof ImageProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support image generation.');
-            }
-        });
+        return $this->ensureProviderSupports(ImageProvider::class, 'image generation', $name);
     }
 
     /**
@@ -217,17 +197,13 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Get a provider instance by name.
+     * Get a text provider instance by name.
      *
      * @throws LogicException
      */
     public function textProvider(?string $name = null): TextProvider
     {
-        return tap($this->instance($name), function ($instance): void {
-            if (! $instance instanceof TextProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support text generation.');
-            }
-        });
+        return $this->ensureProviderSupports(TextProvider::class, 'text generation', $name);
     }
 
     /**
@@ -245,17 +221,13 @@ class AiManager extends MultipleInstanceManager
     }
 
     /**
-     * Get a provider instance by name.
+     * Get a transcription provider instance by name.
      *
      * @throws LogicException
      */
     public function transcriptionProvider(?string $name = null): TranscriptionProvider
     {
-        return tap($this->instance($name), function ($instance): void {
-            if (! $instance instanceof TranscriptionProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support transcription generation.');
-            }
-        });
+        return $this->ensureProviderSupports(TranscriptionProvider::class, 'transcription generation', $name);
     }
 
     /**
@@ -279,11 +251,7 @@ class AiManager extends MultipleInstanceManager
      */
     public function fileProvider(?string $name = null): FileProvider
     {
-        return tap($this->instance($name), function ($instance): void {
-            if (! $instance instanceof FileProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support file management.');
-            }
-        });
+        return $this->ensureProviderSupports(FileProvider::class, 'file management', $name);
     }
 
     /**
@@ -307,11 +275,7 @@ class AiManager extends MultipleInstanceManager
      */
     public function storeProvider(?string $name = null): StoreProvider
     {
-        return tap($this->instance($name), function ($instance): void {
-            if (! $instance instanceof StoreProvider) {
-                throw new LogicException('Provider ['.$instance::class.'] does not support store management.');
-            }
-        });
+        return $this->ensureProviderSupports(StoreProvider::class, 'store management', $name);
     }
 
     /**
@@ -516,6 +480,27 @@ class AiManager extends MultipleInstanceManager
             $config,
             $this->app->make(Dispatcher::class),
         );
+    }
+
+    /**
+     * Get a provider instance by name, ensuring it implements the given capability contract.
+     *
+     * @template TProvider
+     *
+     * @param  class-string<TProvider>  $contract
+     * @return TProvider
+     *
+     * @throws LogicException
+     */
+    protected function ensureProviderSupports(string $contract, string $capability, ?string $name): mixed
+    {
+        $instance = $this->instance($name);
+
+        if (! $instance instanceof $contract) {
+            throw new LogicException('Provider ['.$instance::class."] does not support {$capability}.");
+        }
+
+        return $instance;
     }
 
     /**
