@@ -34,3 +34,9 @@ test('driver extensions survive between queue jobs', function (): void {
     expect($runJobOnFreshScope())->toBeInstanceOf(OpenAiProvider::class);
     expect($runJobOnFreshScope())->toBeInstanceOf(OpenAiProvider::class);
 });
+
+test('a provider without a driver reports the missing driver', function (): void {
+    config()->set('ai.providers.custom', ['key' => 'secret']);
+
+    Ai::textProvider('custom');
+})->throws(RuntimeException::class, 'Instance [custom] does not specify a driver.');

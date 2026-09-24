@@ -539,7 +539,7 @@ class AiManager extends MultipleInstanceManager
             'ai.providers.'.$name, ['driver' => $name],
         );
 
-        if ($config['driver'] instanceof Lab) {
+        if (($config['driver'] ?? null) instanceof Lab) {
             $config['driver'] = $config['driver']->value;
         }
 
