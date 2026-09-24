@@ -198,6 +198,44 @@ test('a paused stream emits an approval request part for each pending approval',
     ]);
 });
 
+test('an approval for a call that was never announced still emits its input part first', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new ToolApprovalRequest('event-1', collect([
+            new PendingApproval('call-1', 'DeleteFile', ['path' => 'a.txt'], 'Destructive operation.'),
+        ]), time()),
+        new StreamEnd('event-2', 'tool_calls', new TextUsage, time()),
+    ]);
+
+    expect($parts)->toBe([
+        ['type' => 'start', 'messageId' => 'msg-1'],
+        ['type' => 'start-step'],
+        ['type' => 'tool-input-available', 'toolCallId' => 'call-1', 'toolName' => 'DeleteFile', 'input' => ['path' => 'a.txt']],
+        ['type' => 'tool-approval-request', 'toolCallId' => 'call-1', 'approvalId' => 'call-1', 'reason' => 'Destructive operation.'],
+        ['type' => 'finish-step'],
+        vercelFinishPart('tool-calls'),
+        ['type' => 'done'],
+    ]);
+});
+
+test('a resumed stream emits an approval request without repeating the input part', function () {
+    $parts = vercelProtocolParts([
+        new ToolApprovalRequest('event-1', collect([
+            new PendingApproval('call-1', 'DeleteFile', ['path' => 'a.txt'], 'Destructive operation.'),
+        ]), time()),
+        new StreamEnd('event-2', 'tool_calls', new TextUsage, time()),
+    ], messageId: 'client-message-1');
+
+    expect($parts)->toBe([
+        ['type' => 'start', 'messageId' => 'client-message-1'],
+        ['type' => 'start-step'],
+        ['type' => 'tool-approval-request', 'toolCallId' => 'call-1', 'approvalId' => 'call-1', 'reason' => 'Destructive operation.'],
+        ['type' => 'finish-step'],
+        vercelFinishPart('tool-calls'),
+        ['type' => 'done'],
+    ]);
+});
+
 test('a resumed stream emits the approved tool output for the prior turn tool call', function () {
     $parts = vercelProtocolParts([
         new ToolResult('event-1', new Data\ToolResult('call-1', 'DeleteFile', ['path' => 'a.txt'], 'deleted'), true, null, time()),
