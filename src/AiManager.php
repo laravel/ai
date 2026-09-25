@@ -569,4 +569,14 @@ class AiManager extends MultipleInstanceManager
 
         return $config;
     }
+
+    /**
+     * Flush the on-demand providers built during the current operation.
+     */
+    public function flushState(): void
+    {
+        $this->forgetInstance(array_keys($this->onDemandProviders));
+
+        $this->onDemandProviders = [];
+    }
 }

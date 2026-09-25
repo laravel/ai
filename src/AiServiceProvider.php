@@ -3,7 +3,9 @@
 namespace Laravel\Ai;
 
 use Closure;
+use Illuminate\Queue\Events\Looping;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Support\Stringable;
@@ -45,6 +47,8 @@ class AiServiceProvider extends ServiceProvider
             $this->registerCommands();
             $this->registerPublishing();
         }
+
+        $this->registerStateFlushing();
 
         // Embeddings macro...
         Stringable::macro('toEmbeddings', function (
@@ -223,5 +227,20 @@ class AiServiceProvider extends ServiceProvider
         $this->publishesMigrations([
             __DIR__.'/../database/migrations' => database_path('migrations'),
         ]);
+    }
+
+    /**
+     * Flush on-demand providers between queue jobs and Octane operations.
+     */
+    protected function registerStateFlushing(): void
+    {
+        $flush = function (): void {
+            if (app()->resolved(AiManager::class)) {
+                app(AiManager::class)->flushState();
+            }
+        };
+
+        Event::listen(Looping::class, $flush);
+        Event::listen('Laravel\Octane\Contracts\OperationTerminated', $flush);
     }
 }

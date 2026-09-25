@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Queue\Events\Looping;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Facade;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -41,6 +43,34 @@ test('rebuilding a named on-demand provider uses the new configuration', functio
 test('an on-demand provider keeps its internal flag out of its additional configuration', function (): void {
     expect(Ai::build(['driver' => 'anthropic', 'key' => 'tenant-key', 'url' => 'https://tenant.example.com/v1'])->additionalConfiguration())
         ->toBe(['url' => 'https://tenant.example.com/v1']);
+});
+
+test('flushing state forgets on-demand providers but keeps configured providers', function (): void {
+    $configured = Ai::textProvider('anthropic');
+    $onDemand = Ai::build(['driver' => 'anthropic', 'key' => 'tenant-key']);
+
+    Ai::flushState();
+
+    expect(Ai::textProvider('anthropic'))->toBe($configured)
+        ->and(fn () => Ai::textProvider($onDemand->name()))
+        ->toThrow(InvalidArgumentException::class, 'was not built in this process');
+});
+
+test('on-demand providers are flushed while the queue worker loops', function (): void {
+    $provider = Ai::build(['driver' => 'anthropic', 'key' => 'tenant-key']);
+
+    expect(Event::until(new Looping('database', 'default')))->toBeNull()
+        ->and(fn () => Ai::textProvider($provider->name()))
+        ->toThrow(InvalidArgumentException::class, 'was not built in this process');
+});
+
+test('on-demand providers are flushed when an octane operation terminates', function (): void {
+    $provider = Ai::build(['driver' => 'anthropic', 'key' => 'tenant-key']);
+
+    Event::dispatch('Laravel\Octane\Contracts\OperationTerminated');
+
+    expect(fn () => Ai::textProvider($provider->name()))
+        ->toThrow(InvalidArgumentException::class, 'was not built in this process');
 });
 
 test('driver extensions survive between queue jobs', function (): void {
