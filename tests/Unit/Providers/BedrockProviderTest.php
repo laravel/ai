@@ -1,17 +1,13 @@
 <?php
 
-use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Events\Dispatcher;
 use Laravel\Ai\Gateway\Bedrock\BedrockImageGateway;
 use Laravel\Ai\Gateway\Bedrock\BedrockRerankingGateway;
 use Laravel\Ai\Gateway\Bedrock\BedrockTextGateway;
 use Laravel\Ai\Providers\BedrockProvider;
 
 beforeEach(function (): void {
-    $this->dispatcher = Mockery::mock(Dispatcher::class);
-});
-
-afterEach(function (): void {
-    Mockery::close();
+    $this->dispatcher = new Dispatcher;
 });
 
 test('can be instantiated with config', function (): void {

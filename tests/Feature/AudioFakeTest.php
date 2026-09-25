@@ -1,7 +1,5 @@
 <?php
 
-use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
-use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -182,32 +180,20 @@ test('audio can be stored under an explicit path and name', function (): void {
 });
 
 test('storing audio publicly passes public visibility to the disk', function (): void {
-    $writes = [];
-
-    $disk = Mockery::mock(Filesystem::class);
-    $disk->shouldReceive('put')->andReturnUsing(function (string $path, string $contents, array $options) use (&$writes): bool {
-        $writes[] = ['path' => $path, 'options' => $options];
-
-        return true;
-    });
-
-    $factory = Mockery::mock(FilesystemFactory::class);
-    $factory->shouldReceive('disk')->with('audio')->andReturn($disk);
-
-    app()->instance(FilesystemFactory::class, $factory);
+    Storage::fake('audio', ['visibility' => 'private']);
 
     Audio::fake([base64_encode('raw-bytes')]);
 
     $response = Audio::of('Hello world')->generate();
 
-    $response->store('generated', 'audio');
-    $response->storePublicly('generated', 'audio');
-    $response->storePubliclyAs('hello.mp3', null, 'audio');
+    $private = $response->store('private', 'audio');
+    $public = $response->storePublicly('public', 'audio');
+    $named = $response->storePubliclyAs('hello.mp3', null, 'audio');
 
-    expect($writes[0]['options'])->toBe([])
-        ->and($writes[1]['options'])->toBe(['visibility' => 'public'])
-        ->and($writes[2]['options'])->toBe(['visibility' => 'public'])
-        ->and($writes[2]['path'])->toBe('hello.mp3');
+    expect(Storage::disk('audio')->getVisibility($private))->toBe('private')
+        ->and(Storage::disk('audio')->getVisibility($public))->toBe('public')
+        ->and(Storage::disk('audio')->getVisibility($named))->toBe('public')
+        ->and($named)->toBe('hello.mp3');
 });
 
 test('queued audio can be faked', function (): void {

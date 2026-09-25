@@ -3,6 +3,7 @@
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Validation\ValidationException;
+use JMac\Testing\Double;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
@@ -68,8 +69,8 @@ test('a validation failure is returned to the model as the tool result', functio
 
     $context = new RunContext(
         'inv_1',
-        Mockery::mock(Agent::class),
-        Mockery::mock(TextProvider::class),
+        Double::for(Agent::class),
+        Double::for(TextProvider::class),
         'stub-model',
         $events,
     );

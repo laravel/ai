@@ -2,6 +2,7 @@
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Events\Dispatcher;
+use JMac\Testing\Double;
 use Laravel\Ai\Approvals\Approval;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Attributes\RepairToolCalls;
@@ -1063,16 +1064,16 @@ test('it allows a single tool search wrapper on a supporting provider', function
 
 function textGenerationLoopProvider(): TextProvider
 {
-    $provider = Mockery::mock(TextProvider::class);
-    $provider->shouldReceive('name')->andReturn('fake');
+    $provider = Double::for(TextProvider::class);
+    $provider->allows('name')->returns('fake');
 
     return $provider;
 }
 
 function textGenerationLoopToolSearchProvider(): TextProvider
 {
-    $provider = Mockery::mock(TextProvider::class, SupportsToolSearch::class);
-    $provider->shouldReceive('name')->andReturn('fake');
+    $provider = Double::for(TextProvider::class, SupportsToolSearch::class);
+    $provider->allows('name')->returns('fake');
 
     return $provider;
 }
@@ -1323,10 +1324,10 @@ test('a pre-validated streamed resume executes the approved tool exactly once', 
 
 function textGenerationLoopAgentTool(Closure|string $text = 'sub-agent result'): AgentTool
 {
-    $agent = Mockery::mock(Agent::class.','.CanActAsTool::class);
-    $agent->shouldReceive('name')->andReturn('research_agent');
-    $agent->shouldNotReceive('prompt');
-    $agent->shouldReceive('stream')->andReturnUsing(fn (): StreamableAgentResponse => new StreamableAgentResponse(
+    $agent = Double::for(Agent::class, CanActAsTool::class);
+    $agent->allows('name')->returns('research_agent');
+    $agent->expects('prompt')->never();
+    $agent->expects('stream')->times(minimum: 1)->resolves(fn (): StreamableAgentResponse => new StreamableAgentResponse(
         'sub-invocation',
         $text instanceof Closure ? $text : fn (): Generator => yield from [
             (new TextDelta('sub-delta', 'sub-message', $text, time()))->withInvocationId('sub-invocation'),
@@ -1424,12 +1425,12 @@ test('preliminary output joins the text of separate sub-agent steps the way the 
 });
 
 test('a sub-agent runs synchronously through the non-streaming loop', function (): void {
-    $agent = Mockery::mock(Agent::class.','.CanActAsTool::class);
-    $agent->shouldReceive('name')->andReturn('research_agent');
-    $agent->shouldReceive('prompt')->once()->andReturn(new AgentResponse(
+    $agent = Double::for(Agent::class, CanActAsTool::class);
+    $agent->allows('name')->returns('research_agent');
+    $agent->expects('prompt')->returns(new AgentResponse(
         'sub-invocation', 'synchronous result', new TextUsage(3, 4), new Meta('fake', 'sub-model')
     ));
-    $agent->shouldNotReceive('stream');
+    $agent->expects('stream')->never();
 
     $toolCall = new ToolCall('call-sub-agent', 'research_agent', ['task' => 'Research'], 'call-sub-agent');
     $gateway = new TextGenerationLoopFakeGateway([
@@ -1453,10 +1454,10 @@ test('a sub-agent runs synchronously through the non-streaming loop', function (
 });
 
 test('a sub-agent is not executed on the final streamed step', function (): void {
-    $agent = Mockery::mock(Agent::class.','.CanActAsTool::class);
-    $agent->shouldReceive('name')->andReturn('research_agent');
-    $agent->shouldNotReceive('prompt');
-    $agent->shouldNotReceive('stream');
+    $agent = Double::for(Agent::class, CanActAsTool::class);
+    $agent->allows('name')->returns('research_agent');
+    $agent->expects('prompt')->never();
+    $agent->expects('stream')->never();
 
     $toolCall = new ToolCall('call-sub-agent', 'research_agent', ['task' => 'Research'], 'call-sub-agent');
 
@@ -1501,7 +1502,7 @@ test('tool invocation events fire around a sub-agent in the streamed loop', func
     $provider = textGenerationLoopProvider();
 
     textGenerationLoopSubAgentStream([$tool], [$toolCall], context: new RunContext(
-        'invocation-1', Mockery::mock(Agent::class), $provider, 'model', $dispatcher,
+        'invocation-1', Double::for(Agent::class), $provider, 'model', $dispatcher,
     ));
 
     expect($invoking)->toBe([AgentTool::class])
@@ -1523,7 +1524,7 @@ test('a sub-agent names the tool call it was delegated from for the whole of its
     $provider = textGenerationLoopProvider();
 
     textGenerationLoopSubAgentStream([$tool], [$toolCall], context: new RunContext(
-        'invocation-1', Mockery::mock(Agent::class), $provider, 'model', new Dispatcher,
+        'invocation-1', Double::for(Agent::class), $provider, 'model', new Dispatcher,
     ));
 
     expect($parents)->toHaveCount(3)

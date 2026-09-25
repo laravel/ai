@@ -1,5 +1,6 @@
 <?php
 
+use JMac\Testing\Double;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TextUsage;
@@ -15,9 +16,9 @@ test('an agent tool streams its events by default and returns its final text', f
         new StreamEnd('event-2', 'stop', new TextUsage, time()),
     ], new Meta('fake', 'model'));
 
-    $agent = Mockery::mock(Agent::class);
-    $agent->shouldReceive('stream')->once()->andReturn($stream);
-    $agent->shouldNotReceive('prompt');
+    $agent = Double::for(Agent::class);
+    $agent->expects('stream')->returns($stream);
+    $agent->expects('prompt')->never();
 
     $generator = (new AgentTool($agent))->stream(new Request(['task' => 'Do the thing']));
 
@@ -29,8 +30,8 @@ test('an agent tool streams its events by default and returns its final text', f
 });
 
 test('a failing sub-agent surfaces its error as the tool result on the streaming path', function (): void {
-    $agent = Mockery::mock(Agent::class);
-    $agent->shouldReceive('stream')->once()->andThrow(new RuntimeException('provider exploded'));
+    $agent = Double::for(Agent::class);
+    $agent->expects('stream')->throws(new RuntimeException('provider exploded'));
 
     $generator = (new AgentTool($agent))->stream(new Request(['task' => 'Do the thing']));
 

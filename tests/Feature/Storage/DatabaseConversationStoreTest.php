@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
+use JMac\Testing\Double;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
@@ -370,7 +371,7 @@ test('it stores a response built without steps as a single step of lists', funct
         new ToolUsingAgent,
         'Check my order status.',
         [],
-        Mockery::mock(TextProvider::class),
+        Double::for(TextProvider::class),
         'test-model',
     );
 
@@ -426,7 +427,7 @@ test('it round trips tool result failure status through storage', function (): v
         new ToolUsingAgent,
         'Where is Berlin?',
         [],
-        Mockery::mock(TextProvider::class),
+        Double::for(TextProvider::class),
         'test-model',
     );
 
@@ -455,7 +456,7 @@ test('it stores a tool result id on the call that made it', function (): void {
         new ToolUsingAgent,
         'Write the file',
         [],
-        Mockery::mock(TextProvider::class),
+        Double::for(TextProvider::class),
         'test-model',
     );
 
@@ -530,7 +531,7 @@ test('a bare rejection resume does not persist a blank assistant row', function 
         new ToolUsingAgent,
         '',
         [],
-        Mockery::mock(TextProvider::class),
+        Double::for(TextProvider::class),
         'test-model',
         approvalDecisions: Decisions::from(['call-1' => Decision::reject()]),
     );
@@ -563,7 +564,7 @@ test('a resume folds its steps, text and usage into the paused row', function ()
         new ToolUsingAgent,
         '',
         [],
-        Mockery::mock(TextProvider::class),
+        Double::for(TextProvider::class),
         'test-model',
         approvalDecisions: Decisions::from(['call-1' => true]),
     );
@@ -590,7 +591,7 @@ test('a resume keeps the citations the paused half of the turn collected', funct
         assistantStep([['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []]]),
     ], ['call-1' => 'Deletes a file'], ['provider' => 'anthropic', 'model' => 'claude-sonnet-4-5', 'citations' => [(new UrlCitation('https://laravel.com/docs/ai'))->toArray()]]);
 
-    $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Mockery::mock(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
+    $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Double::for(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
 
     $meta = new Meta('anthropic', 'claude-sonnet-4-6', collect([new UrlCitation('https://laravel.com/docs/mcp')]));
 
@@ -615,7 +616,7 @@ test('a fold that recorded no result does not leave the row reporting a pending 
         assistantStep([['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []]]),
     ], ['call-1' => 'Deletes a file']);
 
-    $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Mockery::mock(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
+    $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Double::for(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
 
     $response = (new AgentResponse('invocation-id', 'Done.', new TextUsage, new Meta))->withSteps(collect([
         new Step('Done.', [], [], FinishReason::Stop, new TextUsage, new Meta, '', []),
@@ -637,7 +638,7 @@ test('a resume does not fold into a settled row once a newer plain turn follows 
         new ToolUsingAgent,
         '',
         [],
-        Mockery::mock(TextProvider::class),
+        Double::for(TextProvider::class),
         'test-model',
         approvalDecisions: Decisions::from(['call-1' => true]),
     );
@@ -743,7 +744,7 @@ test('completing a turn stores no replay blocks and drops those of the paused ro
         ),
     ], [], ['provider' => 'anthropic']);
 
-    $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Mockery::mock(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
+    $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Double::for(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
 
     $response = (new AgentResponse('invocation-id', 'Deleted b.', new TextUsage, new Meta('anthropic')))->withSteps(collect([
         new Step('Deleted b.', [], [], FinishReason::Stop, new TextUsage, new Meta, '', [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'text', 'text' => 'Deleted b.']]),
@@ -769,7 +770,7 @@ test('a turn that pauses again keeps the replay blocks of the rows it resumed', 
         ),
     ], [], ['provider' => 'anthropic']);
 
-    $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Mockery::mock(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
+    $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Double::for(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
 
     $response = (new AgentResponse('invocation-id', '', new TextUsage, new Meta('anthropic')))
         ->withSteps(collect([
@@ -800,7 +801,7 @@ test('a resume folds into the paused row holding its decided call rather than th
         assistantStep([['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b']]]),
     ], ['call-2' => 'Deletes b file'], ['provider' => 'anthropic']);
 
-    $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Mockery::mock(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
+    $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Double::for(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
 
     $response = (new AgentResponse('invocation-id', 'Deleted a.', new TextUsage, new Meta('anthropic')))->withSteps(collect([
         new Step('Deleted a.', [], [], FinishReason::Stop, new TextUsage, new Meta, '', []),
@@ -900,7 +901,7 @@ test('it writes the steps of a paused turn with their replay blocks and keeps re
         new ToolUsingAgent,
         'Delete config/app.php.',
         [],
-        Mockery::mock(TextProvider::class),
+        Double::for(TextProvider::class),
         'test-model',
     );
 
@@ -937,7 +938,7 @@ test('it writes the steps a paused stream carried on its approval request', func
         new ToolUsingAgent,
         'Delete config/app.php.',
         [],
-        Mockery::mock(TextProvider::class),
+        Double::for(TextProvider::class),
         'test-model',
     );
 
@@ -965,7 +966,7 @@ test('it writes the steps a completed stream carried on its stream end', functio
         new ToolUsingAgent,
         'Read config/app.php.',
         [],
-        Mockery::mock(TextProvider::class),
+        Double::for(TextProvider::class),
         'test-model',
     );
 
@@ -1433,7 +1434,7 @@ test('it records no reasoning on the turn steps when the model did not reason', 
         new ToolUsingAgent,
         'How cold is it?',
         [],
-        Mockery::mock(TextProvider::class),
+        Double::for(TextProvider::class),
         'test-model',
     );
 
@@ -1456,7 +1457,7 @@ test('it records the sources a streamed turn cited into the message meta', funct
         new ToolUsingAgent,
         'What does Laravel MCP do?',
         [],
-        Mockery::mock(TextProvider::class),
+        Double::for(TextProvider::class),
         'test-model',
     );
 
@@ -1485,7 +1486,7 @@ test('it stores no sources when a streamed turn cited nothing', function (): voi
         new ToolUsingAgent,
         'How cold is it?',
         [],
-        Mockery::mock(TextProvider::class),
+        Double::for(TextProvider::class),
         'test-model',
     );
 
@@ -1660,7 +1661,7 @@ function insertPausedConversationTurn(string $conversationId, string $id, array 
 test('provider reasoning state is kept on the step replay blocks rather than copied onto each tool call', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
-    $prompt = new AgentPrompt(new ToolUsingAgent, 'Look it up', [], Mockery::mock(TextProvider::class), 'test-model');
+    $prompt = new AgentPrompt(new ToolUsingAgent, 'Look it up', [], Double::for(TextProvider::class), 'test-model');
 
     $reasoningItem = ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => [], 'encrypted_content' => 'enc-blob-1'];
 
@@ -1711,7 +1712,7 @@ test('a step that dropped an unanswered call replays generically so no raw block
 test('provider tool calls are stored per step and exposed on the stored message and model', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Search conversation');
-    $prompt = new AgentPrompt(new ToolUsingAgent, 'Search', [], Mockery::mock(TextProvider::class), 'test-model');
+    $prompt = new AgentPrompt(new ToolUsingAgent, 'Search', [], Double::for(TextProvider::class), 'test-model');
 
     $search = new ProviderToolCall('ws-1', 'web_search_call', ['action' => ['query' => 'laravel ai']]);
     $execution = new ProviderToolCall('ce-1', 'code_interpreter_call', ['code' => 'print(1)']);

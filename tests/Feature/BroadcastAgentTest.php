@@ -5,6 +5,7 @@ use Illuminate\Broadcasting\BroadcastException;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Event;
+use JMac\Testing\Double;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Jobs\BroadcastAgent;
@@ -151,10 +152,10 @@ test('failed event shares the invocation id with broadcasts from handle', functi
 test('an oversized broadcast frame does not abort the stream and then still resolves', function (): void {
     AssistantAgent::fake(['Hello world']);
 
-    $pending = Mockery::mock(AnonymousEvent::class);
-    $pending->shouldReceive('as')->andReturnSelf();
-    $pending->shouldReceive('with')->andReturnSelf();
-    $pending->shouldReceive('sendNow')->andThrow(new BroadcastException('Payload too large'));
+    $pending = Double::for(AnonymousEvent::class);
+    $pending->allows('as')->returns($pending);
+    $pending->allows('with')->returns($pending);
+    $pending->expects('sendNow')->times(minimum: 1)->throws(new BroadcastException('Payload too large'));
 
     Broadcast::shouldReceive('on')->andReturn($pending);
 

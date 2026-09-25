@@ -7,6 +7,7 @@ use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use JMac\Testing\Double;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Promptable;
@@ -143,10 +144,9 @@ test('write file creates a file', function (): void {
 });
 
 test('write file reports write failures', function (): void {
-    $disk = Mockery::mock(Filesystem::class);
-    $disk->shouldReceive('put')->once()->with('out.txt', 'written')->andReturnFalse();
+    Storage::disk('local')->makeDirectory('out.txt');
 
-    $result = (new WriteFile($disk))->handle(new Request(['path' => 'out.txt', 'contents' => 'written']));
+    $result = (new WriteFile('local'))->handle(new Request(['path' => 'out.txt', 'contents' => 'written']));
 
     expect($result)->toBe('Unable to write [out.txt].');
 });
@@ -176,9 +176,9 @@ test('delete file does not report directories as files', function (): void {
 });
 
 test('delete file reports delete failures', function (): void {
-    $disk = Mockery::mock(Filesystem::class);
-    $disk->shouldReceive('size')->once()->with('gone.txt')->andReturn(1);
-    $disk->shouldReceive('delete')->once()->with('gone.txt')->andReturnFalse();
+    $disk = Double::for(Filesystem::class);
+    $disk->expects('size')->with('gone.txt')->returns(1);
+    $disk->expects('delete')->with('gone.txt')->returns(false);
 
     $result = (new DeleteFile($disk))->handle(new Request(['path' => 'gone.txt']));
 
