@@ -7,16 +7,21 @@ use Laravel\Ai\Jobs\InvokeAgent;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\OnDemandProviderAgent;
 
-test('prompts can use an on-demand provider', function (): void {
-    Http::fake(['tenant-proxy.example.com/*' => $this->fakeTextResponse()]);
-
-    (new AssistantAgent)->prompt('Hi', provider: [
-        Ai::build(['driver' => 'anthropic', 'key' => 'tenant-key', 'url' => 'https://tenant-proxy.example.com/v1']),
-        'openai',
+test('prompts fail over between on-demand providers', function (): void {
+    Http::fake([
+        'primary.example.com/*' => Http::response([], 429),
+        'backup.example.com/*' => $this->fakeTextResponse(),
     ]);
 
-    Http::assertSent(fn ($request): bool => $request->url() === 'https://tenant-proxy.example.com/v1/messages'
-        && $request->header('x-api-key') === ['tenant-key']);
+    (new AssistantAgent)->prompt('Hi', provider: [
+        Ai::build(['driver' => 'anthropic', 'key' => 'primary-key', 'url' => 'https://primary.example.com/v1']),
+        Ai::build(['driver' => 'anthropic', 'key' => 'backup-key', 'url' => 'https://backup.example.com/v1']),
+    ]);
+
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://primary.example.com/v1/messages'
+        && $request->header('x-api-key') === ['primary-key']);
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://backup.example.com/v1/messages'
+        && $request->header('x-api-key') === ['backup-key']);
 });
 
 test('on-demand providers with different config never share an instance', function (): void {
