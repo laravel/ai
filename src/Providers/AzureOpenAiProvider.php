@@ -71,19 +71,6 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
     }
 
     /**
-     * Get the credentials for the AI provider.
-     *
-     * Azure OpenAI uses API key authentication via the `api-key` header.
-     */
-    #[\Override]
-    public function providerCredentials(): array
-    {
-        return [
-            'key' => $this->config['key'],
-        ];
-    }
-
-    /**
      * Get the name of the default (deployment name) text model.
      */
     public function defaultTextModel(): string

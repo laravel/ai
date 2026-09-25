@@ -52,13 +52,6 @@ class AiManager extends MultipleInstanceManager
     use Concerns\InteractsWithFakeTranscriptions;
 
     /**
-     * The key name of the "driver" equivalent configuration option.
-     *
-     * @var string
-     */
-    protected $driverKey = 'driver';
-
-    /**
      * Get a provider instance by name.
      *
      * @throws LogicException

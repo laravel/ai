@@ -38,7 +38,6 @@ trait HandlesTextStreaming
         $textStartEmitted = false;
         $reasoningStartEmitted = false;
 
-        $currentText = '';
         $currentBlockType = '';
         $currentBlockIndex = -1;
         $currentBlockText = '';
@@ -192,7 +191,6 @@ trait HandlesTextStreaming
                             yield $event;
                         }
 
-                        $currentText .= $textDelta;
                         $currentBlockText .= $textDelta;
 
                         yield (new TextDelta(
@@ -235,7 +233,7 @@ trait HandlesTextStreaming
                 } elseif ($deltaType === 'input_json_delta') {
                     $partial = (string) ($data['delta']['partial_json'] ?? '');
 
-                    if ($currentBlockType === 'tool_use' && $currentToolIndex >= 0 && isset($pendingToolCalls[$currentToolIndex])) {
+                    if ($currentBlockType === 'tool_use' && isset($pendingToolCalls[$currentToolIndex])) {
                         $pendingToolCalls[$currentToolIndex]['arguments'] .= $partial;
                     } elseif ($currentBlockType === 'server_tool_use') {
                         $currentServerToolInput .= $partial;
@@ -267,7 +265,7 @@ trait HandlesTextStreaming
 
                     $reasoningStartEmitted = false;
                     $reasoningId = '';
-                } elseif ($currentBlockType === 'tool_use' && $currentToolIndex >= 0 && isset($pendingToolCalls[$currentToolIndex])) {
+                } elseif ($currentBlockType === 'tool_use' && isset($pendingToolCalls[$currentToolIndex])) {
                     $call = $pendingToolCalls[$currentToolIndex];
                     $parsedArguments = json_decode($call['arguments'] ?: '{}', true) ?? [];
 
