@@ -52,6 +52,25 @@ class AiManager extends MultipleInstanceManager
     use Concerns\InteractsWithFakeTranscriptions;
 
     /**
+     * The provider configurations registered at runtime via build(), keyed by provider name.
+     *
+     * @var array<string, array>
+     */
+    protected array $dynamicProviderConfigurations = [];
+
+    /**
+     * Build an on-demand provider instance from the given configuration.
+     */
+    public function build(array $config): Provider
+    {
+        $config['name'] ??= 'dynamic_'.md5((string) json_encode($config));
+
+        $this->dynamicProviderConfigurations[$config['name']] = $config;
+
+        return $this->forgetInstance($config['name'])->instance($config['name']);
+    }
+
+    /**
      * Get a provider instance by name.
      *
      * @throws LogicException
@@ -528,7 +547,7 @@ class AiManager extends MultipleInstanceManager
      */
     public function getInstanceConfig($name): array
     {
-        $config = $this->app['config']->get(
+        $config = $this->dynamicProviderConfigurations[$name] ?? $this->app['config']->get(
             'ai.providers.'.$name, ['driver' => $name],
         );
 

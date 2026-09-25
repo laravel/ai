@@ -81,7 +81,11 @@ abstract class Provider implements \Stringable, ProviderContract
         }
 
         return (new Collection($providers))->mapWithKeys(fn ($value, $key): array => is_numeric($key)
-            ? [($value instanceof Lab ? $value->value : $value) => null]
+            ? [match (true) {
+                $value instanceof self => $value->name(),
+                $value instanceof Lab => $value->value,
+                default => $value,
+            } => null]
             : [($key instanceof Lab ? $key->value : $key) => $value])->all();
     }
 
@@ -90,6 +94,6 @@ abstract class Provider implements \Stringable, ProviderContract
      */
     public function __toString(): string
     {
-        return $this->driver();
+        return $this->name();
     }
 }
