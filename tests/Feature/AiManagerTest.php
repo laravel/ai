@@ -23,7 +23,13 @@ test('a configured provider casts to its driver', function (): void {
 
 test('an on-demand provider cannot replace a configured provider', function (): void {
     Ai::build(['name' => 'anthropic', 'driver' => 'anthropic', 'key' => 'tenant-key']);
-})->throws(InvalidArgumentException::class, 'Provider [anthropic] is already configured.');
+})->throws(InvalidArgumentException::class, 'The provider name [anthropic] is already taken.');
+
+test('an on-demand provider cannot take a built-in provider name', function (): void {
+    config()->set('ai.providers', []);
+
+    Ai::build(['name' => 'openai', 'driver' => 'anthropic', 'key' => 'tenant-key']);
+})->throws(InvalidArgumentException::class, 'The provider name [openai] is already taken.');
 
 test('rebuilding a named on-demand provider uses the new configuration', function (): void {
     Ai::build(['name' => 'tenant', 'driver' => 'anthropic', 'key' => 'old-key']);

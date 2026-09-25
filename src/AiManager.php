@@ -67,8 +67,8 @@ class AiManager extends MultipleInstanceManager
     {
         $name = $config['name'] ?? 'ondemand_'.md5(json_encode($config, JSON_THROW_ON_ERROR));
 
-        if ($this->app['config']->has("ai.providers.{$name}")) {
-            throw new InvalidArgumentException("Provider [{$name}] is already configured.");
+        if ($this->app['config']->has("ai.providers.{$name}") || Lab::tryFrom($name) !== null) {
+            throw new InvalidArgumentException("The provider name [{$name}] is already taken.");
         }
 
         $this->onDemandProviders[$name] = [...$config, 'ondemand' => true];
