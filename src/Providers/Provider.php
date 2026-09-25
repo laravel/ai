@@ -94,6 +94,6 @@ abstract class Provider implements \Stringable, ProviderContract
      */
     public function __toString(): string
     {
-        return $this->name();
+        return $this->driver();
     }
 }

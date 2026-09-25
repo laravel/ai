@@ -10,25 +10,13 @@ use Tests\Fixtures\Agents\OnDemandProviderAgent;
 test('prompts can use an on-demand provider', function (): void {
     Http::fake(['tenant-proxy.example.com/*' => $this->fakeTextResponse()]);
 
-    (new AssistantAgent)->prompt('Hi', provider: Ai::build([
-        'driver' => 'anthropic',
-        'key' => 'tenant-key',
-        'url' => 'https://tenant-proxy.example.com/v1',
-    ]));
-
-    Http::assertSent(fn ($request): bool => $request->url() === 'https://tenant-proxy.example.com/v1/messages'
-        && $request->header('x-api-key') === ['tenant-key']);
-});
-
-test('on-demand providers can be listed for failover', function (): void {
-    Http::fake(['api.anthropic.com/*' => $this->fakeTextResponse()]);
-
     (new AssistantAgent)->prompt('Hi', provider: [
-        Ai::build(['driver' => 'anthropic', 'key' => 'tenant-key']),
+        Ai::build(['driver' => 'anthropic', 'key' => 'tenant-key', 'url' => 'https://tenant-proxy.example.com/v1']),
         'openai',
     ]);
 
-    Http::assertSent(fn ($request): bool => $request->header('x-api-key') === ['tenant-key']);
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://tenant-proxy.example.com/v1/messages'
+        && $request->header('x-api-key') === ['tenant-key']);
 });
 
 test('on-demand providers with different config never share an instance', function (): void {
