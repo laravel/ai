@@ -497,10 +497,6 @@ trait Promptable
 
         $resolved = $provider ?? config('ai.default');
 
-        if ($resolved instanceof Provider) {
-            $resolved = $resolved->name();
-        }
-
         if (is_array($resolved) && array_intersect(array_keys($resolved), ['text', 'image', 'audio', 'transcription', 'embedding', 'reranking', 'classification'])) {
             throw new InvalidArgumentException('The "ai.default" config value must be a string provider name or a Lab enum, not an array.');
         }

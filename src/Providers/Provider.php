@@ -70,23 +70,27 @@ abstract class Provider implements \Stringable, ProviderContract
     /**
      * Format the given provider / model list.
      */
-    public static function formatProviderAndModelList(Lab|array|string $providers, ?string $model = null): array
+    public static function formatProviderAndModelList(self|Lab|array|string $providers, ?string $model = null): array
     {
-        if ($providers instanceof Lab) {
-            return [$providers->value => $model];
-        }
-
-        if (is_string($providers)) {
-            return [$providers => $model];
+        if (! is_array($providers)) {
+            return [self::nameOf($providers) => $model];
         }
 
         return (new Collection($providers))->mapWithKeys(fn ($value, $key): array => is_numeric($key)
-            ? [match (true) {
-                $value instanceof self => $value->name(),
-                $value instanceof Lab => $value->value,
-                default => $value,
-            } => null]
-            : [($key instanceof Lab ? $key->value : $key) => $value])->all();
+            ? [self::nameOf($value) => null]
+            : [$key => $value])->all();
+    }
+
+    /**
+     * Get the name the given provider is resolved by.
+     */
+    private static function nameOf(self|Lab|string $provider): string
+    {
+        return match (true) {
+            $provider instanceof self => $provider->name(),
+            $provider instanceof Lab => $provider->value,
+            default => $provider,
+        };
     }
 
     /**
