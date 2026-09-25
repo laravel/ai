@@ -314,7 +314,7 @@ class TextGenerationLoop
                 });
 
                 if ($stepResult->stopped()) {
-                    $finalReason = FinishReason::Stop;
+                    $finalReason = FinishReason::Cancelled;
 
                     break;
                 }
