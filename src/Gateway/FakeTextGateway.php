@@ -8,6 +8,7 @@ use Illuminate\JsonSchema\Types\ObjectType;
 use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Messages\UserMessage;
@@ -164,8 +165,12 @@ class FakeTextGateway implements StepTextGateway
         }
 
         if ($response instanceof TextResponse && $response->hasPendingApprovals()) {
+            $toolCalls = $response->pendingApprovals->map(
+                fn (PendingApproval $approval): ToolCall => new ToolCall($approval->id, $approval->tool, $approval->arguments),
+            )->all();
+
             return new StepResponse(
-                $response->text, [], FinishReason::Stop, $response->usage, $response->meta,
+                $response->text, $toolCalls, FinishReason::ToolCalls, $response->usage, $response->meta,
                 pendingApprovals: $response->pendingApprovals->all(),
             );
         }

@@ -2,6 +2,7 @@
 
 use GuzzleHttp\Psr7\Response as Psr7Response;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Approvals\Decision;
@@ -19,11 +20,13 @@ use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\Storage\DatabaseConversationStore;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\TextStart;
+use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use PHPUnit\Framework\AssertionFailedError;
@@ -31,6 +34,7 @@ use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ConversationalAgent;
 use Tests\Fixtures\Agents\EmptySchemaStructuredAgent;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
+use Tests\Fixtures\Agents\RememberingApprovableAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 
 describe('prompt responses', function (): void {
@@ -172,6 +176,18 @@ describe('prompt responses', function (): void {
             return $prompt->approvalDecisions?->get('call-1')?->isApproved() === true;
         });
     });
+
+    test('faked paused approval responses persist the pending tool call', function () {
+        Config::set('ai.conversations.generate_title', false);
+
+        $approval = new PendingApproval('call-1', 'ApprovableNumberGenerator', [], 'Needs approval');
+
+        RememberingApprovableAgent::fake([AgentResponse::fakeWithPendingApprovals([$approval])]);
+
+        $response = (new RememberingApprovableAgent)->forUser((object) ['id' => 1])->prompt('Generate a number');
+
+        expect((new DatabaseConversationStore)->pendingApprovalsFor($response->conversationId))->toEqual([$approval]);
+    });
 });
 
 describe('stream responses', function (): void {
@@ -285,6 +301,25 @@ describe('stream responses', function (): void {
             ->and($toolCall->toolCall->name)->toBe('FixedNumberGenerator')
             ->and($events->search(fn ($event): bool => $event instanceof ToolCallEvent))
             ->toBeLessThan($events->search(fn ($event): bool => $event instanceof ToolResultEvent));
+    });
+
+    test('faked paused approval responses emit a tool call event before the approval request', function (): void {
+        ConversationalAgent::fake([
+            AgentResponse::fakeWithPendingApprovals([
+                new PendingApproval('call-1', 'DeleteFile', ['path' => 'config/app.php'], 'Deletes a file'),
+            ]),
+        ]);
+
+        $response = (new ConversationalAgent)->stream('Delete config/app.php');
+        $response->each(fn (): true => true);
+
+        $events = collect($response->events);
+
+        $toolCall = $events->first(fn ($event): bool => $event instanceof ToolCallEvent);
+
+        expect($toolCall?->toolCall->id)->toBe('call-1')
+            ->and($events->search(fn ($event): bool => $event instanceof ToolCallEvent))
+            ->toBeLessThan($events->search(fn ($event): bool => $event instanceof ToolApprovalRequest));
     });
 });
 
