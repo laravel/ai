@@ -10,7 +10,6 @@ use Laravel\Ai\Approvals\Approval;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Attributes\RepairToolCalls;
-use Laravel\Ai\Attributes\StopWhen;
 use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
@@ -315,6 +314,8 @@ class TextGenerationLoop
                 });
 
                 if ($stepResult->stopped()) {
+                    $finalReason = FinishReason::Stop;
+
                     break;
                 }
 
@@ -432,10 +433,7 @@ class TextGenerationLoop
      */
     protected function middlewareFor(?TextGenerationOptions $options): array
     {
-        return [
-            ...StopWhen::middlewareFor($options?->agent),
-            ...($options?->agent instanceof HasMiddleware ? $options->agent->middleware() : []),
-        ];
+        return $options?->agent instanceof HasMiddleware ? $options->agent->middleware() : [];
     }
 
     /**

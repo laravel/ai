@@ -37,9 +37,9 @@ class StepResult implements IteratorAggregate
     /**
      * Create a result that ends the run before the model is called.
      */
-    public static function stop(): static
+    public static function stop(): self
     {
-        return new static(null);
+        return new self(null);
     }
 
     /**

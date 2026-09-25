@@ -5,13 +5,11 @@ use Illuminate\Events\Dispatcher;
 use Laravel\Ai\Approvals\Approval;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Attributes\RepairToolCalls;
-use Laravel\Ai\Attributes\StopWhen;
 use Laravel\Ai\Concerns\InteractsWithApprovals;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\CanActAsTool;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
-use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
@@ -29,8 +27,6 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
-use Laravel\Ai\Middleware\Stop;
-use Laravel\Ai\PendingStep;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
@@ -1065,96 +1061,6 @@ test('it allows a single tool search wrapper on a supporting provider', function
         ->and($response->text)->toBe('done');
 });
 
-test('a stop middleware ends the run before the next model call', function (): void {
-    $tool = new TextGenerationLoopCountingTool;
-    $gateway = new TextGenerationLoopFakeGateway([
-        textGenerationLoopCountingToolStep('call-1'),
-        textGenerationLoopCountingToolStep('call-2'),
-        textGenerationLoopCountingToolStep('call-3'),
-    ]);
-
-    $response = (new TextGenerationLoop($gateway))->generate(
-        textGenerationLoopProvider(),
-        'model',
-        null,
-        [],
-        [$tool],
-        null,
-        new TextGenerationOptions(maxSteps: 5, agent: new TextGenerationLoopStoppingAgent(Stop::when(fn (PendingStep $step): bool => $step->number === 2))),
-        null,
-    );
-
-    expect($gateway->generateCalls)->toBe(2)
-        ->and($tool->calls)->toBe(2)
-        ->and($response->steps)->toHaveCount(2)
-        ->and($response->usage->inputTokens)->toBe(20);
-});
-
-test('a stop middleware ends a stream with a stream end event', function (): void {
-    $tool = new TextGenerationLoopCountingTool;
-    $gateway = new TextGenerationLoopFakeGateway(streams: [
-        textGenerationLoopStreamStep(returns: textGenerationLoopCountingToolStep('call-1')),
-        textGenerationLoopStreamStep(returns: textGenerationLoopCountingToolStep('call-2')),
-    ]);
-
-    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
-        'invocation',
-        textGenerationLoopProvider(),
-        'model',
-        null,
-        [],
-        [$tool],
-        null,
-        new TextGenerationOptions(maxSteps: 5, agent: new TextGenerationLoopStoppingAgent(Stop::unless(fn (PendingStep $step): bool => $step->isFirstStep()))),
-    ), false);
-
-    expect($gateway->streamCalls)->toBe(1)
-        ->and($tool->calls)->toBe(1)
-        ->and(end($events))->toBeInstanceOf(StreamEnd::class)
-        ->and(end($events)->usage->inputTokens)->toBe(10);
-});
-
-test('a stop middleware on the first step returns an empty response without calling the model', function (): void {
-    $gateway = new TextGenerationLoopFakeGateway;
-
-    $response = (new TextGenerationLoop($gateway))->generate(
-        textGenerationLoopProvider(),
-        'model',
-        null,
-        [],
-        [],
-        null,
-        new TextGenerationOptions(agent: new TextGenerationLoopStoppingAgent(Stop::when(true))),
-        null,
-    );
-
-    expect($gateway->generateCalls)->toBe(0)
-        ->and($response->text)->toBe('')
-        ->and($response->steps)->toBeEmpty();
-});
-
-test('a stop when attribute ends the run through the named agent method', function (): void {
-    $tool = new TextGenerationLoopCountingTool;
-    $gateway = new TextGenerationLoopFakeGateway([
-        textGenerationLoopCountingToolStep('call-1'),
-        textGenerationLoopCountingToolStep('call-2'),
-    ]);
-
-    (new TextGenerationLoop($gateway))->generate(
-        textGenerationLoopProvider(),
-        'model',
-        null,
-        [],
-        [$tool],
-        null,
-        new TextGenerationOptions(maxSteps: 5, agent: new TextGenerationLoopStopWhenAgent),
-        null,
-    );
-
-    expect($gateway->generateCalls)->toBe(1)
-        ->and($tool->calls)->toBe(1);
-});
-
 function textGenerationLoopProvider(): TextProvider
 {
     $provider = Mockery::mock(TextProvider::class);
@@ -1175,17 +1081,6 @@ function textGenerationLoopToolSearchProvider(): TextProvider
 function textGenerationLoopStreamStep(array $events = [], ?StepResponse $returns = null): array
 {
     return [$events, $returns];
-}
-
-function textGenerationLoopCountingToolStep(string $id): StepResponse
-{
-    return new StepResponse(
-        text: '',
-        toolCalls: [new ToolCall($id, TextGenerationLoopCountingTool::class, [], $id)],
-        finishReason: FinishReason::ToolCalls,
-        usage: new TextUsage(10, 5),
-        meta: new Meta('fake', 'model'),
-    );
 }
 
 class TextGenerationLoopFakeGateway implements StepTextGateway
@@ -1653,36 +1548,3 @@ test('a gated tool pauses the streamed loop while a sub-agent still reports its 
         ->and($approvalRequests)->toHaveCount(1)
         ->and($approvalRequests->first()->pendingApprovals->first()->id)->toBe('call-gated');
 });
-
-class TextGenerationLoopStoppingAgent implements Agent, HasMiddleware
-{
-    use Promptable;
-
-    public function __construct(protected Stop $stop) {}
-
-    public function instructions(): string
-    {
-        return 'You are a helpful assistant.';
-    }
-
-    public function middleware(): array
-    {
-        return [$this->stop];
-    }
-}
-
-#[StopWhen('shouldStop')]
-class TextGenerationLoopStopWhenAgent implements Agent
-{
-    use Promptable;
-
-    public function instructions(): string
-    {
-        return 'You are a helpful assistant.';
-    }
-
-    public function shouldStop(PendingStep $step): bool
-    {
-        return ! $step->isFirstStep();
-    }
-}
