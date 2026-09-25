@@ -52,6 +52,31 @@ class AiManager extends MultipleInstanceManager
     use Concerns\InteractsWithFakeTranscriptions;
 
     /**
+     * The provider configurations registered at runtime via build(), keyed by provider name.
+     *
+     * @var array<string, array>
+     */
+    protected array $onDemandProviders = [];
+
+    /**
+     * Build an on-demand provider instance from the given configuration.
+     *
+     * @throws InvalidArgumentException
+     */
+    public function build(array $config): Provider
+    {
+        $name = $config['name'] ?? 'ondemand_'.md5(json_encode($config, JSON_THROW_ON_ERROR));
+
+        if ($this->app['config']->has("ai.providers.{$name}") || Lab::tryFrom($name) !== null) {
+            throw new InvalidArgumentException("The provider name [{$name}] is already taken.");
+        }
+
+        $this->onDemandProviders[$name] = [...$config, 'ondemand' => true];
+
+        return $this->forgetInstance($name)->instance($name);
+    }
+
+    /**
      * Get a provider instance by name.
      *
      * @throws LogicException
@@ -528,9 +553,13 @@ class AiManager extends MultipleInstanceManager
      */
     public function getInstanceConfig($name): array
     {
-        $config = $this->app['config']->get(
-            'ai.providers.'.$name, ['driver' => $name],
-        );
+        $config = $this->onDemandProviders[$name] ?? $this->app['config']->get('ai.providers.'.$name);
+
+        if ($config === null && str_starts_with($name, 'ondemand_')) {
+            throw new InvalidArgumentException("On-demand provider [{$name}] was not built in this process. Build it where the work runs, such as the agent's provider() method.");
+        }
+
+        $config ??= ['driver' => $name];
 
         if ($config['driver'] instanceof Lab) {
             $config['driver'] = $config['driver']->value;
@@ -539,5 +568,15 @@ class AiManager extends MultipleInstanceManager
         $config['name'] = $name;
 
         return $config;
+    }
+
+    /**
+     * Flush the on-demand providers built during the current operation.
+     */
+    public function flushState(): void
+    {
+        $this->forgetInstance(array_keys($this->onDemandProviders));
+
+        $this->onDemandProviders = [];
     }
 }
