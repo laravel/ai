@@ -7,6 +7,10 @@ use Laravel\Ai\Jobs\InvokeAgent;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\OnDemandProviderAgent;
 
+beforeEach(function (): void {
+    config()->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
+});
+
 test('prompts use an on-demand provider passed on its own', function (): void {
     Http::fake(['tenant.example.com/*' => $this->fakeTextResponse()]);
 
@@ -62,3 +66,35 @@ test('a queued prompt fails clearly when its on-demand provider was built at the
 
     $job->handle();
 })->throws(InvalidArgumentException::class, 'was not built in this process');
+
+test('a queued prompt rebuilds an on-demand provider built at the call site', function (): void {
+    Http::fake(['tenant.example.com/*' => $this->fakeTextResponse()]);
+
+    $payload = serialize(new InvokeAgent(new AssistantAgent, 'Hi', provider: [Ai::build([
+        'driver' => 'anthropic',
+        'key' => 'tenant-key',
+        'url' => 'https://tenant.example.com/v1',
+    ])]));
+
+    app()->forgetInstance(AiManager::class);
+    Ai::clearResolvedInstances();
+
+    unserialize($payload)->handle();
+
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://tenant.example.com/v1/messages'
+        && $request->header('x-api-key') === ['tenant-key']);
+});
+
+test('a serialized on-demand provider keeps its key out of the payload', function (): void {
+    expect(serialize(Ai::build(['driver' => 'anthropic', 'key' => 'tenant-key'])))->not->toContain('tenant-key');
+});
+
+test('a serialized configured provider travels by name', function (): void {
+    config()->set('ai.providers.anthropic', ['driver' => 'anthropic', 'key' => 'configured-key']);
+
+    $provider = unserialize(serialize(Ai::textProvider('anthropic')));
+
+    expect(serialize(Ai::textProvider('anthropic')))->not->toContain('configured-key')
+        ->and($provider->name())->toBe('anthropic')
+        ->and($provider->providerCredentials())->toBe(['key' => 'configured-key']);
+});

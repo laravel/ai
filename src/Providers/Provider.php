@@ -2,8 +2,11 @@
 
 namespace Laravel\Ai\Providers;
 
+use Illuminate\Container\Container;
+use Illuminate\Contracts\Encryption\Encrypter;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
+use Laravel\Ai\AiManager;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Providers\Provider as ProviderContract;
 use Laravel\Ai\Enums\Lab;
@@ -91,6 +94,32 @@ abstract class Provider implements \Stringable, ProviderContract
             $provider instanceof Lab => $provider->value,
             default => $provider,
         };
+    }
+
+    /**
+     * Get the serializable representation of the provider.
+     */
+    public function __serialize(): array
+    {
+        return ($this->config['ondemand'] ?? false)
+            ? ['config' => Container::getInstance()->make(Encrypter::class)->encrypt($this->config)]
+            : ['name' => $this->name()];
+    }
+
+    /**
+     * Restore the provider from its serialized representation.
+     */
+    public function __unserialize(array $data): void
+    {
+        $manager = Container::getInstance()->make(AiManager::class);
+
+        $provider = isset($data['config'])
+            ? $manager->build(Container::getInstance()->make(Encrypter::class)->decrypt($data['config']))
+            : $manager->instance($data['name']);
+
+        foreach (get_object_vars($provider) as $key => $value) {
+            $this->{$key} = $value;
+        }
     }
 
     /**
