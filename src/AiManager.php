@@ -60,12 +60,18 @@ class AiManager extends MultipleInstanceManager
 
     /**
      * Build an on-demand provider instance from the given configuration.
+     *
+     * @throws InvalidArgumentException
      */
     public function build(array $config): Provider
     {
-        $config['name'] ??= 'dynamic_'.md5((string) json_encode($config));
+        $config['name'] ??= 'dynamic_'.md5(json_encode($config, JSON_THROW_ON_ERROR));
 
-        $this->dynamicProviderConfigurations[$config['name']] = $config;
+        if ($this->app['config']->has("ai.providers.{$config['name']}")) {
+            throw new InvalidArgumentException("Provider [{$config['name']}] is already configured.");
+        }
+
+        $this->dynamicProviderConfigurations[$config['name']] = [...$config, 'dynamic' => true];
 
         return $this->forgetInstance($config['name'])->instance($config['name']);
     }

@@ -94,6 +94,7 @@ abstract class Provider implements \Stringable, ProviderContract
      */
     public function __toString(): string
     {
-        return $this->driver();
+        // In 2.x, cast every provider to its name and drop the "dynamic" flag.
+        return ($this->config['dynamic'] ?? false) ? $this->name() : $this->driver();
     }
 }

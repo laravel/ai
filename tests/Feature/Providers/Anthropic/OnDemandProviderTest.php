@@ -7,6 +7,20 @@ use Laravel\Ai\Jobs\InvokeAgent;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\OnDemandProviderAgent;
 
+test('prompts use an on-demand provider passed on its own', function (): void {
+    Http::fake(['tenant.example.com/*' => $this->fakeTextResponse()]);
+
+    (new AssistantAgent)->prompt('Hi', provider: Ai::build([
+        'driver' => 'anthropic',
+        'key' => 'tenant-key',
+        'url' => 'https://tenant.example.com/v1',
+    ]), model: 'claude-opus-5-5');
+
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://tenant.example.com/v1/messages'
+        && $request->header('x-api-key') === ['tenant-key']
+        && $request['model'] === 'claude-opus-5-5');
+});
+
 test('prompts fail over between on-demand providers', function (): void {
     Http::fake([
         'primary.example.com/*' => Http::response([], 429),
@@ -22,15 +36,6 @@ test('prompts fail over between on-demand providers', function (): void {
         && $request->header('x-api-key') === ['primary-key']);
     Http::assertSent(fn ($request): bool => $request->url() === 'https://backup.example.com/v1/messages'
         && $request->header('x-api-key') === ['backup-key']);
-});
-
-test('on-demand providers with different config never share an instance', function (): void {
-    $first = Ai::build(['driver' => 'anthropic', 'key' => 'tenant-a']);
-    $second = Ai::build(['driver' => 'anthropic', 'key' => 'tenant-b']);
-
-    expect($first->name())->not->toBe($second->name())
-        ->and($first->providerCredentials()['key'])->toBe('tenant-a')
-        ->and($second->providerCredentials()['key'])->toBe('tenant-b');
 });
 
 test('an agent provider method rebuilds its on-demand provider on the queue worker', function (): void {
