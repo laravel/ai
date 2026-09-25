@@ -3,16 +3,16 @@
 namespace Laravel\Ai\Files;
 
 use Illuminate\Contracts\Support\Arrayable;
-use Illuminate\Filesystem\Filesystem;
 use InvalidArgumentException;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
-use RuntimeException;
+use Laravel\Ai\Files\Concerns\HasLocalContent;
 
 class LocalImage extends Image implements Arrayable, JsonSerializable, StorableFile
 {
     use CanBeUploadedToProvider;
+    use HasLocalContent;
 
     public function __construct(public string $path, ?string $mimeType = null)
     {
@@ -21,40 +21,6 @@ class LocalImage extends Image implements Arrayable, JsonSerializable, StorableF
         }
 
         $this->mime = $mimeType;
-    }
-
-    /**
-     * Get the raw representation of the file.
-     *
-     * @throws RuntimeException if the file does not exist at the configured path.
-     */
-    public function content(): string
-    {
-        $content = file_get_contents($this->path);
-
-        if ($content === false) {
-            throw new RuntimeException("File does not exist at path [{$this->path}]");
-        }
-
-        return $content;
-    }
-
-    /**
-     * Get the displayable name of the file.
-     */
-    #[\Override]
-    public function name(): ?string
-    {
-        return $this->name ?? basename($this->path);
-    }
-
-    /**
-     * Get the file's MIME type.
-     */
-    #[\Override]
-    public function mimeType(): ?string
-    {
-        return $this->mime ?? ((new Filesystem)->mimeType($this->path) ?: null);
     }
 
     /**
@@ -68,18 +34,5 @@ class LocalImage extends Image implements Arrayable, JsonSerializable, StorableF
             'path' => $this->path,
             'mime' => $this->mime,
         ];
-    }
-
-    /**
-     * Get the JSON serializable representation of the instance.
-     */
-    public function jsonSerialize(): mixed
-    {
-        return $this->toArray();
-    }
-
-    public function __toString(): string
-    {
-        return $this->content();
     }
 }
