@@ -127,7 +127,7 @@ abstract class Provider implements \Stringable, ProviderContract
      */
     public function __toString(): string
     {
-        // Configured providers cast to their driver for backward compatibility.
+        // Configured providers cast to their driver for backward compatibility...
         return ($this->config['ondemand'] ?? false) ? $this->name() : $this->driver();
     }
 }
