@@ -11,7 +11,10 @@ class Stop
     /**
      * @param  Closure(PendingStep): bool|bool  $condition
      */
-    public function __construct(protected Closure|bool $condition) {}
+    public function __construct(protected Closure|bool $condition)
+    {
+        //
+    }
 
     /**
      * Stop the run before any step for which the given condition holds.
