@@ -76,19 +76,6 @@ class VercelDataProtocol extends StreamProtocol
 
             if ($event instanceof ToolApprovalRequest) {
                 foreach ($event->pendingApprovals as $pendingApproval) {
-                    // An approval for a call that was never announced still needs its input
-                    // part first, or the client cannot resolve the tool invocation it refers to...
-                    if (! isset($toolCalls[$pendingApproval->id]) && $this->messageId === null) {
-                        $toolCalls[$pendingApproval->id] = true;
-
-                        yield from $this->yieldPart([
-                            'type' => 'tool-input-available',
-                            'toolCallId' => $pendingApproval->id,
-                            'toolName' => $pendingApproval->tool,
-                            'input' => $pendingApproval->arguments,
-                        ]);
-                    }
-
                     yield from $this->yieldPart([
                         'type' => 'tool-approval-request',
                         'toolCallId' => $pendingApproval->id,
