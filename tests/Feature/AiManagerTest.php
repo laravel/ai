@@ -25,6 +25,18 @@ test('an on-demand provider cannot replace a configured provider', function (): 
     Ai::build(['name' => 'anthropic', 'driver' => 'anthropic', 'key' => 'tenant-key']);
 })->throws(InvalidArgumentException::class, 'Provider [anthropic] is already configured.');
 
+test('rebuilding a named on-demand provider uses the new configuration', function (): void {
+    Ai::build(['name' => 'tenant', 'driver' => 'anthropic', 'key' => 'old-key']);
+
+    expect(Ai::build(['name' => 'tenant', 'driver' => 'anthropic', 'key' => 'new-key'])->providerCredentials())
+        ->toBe(['key' => 'new-key']);
+});
+
+test('an on-demand provider keeps its internal flag out of its additional configuration', function (): void {
+    expect(Ai::build(['driver' => 'anthropic', 'key' => 'tenant-key', 'url' => 'https://tenant.example.com/v1'])->additionalConfiguration())
+        ->toBe(['url' => 'https://tenant.example.com/v1']);
+});
+
 test('driver extensions survive between queue jobs', function (): void {
     config()->set('ai.providers.custom', ['driver' => 'custom']);
 

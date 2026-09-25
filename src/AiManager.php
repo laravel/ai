@@ -56,7 +56,7 @@ class AiManager extends MultipleInstanceManager
      *
      * @var array<string, array>
      */
-    protected array $dynamicProviderConfigurations = [];
+    protected array $onDemandProviders = [];
 
     /**
      * Build an on-demand provider instance from the given configuration.
@@ -65,13 +65,13 @@ class AiManager extends MultipleInstanceManager
      */
     public function build(array $config): Provider
     {
-        $name = $config['name'] ?? 'dynamic_'.md5(json_encode($config, JSON_THROW_ON_ERROR));
+        $name = $config['name'] ?? 'ondemand_'.md5(json_encode($config, JSON_THROW_ON_ERROR));
 
         if ($this->app['config']->has("ai.providers.{$name}")) {
             throw new InvalidArgumentException("Provider [{$name}] is already configured.");
         }
 
-        $this->dynamicProviderConfigurations[$name] = [...$config, 'dynamic' => true];
+        $this->onDemandProviders[$name] = [...$config, 'ondemand' => true];
 
         return $this->forgetInstance($name)->instance($name);
     }
@@ -553,9 +553,13 @@ class AiManager extends MultipleInstanceManager
      */
     public function getInstanceConfig($name): array
     {
-        $config = $this->dynamicProviderConfigurations[$name] ?? $this->app['config']->get(
-            'ai.providers.'.$name, ['driver' => $name],
-        );
+        $config = $this->onDemandProviders[$name] ?? $this->app['config']->get('ai.providers.'.$name);
+
+        if ($config === null && str_starts_with($name, 'ondemand_')) {
+            throw new InvalidArgumentException("On-demand provider [{$name}] was not built in this process. Build it where the work runs, such as the agent's provider() method.");
+        }
+
+        $config ??= ['driver' => $name];
 
         if ($config['driver'] instanceof Lab) {
             $config['driver'] = $config['driver']->value;

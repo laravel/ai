@@ -50,3 +50,15 @@ test('an agent provider method rebuilds its on-demand provider on the queue work
 
     Http::assertSent(fn ($request): bool => $request->header('x-api-key') === ['tenant-key']);
 });
+
+test('a queued prompt fails clearly when its on-demand provider was built at the call site', function (): void {
+    $job = unserialize(serialize(new InvokeAgent(new AssistantAgent, 'Hi', provider: Ai::build([
+        'driver' => 'anthropic',
+        'key' => 'tenant-key',
+    ]))));
+
+    app()->forgetInstance(AiManager::class);
+    Ai::clearResolvedInstances();
+
+    $job->handle();
+})->throws(InvalidArgumentException::class, 'was not built in this process');

@@ -46,7 +46,7 @@ abstract class Provider implements \Stringable, ProviderContract
      */
     public function additionalConfiguration(): array
     {
-        return array_diff_key($this->config, array_flip(['driver', 'key', 'name']));
+        return array_diff_key($this->config, array_flip(['driver', 'key', 'name', 'ondemand']));
     }
 
     /**
@@ -98,7 +98,7 @@ abstract class Provider implements \Stringable, ProviderContract
      */
     public function __toString(): string
     {
-        // In 2.x, cast every provider to its name and drop the "dynamic" flag.
-        return ($this->config['dynamic'] ?? false) ? $this->name() : $this->driver();
+        // Configured providers cast to their driver for backward compatibility.
+        return ($this->config['ondemand'] ?? false) ? $this->name() : $this->driver();
     }
 }
