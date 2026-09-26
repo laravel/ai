@@ -35,6 +35,7 @@ use Laravel\Ai\Providers\OpenAiProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\TypeSafeProvider;
+use Laravel\Ai\Providers\VonProvider;
 use Laravel\Ai\Providers\VoyageAiProvider;
 use Laravel\Ai\Providers\XaiProvider;
 use LogicException;
@@ -491,6 +492,17 @@ class AiManager extends MultipleInstanceManager
     public function createTypesafeDriver(array $config): TypeSafeProvider
     {
         return new TypeSafeProvider(
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create a Von powered instance.
+     */
+    public function createVonDriver(array $config): VonProvider
+    {
+        return new VonProvider(
             $config,
             $this->app->make(Dispatcher::class)
         );

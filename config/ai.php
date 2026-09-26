@@ -159,6 +159,10 @@ return [
             'driver' => 'xai',
             'key' => env('XAI_API_KEY'),
         ],
+        'von' => [
+            'driver' => 'von',
+            'key' => env('VON_API_KEY'),
+        ],
     ],
 
 ];
