@@ -113,8 +113,7 @@ class TextGenerationLoop
             }
 
             if (! $resumption->shouldContinue) {
-                return (new TextResponse('', new TextUsage, new Meta($provider->name(), $model)))
-                    ->withMessages(collect($newMessages));
+                return $this->emptyResponse($provider, $model, $newMessages);
             }
         } else {
             $allMessages = $this->settleAbandonedToolCalls($messages);
@@ -142,7 +141,7 @@ class TextGenerationLoop
             $attempt = null;
 
             try {
-                $lastResult = $this->runStep($pending, $middleware, function (PendingStep $step) use ($provider, $previous, $context, $allMessages, $continuationToken, &$attempt): StepResult {
+                $stepResult = $this->runStep($pending, $middleware, function (PendingStep $step) use ($provider, $previous, $context, $allMessages, $continuationToken, &$attempt): StepResult {
                     return $attempt = $this->attempt($step, $previous, $allMessages, $continuationToken, $context, fn (StepContext $stepContext): StepResponse => $this->gateway->generateTextStep(
                         $provider,
                         $step->model,
@@ -154,7 +153,13 @@ class TextGenerationLoop
                         $step->timeout,
                         $stepContext,
                     ));
-                })->response();
+                });
+
+                if ($stepResult->stopped()) {
+                    break;
+                }
+
+                $lastResult = $stepResult->response();
             } catch (Throwable $exception) {
                 $this->stepFailed($context, $attempt, $exception);
 
@@ -199,7 +204,9 @@ class TextGenerationLoop
             $previous = $prepared;
         }
 
-        return $this->buildFinalResponse($steps, $newMessages, $lastResult);
+        return $lastResult === null
+            ? $this->emptyResponse($provider, $model, $newMessages)
+            : $this->buildFinalResponse($steps, $newMessages, $lastResult);
     }
 
     /**
@@ -305,6 +312,12 @@ class TextGenerationLoop
                         );
                     });
                 });
+
+                if ($stepResult->stopped()) {
+                    $finalReason = FinishReason::Cancelled;
+
+                    break;
+                }
 
                 $reasoningDeltas = [];
 
@@ -1014,6 +1027,15 @@ class TextGenerationLoop
             $result->replayBlocks,
             $result->providerToolCalls,
         ))->withRawResponse($result->raw);
+    }
+
+    /**
+     * Build the response for a run that ended before any step completed.
+     */
+    protected function emptyResponse(TextProvider $provider, string $model, array $newMessages): TextResponse
+    {
+        return (new TextResponse('', new TextUsage, new Meta($provider->name(), $model)))
+            ->withMessages(collect($newMessages));
     }
 
     /**
