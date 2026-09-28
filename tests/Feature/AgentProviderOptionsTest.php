@@ -44,7 +44,7 @@ test('text generation options accept string provider', function (): void {
 test('text generation options return empty array for unknown provider', function (): void {
     $options = TextGenerationOptions::forAgent(new ProviderOptionsAgent);
 
-    $providerOptions = $options->providerOptions(Lab::Cohere);
+    $providerOptions = $options->providerOptions(Lab::Jina);
 
     expect($providerOptions)->toBeEmpty();
 });

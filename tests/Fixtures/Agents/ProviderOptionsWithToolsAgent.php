@@ -39,6 +39,9 @@ class ProviderOptionsWithToolsAgent implements Agent, HasProviderOptions, HasToo
             Lab::Azure => [
                 'frequency_penalty' => 0.5,
             ],
+            Lab::Cohere => [
+                'k' => 40,
+            ],
             Lab::OpenAI => [
                 'reasoning' => [
                     'effort' => 'high',

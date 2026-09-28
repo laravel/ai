@@ -3,6 +3,7 @@
 use Tests\Feature\Providers\Anthropic\AnthropicHelpers;
 use Tests\Feature\Providers\AzureOpenAi\AzureOpenAiHelpers;
 use Tests\Feature\Providers\Bedrock\BedrockHelpers;
+use Tests\Feature\Providers\Cohere\CohereHelpers;
 use Tests\Feature\Providers\Gemini\GeminiHelpers;
 use Tests\Feature\Providers\Groq\GroqHelpers;
 use Tests\Feature\Providers\Mistral\MistralHelpers;
@@ -21,6 +22,7 @@ pest()->extend(TestCase::class)->in('Feature', 'Integration');
 pest()->use(AnthropicHelpers::class)->group('provider-anthropic')->in('Feature/Providers/Anthropic');
 pest()->use(AzureOpenAiHelpers::class)->group('provider-azure')->in('Feature/Providers/AzureOpenAi');
 pest()->use(BedrockHelpers::class)->group('provider-bedrock')->in('Feature/Providers/Bedrock');
+pest()->use(CohereHelpers::class)->group('provider-cohere')->in('Feature/Providers/Cohere');
 pest()->use(GeminiHelpers::class)->group('provider-gemini')->in('Feature/Providers/Gemini');
 pest()->use(GroqHelpers::class)->group('provider-groq')->in('Feature/Providers/Groq');
 pest()->use(MistralHelpers::class)->group('provider-mistral')->in('Feature/Providers/Mistral');

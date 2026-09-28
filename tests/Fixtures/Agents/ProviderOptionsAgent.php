@@ -38,6 +38,10 @@ class ProviderOptionsAgent implements Agent, HasProviderOptions
                 'frequency_penalty' => 0.5,
                 'presence_penalty' => 0.3,
             ],
+            Lab::Cohere => [
+                'k' => 40,
+                'safety_mode' => 'CONTEXTUAL',
+            ],
             Lab::xAI => [
                 'frequency_penalty' => 0.5,
                 'presence_penalty' => 0.3,
