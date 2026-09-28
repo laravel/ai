@@ -28,6 +28,7 @@ use Laravel\Ai\Providers\ElevenLabsProvider;
 use Laravel\Ai\Providers\GeminiProvider;
 use Laravel\Ai\Providers\GroqProvider;
 use Laravel\Ai\Providers\JinaProvider;
+use Laravel\Ai\Providers\LayaProvider;
 use Laravel\Ai\Providers\MistralProvider;
 use Laravel\Ai\Providers\OllamaProvider;
 use Laravel\Ai\Providers\OpenAiCompatibleProvider;
@@ -424,6 +425,17 @@ class AiManager extends MultipleInstanceManager
     public function createJinaDriver(array $config): JinaProvider
     {
         return new JinaProvider(
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create a Laya powered instance.
+     */
+    public function createLayaDriver(array $config): LayaProvider
+    {
+        return new LayaProvider(
             $config,
             $this->app->make(Dispatcher::class)
         );

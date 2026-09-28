@@ -62,8 +62,16 @@ trait AnswersQuestions
                 inputTokens: $data['usage']['input_tokens'] ?? 0,
                 outputTokens: $data['usage']['output_tokens'] ?? 0,
             ),
-            new Meta($provider->name(), $data['model'] ?? $model),
+            new Meta($provider->name(), $this->answeringModel($data, $model)),
         );
+    }
+
+    /**
+     * Get the name of the model that answered the questions.
+     */
+    protected function answeringModel(array $data, string $model): string
+    {
+        return $data['model'] ?? $model;
     }
 
     /**
