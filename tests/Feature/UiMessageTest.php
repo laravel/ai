@@ -16,16 +16,9 @@ use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Models\ConversationMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
-use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
-use Laravel\Ai\Responses\StreamableAgentResponse;
-use Laravel\Ai\Streaming\Events\StreamEnd;
-use Laravel\Ai\Streaming\Events\StreamStart;
-use Laravel\Ai\Streaming\Events\TextDelta;
-use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
-use Laravel\Ai\Vercel\Chat;
+use Laravel\Ai\Streaming\Protocols\VercelDataProtocol;
 use Laravel\Ai\Vercel\Vercel;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
@@ -258,30 +251,6 @@ function useChatMessages(): array
     ];
 }
 
-function chatProtocolParts(Chat $chat, array $events): array
-{
-    $response = (new StreamableAgentResponse('invocation-1', fn () => yield from $events, new Meta('anthropic', 'claude-sonnet-4-6')))
-        ->usingProtocol($chat->protocol())
-        ->toResponse(request());
-
-    $output = '';
-
-    ob_start(function (string $buffer) use (&$output): string {
-        $output .= $buffer;
-
-        return '';
-    });
-
-    $response->sendContent();
-
-    ob_end_clean();
-
-    return collect(explode("\n\n", trim($output)))
-        ->map(fn (string $frame) => str_replace('data: ', '', $frame))
-        ->map(fn (string $payload) => $payload === '[DONE]' ? ['type' => 'done'] : json_decode($payload, true))
-        ->all();
-}
-
 describe('chat input from a useChat request', function () {
     test('the newest user message becomes the prompt and the rest becomes history', function () {
         $chat = Vercel::chat(useChatMessages());
@@ -373,7 +342,7 @@ describe('chat input from a useChat request', function () {
         expect($chat->decisions())->toBeNull();
     });
 
-    test('the protocol continues the trailing assistant message on a resume turn', function () {
+    test('a resume turn continues the trailing assistant message', function () {
         $chat = Vercel::chat([
             ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Delete a.txt']]],
             ['id' => 'm2', 'role' => 'assistant', 'parts' => [
@@ -381,23 +350,15 @@ describe('chat input from a useChat request', function () {
             ]],
         ]);
 
-        $parts = chatProtocolParts($chat, [
-            new ToolResultEvent('event-1', new ToolResult('call-1', 'DeleteFile', ['path' => 'a.txt'], 'deleted'), true, null, time()),
-            new StreamEnd('event-2', 'stop', new TextUsage, time()),
-        ]);
-
-        expect($parts[0])->toBe(['type' => 'start', 'messageId' => 'm2'])
-            ->and($parts[2])->toBe(['type' => 'tool-output-available', 'toolCallId' => 'call-1', 'output' => 'deleted']);
+        expect($chat->messageId())->toBe('m2')
+            ->and($chat->protocol())->toEqual(new VercelDataProtocol('m2'));
     });
 
-    test('the protocol never continues the trailing user message', function () {
-        $parts = chatProtocolParts(Vercel::chat(useChatMessages()), [
-            new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
-            new TextDelta('event-1', 'msg-1', 'Taylor Otwell.', time()),
-            new StreamEnd('event-2', 'stop', new TextUsage, time()),
-        ]);
+    test('a trailing user message continues no message', function () {
+        $chat = Vercel::chat(useChatMessages());
 
-        expect($parts[0])->toBe(['type' => 'start', 'messageId' => 'msg-1']);
+        expect($chat->messageId())->toBeNull()
+            ->and($chat->protocol())->toEqual(new VercelDataProtocol);
     });
 
     test('a chat prompts an agent directly', function () {

@@ -20,8 +20,10 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolResult;
+use Laravel\Ai\Vercel\Chat;
+use Laravel\Ai\Vercel\Vercel;
 
-function vercelProtocolParts(array|Closure $events, ?string $messageId = null): array
+function vercelProtocolParts(array|Closure $events, Chat|string|null $messageId = null): array
 {
     $stream = $events instanceof Closure ? $events : fn () => yield from $events;
 
@@ -228,6 +230,36 @@ test('a resumed stream may continue an existing client-side message', function (
 
     expect($parts[0])->toBe(['type' => 'start', 'messageId' => 'client-message-1'])
         ->and(collect($parts)->where('type', 'start'))->toHaveCount(1);
+});
+
+test('a resumed chat continues its trailing assistant message', function () {
+    $chat = Vercel::chat([
+        ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Delete a.txt']]],
+        ['id' => 'm2', 'role' => 'assistant', 'parts' => [
+            ['type' => 'tool-DeleteFile', 'toolCallId' => 'call-1', 'state' => 'approval-responded', 'input' => ['path' => 'a.txt'], 'approval' => ['id' => 'call-1', 'approved' => true]],
+        ]],
+    ]);
+
+    $parts = vercelProtocolParts([
+        new ToolResult('event-1', new Data\ToolResult('call-1', 'DeleteFile', ['path' => 'a.txt'], 'deleted'), true, null, time()),
+        new StreamEnd('event-2', 'stop', new TextUsage, time()),
+    ], messageId: $chat);
+
+    expect($parts[0])->toBe(['type' => 'start', 'messageId' => 'm2'])
+        ->and($parts[2])->toBe(['type' => 'tool-output-available', 'toolCallId' => 'call-1', 'output' => 'deleted']);
+});
+
+test('a chat ending in a user message streams a new message', function () {
+    $chat = Vercel::chat([
+        ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Hi']]],
+    ]);
+
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new StreamEnd('event-1', 'stop', new TextUsage, time()),
+    ], messageId: $chat);
+
+    expect($parts[0])->toBe(['type' => 'start', 'messageId' => 'msg-1']);
 });
 
 test('a rejected approval streams as a denied tool output', function () {
