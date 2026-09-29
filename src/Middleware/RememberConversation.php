@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Support\Str;
 use Laravel\Ai\Concerns\RemembersConversations as RemembersConversationsTrait;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\ClaimsApprovals;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\RemembersConversations;
@@ -47,9 +48,13 @@ class RememberConversation
             ? (string) Str::uuid7()
             : null;
 
+        $releaseClaim = $this->claimApprovals($prompt, $agent);
+
         try {
             $response = $next($prompt);
         } catch (Throwable $exception) {
+            $releaseClaim();
+
             $this->rememberFailedTurn($prompt, $exception, $pendingConversationId);
 
             throw $exception;
@@ -57,9 +62,11 @@ class RememberConversation
 
         // A stream fails while it is being consumed, long after this pipeline returned, so it reports back here...
         if ($response instanceof StreamableAgentResponse) {
-            $response->catch(fn (Throwable $exception) => $this->rememberFailedTurn(
-                $prompt, $exception, $pendingConversationId, retryable: ! $response->hasYielded(),
-            ));
+            $response->catch(function (Throwable $exception) use ($prompt, $pendingConversationId, $response, $releaseClaim): void {
+                $releaseClaim();
+
+                $this->rememberFailedTurn($prompt, $exception, $pendingConversationId, retryable: ! $response->hasYielded());
+            });
         }
 
         // Surface the ID to stream protocols without treating it as an existing conversation...
@@ -97,6 +104,26 @@ class RememberConversation
                 $participant,
             )->withStoredMessages($userMessageId, $assistantMessageId);
         });
+    }
+
+    /**
+     * Claim a resume's paused turn so a duplicate resume cannot run its approved tools again, returning the callback that releases it.
+     *
+     * @param  Agent&RemembersConversations  $agent
+     */
+    protected function claimApprovals(AgentPrompt $prompt, Agent $agent): Closure
+    {
+        $conversationId = $agent->currentConversation();
+
+        if (! $prompt->hasApprovalDecisions() || ! $this->store instanceof ClaimsApprovals || $conversationId === null) {
+            return fn () => null;
+        }
+
+        $claimant = $prompt->invocationId ?? (string) Str::uuid7();
+
+        $this->store->claimApprovals($conversationId, $claimant);
+
+        return fn () => $this->store->releaseApprovals($conversationId, $claimant);
     }
 
     /**

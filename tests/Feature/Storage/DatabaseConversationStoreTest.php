@@ -991,6 +991,27 @@ test('it writes the steps a completed stream carried on its stream end', functio
     );
 });
 
+test('a claimed paused turn rejects another resume until the claim goes stale', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    insertAssistantTurn($conversationId, 'message-1', '', [
+        assistantStep([['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'x']]]),
+    ], ['call-1' => 'Deletes x']);
+
+    $store->claimApprovals($conversationId, 'resume-a');
+    $store->claimApprovals($conversationId, 'resume-a');
+
+    expect(fn () => $store->claimApprovals($conversationId, 'resume-b'))
+        ->toThrow(ApprovalMismatchException::class, 'The approval is already being resolved.');
+
+    $this->travel(601)->seconds();
+
+    $store->claimApprovals($conversationId, 'resume-b');
+
+    expect(fn () => $store->claimApprovals($conversationId, 'resume-a'))->toThrow(ApprovalMismatchException::class);
+});
+
 test('storing approval results for a conversation with no paused row throws', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');

@@ -4,11 +4,13 @@ use Illuminate\Broadcasting\Channel;
 use Illuminate\Contracts\Support\Responsable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\ToolApprovalRequested;
 use Laravel\Ai\Events\ToolApprovalResolved;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
@@ -320,3 +322,71 @@ test('an approved streamed resume dispatches the tool approval resolved event', 
             && $event->toolResults[0]->denied === false;
     });
 });
+
+test('a duplicate resume is rejected while the approved tools are still running', function (string $method) {
+    Config::set('ai.conversations.generate_title', false);
+
+    fakeApprovalThenAnswer();
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+
+    $invocations = 0;
+    $duplicate = null;
+
+    Event::listen(InvokingTool::class, function () use (&$invocations, &$duplicate, $paused, $user) {
+        if (++$invocations > 1) {
+            return;
+        }
+
+        try {
+            (new RememberingApprovableAgent)->continue($paused->conversationId, $user)
+                ->prompt(Decision::approveAll(), provider: 'anthropic');
+        } catch (ApprovalMismatchException $exception) {
+            $duplicate = $exception;
+        }
+    });
+
+    $response = (new RememberingApprovableAgent)->continue($paused->conversationId, $user)
+        ->{$method}(Decision::approveAll(), provider: 'anthropic');
+
+    if ($method === 'stream') {
+        $response->each(fn () => true);
+    }
+
+    expect($invocations)->toBe(1)
+        ->and($duplicate?->getMessage())->toBe('The approval is already being resolved.')
+        ->and(DB::table('agent_conversation_messages')->where('role', 'assistant')->value('status'))->toBe('completed');
+})->with(['prompt', 'stream']);
+
+function fakeApprovalThenAnswer(): void
+{
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_1',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [[
+                    'type' => 'tool_use',
+                    'id' => 'toolu_1',
+                    'name' => 'ApprovableNumberGenerator',
+                    'input' => (object) [],
+                ]],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            Http::response([
+                'id' => 'msg_2',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'The number is 72019.']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]),
+    ]);
+}

@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Storage;
 
+use Closure;
 use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Pagination\Cursor;
@@ -12,6 +13,7 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\ClaimsApprovals;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\PaginatesConversations;
 use Laravel\Ai\Contracts\ResolvesPendingApprovals;
@@ -32,8 +34,13 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Throwable;
 
-class DatabaseConversationStore implements ConversationStore, PaginatesConversations, ResolvesPendingApprovals, VerifiesConversationOwnership
+class DatabaseConversationStore implements ClaimsApprovals, ConversationStore, PaginatesConversations, ResolvesPendingApprovals, VerifiesConversationOwnership
 {
+    /**
+     * The seconds after which an unfinished resume's claim may be taken over.
+     */
+    protected int $claimTimeout = 600;
+
     /**
      * Create a new conversation store instance.
      */
@@ -648,6 +655,65 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             $this->table($this->messagesTable())
                 ->where('id', $row->id)
                 ->update(['steps' => $steps->toJson(), 'updated_at' => now()]);
+        });
+    }
+
+    /**
+     * Claim the conversation's paused turn for one resume, so a duplicate resume cannot run its approved tools again.
+     *
+     * @throws ApprovalMismatchException when another resume holds the claim
+     */
+    public function claimApprovals(string $conversationId, string $claimant): void
+    {
+        $this->updatePendingCalls($conversationId, function (array $toolCall) use ($claimant): array {
+            if (($toolCall['claimed_by'] ?? $claimant) !== $claimant && now()->subSeconds($this->claimTimeout)->lt($toolCall['claimed_at'])) {
+                throw new ApprovalMismatchException('The approval is already being resolved.', collect());
+            }
+
+            return [...$toolCall, 'claimed_by' => $claimant, 'claimed_at' => now()->toIso8601String()];
+        });
+    }
+
+    /**
+     * Release a claim whose resume failed, so the approval can be resubmitted.
+     */
+    public function releaseApprovals(string $conversationId, string $claimant): void
+    {
+        $this->updatePendingCalls($conversationId, fn (array $toolCall): array => ($toolCall['claimed_by'] ?? null) === $claimant
+            ? Arr::except($toolCall, ['claimed_by', 'claimed_at'])
+            : $toolCall);
+    }
+
+    /**
+     * Rewrite the pending tool calls of the conversation's paused newest turn under a row lock.
+     *
+     * @param  Closure(array<string, mixed>): array<string, mixed>  $callback
+     */
+    protected function updatePendingCalls(string $conversationId, Closure $callback): void
+    {
+        DB::connection($this->connection)->transaction(function () use ($conversationId, $callback) {
+            $newest = $this->table($this->messagesTable())
+                ->where('conversation_id', $conversationId)
+                ->orderByDesc('id')
+                ->lockForUpdate()
+                ->first();
+
+            if ($newest === null || $newest->role !== 'assistant' || MessageStatus::from($newest->status) !== MessageStatus::Paused) {
+                return;
+            }
+
+            $steps = $this->decodedSteps($newest)->map(function (array $step) use ($callback): array {
+                $step['tool_calls'] = array_map(
+                    fn (array $toolCall): array => PendingApproval::isPending($toolCall) ? $callback($toolCall) : $toolCall,
+                    $step['tool_calls'],
+                );
+
+                return $step;
+            });
+
+            $this->table($this->messagesTable())
+                ->where('id', $newest->id)
+                ->update(['steps' => $steps->toJson()]);
         });
     }
 
