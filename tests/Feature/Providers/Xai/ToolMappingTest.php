@@ -192,18 +192,12 @@ test('file search tool forwards xai provider options into the tool payload', fun
     });
 });
 
-test('unsupported provider tools are omitted from the tools payload', function (): void {
+test('unsupported provider tool throws instead of being silently omitted', function (): void {
     Http::fake(['*' => fakeXaiToolMappingResponse('result')]);
 
     agent(tools: [new WebFetch, new WebSearch])
         ->prompt('Search', provider: 'xai');
-
-    Http::assertSent(function (Request $request): bool {
-        $body = json_decode($request->body(), true);
-
-        return data_get($body, 'tools') === [['type' => 'web_search']];
-    });
-});
+})->throws(RuntimeException::class, 'does not support the [WebFetch] tool');
 
 function fakeXaiToolMappingResponse(string $text): PromiseInterface
 {

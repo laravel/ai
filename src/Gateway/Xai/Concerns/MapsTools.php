@@ -28,9 +28,7 @@ trait MapsTools
 
         foreach ($tools as $tool) {
             if ($tool instanceof ProviderTool) {
-                if (filled($providerTool = $this->mapProviderTool($tool, $provider))) {
-                    $mapped[] = $providerTool;
-                }
+                $mapped[] = $this->mapProviderTool($tool, $provider);
             } elseif ($tool instanceof Tool) {
                 $mapped[] = $this->mapTool($tool);
             }
@@ -48,7 +46,7 @@ trait MapsTools
             $tool instanceof CodeExecution => $this->mapCodeExecutionTool($tool, $provider),
             $tool instanceof FileSearch => $this->mapFileSearchTool($tool, $provider),
             $tool instanceof WebSearch => $this->mapWebSearchTool($tool, $provider),
-            default => [],
+            default => throw new RuntimeException('Provider ['.$provider->name().'] does not support the ['.class_basename($tool).'] tool.'),
         };
     }
 
