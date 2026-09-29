@@ -42,6 +42,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Remote Files
+    |--------------------------------------------------------------------------
+    |
+    | Remote file URLs that point at private or internal network addresses are
+    | blocked before they are fetched. Hosts listed here skip that check so
+    | you may still reach trusted internal services like local storage.
+    |
+    */
+
+    'remote_files' => [
+        'allowed_hosts' => [],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | AI Providers
     |--------------------------------------------------------------------------
     |
