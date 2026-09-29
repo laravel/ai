@@ -33,6 +33,8 @@ class UntrustedUrl
 
     /**
      * Fetch the URL, validating it and every redirect hop against private and internal addresses.
+     *
+     * @throws InvalidArgumentException if the URL or a redirect target is blocked, or the URL redirects too many times.
      */
     public static function fetch(string $url): Response
     {
@@ -57,6 +59,8 @@ class UntrustedUrl
      * Validate the URL, returning the addresses its host resolves to.
      *
      * @return list<string>
+     *
+     * @throws InvalidArgumentException if the URL does not use http or https, or its host is blocked, unresolvable, or resolves to a blocked address.
      */
     public static function validate(string $url): array
     {
@@ -98,6 +102,8 @@ class UntrustedUrl
     }
 
     /**
+     * Resolve the given host to its IPv4 and IPv6 addresses.
+     *
      * @return list<string>
      */
     protected static function resolve(string $host): array
@@ -106,11 +112,14 @@ class UntrustedUrl
             return (static::$resolver)($host);
         }
 
-        $records = (array) @dns_get_record($host, DNS_A | DNS_AAAA);
+        $records = @dns_get_record($host, DNS_A | DNS_AAAA) ?: [];
 
         return array_values(array_filter(array_map(fn (array $record) => $record['ip'] ?? $record['ipv6'] ?? null, $records)));
     }
 
+    /**
+     * Determine if the given IP address is private, reserved, or otherwise internal.
+     */
     protected static function isBlocked(string $address): bool
     {
         if (filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false) {
@@ -127,6 +136,8 @@ class UntrustedUrl
     }
 
     /**
+     * Determine if the given IP address is within any of the given CIDR ranges.
+     *
      * @param  list<string>  $ranges
      */
     protected static function inAnyRange(string $address, array $ranges): bool
@@ -140,6 +151,9 @@ class UntrustedUrl
         return false;
     }
 
+    /**
+     * Determine if the given IP address is within the given CIDR range.
+     */
     protected static function inRange(string $address, string $cidr): bool
     {
         [$network, $bits] = explode('/', $cidr);
