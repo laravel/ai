@@ -461,7 +461,7 @@ test('a plain generation settles abandoned pauses before calling the model, each
         ->and($response->text)->toBe('Sure, moving on.');
 });
 
-test('a default decision approves every pending call while an explicit decision overrides it', function (): void {
+test('a default decision approves every gated call while an explicit decision overrides it', function (): void {
     $gated = new TextGenerationLoopApprovableTool;
     $ungated = new TextGenerationLoopCountingTool;
     $approvedCall = new ToolCall('call-1', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-1');
@@ -485,10 +485,11 @@ test('a default decision approves every pending call while an explicit decision 
 
     expect($gated->calls)->toBe(1)
         ->and($gated->handledArguments)->toBe([['value' => 'approved']])
-        ->and($ungated->calls)->toBe(1)
+        ->and($ungated->calls)->toBe(0)
         ->and($response->hasPendingApprovals())->toBeFalse()
         ->and($response->toolResults)->toHaveCount(3)
         ->and($response->toolResults->firstWhere('id', 'call-2')->result)->toBe('Wrong file')
+        ->and($response->toolResults->firstWhere('id', 'call-ungated')->result)->toBe('This tool call was not executed because it was not pending approval.')
         ->and($response->text)->toBe('done');
 });
 

@@ -872,6 +872,19 @@ class TextGenerationLoop
         $hasBareRejection = false;
 
         foreach ($pendingToolCalls as $toolCall) {
+            if ($resolvedTools[$toolCall->id] instanceof Tool && ! $resolvedTools[$toolCall->id] instanceof Approvable) {
+                $toolResults[] = new ToolResult(
+                    $toolCall->id,
+                    $toolCall->name,
+                    $toolCall->arguments,
+                    'This tool call was not executed because it was not pending approval.',
+                    $toolCall->resultId,
+                    denied: true,
+                );
+
+                continue;
+            }
+
             $decision = $approval[$toolCall->id]
                 ?? $approval['*']
                 ?? Decision::reject('The user rejected this tool call.');

@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Approvals\Decisions;
@@ -126,6 +127,35 @@ test('a paused approval resumes only when the runtime tools are re-applied', fun
 
     expect(ApprovableNumberGenerator::$invocations)->toBe(1)
         ->and($response->text)->toBe('The number is 72019.');
+});
+
+test('an ungated tool call in the resumed history is settled instead of executed', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'id' => 'msg_2',
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-4-6',
+            'content' => [['type' => 'text', 'text' => 'Done.']],
+            'stop_reason' => 'end_turn',
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
+    ]);
+
+    $chat = Vercel::chat([
+        ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Generate a number']]],
+        ['id' => 'm2', 'role' => 'assistant', 'parts' => [
+            ['type' => 'tool-FixedNumberGenerator', 'toolCallId' => 'toolu_1', 'state' => 'approval-responded', 'input' => [], 'approval' => ['id' => 'toolu_1', 'approved' => true]],
+        ]],
+    ]);
+
+    (new AssistantAgent)
+        ->withTools([new FixedNumberGenerator(throwsException: true)])
+        ->withMessages($chat->history())
+        ->prompt($chat, provider: 'anthropic');
+
+    Http::assertSent(fn (Request $request) => str_contains($request->body(), 'was not pending approval')
+        && ! str_contains($request->body(), 'Forced to throw'));
 });
 
 test('middleware may swap the tools for a step', function (): void {
