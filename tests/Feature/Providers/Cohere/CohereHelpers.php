@@ -99,8 +99,6 @@ trait CohereHelpers
             $lines[] = 'event: '.$event['type']."\ndata: ".json_encode($event);
         }
 
-        $lines[] = 'data: [DONE]';
-
         return implode("\n\n", $lines)."\n\n";
     }
 }

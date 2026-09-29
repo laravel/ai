@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Cohere\Concerns;
 
 use Illuminate\Support\Arr;
 use InvalidArgumentException;
+use Laravel\Ai\Gateway\Concerns\ComposesSchemaInstructions;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
@@ -11,6 +12,8 @@ use Laravel\Ai\ToolChoice;
 
 trait BuildsTextRequests
 {
+    use ComposesSchemaInstructions;
+
     /**
      * Build the request body for the Cohere Chat API.
      */
@@ -23,10 +26,7 @@ trait BuildsTextRequests
         ?array $schema,
         ?TextGenerationOptions $options,
     ): array {
-        $body = [
-            'model' => $model,
-            'messages' => $this->mapMessagesToChat($messages, $instructions),
-        ];
+        $body = ['model' => $model];
 
         if (filled($tools)) {
             $mappedTools = $this->mapTools($tools, $provider);
@@ -54,7 +54,14 @@ trait BuildsTextRequests
             }
         }
 
-        if (filled($schema)) {
+        $inlineSchema = filled($body['tools'] ?? null) && filled($schema);
+
+        $body['messages'] = $this->mapMessagesToChat(
+            $messages,
+            $inlineSchema ? $this->composeInstructions($instructions, $schema) : $instructions,
+        );
+
+        if (filled($schema) && ! $inlineSchema) {
             $body['response_format'] = [
                 'type' => 'json_object',
                 'json_schema' => Arr::except((new ObjectSchema($schema))->toSchema(), ['name']),
@@ -78,8 +85,6 @@ trait BuildsTextRequests
 
     /**
      * Map a tool choice to the Cohere tool_choice value.
-     *
-     * Cohere has no "auto" value, as it is the default behavior.
      */
     protected function mapCohereToolChoice(ToolChoice $choice): ?string
     {

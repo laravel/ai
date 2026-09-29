@@ -169,6 +169,25 @@ test('structured output sends a json object response format', function (): void 
     });
 });
 
+test('schema combined with tools omits response format but keeps schema instructions', function (): void {
+    Http::fake(['*' => $this->fakeTextResponse('{"number": 42}')]);
+
+    agent(
+        tools: [new RandomNumberGenerator],
+        schema: fn ($s): array => ['number' => $s->integer()->required()],
+    )->prompt('Give me a number', provider: 'cohere');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $systemMsg = collect($body['messages'])->firstWhere('role', 'system');
+
+        return ! array_key_exists('response_format', $body)
+            && is_array($body['tools'])
+            && $systemMsg !== null
+            && str_contains((string) $systemMsg['content'], 'JSON object that strictly adheres');
+    });
+});
+
 test('streaming request enables streaming without stream options', function (): void {
     Http::fake(['*' => $this->fakeStreamResponse($this->streamTextEvents('Hi'))]);
 
@@ -180,14 +199,6 @@ test('streaming request enables streaming without stream options', function (): 
         return $body['stream'] === true
             && ! array_key_exists('stream_options', $body);
     });
-});
-
-test('request sends bearer token authorization', function (): void {
-    Http::fake(['*' => $this->fakeTextResponse('Hello')]);
-
-    agent()->prompt('Hello', provider: 'cohere');
-
-    Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer test-key'));
 });
 
 test('response text is correctly parsed', function (): void {

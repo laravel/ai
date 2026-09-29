@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\OpenAiCompatible\Concerns;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\File;
@@ -49,7 +50,7 @@ trait MapsAttachments
                     'type' => 'image_url',
                     'image_url' => ['url' => 'data:'.$attachment->getClientMimeType().';base64,'.base64_encode($attachment->get())],
                 ],
-                default => throw new InvalidArgumentException('This openai-compatible provider does not support document attachments. Only image attachments are supported.'),
+                default => throw new InvalidArgumentException(Str::of(class_basename($this))->before('Gateway').' does not support document attachments. Only image attachments are supported.'),
             };
         })->all();
     }

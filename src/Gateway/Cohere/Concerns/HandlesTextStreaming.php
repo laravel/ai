@@ -9,6 +9,7 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
@@ -36,7 +37,6 @@ trait HandlesTextStreaming
         $reasoningId = null;
         $textStartEmitted = false;
         $currentText = '';
-        $reasoning = '';
         $pendingToolCalls = [];
         $toolCalls = [];
         $usage = null;
@@ -67,8 +67,6 @@ trait HandlesTextStreaming
                                 time(),
                             ))->withInvocationId($invocationId);
                         }
-
-                        $reasoning .= $thinking;
 
                         yield (new ReasoningDelta(
                             $this->generateEventId(),
@@ -126,6 +124,18 @@ trait HandlesTextStreaming
                     break;
 
                 case 'message-end':
+                    if (filled($delta['error'] ?? null)) {
+                        yield (new Error(
+                            $this->generateEventId(),
+                            strtolower($delta['finish_reason'] ?? 'error'),
+                            $delta['error'],
+                            false,
+                            time(),
+                        ))->withInvocationId($invocationId);
+
+                        return null;
+                    }
+
                     $finishReason = $delta['finish_reason'] ?? null;
                     $usage = $this->extractUsage($delta['usage'] ?? []);
 
@@ -166,7 +176,6 @@ trait HandlesTextStreaming
             finishReason: $this->extractFinishReason($finishReason),
             usage: $usage ?? new TextUsage(0, 0),
             meta: new Meta($provider->name(), $model),
-            reasoning: $reasoning,
         );
     }
 

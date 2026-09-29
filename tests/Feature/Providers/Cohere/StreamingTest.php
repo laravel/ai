@@ -1,7 +1,9 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
@@ -12,6 +14,7 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
+use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
 beforeEach(function (): void {
@@ -113,4 +116,39 @@ test('streaming emits reasoning events before the text', function (): void {
         ->and($events[4])->toBeInstanceOf(ReasoningEnd::class)
         ->and($events[5])->toBeInstanceOf(TextStart::class)
         ->and($events[6])->toBeInstanceOf(TextDelta::class)->delta->toBe('Hello');
+});
+
+test('streaming exposes the combined reasoning on the response', function (): void {
+    Http::fake(['*' => $this->fakeStreamResponse([
+        ['type' => 'content-delta', 'index' => 0, 'delta' => ['message' => ['content' => ['thinking' => 'Let me ']]]],
+        ['type' => 'content-delta', 'index' => 0, 'delta' => ['message' => ['content' => ['thinking' => 'think...']]]],
+        ['type' => 'content-delta', 'index' => 1, 'delta' => ['message' => ['content' => ['text' => 'Hello']]]],
+        ['type' => 'message-end', 'delta' => ['finish_reason' => 'COMPLETE', 'usage' => ['tokens' => ['input_tokens' => 5, 'output_tokens' => 5]]]],
+    ])]);
+
+    $stream = (new AssistantAgent)->stream('Hello', provider: 'cohere');
+
+    iterator_to_array($stream);
+
+    expect($stream->reasoning)->toBe('Let me think...')
+        ->and($stream->text)->toBe('Hello');
+});
+
+test('streaming error event stops stream', function (): void {
+    Http::fake(['*' => $this->fakeStreamResponse([
+        ['type' => 'content-delta', 'index' => 0, 'delta' => ['message' => ['content' => ['text' => 'Hel']]]],
+        ['type' => 'message-end', 'delta' => ['finish_reason' => 'TIMEOUT', 'error' => 'Generation timed out']],
+    ])]);
+
+    $error = null;
+
+    try {
+        $this->collectStreamEvents();
+    } catch (StreamErrorException $exception) {
+        $error = $exception->error;
+    }
+
+    expect($error)->toBeInstanceOf(Error::class)
+        ->and($error->type)->toBe('timeout')
+        ->and($error->message)->toBe('Generation timed out');
 });

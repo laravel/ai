@@ -5,11 +5,10 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Ai;
-use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
-use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Gateway\CohereGateway;
+use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Reranking;
 use Laravel\Ai\Responses\Data\RankedDocument;
 
@@ -134,7 +133,7 @@ test('reranking request uses the configured timeout', function (): void {
     {
         public array $timeouts = [];
 
-        protected function client(EmbeddingProvider|RerankingProvider $provider, int $timeout = 30): PendingRequest
+        protected function client(Provider $provider, int $timeout = 30): PendingRequest
         {
             $this->timeouts[] = $timeout;
 

@@ -13,13 +13,14 @@ use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Gateway\Cohere\Concerns\BuildsTextRequests;
 use Laravel\Ai\Gateway\Cohere\Concerns\HandlesTextStreaming;
-use Laravel\Ai\Gateway\Cohere\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\Cohere\Concerns\ParsesEmbeddings;
 use Laravel\Ai\Gateway\Cohere\Concerns\ParsesTextResponses;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
+use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionMessages;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
+use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
 use Laravel\Ai\Responses\Data\RerankingUsage;
@@ -181,7 +182,7 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway, StepTextGatew
     /**
      * Get an HTTP client for the Cohere API.
      */
-    protected function client(EmbeddingProvider|RerankingProvider $provider, int $timeout = 30): PendingRequest
+    protected function client(Provider $provider, int $timeout = 30): PendingRequest
     {
         $config = $provider->additionalConfiguration();
 
