@@ -2,7 +2,6 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use Laravel\Ai\Providers\Tools\FileSearch;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
@@ -52,14 +51,6 @@ test('tool with empty schema includes parameters', function (): void {
             && $function['parameters']['additionalProperties'] === false;
     });
 });
-
-test('provider tools throw runtime exception', function (): void {
-    Http::fake(['*' => $this->fakeTextResponse()]);
-
-    agent(
-        tools: [new FileSearch(['store_1'])],
-    )->prompt('Search for something', provider: 'mistral');
-})->throws(RuntimeException::class, 'Mistral does not support');
 
 test('tool with a name() method emits the declared name', function (): void {
     Http::fake(['*' => $this->fakeTextResponse('ok')]);

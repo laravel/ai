@@ -2,10 +2,8 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
-use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
@@ -69,13 +67,6 @@ test('tool parameters are not wrapped in schema definition', function (): void {
         return ! array_key_exists('schema_definition', $function['parameters']['properties'] ?? [])
             && ! in_array('schema_definition', $function['parameters']['required'] ?? []);
     });
-});
-
-test('unsupported provider tools throw runtime exception', function (): void {
-    Http::fake(['*' => fakeOpenRouterResponse('done')]);
-
-    expect(fn (): AgentResponse => agent(tools: [new FileSearch(['store'])])->prompt('Search', provider: 'openrouter'))
-        ->toThrow(RuntimeException::class, 'OpenRouter does not support [FileSearch] provider tools.');
 });
 
 test('web fetch tool is sent as openrouter:web_fetch type', function (): void {

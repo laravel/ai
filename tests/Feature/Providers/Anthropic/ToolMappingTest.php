@@ -2,7 +2,6 @@
 
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Providers\Tools\CodeExecution;
-use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Agents\NamedToolAgent;
@@ -35,20 +34,6 @@ test('tool parameters are not wrapped in schema definition', function (): void {
         return false;
     });
 });
-
-test('unsupported provider tool throws logic exception', function (): void {
-    Http::fake([
-        'api.anthropic.com/*' => $this->fakeTextResponse(),
-    ]);
-
-    agent(
-        'Test unsupported tool',
-        tools: [new FileSearch(['store_1'])],
-    )->prompt(
-        'Search for something',
-        provider: 'anthropic',
-    );
-})->throws(LogicException::class, 'is not supported by Anthropic');
 
 test('tool with a name() method emits the declared name', function (): void {
     Http::fake([

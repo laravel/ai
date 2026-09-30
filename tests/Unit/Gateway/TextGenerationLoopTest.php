@@ -11,6 +11,7 @@ use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\CanActAsTool;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
+use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\InvokingTool;
@@ -28,7 +29,9 @@ use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Promptable;
+use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\ToolSearch;
+use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -982,41 +985,74 @@ test('it yields the error and then throws it when a turn errors without a stream
         ->and($thrown?->getMessage())->toBe('Server overloaded');
 });
 
-test('it rejects tool search on a provider that does not support it before calling the gateway', function (): void {
-    $gateway = new TextGenerationLoopFakeGateway;
-    $tools = [new TextGenerationLoopCountingTool, new ToolSearch(tools: [new TextGenerationLoopCountingTool])];
+test('it sends the deferred tools as regular tools when the provider does not support tool search', function (): void {
+    $gateway = new TextGenerationLoopFakeGateway([
+        new StepResponse('done', [], FinishReason::Stop, new TextUsage, new Meta('fake', 'model')),
+    ]);
+    $regular = new TextGenerationLoopCountingTool;
+    $deferred = new TextGenerationLoopCountingTool;
 
-    expect(fn () => (new TextGenerationLoop($gateway))->generate(
+    (new TextGenerationLoop($gateway))->generate(
         textGenerationLoopProvider(),
         'model',
         null,
         [],
-        $tools,
+        [$regular, new ToolSearch(tools: [$deferred])],
         null,
         null,
         null,
-    ))->toThrow(LogicException::class, 'does not support tool search');
+    );
 
-    expect($gateway->generateCalls)->toBe(0);
+    expect($gateway->tools)->toBe([[$regular, $deferred]]);
 });
 
-test('it rejects tool search on a streamed generation for an unsupported provider', function (): void {
-    $gateway = new TextGenerationLoopFakeGateway;
-    $tools = [new TextGenerationLoopCountingTool, new ToolSearch(tools: [new TextGenerationLoopCountingTool])];
+test('it sends the deferred tools as regular tools on a streamed generation when the provider does not support tool search', function (): void {
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        textGenerationLoopStreamStep(
+            events: [],
+            returns: new StepResponse('done', [], FinishReason::Stop, new TextUsage, new Meta('fake', 'model')),
+        ),
+    ]);
+    $regular = new TextGenerationLoopCountingTool;
+    $deferred = new TextGenerationLoopCountingTool;
 
-    expect(fn () => iterator_to_array((new TextGenerationLoop($gateway))->stream(
+    iterator_to_array((new TextGenerationLoop($gateway))->stream(
         'invocation-1',
         textGenerationLoopProvider(),
         'model',
         null,
         [],
-        $tools,
+        [$regular, new ToolSearch(tools: [$deferred])],
         null,
         null,
         null,
-    )))->toThrow(LogicException::class, 'does not support tool search');
+    ));
 
-    expect($gateway->streamCalls)->toBe(0);
+    expect($gateway->tools)->toBe([[$regular, $deferred]]);
+});
+
+test('it drops provider tools the provider does not support before calling the gateway', function (): void {
+    $gateway = new TextGenerationLoopFakeGateway([
+        new StepResponse('done', [], FinishReason::Stop, new TextUsage, new Meta('fake', 'model')),
+    ]);
+    $regular = new TextGenerationLoopCountingTool;
+    $webSearch = new WebSearch;
+
+    $provider = Mockery::mock(TextProvider::class, SupportsWebSearch::class);
+    $provider->shouldReceive('name')->andReturn('fake');
+
+    (new TextGenerationLoop($gateway))->generate(
+        $provider,
+        'model',
+        null,
+        [],
+        [$regular, new WebFetch, $webSearch, new CodeExecution],
+        null,
+        null,
+        null,
+    );
+
+    expect($gateway->tools)->toBe([[$regular, $webSearch]]);
 });
 
 test('it rejects more than one tool search wrapper on a supporting provider', function (): void {
@@ -1094,6 +1130,8 @@ class TextGenerationLoopFakeGateway implements StepTextGateway
 
     public array $messages = [];
 
+    public array $tools = [];
+
     public function __construct(
         public array $steps = [],
         public array $streams = [],
@@ -1113,6 +1151,7 @@ class TextGenerationLoopFakeGateway implements StepTextGateway
         $this->generateCalls++;
         $this->contexts[] = $stepContext;
         $this->messages[] = $messages;
+        $this->tools[] = $tools;
 
         return array_shift($this->steps);
     }
@@ -1131,6 +1170,7 @@ class TextGenerationLoopFakeGateway implements StepTextGateway
     ): Generator {
         $this->streamCalls++;
         $this->contexts[] = $stepContext;
+        $this->tools[] = $tools;
 
         [$events, $result] = array_shift($this->streams);
 

@@ -192,12 +192,20 @@ test('file search tool forwards xai provider options into the tool payload', fun
     });
 });
 
-test('unsupported provider tool throws instead of being silently omitted', function (): void {
-    Http::fake(['*' => fakeXaiToolMappingResponse('result')]);
+test('provider tools xAI does not support are dropped after failing over to it', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(['type' => 'error', 'error' => ['type' => 'rate_limit_error', 'message' => 'Rate limited']], 429),
+        'api.x.ai/*' => fakeXaiToolMappingResponse('result'),
+    ]);
 
     agent(tools: [new WebFetch, new WebSearch])
-        ->prompt('Search', provider: 'xai');
-})->throws(RuntimeException::class, 'does not support the [WebFetch] tool');
+        ->prompt('Search', provider: ['anthropic', 'xai']);
+
+    Http::assertSent(function (Request $request): bool {
+        return str_contains($request->url(), 'api.x.ai')
+            && data_get(json_decode($request->body(), true), 'tools') === [['type' => 'web_search']];
+    });
+});
 
 function fakeXaiToolMappingResponse(string $text): PromiseInterface
 {

@@ -14,7 +14,11 @@ use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\HasMiddleware;
+use Laravel\Ai\Contracts\Providers\SupportsCodeExecution;
+use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
+use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
+use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
@@ -26,8 +30,12 @@ use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\PendingStep;
+use Laravel\Ai\Providers\Tools\CodeExecution;
+use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Providers\Tools\ToolSearch;
+use Laravel\Ai\Providers\Tools\WebFetch;
+use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Step;
@@ -92,7 +100,9 @@ class TextGenerationLoop
         ?Closure $recordApprovalResults = null,
         ?RunContext $context = null,
     ): TextResponse {
-        $this->ensureToolSearchIsApplicable($provider, $tools);
+        $this->ensureSingleToolSearch($tools);
+
+        $tools = $this->toolsSupportedBy($provider, $tools);
 
         $middleware = $this->middlewareFor($options);
         $steps = new Collection;
@@ -223,7 +233,9 @@ class TextGenerationLoop
         ?array $validatedApproval = null,
         ?RunContext $context = null,
     ): Generator {
-        $this->ensureToolSearchIsApplicable($provider, $tools);
+        $this->ensureSingleToolSearch($tools);
+
+        $tools = $this->toolsSupportedBy($provider, $tools);
 
         $middleware = $this->middlewareFor($options);
         $steps = new Collection;
@@ -1057,24 +1069,33 @@ class TextGenerationLoop
     }
 
     /**
-     * Ensure hosted tool search is only used with a supporting provider and a single wrapper.
+     * Ensure at most one tool search wrapper is registered per request.
      *
      * @param  Tool[]  $tools
      */
-    protected function ensureToolSearchIsApplicable(TextProvider $provider, array $tools): void
+    protected function ensureSingleToolSearch(array $tools): void
     {
-        $wrappers = array_filter($tools, fn ($tool): bool => $tool instanceof ToolSearch);
-
-        if ($wrappers === []) {
-            return;
-        }
-
-        if (! $provider instanceof SupportsToolSearch) {
-            throw new LogicException("Provider [{$provider->name()}] does not support tool search.");
-        }
-
-        if (count($wrappers) > 1) {
+        if (count(array_filter($tools, fn ($tool): bool => $tool instanceof ToolSearch)) > 1) {
             throw new LogicException('Only a single tool search wrapper may be registered per request.');
         }
+    }
+
+    /**
+     * Drop provider tools the provider cannot run, unwrapping tool search into its deferred tools.
+     *
+     * @param  array<Tool|ProviderTool>  $tools
+     * @return array<Tool|ProviderTool>
+     */
+    protected function toolsSupportedBy(TextProvider $provider, array $tools): array
+    {
+        return (new Collection($tools))->flatMap(fn ($tool): array => match (true) {
+            $tool instanceof CodeExecution => $provider instanceof SupportsCodeExecution ? [$tool] : [],
+            $tool instanceof FileSearch => $provider instanceof SupportsFileSearch ? [$tool] : [],
+            $tool instanceof ToolSearch => $provider instanceof SupportsToolSearch ? [$tool] : $tool->tools,
+            $tool instanceof WebFetch => $provider instanceof SupportsWebFetch ? [$tool] : [],
+            $tool instanceof WebSearch => $provider instanceof SupportsWebSearch ? [$tool] : [],
+            $tool instanceof ProviderTool => [],
+            default => [$tool],
+        })->all();
     }
 }
