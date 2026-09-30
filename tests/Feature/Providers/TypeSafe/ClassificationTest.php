@@ -187,15 +187,6 @@ test('the routed checkpoint is reported as the answering model', function (): vo
     expect($response->meta->model)->toBe('english');
 });
 
-test('a self-hosted laya server may be used through the typesafe driver', function (): void {
-    Http::fake(['*' => Http::response(fakeTypeSafeResponse())]);
-
-    Classification::of('text')->question('is_urgent', new Boolean('Urgent?'))->classify(provider: 'laya');
-
-    Http::assertSent(fn (Request $request): bool => $request->url() === 'http://localhost:8000/v1/systemone'
-        && json_decode($request->body(), true)['model'] === 'auto');
-});
-
 test('provider options may not override the core classification payload', function (): void {
     Http::fake(['*' => Http::response(fakeTypeSafeResponse())]);
 

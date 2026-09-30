@@ -116,13 +116,6 @@ return [
             'key' => env('JINA_API_KEY'),
         ],
 
-        'laya' => [
-            'driver' => 'typesafe',
-            'key' => env('LAYA_API_KEY', ''),
-            'url' => env('LAYA_URL', 'http://localhost:8000/v1'),
-            'models' => ['classification' => ['default' => 'auto']],
-        ],
-
         'mistral' => [
             'driver' => 'mistral',
             'key' => env('MISTRAL_API_KEY'),
