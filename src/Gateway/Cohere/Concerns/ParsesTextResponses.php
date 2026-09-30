@@ -77,8 +77,8 @@ trait ParsesTextResponses
     protected function extractUsage(array $usage): TextUsage
     {
         return new TextUsage(
-            inputTokens: (int) ($usage['tokens']['input_tokens'] ?? $usage['billed_units']['input_tokens'] ?? 0),
-            outputTokens: (int) ($usage['tokens']['output_tokens'] ?? $usage['billed_units']['output_tokens'] ?? 0),
+            inputTokens: (int) ($usage['tokens']['input_tokens'] ?? 0),
+            outputTokens: (int) ($usage['tokens']['output_tokens'] ?? 0),
             cacheReadInputTokens: isset($usage['cached_tokens']) ? (int) $usage['cached_tokens'] : null,
         );
     }

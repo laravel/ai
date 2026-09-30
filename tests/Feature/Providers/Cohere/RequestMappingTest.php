@@ -230,18 +230,14 @@ test('response usage reports token counts and cached tokens', function (): void 
         ->and($response->usage->cacheReadInputTokens)->toBe(480);
 });
 
-test('response usage falls back to billed units', function (): void {
+test('response usage leaves cached tokens null when absent', function (): void {
     Http::fake(['*' => Http::response([
         'message' => ['role' => 'assistant', 'content' => [['type' => 'text', 'text' => 'Hello']]],
         'finish_reason' => 'COMPLETE',
-        'usage' => ['billed_units' => ['input_tokens' => 20, 'output_tokens' => 5]],
+        'usage' => ['tokens' => ['input_tokens' => 557, 'output_tokens' => 8]],
     ])]);
 
-    $response = agent()->prompt('Hello', provider: 'cohere');
-
-    expect($response->usage->inputTokens)->toBe(20)
-        ->and($response->usage->outputTokens)->toBe(5)
-        ->and($response->usage->cacheReadInputTokens)->toBeNull();
+    expect(agent()->prompt('Hello', provider: 'cohere')->usage->cacheReadInputTokens)->toBeNull();
 });
 
 test('finish reasons are mapped', function (string $cohereReason, FinishReason $expected): void {

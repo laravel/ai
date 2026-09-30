@@ -106,7 +106,7 @@ trait HandlesTextStreaming
 
                     $toolCall = $delta['message']['tool_calls'] ?? [];
 
-                    $pendingToolCalls[$data['index'] ?? count($pendingToolCalls)] = [
+                    $pendingToolCalls[$data['index']] = [
                         'id' => $toolCall['id'] ?? '',
                         'name' => $toolCall['function']['name'] ?? '',
                         'arguments' => (string) ($toolCall['function']['arguments'] ?? ''),
@@ -115,10 +115,8 @@ trait HandlesTextStreaming
                     break;
 
                 case 'tool-call-delta':
-                    $index = $data['index'] ?? array_key_last($pendingToolCalls);
-
-                    if (isset($pendingToolCalls[$index])) {
-                        $pendingToolCalls[$index]['arguments'] .= (string) ($delta['message']['tool_calls']['function']['arguments'] ?? '');
+                    if (isset($pendingToolCalls[$data['index']])) {
+                        $pendingToolCalls[$data['index']]['arguments'] .= (string) ($delta['message']['tool_calls']['function']['arguments'] ?? '');
                     }
 
                     break;
