@@ -75,7 +75,7 @@ class LoadSkill implements Tool
         $name = $schema->string()->description('The name of the skill to load.')->required();
 
         // An empty enum matches no value at all and is rejected outright under strict schemas...
-        if (($names = $this->skills()->pluck('name')->values()->all()) !== []) {
+        if (($names = $this->skills()->pluck('name')->all()) !== []) {
             $name->enum($names);
         }
 
@@ -117,7 +117,7 @@ class LoadSkill implements Tool
             : $this->read($skill, $path);
 
         return match (true) {
-            $contents === null => "File [{$path}] is not bundled with skill [{$skill->name}].",
+            !$contents => "File [{$path}] is not bundled with skill [{$skill->name}].",
             strlen($contents) > static::MAX_BYTES => "File [{$path}] is too large to read inline.",
             ! mb_check_encoding($contents, 'UTF-8') => "File [{$path}] appears to be binary and cannot be read as text.",
             default => $contents,

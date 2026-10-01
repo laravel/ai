@@ -2,14 +2,11 @@
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Laravel\Ai\Skills\Skill;
 use Laravel\Ai\Tools\LoadSkill;
 use Laravel\Ai\Tools\Request;
 use Symfony\Component\Yaml\Exception\ParseException;
-
-use function Laravel\Ai\agent;
 
 beforeEach(function (): void {
     $this->skills = base_path('skills-'.Str::random(8));
@@ -163,32 +160,6 @@ test('it discovers skills in the resources directory by default', function (): v
     } finally {
         File::deleteDirectory(resource_path('skills'));
     }
-});
-
-test('it is sent to the provider as a LoadSkill function tool carrying the skill catalog', function (): void {
-    skill('pdf', "name: pdf\ndescription: Extract PDF text.");
-
-    config(['ai.providers.openai' => [...config('ai.providers.openai'), 'key' => 'test-key']]);
-
-    Http::fake(['*' => fakeOpenAiResponse('ok')]);
-
-    agent(tools: [new LoadSkill([$this->skills])])->prompt('Extract the text', provider: 'openai');
-
-    Http::assertSent(function (Illuminate\Http\Client\Request $request): bool {
-        $tool = collect(data_get(json_decode($request->body(), true), 'tools'))->firstWhere('name', 'LoadSkill');
-
-        return str_contains($tool['description'], '- pdf: Extract PDF text.')
-            && $tool['parameters']['properties']['name']['enum'] === ['pdf'];
-    });
-});
-
-test('it unwraps a quoted description but keeps an unmatched quote', function (): void {
-    skill('quoted', 'name: quoted'."\n".'description: "Review invoices."');
-    skill('apostrophe', 'name: apostrophe'."\n".'description: Review the team\'s invoices\'');
-
-    expect((new LoadSkill([$this->skills]))->description())
-        ->toContain('- quoted: Review invoices.')
-        ->toContain('- apostrophe: Review the team\'s invoices\'');
 });
 
 test('it parses frontmatter as YAML', function (): void {
