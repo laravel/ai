@@ -4,6 +4,7 @@ namespace Laravel\Ai\Skills;
 
 use Illuminate\Support\Str;
 use Stringable;
+use Symfony\Component\Yaml\Yaml;
 
 class Skill
 {
@@ -35,37 +36,21 @@ class Skill
             return null;
         }
 
-        $frontmatter = $matches[1];
+        $frontmatter = (array) Yaml::parse($matches[1]);
 
-        $description = static::frontmatter($frontmatter, 'description');
+        $description = $frontmatter['description'] ?? null;
 
-        if ($description === null) {
+        if (! is_string($description) || blank($description)) {
             return null;
         }
 
+        $name = $frontmatter['name'] ?? null;
+
         return new self(
-            name: static::frontmatter($frontmatter, 'name') ?? basename($directory),
-            description: $description,
+            name: is_scalar($name) && ! blank($name) ? (string) $name : basename($directory),
+            description: Str::squish($description),
             instructions: trim($matches[2]),
             path: $directory,
         );
-    }
-
-    /**
-     * Read a frontmatter value, matched by line rather than parsed as YAML so unquoted colons still load.
-     */
-    protected static function frontmatter(string $frontmatter, string $key): ?string
-    {
-        $key = preg_quote($key, '/');
-
-        if (preg_match('/^'.$key.':[ \t]*[|>][-+1-9]*[ \t]*\R((?:(?:[ \t]+.*)?(?:\R|\z))*)/m', $frontmatter, $matches)) {
-            return Str::squish($matches[1]) ?: null;
-        }
-
-        if (! preg_match('/^'.$key.':[ \t]*(\S.*)$/m', $frontmatter, $matches)) {
-            return null;
-        }
-
-        return preg_replace('/\A(["\'])(.*)\1\z/', '$2', trim($matches[1])) ?: null;
     }
 }

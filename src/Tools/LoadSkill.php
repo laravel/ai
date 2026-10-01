@@ -80,7 +80,7 @@ class LoadSkill implements Tool
         $name = $schema->string()->description('The name of the skill to load.')->required();
 
         // An empty enum matches no value at all and is rejected outright under strict schemas...
-        if (($names = $this->skills()->keys()->all()) !== []) {
+        if (($names = $this->skills()->pluck('name')->values()->all()) !== []) {
             $name->enum($names);
         }
 
@@ -131,28 +131,31 @@ class LoadSkill implements Tool
      */
     protected function resource(Skill $skill, string $path): string
     {
-        if (array_key_exists($path, $skill->files)) {
-            return (string) $skill->files[$path];
-        }
+        $contents = array_key_exists($path, $skill->files)
+            ? (string) $skill->files[$path]
+            : $this->read($skill, $path);
 
+        return match (true) {
+            $contents === null => "File [{$path}] is not bundled with skill [{$skill->name}].",
+            strlen($contents) > static::MAX_BYTES => "File [{$path}] is too large to read inline.",
+            ! mb_check_encoding($contents, 'UTF-8') => "File [{$path}] appears to be binary and cannot be read as text.",
+            default => $contents,
+        };
+    }
+
+    /**
+     * Read a file from the skill's directory, reading one byte past the limit so oversized files are detected.
+     */
+    protected function read(Skill $skill, string $path): ?string
+    {
         $directory = $skill->path === null ? false : realpath($skill->path);
         $file = $directory === false ? false : realpath($directory.DIRECTORY_SEPARATOR.$path);
 
         if ($file === false || ! is_file($file) || ! str_starts_with($file, $directory.DIRECTORY_SEPARATOR)) {
-            return "File [{$path}] is not bundled with skill [{$skill->name}].";
+            return null;
         }
 
-        if (filesize($file) > static::MAX_BYTES) {
-            return "File [{$path}] is too large to read inline.";
-        }
-
-        $contents = (string) file_get_contents($file);
-
-        if (! mb_check_encoding($contents, 'UTF-8')) {
-            return "File [{$path}] appears to be binary and cannot be read as text.";
-        }
-
-        return $contents;
+        return (string) file_get_contents($file, length: static::MAX_BYTES + 1);
     }
 
     /**
@@ -188,7 +191,7 @@ class LoadSkill implements Tool
         return $this->skills ??= collect($this->sources ?: [resource_path('skills')])
             ->flatMap(fn (Closure|Skill|string $source): iterable => match (true) {
                 $source instanceof Skill => [$source],
-                $source instanceof Closure => $source(),
+                $source instanceof Closure => collect($source())->values(),
                 default => $this->discover($source),
             })
             ->reverse()
