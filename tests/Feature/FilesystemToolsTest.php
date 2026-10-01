@@ -18,6 +18,7 @@ use Laravel\Ai\Tools\Filesystem\FileExists;
 use Laravel\Ai\Tools\Filesystem\GetFileMetadata;
 use Laravel\Ai\Tools\Filesystem\GetFileUrl;
 use Laravel\Ai\Tools\Filesystem\ListFiles;
+use Laravel\Ai\Tools\Filesystem\MoveFile;
 use Laravel\Ai\Tools\Filesystem\ReadFile;
 use Laravel\Ai\Tools\Filesystem\WriteFile;
 use Laravel\Ai\Tools\Request;
@@ -200,11 +201,27 @@ test('copy file reports a missing source', function (): void {
     expect($result)->toBe('Unable to copy [missing.txt] to [dst.txt]. The source file may not exist.');
 });
 
+test('move file relocates a file', function (): void {
+    Storage::disk('local')->put('src.txt', 'data');
+
+    $result = (new MoveFile('local'))->handle(new Request(['from' => 'src.txt', 'to' => 'dst.txt']));
+
+    expect($result)->toBe('Moved [src.txt] to [dst.txt].');
+    Storage::disk('local')->assertMissing('src.txt');
+    Storage::disk('local')->assertExists('dst.txt');
+});
+
+test('move file reports a missing source', function (): void {
+    $result = (new MoveFile('local'))->handle(new Request(['from' => 'missing.txt', 'to' => 'dst.txt']));
+
+    expect($result)->toBe('Unable to move [missing.txt] to [dst.txt]. The source file may not exist.');
+});
+
 test('file storage tools all returns every tool as a collection', function (): void {
     $tools = FileStorage::all('local');
 
     expect($tools)->toBeInstanceOf(Collection::class)
-        ->toHaveCount(8)
+        ->toHaveCount(9)
         ->and($tools->contains(fn ($tool): bool => $tool instanceof WriteFile))->toBeTrue();
 });
 
@@ -212,7 +229,7 @@ test('file storage tools can be filtered as a collection', function (): void {
     $tools = FileStorage::all('local')
         ->reject(fn ($tool): bool => $tool instanceof DeleteFile);
 
-    expect($tools)->toHaveCount(7)
+    expect($tools)->toHaveCount(8)
         ->and($tools->contains(fn ($tool): bool => $tool instanceof DeleteFile))->toBeFalse();
 });
 
@@ -253,7 +270,7 @@ test('every filesystem tool maps to a strict-compliant openai schema', function 
     Http::assertSent(function (Illuminate\Http\Client\Request $request): bool {
         $tools = collect(data_get(json_decode($request->body(), true), 'tools'))->where('type', 'function');
 
-        if ($tools->count() !== 8) {
+        if ($tools->count() !== 9) {
             return false;
         }
 
@@ -292,6 +309,27 @@ test('agent copies a file end to end', function (): void {
 
     Storage::disk('local')->assertExists(['photos/photo1.jpg', 'wallpapers/photo1.jpg']);
     Storage::disk('local')->assertCount('wallpapers', 1);
+});
+
+test('agent moves a file end to end', function (): void {
+    config(['ai.providers.openai' => [
+        ...config('ai.providers.openai'),
+        'key' => 'test-key',
+    ]]);
+
+    Storage::disk('local')->putFileAs('photos', UploadedFile::fake()->image('photo1.jpg'), 'photo1.jpg');
+
+    Http::fake([
+        'api.openai.com/*' => Http::sequence([
+            fakeOpenAiFileToolCall('MoveFile', ['from' => 'photos/photo1.jpg', 'to' => 'wallpapers/photo1.jpg']),
+            fakeOpenAiResponse('Done'),
+        ]),
+    ]);
+
+    (new FileStorageAgent)->prompt('Move photo1 into the wallpapers folder', provider: 'openai');
+
+    Storage::disk('local')->assertMissing('photos/photo1.jpg');
+    Storage::disk('local')->assertExists('wallpapers/photo1.jpg');
 });
 
 test('agent deletes a file end to end', function (): void {

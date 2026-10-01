@@ -11,6 +11,7 @@ use Laravel\Ai\Tools\Filesystem\FileExists;
 use Laravel\Ai\Tools\Filesystem\GetFileMetadata;
 use Laravel\Ai\Tools\Filesystem\GetFileUrl;
 use Laravel\Ai\Tools\Filesystem\ListFiles;
+use Laravel\Ai\Tools\Filesystem\MoveFile;
 use Laravel\Ai\Tools\Filesystem\ReadFile;
 use Laravel\Ai\Tools\Filesystem\WriteFile;
 
@@ -27,6 +28,7 @@ class FileStorage
             new WriteFile($disk),
             new DeleteFile($disk),
             new CopyFile($disk),
+            new MoveFile($disk),
         ]);
     }
 
