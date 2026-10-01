@@ -333,3 +333,46 @@ test('default store true still retains replay blocks with encrypted reasoning', 
     expect(collect($blocks)->firstWhere('type', 'reasoning'))->toMatchArray(['id' => 'rs_1', 'encrypted_content' => 'enc-blob-1'])
         ->and(collect($blocks)->firstWhere('type', 'function_call')['call_id'] ?? null)->toBe('call_1');
 });
+
+test('stateless tool follow up drops file search calls but keeps the surrounding reasoning', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'resp_tool_1',
+                'status' => 'completed',
+                'model' => 'gpt-5.4',
+                'output' => [
+                    ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => [], 'encrypted_content' => 'enc-blob-1'],
+                    ['type' => 'file_search_call', 'id' => 'fs_1', 'status' => 'completed', 'queries' => ['numbers'], 'results' => null],
+                    ['type' => 'function_call', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'FixedNumberGenerator', 'arguments' => '{}', 'status' => 'completed'],
+                ],
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            fakeOpenAiResponse('Done'),
+        ]),
+    ]);
+
+    $response = (new ToolUsingAgent(fixed: true))->prompt('Generate a number', provider: 'openai');
+
+    $input = collect(json_decode((string) Http::recorded()[1][0]->body(), true)['input']);
+
+    $reasoningAt = $input->search(fn ($i): bool => ($i['type'] ?? null) === 'reasoning'
+        && ($i['id'] ?? null) === 'rs_1'
+        && ($i['encrypted_content'] ?? null) === 'enc-blob-1');
+    $functionAt = $input->search(fn ($i): bool => ($i['type'] ?? null) === 'function_call'
+        && ($i['id'] ?? null) === 'fc_1');
+
+    expect($input->contains(fn ($i): bool => ($i['type'] ?? null) === 'file_search_call'))
+        ->toBeFalse('stored-only file_search_call item not replayed')
+        ->and($reasoningAt)->not->toBeFalse('reasoning still replayed with its encrypted content')
+        ->and($functionAt)->not->toBeFalse('function call still replayed')
+        ->and($reasoningAt)->toBeLessThan($functionAt)
+        ->and($input->contains(fn ($i): bool => ($i['type'] ?? null) === 'function_call_output'
+            && ($i['call_id'] ?? null) === 'call_1'))
+        ->toBeTrue('tool result included');
+
+    $blocks = $response->messages->whereInstanceOf(AssistantMessage::class)->first()->replayBlocks;
+
+    expect(collect($blocks)->firstWhere('type', 'file_search_call')['id'] ?? null)
+        ->toBe('fs_1', 'replay blocks themselves are left intact');
+});

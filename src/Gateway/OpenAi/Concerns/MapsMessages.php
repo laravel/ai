@@ -32,7 +32,7 @@ trait MapsMessages
 
             match ($message->role) {
                 MessageRole::User => $this->mapUserMessage($message, $input, $provider),
-                MessageRole::Assistant => $this->mapAssistantMessage($message, $input),
+                MessageRole::Assistant => $this->mapAssistantMessage($message, $input, $provider),
                 MessageRole::ToolResult => $this->mapToolResultMessage($message, $input),
             };
         }
@@ -62,10 +62,14 @@ trait MapsMessages
     /**
      * Map an assistant message to OpenAI format.
      */
-    protected function mapAssistantMessage(AssistantMessage|Message $message, array &$input): void
+    protected function mapAssistantMessage(AssistantMessage|Message $message, array &$input, ?Provider $provider = null): void
     {
         if ($message instanceof AssistantMessage && filled($message->replayBlocks)) {
-            foreach ($message->replayBlocks as $block) {
+            $blocks = $provider !== null && $this->isStateless($provider)
+                ? $this->withoutStoredOnlyItems($message->replayBlocks)
+                : $message->replayBlocks;
+
+            foreach ($blocks as $block) {
                 $input[] = $block;
             }
 
@@ -109,6 +113,24 @@ trait MapsMessages
                 ],
             ];
         }
+    }
+
+    /**
+     * Remove items that can only be replayed from a stored response.
+     *
+     * A file_search_call item is resolved by its id, which only exists when the response was stored, so
+     * the API rejects it with a 404 when store is false. The surrounding reasoning is kept, as it usually
+     * also led to the function call that follows.
+     *
+     * @param  array<int, array<string, mixed>>  $blocks
+     * @return array<int, array<string, mixed>>
+     */
+    protected function withoutStoredOnlyItems(array $blocks): array
+    {
+        return array_values(array_filter(
+            $blocks,
+            fn (array $block): bool => ($block['type'] ?? null) !== 'file_search_call',
+        ));
     }
 
     /**
