@@ -149,7 +149,6 @@ test('it keeps a numeric skill name a string in the schema', function (): void {
 test('it reports an unknown skill and an empty source', function (): void {
     expect((new LoadSkill([$this->skills]))->handle(new Request(['name' => 'missing'])))
         ->toBe('Skill [missing] does not exist.')
-        ->and((new LoadSkill([$this->skills]))->isEmpty())->toBeTrue()
         ->and((new LoadSkill([$this->skills]))->schema(new JsonSchemaTypeFactory)['name']->toArray())
         ->not->toHaveKey('enum');
 });
@@ -226,17 +225,4 @@ test('it squishes a folded or literal block scalar description into one line', f
     expect((new LoadSkill([$this->skills]))->description())
         ->toContain("- audit: Review invoices. Flag duplicates.\n")
         ->toEndWith('- pdf: Extract PDF text. Use when handling PDFs.');
-});
-
-test('it caps the bundled file listing and notes how many files are unlisted', function (): void {
-    $path = skill('pdf', "name: pdf\ndescription: Extract PDF text.");
-
-    foreach (range(1, 52) as $index) {
-        bundle($path, sprintf('references/%02d.md', $index), 'Reference.');
-    }
-
-    expect((new LoadSkill([$this->skills]))->handle(new Request(['name' => 'pdf'])))
-        ->toContain("references/50.md\n</skill_resources>")
-        ->not->toContain('references/51.md')
-        ->toContain("the file's path. 2 more bundled files are not listed.");
 });

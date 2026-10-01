@@ -15,11 +15,6 @@ use Symfony\Component\Finder\SplFileInfo;
 class LoadSkill implements Tool
 {
     /**
-     * The maximum number of bundled files listed for a skill.
-     */
-    protected const MAX_RESOURCES = 50;
-
-    /**
      * The maximum number of bytes that may be read from a bundled file.
      */
     protected const MAX_BYTES = 256 * 1024;
@@ -92,31 +87,17 @@ class LoadSkill implements Tool
     }
 
     /**
-     * Determine whether any skills were discovered.
-     */
-    public function isEmpty(): bool
-    {
-        return $this->skills()->isEmpty();
-    }
-
-    /**
      * Get the skill's instructions and the files bundled alongside them.
      */
     protected function instructions(Skill $skill): string
     {
-        $paths = $this->resources($skill);
-
-        $files = implode("\n", array_slice($paths, 0, static::MAX_RESOURCES));
-
-        $unlisted = count($paths) > static::MAX_RESOURCES
-            ? ' '.(count($paths) - static::MAX_RESOURCES).' more bundled files are not listed.'
-            : '';
+        $files = implode("\n", $this->resources($skill));
 
         $resources = $files === '' ? '' : <<<EOT
             <skill_resources>
             {$files}
             </skill_resources>
-            Read one of these files by calling this tool again with the skill name and the file's path.{$unlisted}
+            Read one of these files by calling this tool again with the skill name and the file's path.
             EOT;
 
         return <<<EOT
