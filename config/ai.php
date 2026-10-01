@@ -85,6 +85,18 @@ return [
             ],
         ],
 
+        'cloudflare' => [
+            'driver' => 'cloudflare',
+            'key' => env('CLOUDFLARE_API_KEY'),
+            'account_id' => env('CLOUDFLARE_ACCOUNT_ID'),
+            'url' => env('CLOUDFLARE_URL', 'https://api.cloudflare.com/client/v4'),
+            'models' => [
+                'classification' => [
+                    'default' => env('CLOUDFLARE_CLASSIFICATION_MODEL', '@cf/cloudflare/clef'),
+                ],
+            ],
+        ],
+
         'cohere' => [
             'driver' => 'cohere',
             'key' => env('COHERE_API_KEY'),

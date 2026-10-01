@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\Concerns;
 
+use Illuminate\Http\Client\Response;
 use Laravel\Ai\Classification\Boolean;
 use Laravel\Ai\Classification\Choice;
 use Laravel\Ai\Classification\Score;
@@ -39,14 +40,14 @@ trait AnswersQuestions
     ): ClassificationResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post($this->classificationEndpoint(), array_merge($providerOptions, [
+            fn () => $this->sendClassificationRequest($provider, array_merge($providerOptions, [
                 'model' => $model,
                 'state' => $state,
                 'questions' => array_map($this->mapQuestion(...), $questions),
-            ])),
+            ]), $timeout),
         );
 
-        $data = $response->json();
+        $data = $this->classificationResponseData($response);
 
         $answers = [];
 
@@ -67,6 +68,22 @@ trait AnswersQuestions
     }
 
     /**
+     * Send a classification request to the provider.
+     */
+    protected function sendClassificationRequest(ClassificationProvider $provider, array $payload, int $timeout): Response
+    {
+        return $this->client($provider, $timeout)->post($this->classificationEndpoint(), $payload);
+    }
+
+    /**
+     * Get the classification data from the provider's response.
+     */
+    protected function classificationResponseData(Response $response): array
+    {
+        return $response->json();
+    }
+
+    /**
      * Get the name of the model that answered the questions.
      */
     protected function answeringModel(array $data, string $model): string
@@ -84,7 +101,7 @@ trait AnswersQuestions
                 'type' => 'noul',
                 'instructions' => $question->instructions,
                 'criteria' => $question->criteria,
-            ], fn ($value) => $value !== null),
+            ], fn ($value): bool => $value !== null),
             $question instanceof Choice => [
                 'type' => 'choice',
                 'instructions' => $question->instructions,
