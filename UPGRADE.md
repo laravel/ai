@@ -4,7 +4,19 @@
 
 ### Upgrading Using AI
 
-You can automate your upgrade using [Laravel Boost](https://github.com/laravel/boost). Run the `/upgrade-ai-sdk-v1` slash command in Claude Code, Cursor, OpenCode, Gemini, or VS Code to begin the upgrade. Boost walks your assistant through this guide one change at a time, using your own codebase as context.
+You can automate your upgrade using [Laravel Boost](https://github.com/laravel/boost). First, update Boost to 2.10.0 or later:
+
+```shell
+composer require laravel/boost:^2.10 --dev -W
+```
+
+Then run the `/upgrade-ai-sdk-v1` slash command in your AI assistant.
+
+### Laravel MCP 1.0 Is Required
+
+**Likelihood Of Impact: High**
+
+Laravel AI 1.0 conflicts with `laravel/mcp` versions below 1.0. If your application uses `laravel/mcp` directly, update it to `^1.0` and review the [Laravel MCP upgrade guide](https://github.com/laravel/mcp/blob/main/UPGRADE.md).
 
 ### Conversation Messages Now Store Steps
 
