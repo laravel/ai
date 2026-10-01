@@ -56,7 +56,7 @@ test('it returns a skill body without its frontmatter and lists the bundled file
         ->toContain('<skill_content name="pdf">')
         ->toContain('# Extracting')
         ->not->toContain('description: Extract PDF text.')
-        ->toContain("<skill_resources>\nreferences/spec.md\nscripts/extract.py\n</skill_resources>");
+        ->toContain("Run the script.\n\n<skill_resources>\nreferences/spec.md\nscripts/extract.py\n</skill_resources>");
 });
 
 test('it reads a file bundled with a skill', function (): void {
@@ -66,6 +66,20 @@ test('it reads a file bundled with a skill', function (): void {
 
     expect((new LoadSkill([$this->skills]))->handle(new Request(['name' => 'pdf', 'path' => 'references/spec.md'])))
         ->toBe('The spec.');
+});
+
+test('it will not read a binary or oversized bundled file', function (): void {
+    $path = skill('pdf', "name: pdf\ndescription: Extract PDF text.");
+
+    bundle($path, 'assets/logo.png', "\x89PNG\x00\xff");
+    bundle($path, 'references/huge.md', str_repeat('a', 256 * 1024 + 1));
+
+    $tool = new LoadSkill([$this->skills]);
+
+    expect($tool->handle(new Request(['name' => 'pdf', 'path' => 'assets/logo.png'])))
+        ->toBe('File [assets/logo.png] appears to be binary and cannot be read as text.')
+        ->and($tool->handle(new Request(['name' => 'pdf', 'path' => 'references/huge.md'])))
+        ->toBe('File [references/huge.md] is too large to read inline.');
 });
 
 test('it will not read a file outside of the skill directory', function (): void {

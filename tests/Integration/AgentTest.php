@@ -23,8 +23,10 @@ use Laravel\Ai\PendingStep;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Skills\Skill;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\ToolChoice;
+use Laravel\Ai\Tools\LoadSkill;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ConversationalAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
@@ -55,6 +57,28 @@ test('agents can get a simple text response', function (string $provider, string
 
     Event::assertDispatched(PromptingAgent::class);
     Event::assertDispatched(AgentPrompted::class);
+})->with('agent-providers');
+
+test('agents can load a skill from a catalog longer than 1024 characters', function (string $provider, string $apiKey, string $model): void {
+    requiresApiKey($apiKey);
+
+    $skills = collect(range(1, 4))->map(fn (int $index): Skill => new Skill(
+        name: "filler-{$index}",
+        description: str_repeat('Use when the user asks about an unrelated filler topic. ', 9),
+        instructions: 'Reply with the word filler.',
+    ))->push(new Skill(
+        name: 'secret-word',
+        description: 'Use when the user asks for the secret word.',
+        instructions: 'The secret word is pomegranate.',
+    ))->all();
+
+    $response = agent(tools: [new LoadSkill($skills)])->prompt(
+        'Load the secret-word skill and tell me the secret word.',
+        provider: $provider,
+        model: $model,
+    );
+
+    expect(strtolower($response->text))->toContain('pomegranate');
 })->with('agent-providers');
 
 test('ad hoc agents can be prompted', function (string $provider, string $apiKey, string $model): void {

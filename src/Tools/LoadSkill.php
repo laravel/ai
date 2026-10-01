@@ -17,21 +17,26 @@ class LoadSkill implements Tool
     /**
      * The maximum number of bundled files listed for a skill.
      */
-    private const MAX_RESOURCES = 50;
+    protected const MAX_RESOURCES = 50;
+
+    /**
+     * The maximum number of bytes that may be read from a bundled file.
+     */
+    protected const MAX_BYTES = 256 * 1024;
 
     /**
      * The resolved skills, keyed by name.
      *
      * @var Collection<string, Skill>|null
      */
-    private ?Collection $skills = null;
+    protected ?Collection $skills = null;
 
     /**
      * Create a new skill loading tool instance.
      *
      * @param  list<Closure|Skill|string>  $sources
      */
-    public function __construct(private array $sources = [])
+    public function __construct(protected array $sources = [])
     {
         //
     }
@@ -101,13 +106,15 @@ class LoadSkill implements Tool
     {
         $paths = $this->resources($skill);
 
-        $files = implode("\n", array_slice($paths, 0, self::MAX_RESOURCES));
+        $files = implode("\n", array_slice($paths, 0, static::MAX_RESOURCES));
 
-        $unlisted = count($paths) > self::MAX_RESOURCES
-            ? ' '.(count($paths) - self::MAX_RESOURCES).' more bundled files are not listed.'
+        $unlisted = count($paths) > static::MAX_RESOURCES
+            ? ' '.(count($paths) - static::MAX_RESOURCES).' more bundled files are not listed.'
             : '';
 
         $resources = $files === '' ? '' : <<<EOT
+
+
             <skill_resources>
             {$files}
             </skill_resources>
@@ -126,7 +133,7 @@ class LoadSkill implements Tool
     /**
      * Read a file bundled with the given skill.
      */
-    private function resource(Skill $skill, string $path): string
+    protected function resource(Skill $skill, string $path): string
     {
         if (array_key_exists($path, $skill->files)) {
             return (string) $skill->files[$path];
@@ -139,7 +146,17 @@ class LoadSkill implements Tool
             return "File [{$path}] is not bundled with skill [{$skill->name}].";
         }
 
-        return (string) file_get_contents($file);
+        if (filesize($file) > static::MAX_BYTES) {
+            return "File [{$path}] is too large to read inline.";
+        }
+
+        $contents = (string) file_get_contents($file);
+
+        if (! mb_check_encoding($contents, 'UTF-8')) {
+            return "File [{$path}] appears to be binary and cannot be read as text.";
+        }
+
+        return $contents;
     }
 
     /**
@@ -147,7 +164,7 @@ class LoadSkill implements Tool
      *
      * @return list<string>
      */
-    private function resources(Skill $skill): array
+    protected function resources(Skill $skill): array
     {
         if ($skill->files !== []) {
             return array_keys($skill->files);
@@ -170,7 +187,7 @@ class LoadSkill implements Tool
      *
      * @return Collection<string, Skill>
      */
-    private function skills(): Collection
+    protected function skills(): Collection
     {
         return $this->skills ??= collect($this->sources ?: [resource_path('skills')])
             ->flatMap(fn (Closure|Skill|string $source): iterable => match (true) {

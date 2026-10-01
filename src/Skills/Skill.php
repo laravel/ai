@@ -37,14 +37,14 @@ class Skill
 
         $frontmatter = $matches[1];
 
-        $description = self::frontmatter($frontmatter, 'description');
+        $description = static::frontmatter($frontmatter, 'description');
 
         if ($description === null) {
             return null;
         }
 
         return new self(
-            name: self::frontmatter($frontmatter, 'name') ?? basename($directory),
+            name: static::frontmatter($frontmatter, 'name') ?? basename($directory),
             description: $description,
             instructions: trim($matches[2]),
             path: $directory,
@@ -54,7 +54,7 @@ class Skill
     /**
      * Read a frontmatter value, matched by line rather than parsed as YAML so unquoted colons still load.
      */
-    private static function frontmatter(string $frontmatter, string $key): ?string
+    protected static function frontmatter(string $frontmatter, string $key): ?string
     {
         $key = preg_quote($key, '/');
 
