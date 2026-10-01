@@ -117,7 +117,7 @@ class LoadSkill implements Tool
             : $this->read($skill, $path);
 
         return match (true) {
-            !$contents => "File [{$path}] is not bundled with skill [{$skill->name}].",
+            $contents === null => "File [{$path}] is not bundled with skill [{$skill->name}].",
             strlen($contents) > static::MAX_BYTES => "File [{$path}] is too large to read inline.",
             ! mb_check_encoding($contents, 'UTF-8') => "File [{$path}] appears to be binary and cannot be read as text.",
             default => $contents,
