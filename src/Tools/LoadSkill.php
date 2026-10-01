@@ -113,8 +113,6 @@ class LoadSkill implements Tool
             : '';
 
         $resources = $files === '' ? '' : <<<EOT
-
-
             <skill_resources>
             {$files}
             </skill_resources>
@@ -123,9 +121,7 @@ class LoadSkill implements Tool
 
         return <<<EOT
             <skill_content name="{$skill->name}">
-
             {$skill->instructions}{$resources}
-
             </skill_content>
             EOT;
     }
