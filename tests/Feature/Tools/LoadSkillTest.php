@@ -156,3 +156,25 @@ test('it lists no resources for a skill pointed at a missing directory', functio
         ->toContain('Body.')
         ->not->toContain('<skill_resources>');
 });
+
+test('it squishes a folded or literal block scalar description into one line', function (): void {
+    skill('pdf', "description: >\n  Extract PDF text.\n\n  Use when handling PDFs.\nname: pdf");
+    skill('audit', "name: audit\ndescription: |-\n  Review invoices.\n  Flag duplicates.\nlicense: MIT");
+
+    expect((new LoadSkill([$this->skills]))->description())
+        ->toContain("- audit: Review invoices. Flag duplicates.\n")
+        ->toEndWith('- pdf: Extract PDF text. Use when handling PDFs.');
+});
+
+test('it caps the bundled file listing and notes how many files are unlisted', function (): void {
+    $path = skill('pdf', "name: pdf\ndescription: Extract PDF text.");
+
+    foreach (range(1, 52) as $index) {
+        bundle($path, sprintf('references/%02d.md', $index), 'Reference.');
+    }
+
+    expect((new LoadSkill([$this->skills]))->handle(new Request(['name' => 'pdf'])))
+        ->toContain("references/50.md\n</skill_resources>")
+        ->not->toContain('references/51.md')
+        ->toContain("the file's path. 2 more bundled files are not listed.");
+});

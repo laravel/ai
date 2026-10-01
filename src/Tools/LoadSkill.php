@@ -17,19 +17,24 @@ class LoadSkill implements Tool
     /**
      * The maximum number of bundled files listed for a skill.
      */
-    protected const MAX_RESOURCES = 50;
+    private const MAX_RESOURCES = 50;
 
     /**
      * The resolved skills, keyed by name.
+     *
+     * @var Collection<string, Skill>|null
      */
-    protected ?Collection $skills = null;
+    private ?Collection $skills = null;
 
     /**
      * Create a new skill loading tool instance.
      *
      * @param  list<Closure|Skill|string>  $sources
      */
-    public function __construct(protected array $sources = []) {}
+    public function __construct(private array $sources = [])
+    {
+        //
+    }
 
     /**
      * Get the description of the tool's purpose.
@@ -94,22 +99,34 @@ class LoadSkill implements Tool
      */
     protected function instructions(Skill $skill): string
     {
-        $sections = ["<skill_content name=\"{$skill->name}\">", (string) $skill->instructions];
+        $paths = $this->resources($skill);
 
-        if (($resources = $this->resources($skill)) !== []) {
-            $sections[] = "<skill_resources>\n".implode("\n", $resources)."\n</skill_resources>\n"
-                ."Read one of these files by calling this tool again with the skill name and the file's path.";
-        }
+        $files = implode("\n", array_slice($paths, 0, self::MAX_RESOURCES));
 
-        $sections[] = '</skill_content>';
+        $unlisted = count($paths) > self::MAX_RESOURCES
+            ? ' '.(count($paths) - self::MAX_RESOURCES).' more bundled files are not listed.'
+            : '';
 
-        return implode("\n\n", $sections);
+        $resources = $files === '' ? '' : <<<EOT
+            <skill_resources>
+            {$files}
+            </skill_resources>
+            Read one of these files by calling this tool again with the skill name and the file's path.{$unlisted}
+            EOT;
+
+        return <<<EOT
+            <skill_content name="{$skill->name}">
+
+            {$skill->instructions}{$resources}
+
+            </skill_content>
+            EOT;
     }
 
     /**
      * Read a file bundled with the given skill.
      */
-    protected function resource(Skill $skill, string $path): string
+    private function resource(Skill $skill, string $path): string
     {
         if (array_key_exists($path, $skill->files)) {
             return (string) $skill->files[$path];
@@ -118,7 +135,6 @@ class LoadSkill implements Tool
         $directory = $skill->path === null ? false : realpath($skill->path);
         $file = $directory === false ? false : realpath($directory.DIRECTORY_SEPARATOR.$path);
 
-        // Both ends are resolved before comparison so a traversing path cannot escape the skill's own directory...
         if ($file === false || ! is_file($file) || ! str_starts_with($file, $directory.DIRECTORY_SEPARATOR)) {
             return "File [{$path}] is not bundled with skill [{$skill->name}].";
         }
@@ -131,7 +147,7 @@ class LoadSkill implements Tool
      *
      * @return list<string>
      */
-    protected function resources(Skill $skill): array
+    private function resources(Skill $skill): array
     {
         if ($skill->files !== []) {
             return array_keys($skill->files);
@@ -145,7 +161,6 @@ class LoadSkill implements Tool
             ->map(fn (SplFileInfo $file): string => str_replace('\\', '/', $file->getRelativePathname()))
             ->reject(fn (string $path): bool => $path === 'SKILL.md')
             ->sort()
-            ->take(static::MAX_RESOURCES)
             ->values()
             ->all();
     }
@@ -155,7 +170,7 @@ class LoadSkill implements Tool
      *
      * @return Collection<string, Skill>
      */
-    protected function skills(): Collection
+    private function skills(): Collection
     {
         return $this->skills ??= collect($this->sources ?: [resource_path('skills')])
             ->flatMap(fn (Closure|Skill|string $source): iterable => match (true) {
@@ -163,7 +178,6 @@ class LoadSkill implements Tool
                 $source instanceof Closure => $source(),
                 default => $this->discover($source),
             })
-            // Reversed so the earliest source wins a name collision, then sorted so the prompt stays cacheable...
             ->reverse()
             ->keyBy('name')
             ->sortKeys();
