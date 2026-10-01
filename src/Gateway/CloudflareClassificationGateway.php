@@ -8,6 +8,11 @@ use Illuminate\Http\Client\Response;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\ClassificationGateway;
 use Laravel\Ai\Contracts\Providers\ClassificationProvider;
+use Laravel\Ai\Contracts\Question;
+use Laravel\Ai\Responses\ClassificationResponse;
+use Laravel\Ai\Responses\Data\Answer;
+use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use UnexpectedValueException;
 
 class CloudflareClassificationGateway implements ClassificationGateway
@@ -25,19 +30,53 @@ class CloudflareClassificationGateway implements ClassificationGateway
     }
 
     /**
-     * Send a classification request using the Workers AI model identifier and its input selector.
+     * Answer the given questions using the Workers AI model identifier and its input selector.
+     *
+     * @param  string|array<string, mixed>  $state
+     * @param  array<string, Question>  $questions
+     * @param  array<string, mixed>  $providerOptions
      */
-    protected function sendClassificationRequest(ClassificationProvider $provider, array $payload, int $timeout): Response
-    {
-        $model = $payload['model'];
-
-        $payload['model'] = match ($model) {
+    public function classify(
+        ClassificationProvider $provider,
+        string $model,
+        string|array $state,
+        array $questions,
+        int $timeout = 30,
+        array $providerOptions = [],
+    ): ClassificationResponse {
+        $selector = match ($model) {
             '@cf/cloudflare/clef' => 'clef',
             '@cf/cloudflare/clef-flash' => 'clef-flash',
             default => throw new InvalidArgumentException("Unsupported Cloudflare classification model [{$model}]."),
         };
 
-        return $this->client($provider, $timeout)->post($this->classificationEndpoint().'/'.$model, $payload);
+        $response = $this->withErrorHandling(
+            $provider->name(),
+            fn () => $this->client($provider, $timeout)->post($this->classificationEndpoint().'/'.$model, array_merge($providerOptions, [
+                'model' => $selector,
+                'state' => $state,
+                'questions' => array_map($this->mapQuestion(...), $questions),
+            ])),
+        );
+
+        $data = $this->classificationResponseData($response);
+
+        $answers = [];
+
+        foreach ($data['answers'] as $key => $answer) {
+            if (($mapped = $this->mapAnswer($answer, $questions[$key] ?? null)) instanceof Answer) {
+                $answers[$key] = $mapped;
+            }
+        }
+
+        return new ClassificationResponse(
+            $answers,
+            new TextUsage(
+                inputTokens: $data['usage']['input_tokens'] ?? 0,
+                outputTokens: $data['usage']['output_tokens'] ?? 0,
+            ),
+            new Meta($provider->name(), $this->answeringModel($data, $model)),
+        );
     }
 
     /**
