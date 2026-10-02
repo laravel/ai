@@ -70,7 +70,7 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsCodeEx
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'claude-sonnet-5';
+        return $this->config['models']['text']['default'] ?? 'claude-sonnet-5-5';
     }
 
     /**
@@ -86,7 +86,7 @@ class AnthropicProvider extends Provider implements FileProvider, SupportsCodeEx
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'claude-opus-5-5';
+        return $this->config['models']['text']['smartest'] ?? 'claude-fable-5-1';
     }
 
     /**

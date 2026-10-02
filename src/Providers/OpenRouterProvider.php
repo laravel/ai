@@ -103,7 +103,7 @@ class OpenRouterProvider extends Provider implements AudioProvider, Classificati
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'anthropic/claude-sonnet-5';
+        return $this->config['models']['text']['default'] ?? 'anthropic/claude-sonnet-5.5';
     }
 
     /**
@@ -119,7 +119,7 @@ class OpenRouterProvider extends Provider implements AudioProvider, Classificati
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'anthropic/claude-opus-5';
+        return $this->config['models']['text']['smartest'] ?? 'anthropic/claude-fable-5.1';
     }
 
     /**
@@ -135,7 +135,7 @@ class OpenRouterProvider extends Provider implements AudioProvider, Classificati
      */
     public function defaultImageModel(): string
     {
-        return $this->config['models']['image']['default'] ?? 'google/gemini-3.1-flash-image-preview';
+        return $this->config['models']['image']['default'] ?? 'google/gemini-3.1-flash-image';
     }
 
     /**
@@ -171,7 +171,7 @@ class OpenRouterProvider extends Provider implements AudioProvider, Classificati
      */
     public function defaultAudioModel(): string
     {
-        return $this->config['models']['audio']['default'] ?? 'google/gemini-3.1-flash-tts-preview';
+        return $this->config['models']['audio']['default'] ?? 'google/gemini-3.8-flash-lite-tts';
     }
 
     /**
@@ -187,7 +187,7 @@ class OpenRouterProvider extends Provider implements AudioProvider, Classificati
      */
     public function defaultTranscriptionModel(): string
     {
-        return $this->config['models']['transcription']['default'] ?? 'openai/whisper-1';
+        return $this->config['models']['transcription']['default'] ?? 'openai/gpt-transcribe';
     }
 
     /**
@@ -211,7 +211,7 @@ class OpenRouterProvider extends Provider implements AudioProvider, Classificati
      */
     public function defaultRerankingModel(): string
     {
-        return $this->config['models']['reranking']['default'] ?? 'cohere/rerank-v3.5';
+        return $this->config['models']['reranking']['default'] ?? 'cohere/rerank-4-pro';
     }
 
     /**

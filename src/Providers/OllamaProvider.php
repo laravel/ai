@@ -80,7 +80,7 @@ class OllamaProvider extends Provider implements EmbeddingProvider, TextProvider
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'qwen3.5:cloud';
+        return $this->config['models']['text']['smartest'] ?? 'gemma4:cloud';
     }
 
     /**

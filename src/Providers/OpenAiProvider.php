@@ -101,7 +101,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'gpt-6-sol';
+        return $this->config['models']['text']['default'] ?? 'gpt-6.1-sol';
     }
 
     /**
@@ -125,7 +125,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultImageModel(): string
     {
-        return $this->config['models']['image']['default'] ?? 'gpt-image-2';
+        return $this->config['models']['image']['default'] ?? 'gpt-image-2.5-flare';
     }
 
     /**

@@ -125,7 +125,7 @@ test('audio uses default model when none specified', function (): void {
 
     Audio::of('Hello world')->voice('Kore')->generate(provider: 'gemini');
 
-    expect(sentRequest()->data())->toMatchArray(['model' => 'gemini-3.1-flash-tts-preview']);
+    expect(sentRequest()->data())->toMatchArray(['model' => 'gemini-3.8-flash-lite-tts']);
 });
 
 test('nested generation config provider options are merged beneath the core config', function (): void {

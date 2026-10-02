@@ -97,7 +97,7 @@ class CohereProvider extends Provider implements EmbeddingProvider, RerankingPro
      */
     public function defaultRerankingModel(): string
     {
-        return $this->config['models']['reranking']['default'] ?? 'rerank-v3.5';
+        return $this->config['models']['reranking']['default'] ?? 'rerank-v4.0-pro';
     }
 
     /**

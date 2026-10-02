@@ -78,7 +78,7 @@ class XaiProvider extends Provider implements ImageProvider, SupportsCodeExecuti
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'grok-4.20-non-reasoning';
+        return $this->config['models']['text']['default'] ?? 'grok-4.7';
     }
 
     /**
@@ -94,7 +94,7 @@ class XaiProvider extends Provider implements ImageProvider, SupportsCodeExecuti
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'grok-4.3';
+        return $this->config['models']['text']['smartest'] ?? 'grok-4.7';
     }
 
     /**
@@ -110,7 +110,7 @@ class XaiProvider extends Provider implements ImageProvider, SupportsCodeExecuti
      */
     public function defaultImageModel(): string
     {
-        return $this->config['models']['image']['default'] ?? 'grok-imagine-image';
+        return $this->config['models']['image']['default'] ?? 'grok-imagine-image-2.0';
     }
 
     /**
