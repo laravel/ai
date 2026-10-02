@@ -54,7 +54,7 @@ test('it returns a skill body without its frontmatter and lists the bundled file
         ->toContain('<skill_content name="pdf">')
         ->toContain('# Extracting')
         ->not->toContain('description: Extract PDF text.')
-        ->toContain("<skill_resources>\nreferences/spec.md\nscripts/extract.py\n</skill_resources>");
+        ->toContain("Run the script.\n\n<skill_resources>\nreferences/spec.md\nscripts/extract.py\n</skill_resources>");
 });
 
 test('it reads a file bundled with a skill', function (): void {
@@ -176,9 +176,10 @@ test('it parses frontmatter as YAML', function (): void {
 });
 
 test('it throws on frontmatter that is not valid YAML', function (): void {
-    skill('pdf', "name: pdf\ndescription: Use when: handling PDFs.");
+    $path = skill('pdf', "name: pdf\ndescription: Use when: handling PDFs.");
 
-    expect(fn () => (new LoadSkill([$this->skills]))->description())->toThrow(ParseException::class);
+    expect(fn () => (new LoadSkill([$this->skills]))->description())
+        ->toThrow(ParseException::class, realpath($path).'/SKILL.md');
 });
 
 test('it lists no resources for a skill pointed at a missing directory', function (): void {
@@ -189,11 +190,12 @@ test('it lists no resources for a skill pointed at a missing directory', functio
         ->not->toContain('<skill_resources>');
 });
 
-test('it squishes a folded or literal block scalar description into one line', function (): void {
+test('it squishes every skill description into one catalog line', function (): void {
     skill('pdf', "description: >\n  Extract PDF text.\n\n  Use when handling PDFs.\nname: pdf");
-    skill('audit', "name: audit\ndescription: |-\n  Review invoices.\n  Flag duplicates.\nlicense: MIT");
 
-    expect((new LoadSkill([$this->skills]))->description())
+    $tool = new LoadSkill([$this->skills, new Skill('audit', "Review invoices.\n  Flag duplicates.", 'Body.')]);
+
+    expect($tool->description())
         ->toContain("- audit: Review invoices. Flag duplicates.\n")
         ->toEndWith('- pdf: Extract PDF text. Use when handling PDFs.');
 });

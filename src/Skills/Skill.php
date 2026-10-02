@@ -2,8 +2,8 @@
 
 namespace Laravel\Ai\Skills;
 
-use Illuminate\Support\Str;
 use Stringable;
+use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
 class Skill
@@ -36,7 +36,13 @@ class Skill
             return null;
         }
 
-        $frontmatter = (array) Yaml::parse($matches[1]);
+        try {
+            $frontmatter = (array) Yaml::parse($matches[1]);
+        } catch (ParseException $e) {
+            $e->setParsedFile($file);
+
+            throw $e;
+        }
 
         $description = $frontmatter['description'] ?? null;
 
@@ -48,7 +54,7 @@ class Skill
 
         return new self(
             name: is_scalar($name) && ! blank($name) ? (string) $name : basename($directory),
-            description: Str::squish($description),
+            description: $description,
             instructions: trim($matches[2]),
             path: $directory,
         );

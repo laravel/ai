@@ -7,6 +7,7 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Skills\Skill;
 use Stringable;
@@ -42,7 +43,7 @@ class LoadSkill implements Tool
     public function description(): Stringable|string
     {
         return $this->skills()
-            ->map(fn (Skill $skill): string => "- {$skill->name}: {$skill->description}")
+            ->map(fn (Skill $skill): string => "- {$skill->name}: ".Str::squish((string) $skill->description))
             ->prepend("Load a skill's instructions before performing a task matching the skill's description. Pass a path to read one of the skill's bundled files instead.\n\nAvailable skills:")
             ->implode("\n");
     }
@@ -91,20 +92,12 @@ class LoadSkill implements Tool
      */
     protected function instructions(Skill $skill): string
     {
-        $files = implode("\n", $this->resources($skill));
+        $resources = Str::of(implode("\n", $this->resources($skill)))->whenNotEmpty(fn ($files) => $files->wrap(
+            "\n\n<skill_resources>\n",
+            "\n</skill_resources>\nRead one of these files by calling this tool again with the skill name and the file's path.",
+        ));
 
-        $resources = $files === '' ? '' : <<<EOT
-            <skill_resources>
-            {$files}
-            </skill_resources>
-            Read one of these files by calling this tool again with the skill name and the file's path.
-            EOT;
-
-        return <<<EOT
-            <skill_content name="{$skill->name}">
-            {$skill->instructions}{$resources}
-            </skill_content>
-            EOT;
+        return "<skill_content name=\"{$skill->name}\">\n{$skill->instructions}{$resources}\n</skill_content>";
     }
 
     /**
