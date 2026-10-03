@@ -74,6 +74,7 @@ return [
             'network' => 'none',
             'env' => [],
             'timeout' => 120,
+            'suspend_after_turn' => env('AI_SANDBOX_SUSPEND', false),
         ],
     ],
 

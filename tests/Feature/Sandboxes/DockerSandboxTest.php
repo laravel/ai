@@ -96,6 +96,49 @@ test('forgetting a sandbox removes its container and volume', function () {
         ->and(Process::run(['docker', 'volume', 'inspect', $this->factory->name($this->id)])->successful())->toBeFalse();
 });
 
+test('restoring a checkpoint brings back both the workspace and the container filesystem', function () {
+    $sandbox = $this->factory->create($this->id);
+
+    $sandbox->write('notes.txt', 'v1');
+    $sandbox->exec('touch /etc/installed-by-agent');
+
+    $checkpoint = $this->factory->checkpoint($this->id);
+
+    $sandbox->write('notes.txt', 'v2');
+    $sandbox->write('later.txt', 'later');
+    $sandbox->exec('rm /etc/installed-by-agent');
+
+    $this->factory->restore($this->id, $checkpoint);
+
+    $restored = $this->factory->create($this->id);
+
+    expect($restored->read('notes.txt'))->toBe('v1')
+        ->and($restored->exists('later.txt'))->toBeFalse()
+        ->and($restored->exec('test -f /etc/installed-by-agent')->successful())->toBeTrue();
+});
+
+test('forgetting a sandbox removes its checkpoints', function () {
+    $this->factory->create($this->id)->write('a.txt', 'a');
+
+    $checkpoint = $this->factory->checkpoint($this->id);
+
+    $this->factory->forget($this->id);
+
+    $image = strtolower($this->factory->name($this->id)).':'.$checkpoint;
+
+    expect(Process::run(['docker', 'image', 'inspect', $image])->successful())->toBeFalse()
+        ->and(Process::run(['docker', 'volume', 'inspect', $this->factory->name($this->id).'-'.$checkpoint])->successful())->toBeFalse();
+});
+
+test('a suspended sandbox stops its container and resumes with its files on the next create', function () {
+    $this->factory->create($this->id)->write('kept.txt', 'kept');
+
+    $this->factory->suspend($this->id);
+
+    expect(trim(Process::run(['docker', 'inspect', '-f', '{{.State.Running}}', $this->factory->name($this->id)])->output()))->toBe('false')
+        ->and($this->factory->create($this->id)->read('kept.txt'))->toBe('kept');
+});
+
 test('glob and grep work against the container', function () {
     $sandbox = $this->factory->create($this->id);
 

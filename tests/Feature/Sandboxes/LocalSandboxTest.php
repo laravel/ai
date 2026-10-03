@@ -103,6 +103,31 @@ test('the local driver isolates by default and refuses to run when the isolation
     }
 });
 
+test('restoring a local checkpoint brings back the workspace without following symlinks', function () {
+    $factory = new LocalFactory(['root' => $this->root, 'isolate' => false]);
+
+    $this->sandbox->write('notes.txt', 'v1');
+    symlink('/etc', "{$this->root}/conversation-1/etc-link");
+
+    $checkpoint = $factory->checkpoint('conversation-1');
+
+    $this->sandbox->write('notes.txt', 'v2');
+    $this->sandbox->write('later.txt', 'later');
+
+    $factory->restore('conversation-1', $checkpoint);
+
+    expect($this->sandbox->read('notes.txt'))->toBe('v1')
+        ->and($this->sandbox->exists('later.txt'))->toBeFalse()
+        ->and(is_link("{$this->root}/conversation-1/etc-link"))->toBeTrue()
+        ->and(File::exists("{$this->root}/.checkpoints/conversation-1/{$checkpoint}/etc-link/hosts"))->toBeTrue()
+        ->and(is_link("{$this->root}/.checkpoints/conversation-1/{$checkpoint}/etc-link"))->toBeTrue()
+        ->and(fn () => $factory->restore('conversation-1', 'missing'))->toThrow(RuntimeException::class);
+
+    $factory->forget('conversation-1');
+
+    expect(File::exists("{$this->root}/.checkpoints/conversation-1"))->toBeFalse();
+});
+
 test('a factory forgets a sandbox by removing its workspace', function () {
     $this->sandbox->write('a.txt', 'a');
 

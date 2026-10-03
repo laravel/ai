@@ -223,3 +223,27 @@ test('the sandbox is released when the consumer abandons a stream', function () 
 
     expect(Cache::lock("ai:sandbox:{$stream->conversationId}", 60)->get())->toBeTrue();
 });
+
+test('a factory that suspends after each turn stops a kept sandbox once the turn ends', function () {
+    $sandbox = Ai::fakeSandbox()->suspendAfterTurn();
+
+    SandboxedAgent::fake([
+        new ToolCall('call_1', 'Write', ['path' => 'a.txt', 'contents' => 'a']),
+        'Done.',
+    ]);
+
+    $response = (new SandboxedAgent)->forUser((object) ['id' => 1])->prompt('Write a.txt');
+
+    $sandbox->assertSuspended($response->conversationId);
+});
+
+test('checkpoints of a fake sandbox restore its files', function () {
+    $sandbox = Ai::fakeSandbox(['notes.txt' => 'v1']);
+
+    $checkpoint = $sandbox->checkpoint('conversation-1');
+
+    $sandbox->create('conversation-1')->write('notes.txt', 'v2');
+    $sandbox->restore('conversation-1', $checkpoint);
+
+    expect($sandbox->create('conversation-1')->read('notes.txt'))->toBe('v1');
+});

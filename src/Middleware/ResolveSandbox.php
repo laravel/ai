@@ -10,6 +10,7 @@ use Laravel\Ai\Attributes\Sandbox as SandboxAttribute;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\RemembersConversations;
 use Laravel\Ai\Contracts\Sandbox\ForgetsSandboxes;
+use Laravel\Ai\Contracts\Sandbox\Suspendable;
 use Laravel\Ai\Events\SandboxResolved;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\StreamableAgentResponse;
@@ -94,10 +95,19 @@ class ResolveSandbox
         );
 
         $release = function () use ($prompt, $factory, &$id, &$lock): void {
-            $lock?->release();
+            if ($lock === null) {
+                return;
+            }
 
-            if ($lock !== null && ! $this->kept($prompt->agent, $id) && $factory instanceof ForgetsSandboxes) {
-                $factory->forget($id);
+            // The lock is held until the container is stopped or removed, so the next turn cannot start it in between...
+            try {
+                if (! $this->kept($prompt->agent, $id) && $factory instanceof ForgetsSandboxes) {
+                    $factory->forget($id);
+                } elseif ($factory instanceof Suspendable && $factory->suspendsAfterTurn()) {
+                    $factory->suspend($id);
+                }
+            } finally {
+                $lock->release();
             }
         };
 

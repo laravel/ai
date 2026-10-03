@@ -5,12 +5,15 @@ namespace Laravel\Ai\Sandboxes;
 use Closure;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Laravel\Ai\Contracts\Sandbox\Checkpointable;
 use Laravel\Ai\Contracts\Sandbox\ForgetsSandboxes;
 use Laravel\Ai\Contracts\Sandbox\SandboxFactory;
+use Laravel\Ai\Contracts\Sandbox\Suspendable;
 use Laravel\Ai\Sandboxes\Drivers\FakeDriver;
 use PHPUnit\Framework\Assert as PHPUnit;
+use RuntimeException;
 
-class FakeFactory implements ForgetsSandboxes, SandboxFactory
+class FakeFactory implements Checkpointable, ForgetsSandboxes, SandboxFactory, Suspendable
 {
     /**
      * The directory every fake sandbox works in.
@@ -28,6 +31,14 @@ class FakeFactory implements ForgetsSandboxes, SandboxFactory
 
     /** @var array<int, string> */
     protected array $forgotten = [];
+
+    /** @var array<string, array{files: array<string, string>, directories: array<string, true>}> */
+    protected array $checkpoints = [];
+
+    /** @var array<int, string> */
+    protected array $suspended = [];
+
+    protected bool $suspendsAfterTurn = false;
 
     /**
      * @param  array<string, string>  $files
@@ -65,6 +76,74 @@ class FakeFactory implements ForgetsSandboxes, SandboxFactory
         unset($this->drivers[$id]);
 
         $this->forgotten[] = $id;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function checkpoint(string $id): string
+    {
+        $this->create($id);
+
+        $driver = $this->drivers[$id];
+
+        $this->checkpoints[$checkpoint = "{$id}:".count($this->checkpoints)] = [
+            'files' => $driver->files,
+            'directories' => $driver->directories,
+        ];
+
+        return $checkpoint;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function restore(string $id, string $checkpoint): void
+    {
+        $snapshot = $this->checkpoints[$checkpoint] ?? throw new RuntimeException("Checkpoint [{$checkpoint}] does not exist.");
+
+        $this->create($id);
+
+        $driver = $this->drivers[$id];
+
+        $driver->files = $snapshot['files'];
+        $driver->directories = $snapshot['directories'];
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function suspend(string $id): void
+    {
+        $this->suspended[] = $id;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function suspendsAfterTurn(): bool
+    {
+        return $this->suspendsAfterTurn;
+    }
+
+    /**
+     * Suspend sandboxes when their turn ends, as a factory configured to do so would.
+     */
+    public function suspendAfterTurn(bool $suspend = true): self
+    {
+        $this->suspendsAfterTurn = $suspend;
+
+        return $this;
+    }
+
+    /**
+     * Assert that the sandbox with the given ID was suspended.
+     */
+    public function assertSuspended(string $id): self
+    {
+        PHPUnit::assertContains($id, $this->suspended, "The sandbox [{$id}] was not suspended.");
+
+        return $this;
     }
 
     /**
