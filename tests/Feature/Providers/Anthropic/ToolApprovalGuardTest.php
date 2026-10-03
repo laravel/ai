@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Approvals\ApprovalSignature;
 use Laravel\Ai\Exceptions\ApprovalNotResumableException;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
@@ -99,7 +100,7 @@ test('a stateless pause resumes from client-replayed history when approved', fun
     $chat = Vercel::chat([
         ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Generate a number']]],
         ['id' => 'm2', 'role' => 'assistant', 'parts' => [
-            ['type' => 'tool-ApprovableNumberGenerator', 'toolCallId' => 'toolu_1', 'state' => 'approval-responded', 'input' => [], 'approval' => ['id' => 'toolu_1', 'approved' => true]],
+            ['type' => 'tool-ApprovableNumberGenerator', 'toolCallId' => 'toolu_1', 'state' => 'approval-responded', 'input' => [], 'approval' => ['id' => ApprovalSignature::sign('toolu_1', 'ApprovableNumberGenerator', []), 'approved' => true]],
         ]],
     ]);
 
