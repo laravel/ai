@@ -66,18 +66,28 @@ class OpenRouterProvider extends Provider implements AudioProvider, Classificati
      */
     public function webSearchToolOptions(WebSearch $search): array
     {
-        return $this->serverToolOptions($search);
+        return $this->serverToolOptions($search, [
+            'user_location' => $search->hasLocation()
+                ? array_filter([
+                    'type' => 'approximate',
+                    'city' => $search->city,
+                    'region' => $search->region,
+                    'country' => $search->country,
+                ])
+                : null,
+        ]);
     }
 
     /**
      * Get the parameters for an OpenRouter server tool.
      */
-    protected function serverToolOptions(WebFetch|WebSearch $tool): array
+    protected function serverToolOptions(WebFetch|WebSearch $tool, array $parameters = []): array
     {
         return array_filter([
             'parameters' => array_filter([
                 'max_uses' => $tool->maxSearches,
                 'allowed_domains' => $tool->allowedDomains,
+                ...$parameters,
             ]) + $tool->providerOptions(Lab::OpenRouter),
         ]);
     }
