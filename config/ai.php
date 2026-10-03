@@ -58,7 +58,7 @@ return [
         'local' => [
             'driver' => 'local',
             'root' => env('AI_SANDBOX_ROOT', storage_path('app/sandboxes')),
-            'isolate' => env('AI_SANDBOX_ISOLATE', false),
+            'isolate' => env('AI_SANDBOX_ISOLATE', true),
             'network' => env('AI_SANDBOX_NETWORK', true),
             'env' => [],
             'timeout' => 120,

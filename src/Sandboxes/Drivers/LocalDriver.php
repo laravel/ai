@@ -35,7 +35,7 @@ class LocalDriver implements SandboxDriver
             $result = Process::path($cwd)
                 ->env($this->environment($env))
                 ->timeout($timeout ?? $this->config['timeout'] ?? 120)
-                ->run(($this->config['isolate'] ?? false) ? $this->isolated($command, $cwd) : $command);
+                ->run(($this->config['isolate'] ?? true) ? $this->isolated($command, $cwd) : $command);
         } catch (ProcessTimedOutException $exception) {
             return new ShellResult(
                 $exception->result->output(),
@@ -179,7 +179,7 @@ class LocalDriver implements SandboxDriver
     protected function binary(string $name): string
     {
         return (new ExecutableFinder)->find($name) ?? throw new RuntimeException(
-            "Isolated local sandboxes need [{$name}]. Install it or set [isolate] to false.",
+            "Isolated local sandboxes need [{$name}]. Install it or set AI_SANDBOX_ISOLATE=false to run commands unisolated.",
         );
     }
 

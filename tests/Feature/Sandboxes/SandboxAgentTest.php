@@ -22,6 +22,7 @@ use Tests\Fixtures\Agents\SandboxedAgent;
 beforeEach(function () {
     Config::set('ai.conversations.generate_title', false);
     Config::set('ai.sandboxes.local.root', $this->root = sys_get_temp_dir().'/ai-sandboxes-'.uniqid());
+    Config::set('ai.sandboxes.local.isolate', false);
 });
 
 afterEach(fn () => File::deleteDirectory($this->root));

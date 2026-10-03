@@ -15,7 +15,7 @@ use Symfony\Component\Process\ExecutableFinder;
 
 beforeEach(function () {
     $this->root = sys_get_temp_dir().'/ai-sandboxes-'.uniqid();
-    $this->sandbox = (new LocalFactory(['root' => $this->root, 'timeout' => 5]))->create('conversation-1');
+    $this->sandbox = (new LocalFactory(['root' => $this->root, 'timeout' => 5, 'isolate' => false]))->create('conversation-1');
 });
 
 afterEach(fn () => File::deleteDirectory($this->root));
@@ -89,12 +89,12 @@ test('an isolated sandbox can be cut off from the network', function () {
     expect($result->stdout)->toBe('offline');
 });
 
-test('an isolated sandbox refuses to run when the isolation tool is missing', function () {
+test('the local driver isolates by default and refuses to run when the isolation tool is missing', function () {
     $path = getenv('PATH');
     putenv('PATH=/nonexistent');
 
     try {
-        $sandbox = (new LocalFactory(['root' => $this->root, 'isolate' => true]))->create('conversation-1');
+        $sandbox = (new LocalFactory(['root' => $this->root]))->create('conversation-1');
 
         expect(fn () => $sandbox->exec('echo hi > ran.txt'))->toThrow(RuntimeException::class, 'Isolated local sandboxes')
             ->and(File::exists("{$this->root}/conversation-1/ran.txt"))->toBeFalse();
