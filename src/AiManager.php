@@ -22,6 +22,7 @@ use Laravel\Ai\Gateway\OpenAi\OpenAiGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
 use Laravel\Ai\Providers\AzureOpenAiProvider;
 use Laravel\Ai\Providers\BedrockProvider;
+use Laravel\Ai\Providers\CloudflareProvider;
 use Laravel\Ai\Providers\CohereProvider;
 use Laravel\Ai\Providers\DeepSeekProvider;
 use Laravel\Ai\Providers\ElevenLabsProvider;
@@ -321,6 +322,17 @@ class AiManager extends MultipleInstanceManager
     public function createBedrockDriver(array $config): BedrockProvider
     {
         return new BedrockProvider(
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create a Cloudflare powered instance.
+     */
+    public function createCloudflareDriver(array $config): CloudflareProvider
+    {
+        return new CloudflareProvider(
             $config,
             $this->app->make(Dispatcher::class)
         );
