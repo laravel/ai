@@ -42,6 +42,44 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Sandboxes
+    |--------------------------------------------------------------------------
+    |
+    | Agents marked with the Sandbox attribute work in a sandbox: a directory
+    | they may read, write, and run commands in, kept per conversation. The
+    | local driver runs commands on this machine; "isolate" confines their
+    | writes to the workspace using sandbox-exec on macOS or bwrap on Linux.
+    |
+    */
+
+    'default_sandbox' => env('AI_SANDBOX', 'local'),
+
+    'sandboxes' => [
+        'local' => [
+            'driver' => 'local',
+            'root' => env('AI_SANDBOX_ROOT', storage_path('app/sandboxes')),
+            'isolate' => env('AI_SANDBOX_ISOLATE', true),
+            'network' => env('AI_SANDBOX_NETWORK', true),
+            'env' => [],
+            'timeout' => 120,
+        ],
+
+        'docker' => [
+            'driver' => 'docker',
+            'image' => env('AI_SANDBOX_IMAGE', 'ubuntu:24.04'),
+            'workdir' => '/workspace',
+            'binary' => env('AI_SANDBOX_DOCKER_BINARY', 'docker'),
+            'memory' => '512m',
+            'cpus' => '1',
+            'network' => 'none',
+            'env' => [],
+            'timeout' => 120,
+            'suspend_after_turn' => env('AI_SANDBOX_SUSPEND', false),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | AI Providers
     |--------------------------------------------------------------------------
     |

@@ -2,7 +2,9 @@
 
 namespace Laravel\Ai;
 
+use Closure;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\MultipleInstanceManager;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Agent;
@@ -15,6 +17,7 @@ use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Contracts\Sandbox\SandboxFactory;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Anthropic\AnthropicGateway;
 use Laravel\Ai\Gateway\Gemini\GeminiGateway;
@@ -37,6 +40,8 @@ use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\TypeSafeProvider;
 use Laravel\Ai\Providers\VoyageAiProvider;
 use Laravel\Ai\Providers\XaiProvider;
+use Laravel\Ai\Sandboxes\FakeFactory;
+use Laravel\Ai\Sandboxes\SandboxManager;
 use LogicException;
 
 class AiManager extends MultipleInstanceManager
@@ -563,5 +568,35 @@ class AiManager extends MultipleInstanceManager
         $this->forgetInstance(array_keys($this->onDemandProviders));
 
         $this->onDemandProviders = [];
+    }
+
+    /**
+     * Get a sandbox factory by name.
+     */
+    public function sandbox(?string $name = null): SandboxFactory
+    {
+        return $this->app->make(SandboxManager::class)->factory($name);
+    }
+
+    /**
+     * Register a custom sandbox driver.
+     *
+     * @param  Closure(Application, array): SandboxFactory  $callback
+     */
+    public function extendSandbox(string $driver, Closure $callback): self
+    {
+        $this->app->make(SandboxManager::class)->extend($driver, $callback);
+
+        return $this;
+    }
+
+    /**
+     * Replace every sandbox with an in-memory fake seeded with the given files.
+     *
+     * @param  array<string, string>  $files
+     */
+    public function fakeSandbox(array $files = []): FakeFactory
+    {
+        return $this->app->make(SandboxManager::class)->fake($files);
     }
 }
