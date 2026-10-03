@@ -6,8 +6,10 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Events\Reranked;
 use Laravel\Ai\Events\Reranking;
+use Laravel\Ai\Events\RerankingFailed;
 use Laravel\Ai\Prompts\RerankingPrompt;
 use Laravel\Ai\Responses\RerankingResponse;
+use Throwable;
 
 trait Reranks
 {
@@ -33,16 +35,28 @@ trait Reranks
             $invocationId, $this, $model, $prompt,
         ));
 
-        return tap($this->rerankingGateway()->rerank(
-            $this,
-            $model,
-            $documents,
-            $query,
-            $limit,
-            $timeout,
-            $providerOptions,
-        ), fn (RerankingResponse $response) => $this->events->dispatch(new Reranked(
+        try {
+            $response = $this->rerankingGateway()->rerank(
+                $this,
+                $model,
+                $documents,
+                $query,
+                $limit,
+                $timeout,
+                $providerOptions,
+            );
+        } catch (Throwable $e) {
+            $this->events->dispatch(new RerankingFailed(
+                $invocationId, $this, $model, $prompt, $e,
+            ));
+
+            throw $e;
+        }
+
+        $this->events->dispatch(new Reranked(
             $invocationId, $this, $model, $prompt, $response,
-        )));
+        ));
+
+        return $response;
     }
 }

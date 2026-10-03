@@ -4,10 +4,12 @@ namespace Laravel\Ai\Providers\Concerns;
 
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Events\AudioFailed;
 use Laravel\Ai\Events\AudioGenerated;
 use Laravel\Ai\Events\GeneratingAudio;
 use Laravel\Ai\Prompts\AudioPrompt;
 use Laravel\Ai\Responses\AudioResponse;
+use Throwable;
 
 trait GeneratesAudio
 {
@@ -38,12 +40,22 @@ trait GeneratesAudio
             $invocationId, $this, $model, $prompt,
         ));
 
-        return tap($this->audioGateway()->generateAudio(
-            $this, $model, $prompt->text, $prompt->voice, $prompt->instructions, $timeout, $prompt->providerOptions,
-        ), function (AudioResponse $response) use ($invocationId, $model, $prompt): void {
-            $this->events->dispatch(new AudioGenerated(
-                $invocationId, $this, $model, $prompt, $response,
+        try {
+            $response = $this->audioGateway()->generateAudio(
+                $this, $model, $prompt->text, $prompt->voice, $prompt->instructions, $timeout, $prompt->providerOptions,
+            );
+        } catch (Throwable $e) {
+            $this->events->dispatch(new AudioFailed(
+                $invocationId, $this, $model, $prompt, $e,
             ));
-        });
+
+            throw $e;
+        }
+
+        $this->events->dispatch(new AudioGenerated(
+            $invocationId, $this, $model, $prompt, $response,
+        ));
+
+        return $response;
     }
 }
