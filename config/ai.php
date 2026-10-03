@@ -47,7 +47,8 @@ return [
     |
     | Agents marked with the Sandbox attribute work in a sandbox: a directory
     | they may read, write, and run commands in, kept per conversation. The
-    | local driver runs commands on this machine and does not isolate them.
+    | local driver runs commands on this machine; "isolate" confines their
+    | writes to the workspace using sandbox-exec on macOS or bwrap on Linux.
     |
     */
 
@@ -57,6 +58,8 @@ return [
         'local' => [
             'driver' => 'local',
             'root' => env('AI_SANDBOX_ROOT', storage_path('app/sandboxes')),
+            'isolate' => env('AI_SANDBOX_ISOLATE', false),
+            'network' => env('AI_SANDBOX_NETWORK', true),
             'env' => [],
             'timeout' => 120,
         ],

@@ -11,6 +11,7 @@ use Laravel\Ai\Sandboxes\Exceptions\SandboxPathException;
 use Laravel\Ai\Sandboxes\FileStat;
 use Laravel\Ai\Sandboxes\ShellResult;
 use RuntimeException;
+use Symfony\Component\Process\ExecutableFinder;
 
 class LocalDriver implements SandboxDriver
 {
@@ -34,7 +35,7 @@ class LocalDriver implements SandboxDriver
             $result = Process::path($cwd)
                 ->env($this->environment($env))
                 ->timeout($timeout ?? $this->config['timeout'] ?? 120)
-                ->run($command);
+                ->run(($this->config['isolate'] ?? false) ? $this->isolated($command, $cwd) : $command);
         } catch (ProcessTimedOutException $exception) {
             return new ShellResult(
                 $exception->result->output(),
@@ -134,6 +135,60 @@ class LocalDriver implements SandboxDriver
             $recursive => $this->files->deleteDirectory($path),
             default => rmdir($path),
         };
+    }
+
+    /**
+     * Wrap the command so the kernel only lets it write inside the workspace, and optionally cuts its network.
+     *
+     * @return array<int, string>
+     *
+     * @throws RuntimeException
+     */
+    protected function isolated(string $command, string $cwd): array
+    {
+        $workspace = realpath($this->root ?? $cwd) ?: $cwd;
+        $network = $this->config['network'] ?? true;
+
+        return match (PHP_OS_FAMILY) {
+            'Darwin' => [$this->binary('sandbox-exec'), '-p', implode(' ', [
+                '(version 1) (allow default) (deny file-write*)',
+                '(allow file-write* (subpath '.$this->quote($workspace).') (subpath "/dev"))',
+                $network ? '' : '(deny network*)',
+            ]), 'sh', '-c', $command],
+            'Linux' => [
+                $this->binary('bwrap'),
+                '--ro-bind', '/', '/',
+                '--dev', '/dev',
+                '--proc', '/proc',
+                '--tmpfs', '/tmp',
+                '--bind', $workspace, $workspace,
+                ...($network ? [] : ['--unshare-net']),
+                '--die-with-parent',
+                '--chdir', $cwd,
+                'sh', '-c', $command,
+            ],
+            default => throw new RuntimeException('Isolated local sandboxes are only supported on macOS and Linux.'),
+        };
+    }
+
+    /**
+     * Find the given isolation binary, failing loudly rather than running the command unisolated.
+     *
+     * @throws RuntimeException
+     */
+    protected function binary(string $name): string
+    {
+        return (new ExecutableFinder)->find($name) ?? throw new RuntimeException(
+            "Isolated local sandboxes need [{$name}]. Install it or set [isolate] to false.",
+        );
+    }
+
+    /**
+     * Quote the given path as a Seatbelt profile string.
+     */
+    protected function quote(string $path): string
+    {
+        return '"'.addcslashes($path, '"\\').'"';
     }
 
     /**

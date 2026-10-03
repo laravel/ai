@@ -11,6 +11,7 @@ use Laravel\Ai\Tools\Sandbox\Edit;
 use Laravel\Ai\Tools\Sandbox\Glob;
 use Laravel\Ai\Tools\Sandbox\Grep;
 use Laravel\Ai\Tools\Sandbox\Read;
+use Symfony\Component\Process\ExecutableFinder;
 
 beforeEach(function () {
     $this->root = sys_get_temp_dir().'/ai-sandboxes-'.uniqid();
@@ -65,6 +66,41 @@ test('a command that runs past its timeout is stopped and reported', function ()
     expect($result->timedOut)->toBeTrue()
         ->and($result->stdout)->toBe("started\n")
         ->and($result->successful())->toBeFalse();
+});
+
+test('an isolated sandbox only writes inside its workspace', function () {
+    isolationAvailable();
+
+    $sandbox = (new LocalFactory(['root' => $this->root, 'isolate' => true]))->create('conversation-1');
+
+    $result = $sandbox->exec('echo inside > in.txt; echo outside > ../out.txt; echo done > /dev/null; cat in.txt');
+
+    expect($result->stdout)->toBe("inside\n")
+        ->and(File::exists("{$this->root}/out.txt"))->toBeFalse();
+});
+
+test('an isolated sandbox can be cut off from the network', function () {
+    isolationAvailable();
+
+    $offline = (new LocalFactory(['root' => $this->root, 'isolate' => true, 'network' => false]))->create('conversation-1');
+
+    $result = $offline->exec('php -r \'echo @fsockopen("1.1.1.1", 80, $code, $error, 2) ? "online" : "offline";\'');
+
+    expect($result->stdout)->toBe('offline');
+});
+
+test('an isolated sandbox refuses to run when the isolation tool is missing', function () {
+    $path = getenv('PATH');
+    putenv('PATH=/nonexistent');
+
+    try {
+        $sandbox = (new LocalFactory(['root' => $this->root, 'isolate' => true]))->create('conversation-1');
+
+        expect(fn () => $sandbox->exec('echo hi > ran.txt'))->toThrow(RuntimeException::class, 'Isolated local sandboxes')
+            ->and(File::exists("{$this->root}/conversation-1/ran.txt"))->toBeFalse();
+    } finally {
+        putenv("PATH={$path}");
+    }
 });
 
 test('a factory forgets a sandbox by removing its workspace', function () {
@@ -181,3 +217,16 @@ test('a deferred sandbox is not created until it is used', function () {
     expect($created)->toBe(1)
         ->and(File::get("{$this->root}/conversation-1/repo/a.txt"))->toBe('a');
 });
+
+function isolationAvailable(): void
+{
+    $binary = match (PHP_OS_FAMILY) {
+        'Darwin' => 'sandbox-exec',
+        'Linux' => 'bwrap',
+        default => null,
+    };
+
+    if ($binary === null || (new ExecutableFinder)->find($binary) === null) {
+        test()->markTestSkipped('OS-level isolation is not available.');
+    }
+}
