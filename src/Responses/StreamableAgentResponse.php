@@ -19,7 +19,6 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Protocols\AgentUserInteractionProtocol;
 use Laravel\Ai\Streaming\Protocols\StreamProtocol;
 use Laravel\Ai\Streaming\Protocols\VercelDataProtocol;
-use Laravel\Ai\Vercel\Chat;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 use Traversable;
@@ -158,11 +157,9 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
      *
      * The message ID is the assistant message the response continues, not the "messageId" sent by useChat.
      */
-    public function usingVercelDataProtocol(Chat|string|null $messageId = null): self
+    public function usingVercelDataProtocol(?string $messageId = null): self
     {
-        return $this->usingProtocol(new VercelDataProtocol(
-            $messageId instanceof Chat ? $messageId->messageId() : $messageId
-        ));
+        return $this->usingProtocol(new VercelDataProtocol($messageId));
     }
 
     /**
