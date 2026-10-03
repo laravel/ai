@@ -50,11 +50,19 @@ class Chat implements AgentInput
     }
 
     /**
+     * Get the ID of the assistant message the response continues, if any.
+     */
+    public function messageId(): ?string
+    {
+        return static::latestOfRole($this->messages, 'assistant')['id'] ?? null;
+    }
+
+    /**
      * Get the stream protocol for the chat.
      */
     public function protocol(): VercelDataProtocol
     {
-        return new VercelDataProtocol;
+        return new VercelDataProtocol($this->messageId());
     }
 
     /**
