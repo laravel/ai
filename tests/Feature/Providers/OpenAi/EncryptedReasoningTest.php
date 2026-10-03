@@ -356,23 +356,12 @@ test('stateless tool follow up drops file search calls but keeps the surrounding
 
     $input = collect(json_decode((string) Http::recorded()[1][0]->body(), true)['input']);
 
-    $reasoningAt = $input->search(fn ($i): bool => ($i['type'] ?? null) === 'reasoning'
-        && ($i['id'] ?? null) === 'rs_1'
-        && ($i['encrypted_content'] ?? null) === 'enc-blob-1');
-    $functionAt = $input->search(fn ($i): bool => ($i['type'] ?? null) === 'function_call'
-        && ($i['id'] ?? null) === 'fc_1');
-
-    expect($input->contains(fn ($i): bool => ($i['type'] ?? null) === 'file_search_call'))
-        ->toBeFalse('stored-only file_search_call item not replayed')
-        ->and($reasoningAt)->not->toBeFalse('reasoning still replayed with its encrypted content')
-        ->and($functionAt)->not->toBeFalse('function call still replayed')
-        ->and($reasoningAt)->toBeLessThan($functionAt)
-        ->and($input->contains(fn ($i): bool => ($i['type'] ?? null) === 'function_call_output'
-            && ($i['call_id'] ?? null) === 'call_1'))
-        ->toBeTrue('tool result included');
+    expect($input->whereNotNull('type')->pluck('type')->all())
+        ->toBe(['reasoning', 'function_call', 'function_call_output'])
+        ->and($input->firstWhere('type', 'reasoning'))->toMatchArray(['id' => 'rs_1', 'encrypted_content' => 'enc-blob-1']);
 
     $blocks = $response->messages->whereInstanceOf(AssistantMessage::class)->first()->replayBlocks;
 
     expect(collect($blocks)->firstWhere('type', 'file_search_call')['id'] ?? null)
-        ->toBe('fs_1', 'replay blocks themselves are left intact');
+        ->toBe('fs_1');
 });
