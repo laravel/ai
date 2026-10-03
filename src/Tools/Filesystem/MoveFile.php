@@ -15,7 +15,7 @@ class MoveFile extends FilesystemTool
      */
     public function description(): string
     {
-        return 'Move or rename a file on the filesystem disk.';
+        return 'Move or rename a file on the filesystem disk. The file no longer exists at its original path.';
     }
 
     /**
@@ -23,18 +23,24 @@ class MoveFile extends FilesystemTool
      */
     public function handle(Request $request): string
     {
-        $from = $request->string('from');
-        $to = $request->string('to');
+        $disk = $this->disk();
+
+        $from = (string) $request->string('from');
+        $to = (string) $request->string('to');
+
+        if (! $this->fileExists($disk, $from)) {
+            return "File [{$from}] does not exist.";
+        }
 
         try {
-            $moved = $this->disk()->move($from, $to);
+            $moved = $disk->move($from, $to);
         } catch (Throwable $throwable) {
             return "Unable to move [{$from}] to [{$to}]: {$throwable->getMessage()}";
         }
 
         return $moved
             ? "Moved [{$from}] to [{$to}]."
-            : "Unable to move [{$from}] to [{$to}]. The source file may not exist.";
+            : "Unable to move [{$from}] to [{$to}].";
     }
 
     /**

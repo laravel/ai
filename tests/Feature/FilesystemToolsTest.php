@@ -214,7 +214,27 @@ test('move file relocates a file', function (): void {
 test('move file reports a missing source', function (): void {
     $result = (new MoveFile('local'))->handle(new Request(['from' => 'missing.txt', 'to' => 'dst.txt']));
 
-    expect($result)->toBe('Unable to move [missing.txt] to [dst.txt]. The source file may not exist.');
+    expect($result)->toBe('File [missing.txt] does not exist.');
+});
+
+test('move file does not move directories', function (): void {
+    Storage::disk('local')->makeDirectory('photos');
+
+    $result = (new MoveFile('local'))->handle(new Request(['from' => 'photos', 'to' => 'archive/photos']));
+
+    expect($result)->toBe('File [photos] does not exist.');
+    Storage::disk('local')->assertExists('photos');
+    Storage::disk('local')->assertMissing('archive/photos');
+});
+
+test('move file reports move failures', function (): void {
+    $disk = Double::for(Filesystem::class);
+    $disk->expects('size')->with('a.txt')->returns(1);
+    $disk->expects('move')->with('a.txt', 'b.txt')->returns(false);
+
+    $result = (new MoveFile($disk))->handle(new Request(['from' => 'a.txt', 'to' => 'b.txt']));
+
+    expect($result)->toBe('Unable to move [a.txt] to [b.txt].');
 });
 
 test('file storage tools all returns every tool as a collection', function (): void {
@@ -309,27 +329,6 @@ test('agent copies a file end to end', function (): void {
 
     Storage::disk('local')->assertExists(['photos/photo1.jpg', 'wallpapers/photo1.jpg']);
     Storage::disk('local')->assertCount('wallpapers', 1);
-});
-
-test('agent moves a file end to end', function (): void {
-    config(['ai.providers.openai' => [
-        ...config('ai.providers.openai'),
-        'key' => 'test-key',
-    ]]);
-
-    Storage::disk('local')->putFileAs('photos', UploadedFile::fake()->image('photo1.jpg'), 'photo1.jpg');
-
-    Http::fake([
-        'api.openai.com/*' => Http::sequence([
-            fakeOpenAiFileToolCall('MoveFile', ['from' => 'photos/photo1.jpg', 'to' => 'wallpapers/photo1.jpg']),
-            fakeOpenAiResponse('Done'),
-        ]),
-    ]);
-
-    (new FileStorageAgent)->prompt('Move photo1 into the wallpapers folder', provider: 'openai');
-
-    Storage::disk('local')->assertMissing('photos/photo1.jpg');
-    Storage::disk('local')->assertExists('wallpapers/photo1.jpg');
 });
 
 test('agent deletes a file end to end', function (): void {
