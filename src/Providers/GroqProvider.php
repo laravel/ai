@@ -5,11 +5,16 @@ namespace Laravel\Ai\Providers;
 use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
+use Laravel\Ai\Contracts\Providers\SupportsCodeExecution;
+use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Groq\GroqGateway;
+use Laravel\Ai\Providers\Tools\CodeExecution;
+use Laravel\Ai\Providers\Tools\WebSearch;
 
-class GroqProvider extends Provider implements TextProvider, TranscriptionProvider
+class GroqProvider extends Provider implements SupportsCodeExecution, SupportsWebSearch, TextProvider, TranscriptionProvider
 {
     use Concerns\GeneratesText;
     use Concerns\GeneratesTranscriptions;
@@ -20,6 +25,22 @@ class GroqProvider extends Provider implements TextProvider, TranscriptionProvid
     public function __construct(protected array $config, protected Dispatcher $events)
     {
         //
+    }
+
+    /**
+     * Get the code execution tool options for the provider.
+     */
+    public function codeExecutionToolOptions(CodeExecution $codeExecution): array
+    {
+        return $codeExecution->providerOptions(Lab::Groq);
+    }
+
+    /**
+     * Get the web search tool options for the provider.
+     */
+    public function webSearchToolOptions(WebSearch $search): array
+    {
+        return $search->providerOptions(Lab::Groq);
     }
 
     /**

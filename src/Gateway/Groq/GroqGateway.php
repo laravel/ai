@@ -6,6 +6,8 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
+use Laravel\Ai\Contracts\Providers\SupportsCodeExecution;
+use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
@@ -13,11 +15,16 @@ use Laravel\Ai\Gateway\Concerns\ResolvesAudioFilenames;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionMessages;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\PerformsChatCompletionSteps;
+use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Providers\Tools\CodeExecution;
+use Laravel\Ai\Providers\Tools\ProviderTool;
+use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Responses\Data\TranscriptionUsage;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use LogicException;
+use RuntimeException;
 
 class GroqGateway implements StepTextGateway, TranscriptionGateway
 {
@@ -34,6 +41,48 @@ class GroqGateway implements StepTextGateway, TranscriptionGateway
     use ResolvesAudioFilenames;
 
     public function __construct(protected Dispatcher $events) {}
+
+    /**
+     * Map a provider tool to a Groq built-in tool definition.
+     */
+    protected function mapProviderTool(ProviderTool $tool, Provider $provider): array
+    {
+        return match (true) {
+            $tool instanceof CodeExecution => $this->mapCodeExecutionTool($tool, $provider),
+            $tool instanceof WebSearch => $this->mapWebSearchTool($tool, $provider),
+            default => throw new RuntimeException('Groq does not support ['.class_basename($tool).'] provider tools.'),
+        };
+    }
+
+    /**
+     * Map a code execution tool to a Groq code interpreter definition.
+     */
+    protected function mapCodeExecutionTool(CodeExecution $tool, Provider $provider): array
+    {
+        if (! $provider instanceof SupportsCodeExecution) {
+            throw new RuntimeException('Provider ['.$provider->name().'] does not support code execution.');
+        }
+
+        return [
+            'type' => 'code_interpreter',
+            ...$provider->codeExecutionToolOptions($tool),
+        ];
+    }
+
+    /**
+     * Map a web search tool to a Groq browser search definition.
+     */
+    protected function mapWebSearchTool(WebSearch $tool, Provider $provider): array
+    {
+        if (! $provider instanceof SupportsWebSearch) {
+            throw new RuntimeException('Provider ['.$provider->name().'] does not support web search.');
+        }
+
+        return [
+            'type' => 'browser_search',
+            ...$provider->webSearchToolOptions($tool),
+        ];
+    }
 
     /**
      * The status codes that indicate Groq is transiently unavailable and the request should fail over.

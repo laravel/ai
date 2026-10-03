@@ -10,6 +10,7 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
@@ -97,7 +98,7 @@ trait HandlesTextStreaming
                 ))->withInvocationId($invocationId);
             }
 
-            if ($reasoningId !== null && ((isset($delta['content']) && $delta['content'] !== '') || isset($delta['tool_calls']))) {
+            if ($reasoningId !== null && ((isset($delta['content']) && $delta['content'] !== '') || isset($delta['tool_calls']) || isset($delta['executed_tools']))) {
                 yield (new ReasoningEnd(
                     $this->generateEventId(),
                     $reasoningId,
@@ -125,6 +126,18 @@ trait HandlesTextStreaming
                     $messageId,
                     $delta['content'],
                     time(),
+                ))->withInvocationId($invocationId);
+            }
+
+            foreach ($delta['executed_tools'] ?? [] as $executedTool) {
+                yield (new ProviderToolEvent(
+                    $this->generateEventId(),
+                    (string) ($executedTool['index'] ?? ''),
+                    (string) ($executedTool['name'] ?? $executedTool['type'] ?? ''),
+                    $executedTool,
+                    isset($executedTool['output']) ? 'completed' : 'in_progress',
+                    time(),
+                    provider: $provider->name(),
                 ))->withInvocationId($invocationId);
             }
 
