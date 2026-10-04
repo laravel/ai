@@ -202,8 +202,8 @@ class DockerProvider extends Provider implements Checkpointable, Suspendable
             '--name', $name,
             '--label', static::LABEL.'='.$id,
             '--label', static::OPTIONS_LABEL.'='.json_encode(['image' => $image, ...$options], JSON_THROW_ON_ERROR),
-            '--memory', (string) ($options['memory'] ?? $this->config['memory'] ?? '512m'),
-            '--cpus', (string) ($options['cpus'] ?? $this->config['cpus'] ?? '1'),
+            '--memory', ((int) ($options['memory'] ?? $this->config['memory'] ?? 512)).'m',
+            '--cpus', (string) ($options['cpus'] ?? $this->config['cpus'] ?? 1),
             '--network', match (true) {
                 $network === true => 'bridge',
                 is_string($network) && $network !== '' => $network,

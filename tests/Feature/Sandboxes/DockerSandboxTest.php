@@ -17,8 +17,8 @@ beforeEach(function () {
         'driver' => 'docker',
         'image' => env('AI_SANDBOX_TEST_IMAGE', 'alpine:3.20'),
         'workdir' => '/workspace',
-        'memory' => '256m',
-        'cpus' => '1',
+        'memory' => 256,
+        'cpus' => 1,
         'network' => false,
         'timeout' => 30,
     ];
@@ -48,7 +48,8 @@ test('commands run inside the container, isolated from the host and the network'
 
     expect($result->stdout)->toBe("/workspace\nlo\nhi\n")
         ->and($result->successful())->toBeTrue()
-        ->and($sandbox->state())->toBe(SandboxState::Running);
+        ->and($sandbox->state())->toBe(SandboxState::Running)
+        ->and(trim(Process::run(['docker', 'inspect', '-f', '{{.HostConfig.Memory}}', $this->provider->container($sandbox->id())])->output()))->toBe((string) (256 * 1024 * 1024));
 });
 
 test('a fresh provider attaches to the container by ID without starting or replacing it', function () {
