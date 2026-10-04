@@ -22,7 +22,6 @@ use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Middleware\RememberConversation;
-use Laravel\Ai\Middleware\ResolveSandbox;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Responses\AgentResponse;
@@ -149,10 +148,6 @@ trait GeneratesText
             return $next($prompt);
         }] : [];
 
-        if (ResolveSandbox::appliesTo($agent)) {
-            $middleware[] = resolve(ResolveSandbox::class);
-        }
-
         if (RememberConversation::appliesTo($agent)) {
             $middleware[] = new RememberConversation(resolve(ConversationStore::class), $this);
         }
@@ -170,7 +165,7 @@ trait GeneratesText
 
         return array_map(
             fn ($tool) => $this->resolveTool($tool),
-            [...$tools, ...$prompt->sandboxTools()],
+            $tools,
         );
     }
 

@@ -2,15 +2,19 @@
 
 namespace Laravel\Ai\Contracts\Sandbox;
 
+use Laravel\Ai\Sandboxes\Exceptions\SandboxStateException;
+
 interface Suspendable
 {
     /**
-     * Stop the sandbox with the given ID, keeping its files until it is next created.
+     * Stop the sandbox with the given ID, keeping its files.
      */
     public function suspend(string $id): void;
 
     /**
-     * Determine whether sandboxes are suspended when a turn ends.
+     * Start the stopped sandbox with the given ID again.
+     *
+     * @throws SandboxStateException
      */
-    public function suspendsAfterTurn(): bool;
+    public function resume(string $id): void;
 }

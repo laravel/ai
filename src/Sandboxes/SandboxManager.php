@@ -3,55 +3,133 @@
 namespace Laravel\Ai\Sandboxes;
 
 use Illuminate\Support\MultipleInstanceManager;
-use Laravel\Ai\Contracts\Sandbox\SandboxFactory;
+use Laravel\Ai\Contracts\Sandbox\SandboxProvider;
 
 /**
- * @method SandboxFactory instance(?string $name = null)
+ * @method SandboxProvider instance(?string $name = null)
  */
 class SandboxManager extends MultipleInstanceManager
 {
-    protected ?FakeFactory $fake = null;
+    protected ?FakeProvider $fake = null;
 
     /**
-     * Get a sandbox factory by name.
+     * Get a sandbox provider by name.
      */
-    public function factory(?string $name = null): SandboxFactory
+    public function provider(?string $name = null): SandboxProvider
     {
         return $this->fake ?? $this->instance($name);
     }
 
     /**
-     * Replace every sandbox factory with an in-memory fake.
+     * Create a sandbox on the default provider.
+     *
+     * @param  array<string, mixed>  $options
+     */
+    public function create(array $options = []): Sandbox
+    {
+        return $this->provider()->create($options);
+    }
+
+    /**
+     * Delete a sandbox on the default provider.
+     */
+    public function delete(string $id): void
+    {
+        $this->provider()->delete($id);
+    }
+
+    /**
+     * Replace every sandbox provider with an in-memory fake whose new sandboxes start with the given files.
      *
      * @param  array<string, string>  $files
      */
-    public function fake(array $files = []): FakeFactory
+    public function fake(array $files = []): FakeProvider
     {
-        return $this->fake = new FakeFactory($files);
+        return $this->fake = new FakeProvider($files);
     }
 
     /**
-     * Create the local sandbox factory.
+     * Create the local sandbox provider.
      */
-    protected function createLocalDriver(array $config): LocalFactory
+    protected function createLocalDriver(array $config): LocalProvider
     {
-        return new LocalFactory($config);
+        return new LocalProvider($config);
     }
 
     /**
-     * Create the Docker sandbox factory.
+     * Create the Docker sandbox provider.
      */
-    protected function createDockerDriver(array $config): DockerFactory
+    protected function createDockerDriver(array $config): DockerProvider
     {
-        return new DockerFactory($config);
+        return new DockerProvider($config);
     }
 
     /**
-     * Create the Boat sandbox factory.
+     * Create the Boat sandbox provider.
      */
-    protected function createBoatDriver(array $config): BoatFactory
+    protected function createBoatDriver(array $config): BoatProvider
     {
-        return new BoatFactory($config);
+        return new BoatProvider($config);
+    }
+
+    /**
+     * Create the E2B sandbox provider.
+     */
+    protected function createE2bDriver(array $config): E2bProvider
+    {
+        return new E2bProvider($config);
+    }
+
+    /**
+     * Create the Daytona sandbox provider.
+     */
+    protected function createDaytonaDriver(array $config): DaytonaProvider
+    {
+        return new DaytonaProvider($config);
+    }
+
+    /**
+     * Create the Fly.io Machines sandbox provider.
+     */
+    protected function createFlyDriver(array $config): FlyProvider
+    {
+        return new FlyProvider($config);
+    }
+
+    /**
+     * Create the Cloudflare Sandbox bridge sandbox provider.
+     */
+    protected function createCloudflareDriver(array $config): CloudflareProvider
+    {
+        return new CloudflareProvider($config);
+    }
+
+    /**
+     * Create the BoxLite sandbox provider.
+     */
+    protected function createBoxliteDriver(array $config): BoxLiteProvider
+    {
+        return new BoxLiteProvider($config);
+    }
+
+    /**
+     * Create the Upstash Box sandbox provider.
+     */
+    protected function createUpstashDriver(array $config): UpstashProvider
+    {
+        return new UpstashProvider($config);
+    }
+
+    /**
+     * Forward calls to the default provider, which is also how Sandbox::get() arrives since the parent reserves get().
+     *
+     * @param  string  $method
+     * @param  array<int, mixed>  $parameters
+     * @return mixed
+     */
+    public function __call($method, $parameters)
+    {
+        return $this->provider()->$method(...$parameters);
     }
 
     /**
@@ -75,6 +153,8 @@ class SandboxManager extends MultipleInstanceManager
      */
     public function getInstanceConfig($name)
     {
-        return $this->config->get("ai.sandboxes.{$name}");
+        $config = $this->config->get("ai.sandboxes.{$name}");
+
+        return is_array($config) ? ['name' => $name, ...$config] : null;
     }
 }

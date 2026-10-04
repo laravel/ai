@@ -2,15 +2,13 @@
 
 namespace Laravel\Ai\Sandboxes\Exceptions;
 
-use RuntimeException;
-
-class SandboxPathException extends RuntimeException
+class SandboxPathException extends SandboxException
 {
     /**
-     * Create an exception for a path that leaves the sandbox's working directory.
+     * Create an exception for a path that resolves outside the sandbox root.
      */
-    public static function outside(string $path, string $cwd): self
+    public static function outside(string $path, string $root): self
     {
-        return new self("Path [{$path}] is outside the sandbox directory [{$cwd}].");
+        return new self("Path [{$path}] is outside the sandbox root [{$root}].");
     }
 }

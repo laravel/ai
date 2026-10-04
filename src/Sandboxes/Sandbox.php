@@ -3,102 +3,78 @@
 namespace Laravel\Ai\Sandboxes;
 
 use Closure;
-use Illuminate\Contracts\Cache\Lock;
-use Illuminate\Support\Facades\Cache;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Sandbox\SandboxDriver;
-use Laravel\Ai\Sandboxes\Exceptions\SandboxBusy;
 use Laravel\Ai\Sandboxes\Exceptions\SandboxPathException;
-use Throwable;
 
 final class Sandbox
 {
-    /**
-     * The number of seconds a turn may hold its sandbox before another turn can take it.
-     */
-    public const LOCK_SECONDS = 600;
+    protected string $root;
 
-    protected ?Sandbox $resolved = null;
+    protected string $cwd;
 
-    /**
-     * @param  (Closure(): Sandbox)|null  $resolver
-     */
-    protected function __construct(
-        protected ?SandboxDriver $driver = null,
-        protected string $cwd = '/',
-        protected ?Closure $resolver = null,
-    ) {}
+    public function __construct(
+        protected string $provider,
+        protected string $id,
+        protected SandboxDriver $driver,
+        string $root,
+        ?string $cwd = null,
+    ) {
+        $this->root = $this->cwd = self::normalize($root);
 
-    /**
-     * Wrap the given driver in a sandbox rooted at the given absolute directory.
-     */
-    public static function fromDriver(SandboxDriver $driver, string $cwd): self
-    {
-        return new self($driver, self::normalize($cwd));
-    }
-
-    /**
-     * Create a sandbox that is only resolved once it is first used.
-     *
-     * @param  Closure(): Sandbox  $resolver
-     */
-    public static function defer(Closure $resolver): self
-    {
-        return new self(resolver: $resolver);
-    }
-
-    /**
-     * Get the lock a turn holds while it works in the sandbox with the given ID.
-     */
-    public static function lock(string $id): Lock
-    {
-        return Cache::lock("ai:sandbox:{$id}", self::LOCK_SECONDS);
-    }
-
-    /**
-     * Run the callback while holding the sandbox with the given ID, failing when a turn is working in it.
-     *
-     * @template TReturn
-     *
-     * @param  Closure(): TReturn  $callback
-     * @return TReturn
-     *
-     * @throws SandboxBusy
-     */
-    public static function exclusively(string $id, Closure $callback): mixed
-    {
-        $lock = self::lock($id);
-
-        if (! $lock->get()) {
-            throw SandboxBusy::for($id);
-        }
-
-        try {
-            return $callback();
-        } finally {
-            $lock->release();
+        if ($cwd !== null) {
+            $this->cwd = $this->resolvePath($cwd);
         }
     }
 
     /**
-     * Get a sandbox working in the given directory, relative to this one.
+     * Get the configured name of the provider the sandbox belongs to.
+     */
+    public function provider(): string
+    {
+        return $this->provider;
+    }
+
+    /**
+     * Get the provider's ID of the sandbox.
+     */
+    public function id(): string
+    {
+        return $this->id;
+    }
+
+    /**
+     * Get the current state of the sandbox.
+     */
+    public function state(): SandboxState
+    {
+        return $this->driver->state();
+    }
+
+    /**
+     * Get the absolute directory paths are confined to.
+     */
+    public function root(): string
+    {
+        return $this->root;
+    }
+
+    /**
+     * Get the absolute directory commands run in and relative paths resolve against.
+     */
+    public function cwd(): string
+    {
+        return $this->cwd;
+    }
+
+    /**
+     * Get a handle working in the given directory, which stays confined to the same root.
      *
      * @throws SandboxPathException
      */
     public function withCwd(string $cwd): self
     {
-        if ($this->resolver !== null) {
-            return self::defer(fn () => $this->target()->withCwd($cwd));
-        }
-
-        return new self($this->driver, $this->resolvePath($cwd));
-    }
-
-    /**
-     * Get the absolute directory the sandbox works in.
-     */
-    public function cwd(): string
-    {
-        return $this->target()->cwd;
+        return new self($this->provider, $this->id, $this->driver, $this->root, $this->resolvePath($cwd));
     }
 
     /**
@@ -106,17 +82,26 @@ final class Sandbox
      */
     public function driver(): SandboxDriver
     {
-        return $this->target()->driver;
+        return $this->driver;
     }
 
     /**
-     * Run a shell command in the sandbox's working directory.
+     * Run a shell command in the working directory.
      *
      * @param  array<string, string>  $env
+     * @param  (Closure(string, string): void)|null  $onOutput
+     *
+     * @throws InvalidArgumentException
      */
-    public function exec(string $command, ?int $timeout = null, array $env = []): ShellResult
+    public function exec(string $command, ?int $timeout = null, array $env = [], ?Closure $onOutput = null): ShellResult
     {
-        return $this->driver()->exec($command, $this->cwd(), $env, $timeout);
+        foreach (array_keys($env) as $name) {
+            if (! preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', (string) $name)) {
+                throw new InvalidArgumentException("Invalid environment variable name [{$name}].");
+            }
+        }
+
+        return $this->driver->exec($command, $this->cwd, $env, $timeout, $onOutput);
     }
 
     /**
@@ -126,7 +111,7 @@ final class Sandbox
      */
     public function read(string $path): string
     {
-        return $this->driver()->read($this->resolvePath($path));
+        return $this->driver->read($this->resolvePath($path));
     }
 
     /**
@@ -138,13 +123,11 @@ final class Sandbox
     {
         $path = $this->resolvePath($path);
 
-        try {
-            $this->driver()->write($path, $contents);
-        } catch (Throwable) {
-            $this->driver()->mkdir(dirname($path), recursive: true);
-
-            $this->driver()->write($path, $contents);
+        if ($this->driver->stat(dirname($path)) === null) {
+            $this->driver->mkdir(dirname($path), recursive: true);
         }
+
+        $this->driver->write($path, $contents);
     }
 
     /**
@@ -154,7 +137,7 @@ final class Sandbox
      */
     public function stat(string $path): ?FileStat
     {
-        return $this->driver()->stat($this->resolvePath($path));
+        return $this->driver->stat($this->resolvePath($path));
     }
 
     /**
@@ -176,7 +159,7 @@ final class Sandbox
      */
     public function readdir(string $path = '.'): array
     {
-        return $this->driver()->readdir($this->resolvePath($path));
+        return $this->driver->readdir($this->resolvePath($path));
     }
 
     /**
@@ -186,7 +169,7 @@ final class Sandbox
      */
     public function mkdir(string $path, bool $recursive = false): void
     {
-        $this->driver()->mkdir($this->resolvePath($path), $recursive);
+        $this->driver->mkdir($this->resolvePath($path), $recursive);
     }
 
     /**
@@ -196,22 +179,20 @@ final class Sandbox
      */
     public function rm(string $path, bool $recursive = false, bool $force = false): void
     {
-        $this->driver()->rm($this->resolvePath($path), $recursive, $force);
+        $this->driver->rm($this->resolvePath($path), $recursive, $force);
     }
 
     /**
-     * Resolve the given path against the working directory, rejecting paths that leave it.
+     * Resolve the given path against the working directory, rejecting paths that leave the root.
      *
      * @throws SandboxPathException
      */
     public function resolvePath(string $path): string
     {
-        $cwd = $this->cwd();
+        $resolved = self::normalize(str_starts_with($path, '/') ? $path : $this->cwd.'/'.$path);
 
-        $resolved = self::normalize(str_starts_with($path, '/') ? $path : $cwd.'/'.$path);
-
-        if ($resolved !== $cwd && ! str_starts_with($resolved, rtrim($cwd, '/').'/')) {
-            throw SandboxPathException::outside($path, $cwd);
+        if ($resolved !== $this->root && ! str_starts_with($resolved, rtrim($this->root, '/').'/')) {
+            throw SandboxPathException::outside($path, $this->root);
         }
 
         return $resolved;
@@ -233,17 +214,5 @@ final class Sandbox
         }
 
         return '/'.implode('/', $segments);
-    }
-
-    /**
-     * Get the sandbox the operations run against, resolving it on first use.
-     */
-    protected function target(): self
-    {
-        if ($this->resolver === null) {
-            return $this;
-        }
-
-        return $this->resolved ??= ($this->resolver)();
     }
 }

@@ -45,10 +45,10 @@ return [
     | Sandboxes
     |--------------------------------------------------------------------------
     |
-    | Agents marked with the Sandbox attribute work in a sandbox: a directory
-    | they may read, write, and run commands in, kept per conversation. The
-    | local driver runs commands on this machine; "isolate" confines their
-    | writes to the workspace using sandbox-exec on macOS or bwrap on Linux.
+    | A sandbox is a filesystem and shell your application creates, attaches
+    | to by ID, and deletes. The local provider runs commands on this host,
+    | where "isolate" confines writes with sandbox-exec or bwrap. The other
+    | providers run each sandbox in its own container or virtual machine.
     |
     */
 
@@ -71,10 +71,9 @@ return [
             'binary' => env('AI_SANDBOX_DOCKER_BINARY', 'docker'),
             'memory' => '512m',
             'cpus' => '1',
-            'network' => 'none',
+            'network' => false,
             'env' => [],
             'timeout' => 120,
-            'suspend_after_turn' => env('AI_SANDBOX_SUSPEND', true),
         ],
 
         'boat' => [
@@ -83,6 +82,61 @@ return [
             'type' => 'small',
             'ttl' => 900,
             'no_env' => true,
+            'env' => [],
+            'timeout' => 120,
+        ],
+
+        'e2b' => [
+            'driver' => 'e2b',
+            'key' => env('E2B_API_KEY'),
+            'template' => env('E2B_TEMPLATE', 'base'),
+            'ttl' => 900,
+            'env' => [],
+            'timeout' => 120,
+        ],
+
+        'daytona' => [
+            'driver' => 'daytona',
+            'key' => env('DAYTONA_API_KEY'),
+            'snapshot' => env('DAYTONA_SNAPSHOT'),
+            'ttl' => 900,
+            'env' => [],
+            'timeout' => 120,
+        ],
+
+        'fly' => [
+            'driver' => 'fly',
+            'key' => env('FLY_API_TOKEN'),
+            'app' => env('FLY_SANDBOX_APP'),
+            'region' => env('FLY_SANDBOX_REGION'),
+            'image' => env('FLY_SANDBOX_IMAGE', 'ubuntu:24.04'),
+            'cpus' => 1,
+            'memory' => 1024,
+            'env' => [],
+            'timeout' => 120,
+        ],
+
+        'cloudflare' => [
+            'driver' => 'cloudflare',
+            'url' => env('CLOUDFLARE_SANDBOX_URL'),
+            'key' => env('CLOUDFLARE_SANDBOX_API_KEY'),
+            'timeout' => 120,
+        ],
+
+        'boxlite' => [
+            'driver' => 'boxlite',
+            'url' => env('BOXLITE_URL', 'http://localhost:8100'),
+            'key' => env('BOXLITE_API_KEY'),
+            'image' => env('BOXLITE_IMAGE', 'alpine:latest'),
+            'ttl' => 900,
+            'env' => [],
+            'timeout' => 120,
+        ],
+
+        'upstash' => [
+            'driver' => 'upstash',
+            'key' => env('UPSTASH_BOX_API_KEY'),
+            'size' => 'small',
             'env' => [],
             'timeout' => 120,
         ],

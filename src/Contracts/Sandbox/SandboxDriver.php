@@ -2,17 +2,25 @@
 
 namespace Laravel\Ai\Contracts\Sandbox;
 
+use Closure;
 use Laravel\Ai\Sandboxes\FileStat;
+use Laravel\Ai\Sandboxes\SandboxState;
 use Laravel\Ai\Sandboxes\ShellResult;
 
 interface SandboxDriver
 {
     /**
+     * Get the current state of the sandbox.
+     */
+    public function state(): SandboxState;
+
+    /**
      * Run a shell command in the given directory.
      *
      * @param  array<string, string>  $env
+     * @param  (Closure(string, string): void)|null  $onOutput
      */
-    public function exec(string $command, string $cwd, array $env = [], ?int $timeout = null): ShellResult;
+    public function exec(string $command, string $cwd, array $env = [], ?int $timeout = null, ?Closure $onOutput = null): ShellResult;
 
     /**
      * Read the contents of the file at the given absolute path.

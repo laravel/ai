@@ -1,15 +1,11 @@
 <?php
 
-use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Process;
-use Laravel\Ai\Ai;
-use Laravel\Ai\Responses\Data\ToolCall;
-use Laravel\Ai\Sandboxes\DockerFactory;
-use Laravel\Ai\Sandboxes\Exceptions\SandboxDied;
-use Laravel\Ai\Tools\Request;
-use Laravel\Ai\Tools\Sandbox\Glob;
-use Laravel\Ai\Tools\Sandbox\Grep;
-use Tests\Fixtures\Agents\SandboxedAgent;
+use Laravel\Ai\Sandboxes\DockerProvider;
+use Laravel\Ai\Sandboxes\Exceptions\SandboxNotFound;
+use Laravel\Ai\Sandboxes\Exceptions\SandboxStateException;
+use Laravel\Ai\Sandboxes\Exceptions\UnsupportedOptionException;
+use Laravel\Ai\Sandboxes\SandboxState;
 
 beforeEach(function () {
     if (! Process::run(['docker', 'info'])->successful()) {
@@ -17,41 +13,69 @@ beforeEach(function () {
     }
 
     $this->config = [
+        'name' => 'docker',
         'driver' => 'docker',
         'image' => env('AI_SANDBOX_TEST_IMAGE', 'alpine:3.20'),
         'workdir' => '/workspace',
         'memory' => '256m',
         'cpus' => '1',
-        'network' => 'none',
+        'network' => false,
         'timeout' => 30,
     ];
 
-    $this->factory = new DockerFactory($this->config);
-    $this->id = 'test-'.uniqid();
+    $this->provider = new DockerProvider($this->config);
+    $this->sandboxes = [];
+
+    $this->create = function (array $options = []) {
+        $sandbox = $this->provider->create($options);
+
+        $this->sandboxes[] = $sandbox->id();
+
+        return $sandbox;
+    };
 });
 
 afterEach(function () {
-    if (isset($this->factory)) {
-        $this->factory->forget($this->id);
+    foreach ($this->sandboxes ?? [] as $id) {
+        $this->provider->delete($id);
     }
 });
 
 test('commands run inside the container, isolated from the host and the network', function () {
-    $sandbox = $this->factory->create($this->id);
+    $sandbox = ($this->create)(['env' => ['GREETING' => 'hi']]);
 
-    $result = $sandbox->exec('pwd; ls /sys/class/net; test -e /Users && echo host-visible; true');
+    $result = $sandbox->exec('pwd; ls /sys/class/net; echo $GREETING; test -e /Users && echo host-visible; true');
 
-    expect($result->stdout)->toBe("/workspace\nlo\n")
-        ->and($result->successful())->toBeTrue();
+    expect($result->stdout)->toBe("/workspace\nlo\nhi\n")
+        ->and($result->successful())->toBeTrue()
+        ->and($sandbox->state())->toBe(SandboxState::Running);
 });
 
-test('files written in the sandbox round trip through the container', function () {
-    $sandbox = $this->factory->create($this->id);
+test('a fresh provider attaches to the container by ID without starting or replacing it', function () {
+    $sandbox = ($this->create)();
+    $sandbox->write('kept.txt', 'still here');
 
-    $sandbox->write('src/a b/it\'s.txt', "line one\n\$HOME `x`\n");
+    Process::run(['docker', 'stop', '-t', '0', $this->provider->container($sandbox->id())]);
 
-    expect($sandbox->read('src/a b/it\'s.txt'))->toBe("line one\n\$HOME `x`\n")
-        ->and($sandbox->stat('src/a b/it\'s.txt'))->isFile->toBeTrue()
+    $attached = (new DockerProvider($this->config))->get($sandbox->id());
+
+    expect($attached->state())->toBe(SandboxState::Stopped)
+        ->and(fn () => $attached->exec('true'))->toThrow(SandboxStateException::class)
+        ->and(fn () => $this->provider->get('01jzzzzzzzzzzzzzzzzzzzzzzz'))->toThrow(SandboxNotFound::class);
+
+    $this->provider->resume($sandbox->id());
+
+    expect($attached->read('kept.txt'))->toBe('still here')
+        ->and(fn () => $this->provider->resume($sandbox->id()))->toThrow(SandboxStateException::class);
+});
+
+test('files round trip through the container, including binary contents and awkward names', function () {
+    $sandbox = ($this->create)();
+
+    $sandbox->write('src/a b/it\'s.bin', "line one\n\$HOME `x`\x00\xff");
+
+    expect($sandbox->read('src/a b/it\'s.bin'))->toBe("line one\n\$HOME `x`\x00\xff")
+        ->and($sandbox->stat('src/a b/it\'s.bin'))->isFile->toBeTrue()
         ->and($sandbox->stat('src'))->isDirectory->toBeTrue()
         ->and($sandbox->stat('missing'))->toBeNull()
         ->and($sandbox->readdir('src'))->toBe(['a b']);
@@ -61,16 +85,19 @@ test('files written in the sandbox round trip through the container', function (
     expect($sandbox->exists('src'))->toBeFalse();
 });
 
-test('the workspace survives the container stopping and is reattached by name', function () {
-    $this->factory->create($this->id)->write('kept.txt', 'still here');
+test('command output streams from the container', function () {
+    $chunks = [];
 
-    Process::run(['docker', 'stop', '-t', '0', $this->factory->name($this->id)]);
+    $result = ($this->create)()->exec('echo one; echo two >&2', onOutput: function (string $type, string $chunk) use (&$chunks) {
+        $chunks[$type] = ($chunks[$type] ?? '').$chunk;
+    });
 
-    expect($this->factory->create($this->id)->read('kept.txt'))->toBe('still here');
+    expect($chunks)->toBe(['stdout' => "one\n", 'stderr' => "two\n"])
+        ->and($result->stdout)->toBe("one\n");
 });
 
 test('a command past its timeout is stopped inside the container', function () {
-    $sandbox = $this->factory->create($this->id);
+    $sandbox = ($this->create)();
 
     $result = $sandbox->exec('echo started; sleep 30', timeout: 1);
 
@@ -79,128 +106,73 @@ test('a command past its timeout is stopped inside the container', function () {
         ->and($sandbox->exec('ps -o args | grep -c "[s]leep 30"')->stdout)->toBe("0\n");
 });
 
-test('a removed container surfaces as a dead sandbox', function () {
-    $sandbox = $this->factory->create($this->id);
+test('options the container cannot honor are refused before anything starts', function () {
+    $before = Process::run(['docker', 'ps', '-aq', '--filter', 'label='.DockerProvider::LABEL])->output();
 
-    Process::run(['docker', 'rm', '-f', $this->factory->name($this->id)]);
-
-    expect(fn () => $sandbox->exec('true'))->toThrow(SandboxDied::class);
+    expect(fn () => $this->provider->create(['ttl' => 60]))->toThrow(UnsupportedOptionException::class)
+        ->and(fn () => $this->provider->create(['network' => ['github.com:443']]))->toThrow(UnsupportedOptionException::class)
+        ->and(Process::run(['docker', 'ps', '-aq', '--filter', 'label='.DockerProvider::LABEL])->output())->toBe($before);
 });
 
-test('forgetting a sandbox removes its container and volume', function () {
-    $this->factory->create($this->id);
+test('deleting removes the container and its volume, repeats safely, and fails later calls as missing', function () {
+    $sandbox = $this->provider->create();
 
-    $this->factory->forget($this->id);
+    $this->provider->delete($sandbox->id());
+    $this->provider->delete($sandbox->id());
 
-    expect(Process::run(['docker', 'inspect', $this->factory->name($this->id)])->successful())->toBeFalse()
-        ->and(Process::run(['docker', 'volume', 'inspect', $this->factory->name($this->id)])->successful())->toBeFalse();
+    expect(Process::run(['docker', 'volume', 'inspect', $this->provider->container($sandbox->id())])->successful())->toBeFalse()
+        ->and($sandbox->state())->toBe(SandboxState::Terminated)
+        ->and(fn () => $sandbox->exec('true'))->toThrow(SandboxNotFound::class);
 });
 
-test('restoring a checkpoint brings back both the workspace and the container filesystem', function () {
-    $sandbox = $this->factory->create($this->id);
+test('restoring a checkpoint brings back the workspace and the container filesystem with the same options', function () {
+    $sandbox = ($this->create)(['env' => ['KEPT' => 'yes']]);
 
     $sandbox->write('notes.txt', 'v1');
     $sandbox->exec('touch /etc/installed-by-agent');
 
-    $checkpoint = $this->factory->checkpoint($this->id);
+    $checkpoint = $this->provider->checkpoint($sandbox->id());
 
     $sandbox->write('notes.txt', 'v2');
     $sandbox->write('later.txt', 'later');
     $sandbox->exec('rm /etc/installed-by-agent');
 
-    $this->factory->restore($this->id, $checkpoint);
+    $restored = $this->provider->restore($sandbox->id(), $checkpoint);
 
-    $restored = $this->factory->create($this->id);
-
-    expect($restored->read('notes.txt'))->toBe('v1')
+    expect($restored->id())->toBe($sandbox->id())
+        ->and($restored->read('notes.txt'))->toBe('v1')
         ->and($restored->exists('later.txt'))->toBeFalse()
-        ->and($restored->exec('test -f /etc/installed-by-agent')->successful())->toBeTrue();
-});
-
-test('forgetting a sandbox removes its checkpoints', function () {
-    $this->factory->create($this->id)->write('a.txt', 'a');
-
-    $checkpoint = $this->factory->checkpoint($this->id);
-
-    $this->factory->forget($this->id);
-
-    $image = strtolower($this->factory->name($this->id)).':'.$checkpoint;
-
-    expect(Process::run(['docker', 'image', 'inspect', $image])->successful())->toBeFalse()
-        ->and(Process::run(['docker', 'volume', 'inspect', $this->factory->name($this->id).'-'.$checkpoint])->successful())->toBeFalse();
-});
-
-test('a forgotten checkpoint removes its image and volume', function () {
-    $this->factory->create($this->id)->write('a.txt', 'a');
-
-    $checkpoint = $this->factory->checkpoint($this->id);
-
-    $this->factory->forgetCheckpoint($this->id, $checkpoint);
-
-    expect(Process::run(['docker', 'image', 'inspect', strtolower($this->factory->name($this->id)).':'.$checkpoint])->successful())->toBeFalse()
-        ->and(Process::run(['docker', 'volume', 'inspect', $this->factory->name($this->id).'-'.$checkpoint])->successful())->toBeFalse();
+        ->and($restored->exec('test -f /etc/installed-by-agent && echo $KEPT')->stdout)->toBe("yes\n");
 });
 
 test('a checkpoint without its workspace copy is refused before the workspace is touched', function () {
-    $this->factory->create($this->id)->write('notes.txt', 'v1');
+    $sandbox = ($this->create)();
+    $sandbox->write('notes.txt', 'v1');
 
-    $checkpoint = $this->factory->checkpoint($this->id);
+    $checkpoint = $this->provider->checkpoint($sandbox->id());
 
-    Process::run(['docker', 'volume', 'rm', '-f', $this->factory->name($this->id).'-'.$checkpoint]);
+    Process::run(['docker', 'volume', 'rm', '-f', $this->provider->container($sandbox->id()).'-'.$checkpoint]);
 
-    expect(fn () => $this->factory->restore($this->id, $checkpoint))->toThrow(RuntimeException::class)
-        ->and($this->factory->create($this->id)->read('notes.txt'))->toBe('v1');
+    expect(fn () => $this->provider->restore($sandbox->id(), $checkpoint))->toThrow(RuntimeException::class)
+        ->and($this->provider->get($sandbox->id())->read('notes.txt'))->toBe('v1');
 });
 
-test('checkpointing a suspended sandbox leaves it stopped', function () {
-    $this->factory->create($this->id)->write('a.txt', 'a');
-    $this->factory->suspend($this->id);
+test('checkpoints are removed one at a time or with the sandbox', function () {
+    $sandbox = $this->provider->create();
+    $sandbox->write('a.txt', 'a');
 
-    $this->factory->checkpoint($this->id);
+    $first = $this->provider->checkpoint($sandbox->id());
+    $second = $this->provider->checkpoint($sandbox->id());
 
-    expect(trim(Process::run(['docker', 'inspect', '-f', '{{.State.Running}}', $this->factory->name($this->id)])->output()))->toBe('false');
-});
+    $this->provider->forgetCheckpoint($sandbox->id(), $first);
 
-test('a suspended sandbox stops its container and resumes with its files on the next create', function () {
-    $this->factory->create($this->id)->write('kept.txt', 'kept');
+    $image = fn ($checkpoint) => Process::run(['docker', 'image', 'inspect', $this->provider->container($sandbox->id()).':'.$checkpoint])->successful();
 
-    $this->factory->suspend($this->id);
+    expect($image($first))->toBeFalse()
+        ->and($image($second))->toBeTrue();
 
-    expect(trim(Process::run(['docker', 'inspect', '-f', '{{.State.Running}}', $this->factory->name($this->id)])->output()))->toBe('false')
-        ->and($this->factory->create($this->id)->read('kept.txt'))->toBe('kept');
-});
+    $this->provider->delete($sandbox->id());
 
-test('glob and grep work against the container', function () {
-    $sandbox = $this->factory->create($this->id);
-
-    $sandbox->write('src/App.php', "<?php\nclass App {}\n");
-    $sandbox->write('node_modules/x/index.php', 'class App {}');
-
-    expect((new Glob($sandbox))->handle(new Request(['pattern' => '**/*.php'])))->toBe('src/App.php')
-        ->and((new Grep($sandbox))->handle(new Request(['pattern' => 'class App', 'path' => 'src'])))->toBe('src/App.php:2:class App {}');
-});
-
-test('a remembered agent keeps its container workspace across turns', function () {
-    Config::set('ai.conversations.generate_title', false);
-    Config::set('ai.default_sandbox', 'docker');
-    Config::set('ai.sandboxes.docker', $this->config);
-
-    $user = (object) ['id' => 1];
-
-    SandboxedAgent::fake([
-        new ToolCall('call_1', 'Bash', ['command' => 'echo built > out.txt']),
-        'Built.',
-        new ToolCall('call_2', 'Read', ['path' => 'out.txt']),
-        'It says built.',
-    ]);
-
-    $first = (new SandboxedAgent)->forUser($user)->prompt('Build');
-
-    $this->id = $first->conversationId;
-
-    $second = (new SandboxedAgent)->continue($first->conversationId, $user)->prompt('Read the output');
-
-    expect($second->toolResults[0]->result)->toBe("built\n")
-        ->and(Ai::sandbox('docker'))->toBeInstanceOf(DockerFactory::class)
-        ->and(trim(Process::run(['docker', 'inspect', '-f', '{{.State.Running}}', $this->factory->name($this->id)])->output()))->toBe('false');
+    expect($image($second))->toBeFalse()
+        ->and(Process::run(['docker', 'volume', 'inspect', $this->provider->container($sandbox->id()).'-'.$second])->successful())->toBeFalse();
 });

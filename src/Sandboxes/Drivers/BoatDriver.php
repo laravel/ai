@@ -2,24 +2,32 @@
 
 namespace Laravel\Ai\Sandboxes\Drivers;
 
+use Closure;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Sandbox\SandboxDriver;
-use Laravel\Ai\Sandboxes\Exceptions\SandboxDied;
-use Laravel\Ai\Sandboxes\FileStat;
+use Laravel\Ai\Sandboxes\Concerns\ManagesFilesWithCommands;
+use Laravel\Ai\Sandboxes\Concerns\WrapsCommands;
+use Laravel\Ai\Sandboxes\Exceptions\SandboxException;
+use Laravel\Ai\Sandboxes\Exceptions\SandboxNotFound;
+use Laravel\Ai\Sandboxes\Exceptions\SandboxStateException;
+use Laravel\Ai\Sandboxes\SandboxState;
 use Laravel\Ai\Sandboxes\ShellResult;
-use RuntimeException;
+use Throwable;
 
 class BoatDriver implements SandboxDriver
 {
+    use ManagesFilesWithCommands, WrapsCommands;
+
     /**
      * The longest command Boat runs synchronously, in seconds.
      */
     protected const MAX_TIMEOUT = 600;
 
     public function __construct(
-        protected string $sandbox,
+        protected string $provider,
+        protected string $id,
         protected array $config = [],
     ) {}
 
@@ -35,38 +43,59 @@ class BoatDriver implements SandboxDriver
     }
 
     /**
+     * Map a Boat sandbox state onto the SDK's states.
+     */
+    public static function mapState(?string $state): SandboxState
+    {
+        return match ($state) {
+            'init', 'provisioning', 'provisioned', 'cloning' => SandboxState::Creating,
+            'ready', 'idle', 'running' => SandboxState::Running,
+            'archiving', 'archived' => SandboxState::Stopped,
+            'cancelled', null => SandboxState::Terminated,
+            default => SandboxState::Error,
+        };
+    }
+
+    /**
      * {@inheritdoc}
      */
-    public function exec(string $command, string $cwd, array $env = [], ?int $timeout = null): ShellResult
+    public function state(): SandboxState
+    {
+        $response = static::client($this->config)->get("sandboxes/{$this->id}");
+
+        if ($response->notFound()) {
+            return SandboxState::Terminated;
+        }
+
+        return static::mapState($this->ensureSuccessful($response)->json('sandbox.state'));
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function exec(string $command, string $cwd, array $env = [], ?int $timeout = null, ?Closure $onOutput = null): ShellResult
     {
         $timeout = min($timeout ?? $this->config['timeout'] ?? 120, static::MAX_TIMEOUT);
 
-        $exports = collect([...$this->config['env'] ?? [], ...$env])
-            ->map(fn ($value, $key) => 'export '.$key.'='.escapeshellarg((string) $value).'; ')
-            ->implode('');
-
         // Boat only takes a working directory relative to its own, so the command changes into the absolute one itself...
-        $response = static::client($this->config)
-            ->timeout($timeout + 30)
-            ->post("sandboxes/{$this->sandbox}/commands", [
-                'command' => $exports.'cd -- '.escapeshellarg($cwd).' && '.$command,
-                'timeoutSeconds' => $timeout,
-            ]);
+        $payload = [
+            'command' => $this->script($command, $cwd, $env),
+            'timeoutSeconds' => $timeout,
+        ];
 
-        if ($response->notFound()) {
-            throw SandboxDied::for($this->sandbox, (string) $response->json('message', ''));
+        $request = static::client($this->config)->timeout($timeout + 30);
+
+        if ($onOutput === null) {
+            $result = $this->ensureSuccessful($request->post("sandboxes/{$this->id}/commands", $payload))->json();
+
+            return new ShellResult($result['stdout'] ?? '', $result['stderr'] ?? '', $result['exitCode'] ?? 1, (bool) ($result['timedOut'] ?? false));
         }
 
-        $this->ensureAlive($response);
-
-        $result = $response->throw()->json();
-
-        return new ShellResult(
-            $result['stdout'] ?? '',
-            $result['stderr'] ?? '',
-            $result['exitCode'] ?? 1,
-            timedOut: (bool) ($result['timedOut'] ?? false),
+        $response = $this->ensureSuccessful(
+            $request->withOptions(['stream' => true])->post("sandboxes/{$this->id}/commands", [...$payload, 'stream' => true]),
         );
+
+        return $this->stream($response, $onOutput);
     }
 
     /**
@@ -74,14 +103,12 @@ class BoatDriver implements SandboxDriver
      */
     public function read(string $path): string
     {
-        $response = static::client($this->config)->get("sandboxes/{$this->sandbox}/files", [
+        $response = static::client($this->config)->get("sandboxes/{$this->id}/files", [
             'path' => $path,
             'encoding' => 'base64',
         ]);
 
-        $this->ensureAlive($response);
-
-        return base64_decode($response->throw()->json('content', ''));
+        return base64_decode($this->ensureSuccessful($response)->json('content', ''));
     }
 
     /**
@@ -89,94 +116,93 @@ class BoatDriver implements SandboxDriver
      */
     public function write(string $path, string $contents): void
     {
-        $response = static::client($this->config)->put("sandboxes/{$this->sandbox}/files", [
+        $this->ensureSuccessful(static::client($this->config)->put("sandboxes/{$this->id}/files", [
             'path' => $path,
             'content' => base64_encode($contents),
             'encoding' => 'base64',
-        ]);
-
-        $this->ensureAlive($response);
-
-        $response->throw();
+        ]));
     }
 
     /**
-     * {@inheritdoc}
+     * Read Boat's newline-delimited command frames as they arrive.
+     *
+     * @param  Closure(string, string): void  $onOutput
+     *
+     * @throws SandboxException
      */
-    public function stat(string $path): ?FileStat
+    protected function stream(Response $response, Closure $onOutput): ShellResult
     {
-        $result = $this->run(['stat', '-c', '%F|%s|%Y', '--', $path]);
+        $body = $response->toPsrResponse()->getBody();
 
-        if (! $result->successful()) {
-            return null;
+        $buffer = '';
+        $output = ['stdout' => '', 'stderr' => ''];
+        $exit = null;
+
+        $handle = function (string $line) use ($onOutput, &$output, &$exit): void {
+            $frame = json_decode($line, true) ?? [];
+            $type = $frame['type'] ?? null;
+
+            if ($type === 'stdout' || $type === 'stderr') {
+                $output[$type] .= $frame['data'];
+
+                $onOutput($type, $frame['data']);
+            } elseif ($type === 'exit') {
+                $exit = $frame;
+            } elseif ($type === 'error') {
+                throw new SandboxException($frame['message'] ?? $frame['error'] ?? 'Boat command failed.', $this->provider, $this->id);
+            }
+        };
+
+        try {
+            while (! $body->eof()) {
+                $buffer .= $body->read(8192);
+
+                while (($position = strpos($buffer, "\n")) !== false) {
+                    $handle(substr($buffer, 0, $position));
+
+                    $buffer = substr($buffer, $position + 1);
+                }
+            }
+
+            if (trim($buffer) !== '') {
+                $handle($buffer);
+            }
+        } catch (Throwable $exception) {
+            // Closing the stream stops reading; Boat's own timeout bounds a command that keeps running remotely...
+            $body->close();
+
+            throw $exception;
         }
 
-        [$type, $size, $mtime] = explode('|', trim($result->stdout));
-
-        return new FileStat(str_contains($type, 'regular'), $type === 'directory', (int) $size, (int) $mtime);
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function readdir(string $path): array
-    {
-        return array_values(array_filter(explode("\n", $this->succeed(['ls', '-1A', '--', $path])->stdout)));
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function mkdir(string $path, bool $recursive = false): void
-    {
-        $this->succeed(['mkdir', ...($recursive ? ['-p'] : []), '--', $path]);
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function rm(string $path, bool $recursive = false, bool $force = false): void
-    {
-        $this->succeed(['rm', ...($recursive ? ['-r'] : []), ...($force ? ['-f'] : []), '--', $path]);
-    }
-
-    /**
-     * Run the given arguments as one escaped command in the sandbox.
-     *
-     * @param  array<int, string>  $arguments
-     */
-    protected function run(array $arguments): ShellResult
-    {
-        return $this->exec(implode(' ', array_map(escapeshellarg(...), $arguments)), '/', timeout: 60);
-    }
-
-    /**
-     * Run the given arguments in the sandbox, failing when they do not succeed.
-     *
-     * @param  array<int, string>  $arguments
-     *
-     * @throws RuntimeException
-     */
-    protected function succeed(array $arguments): ShellResult
-    {
-        $result = $this->run($arguments);
-
-        if (! $result->successful()) {
-            throw new RuntimeException(trim($result->stderr) ?: "Boat command failed with exit code {$result->exitCode}.");
+        if ($exit === null) {
+            throw new SandboxException('Boat closed the command stream without an exit frame.', $this->provider, $this->id);
         }
 
-        return $result;
+        return new ShellResult($output['stdout'], $output['stderr'], $exit['exitCode'] ?? 1, (bool) ($exit['timedOut'] ?? false));
     }
 
     /**
-     * Fail when Boat reports that the sandbox is no longer running.
+     * Fail with the SDK's exceptions when Boat reports a missing or stopped sandbox, or any other error.
      *
-     * @throws SandboxDied
+     * @throws SandboxException
      */
-    protected function ensureAlive(Response $response): void
+    protected function ensureSuccessful(Response $response): Response
     {
-        if ($response->json('code') === 'sandbox_not_ready') {
-            throw SandboxDied::for($this->sandbox, (string) $response->json('message', ''));
+        if ($response->successful()) {
+            return $response;
         }
+
+        $message = (string) $response->json('message', $response->body());
+
+        throw match (true) {
+            $response->json('code') === 'sandbox_not_ready' => SandboxStateException::for(
+                $this->provider, $this->id, static::mapState($response->json('state', $response->json('error.details.state'))), SandboxState::Running,
+            ),
+            $response->json('code') === 'boat_starting' => SandboxStateException::for(
+                $this->provider, $this->id, SandboxState::Creating, SandboxState::Running,
+            ),
+            $response->notFound() && $response->json('code') !== 'file_not_found' => SandboxNotFound::for($this->provider, $this->id, $message),
+            default => new SandboxException("Boat request failed with status {$response->status()}: {$message}", $this->provider, $this->id),
+        };
     }
 }

@@ -49,8 +49,6 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
     protected array $catchCallbacks = [];
 
-    protected array $finallyCallbacks = [];
-
     protected ?StreamProtocol $protocol = null;
 
     protected ?StreamedAgentResponse $streamedResponse = null;
@@ -89,16 +87,6 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
     public function catch(callable $callback): self
     {
         $this->catchCallbacks[] = $callback;
-
-        return $this;
-    }
-
-    /**
-     * Provide a callback that should be invoked once the stream stops, however it stops.
-     */
-    public function finally(callable $callback): self
-    {
-        $this->finallyCallbacks[] = $callback;
 
         return $this;
     }
@@ -221,76 +209,65 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
             return;
         }
 
-        // Runs however iteration ends, including when the consumer abandons the stream partway...
+        $events = [];
+
+        // Resolve the stream of the prompt and yield the events...
         try {
-            $events = [];
+            foreach (call_user_func($this->generator) as $event) {
+                $events[] = $event;
 
-            // Resolve the stream of the prompt and yield the events...
-            try {
-                foreach (call_user_func($this->generator) as $event) {
-                    $events[] = $event;
+                $this->hasYielded = true;
 
-                    $this->hasYielded = true;
-
-                    yield $event;
-                }
-            } catch (Throwable $exception) {
-                // Taken before invoking so a re-iterated stream does not report the same failure twice...
-                $callbacks = $this->catchCallbacks;
-
-                $this->catchCallbacks = [];
-
-                foreach ($callbacks as $callback) {
-                    $callback($exception);
-                }
-
-                throw $exception;
+                yield $event;
             }
+        } catch (Throwable $exception) {
+            // Taken before invoking so a re-iterated stream does not report the same failure twice...
+            $callbacks = $this->catchCallbacks;
 
-            $this->events = new Collection($events);
-            $this->text = TextDelta::combine($events);
-            $this->reasoning = ReasoningDelta::combine($events);
-            $this->citations = Citation::combine($events);
-            $this->usage = StreamEnd::combineUsage($events);
-
-            $start = $this->events->last(fn (StreamEvent $event): bool => $event instanceof StreamStart);
-
-            if ($start instanceof StreamStart && $this->meta instanceof Meta) {
-                $this->meta->model = $start->model;
-            }
-
-            $this->streamedResponse = new StreamedAgentResponse(
-                $this->invocationId,
-                $this->events,
-                $this->meta,
-            );
-
-            if ($this->conversationId !== null) {
-                $this->streamedResponse->withinConversation(
-                    $this->conversationId,
-                    $this->conversationUser
-                );
-            }
-
-            $this->streamedResponse->withStoredMessages(
-                $this->userMessageId,
-                $this->assistantMessageId,
-            );
-
-            foreach ($this->thenCallbacks as $callback) {
-                call_user_func($callback, $this->streamedResponse);
-            }
-
-            $this->syncConversationFromStreamedResponse();
-        } finally {
-            $callbacks = $this->finallyCallbacks;
-
-            $this->finallyCallbacks = [];
+            $this->catchCallbacks = [];
 
             foreach ($callbacks as $callback) {
-                $callback();
+                $callback($exception);
             }
+
+            throw $exception;
         }
+
+        $this->events = new Collection($events);
+        $this->text = TextDelta::combine($events);
+        $this->reasoning = ReasoningDelta::combine($events);
+        $this->citations = Citation::combine($events);
+        $this->usage = StreamEnd::combineUsage($events);
+
+        $start = $this->events->last(fn (StreamEvent $event): bool => $event instanceof StreamStart);
+
+        if ($start instanceof StreamStart && $this->meta instanceof Meta) {
+            $this->meta->model = $start->model;
+        }
+
+        $this->streamedResponse = new StreamedAgentResponse(
+            $this->invocationId,
+            $this->events,
+            $this->meta,
+        );
+
+        if ($this->conversationId !== null) {
+            $this->streamedResponse->withinConversation(
+                $this->conversationId,
+                $this->conversationUser
+            );
+        }
+
+        $this->streamedResponse->withStoredMessages(
+            $this->userMessageId,
+            $this->assistantMessageId,
+        );
+
+        foreach ($this->thenCallbacks as $callback) {
+            call_user_func($callback, $this->streamedResponse);
+        }
+
+        $this->syncConversationFromStreamedResponse();
     }
 
     /**

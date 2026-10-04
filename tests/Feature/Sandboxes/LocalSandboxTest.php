@@ -2,63 +2,143 @@
 
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
-use Laravel\Ai\Ai;
+use Laravel\Ai\Sandboxes\Exceptions\SandboxException;
+use Laravel\Ai\Sandboxes\Exceptions\SandboxNotFound;
 use Laravel\Ai\Sandboxes\Exceptions\SandboxPathException;
-use Laravel\Ai\Sandboxes\LocalFactory;
-use Laravel\Ai\Sandboxes\Sandbox;
-use Laravel\Ai\Tools\Request;
-use Laravel\Ai\Tools\Sandbox\Bash;
-use Laravel\Ai\Tools\Sandbox\Edit;
-use Laravel\Ai\Tools\Sandbox\Glob;
-use Laravel\Ai\Tools\Sandbox\Grep;
-use Laravel\Ai\Tools\Sandbox\Read;
+use Laravel\Ai\Sandboxes\Exceptions\UnsupportedOptionException;
+use Laravel\Ai\Sandboxes\LocalProvider;
+use Laravel\Ai\Sandboxes\SandboxState;
 use Symfony\Component\Process\ExecutableFinder;
 
 beforeEach(function () {
     $this->root = sys_get_temp_dir().'/ai-sandboxes-'.uniqid();
-    $this->sandbox = (new LocalFactory(['root' => $this->root, 'timeout' => 5, 'isolate' => false]))->create('conversation-1');
+    $this->provider = new LocalProvider(['name' => 'local', 'driver' => 'local', 'root' => $this->root, 'timeout' => 5, 'isolate' => false]);
+    $this->sandbox = $this->provider->create();
+    $this->workspace = "{$this->root}/{$this->sandbox->id()}";
 });
 
 afterEach(fn () => File::deleteDirectory($this->root));
 
-test('paths resolve inside the workspace and never outside it', function () {
-    $cwd = "{$this->root}/conversation-1";
+test('each create makes a new workspace that a later request can attach to by ID', function () {
+    $this->sandbox->write('notes.txt', 'kept');
 
-    expect($this->sandbox->resolvePath('src/./a/../b.php'))->toBe("{$cwd}/src/b.php")
-        ->and($this->sandbox->resolvePath("{$cwd}//src/b.php"))->toBe("{$cwd}/src/b.php")
-        ->and(fn () => $this->sandbox->resolvePath('../conversation-2/secret'))->toThrow(SandboxPathException::class)
-        ->and(fn () => $this->sandbox->resolvePath('/etc/passwd'))->toThrow(SandboxPathException::class)
-        ->and(fn () => $this->sandbox->withCwd('repo')->resolvePath('../outside'))->toThrow(SandboxPathException::class);
+    $other = $this->provider->create();
+    $attached = (new LocalProvider(['name' => 'local', 'driver' => 'local', 'root' => $this->root, 'isolate' => false]))->get($this->sandbox->id());
+
+    expect($other->id())->not->toBe($this->sandbox->id())
+        ->and($other->exists('notes.txt'))->toBeFalse()
+        ->and($attached->read('notes.txt'))->toBe('kept')
+        ->and($attached->state())->toBe(SandboxState::Running)
+        ->and($attached->provider())->toBe('local');
+});
+
+test('attaching never creates a workspace', function () {
+    expect(fn () => $this->provider->get('01JZZZZZZZZZZZZZZZZZZZZZZZ'))->toThrow(SandboxNotFound::class)
+        ->and(fn () => $this->provider->get('../etc'))->toThrow(SandboxNotFound::class)
+        ->and(fn () => $this->provider->get("{$this->root}/missing"))->toThrow(SandboxNotFound::class)
+        ->and(File::exists("{$this->root}/missing"))->toBeFalse();
+});
+
+test('an existing directory can be attached by path and is never deleted or checkpointed', function () {
+    File::ensureDirectoryExists($app = "{$this->root}/app");
+    File::put("{$app}/composer.json", '{}');
+
+    $sandbox = $this->provider->get($app);
+
+    expect($sandbox->id())->toBe(realpath($app))
+        ->and($sandbox->read('composer.json'))->toBe('{}')
+        ->and(fn () => $this->provider->delete($app))->toThrow(SandboxException::class)
+        ->and(fn () => $this->provider->checkpoint($app))->toThrow(SandboxException::class)
+        ->and(File::exists("{$app}/composer.json"))->toBeTrue();
+});
+
+test('deleting removes the workspace, repeats safely, and leaves later calls failing as missing', function () {
+    $this->provider->delete($this->sandbox->id());
+    $this->provider->delete($this->sandbox->id());
+
+    expect(File::exists($this->workspace))->toBeFalse()
+        ->and($this->sandbox->state())->toBe(SandboxState::Terminated)
+        ->and(fn () => $this->sandbox->exec('true'))->toThrow(SandboxNotFound::class)
+        ->and(fn () => $this->sandbox->read('a.txt'))->toThrow(SandboxNotFound::class)
+        ->and(fn () => $this->provider->get($this->sandbox->id()))->toThrow(SandboxNotFound::class);
+});
+
+test('create options are validated before anything is made and kept for later attachments', function () {
+    expect(fn () => $this->provider->create(['image' => 'node:22']))->toThrow(UnsupportedOptionException::class, '[image]')
+        ->and(fn () => $this->provider->create(['network' => ['github.com:443']]))->toThrow(UnsupportedOptionException::class, 'allowlists')
+        ->and(fn () => $this->provider->create(['env' => ['BAD-NAME' => 'x']]))->toThrow(InvalidArgumentException::class)
+        ->and(File::directories($this->root))->toHaveCount(1);
+
+    $sandbox = $this->provider->create(['env' => ['GREETING' => 'hello']]);
+
+    expect($this->provider->get($sandbox->id())->exec('echo $GREETING')->stdout)->toBe("hello\n")
+        ->and($sandbox->readdir())->toBe([]);
+});
+
+test('paths resolve against the working directory and never leave the root', function () {
+    $repo = $this->sandbox->withCwd('repo');
+
+    expect($this->sandbox->resolvePath('src/./a/../b.php'))->toBe("{$this->workspace}/src/b.php")
+        ->and($repo->cwd())->toBe("{$this->workspace}/repo")
+        ->and($repo->root())->toBe($this->workspace)
+        ->and($repo->resolvePath('../shared.txt'))->toBe("{$this->workspace}/shared.txt")
+        ->and(fn () => $repo->resolvePath('../../outside'))->toThrow(SandboxPathException::class)
+        ->and(fn () => $this->sandbox->resolvePath('/etc/passwd'))->toThrow(SandboxPathException::class);
 });
 
 test('symlinks cannot reach files outside the workspace', function () {
     File::ensureDirectoryExists($outside = "{$this->root}/outside");
     File::put("{$outside}/secret.txt", 'secret');
-    symlink($outside, "{$this->root}/conversation-1/link");
+    symlink($outside, "{$this->workspace}/link");
 
-    expect((new Read($this->sandbox))->handle(new Request(['path' => 'link/secret.txt'])))
-        ->toStartWith('Path [')
+    expect(fn () => $this->sandbox->read('link/secret.txt'))->toThrow(SandboxPathException::class)
         ->and(fn () => $this->sandbox->write('link/planted.txt', 'x'))->toThrow(SandboxPathException::class)
         ->and(File::exists("{$outside}/planted.txt"))->toBeFalse();
 });
 
-test('writing creates missing parent directories', function () {
-    $this->sandbox->write('a/b/c.txt', 'deep');
+test('writing creates missing parent directories and keeps binary contents', function () {
+    $this->sandbox->write('a/b/c.bin', "\x00\xff");
 
-    expect(File::get("{$this->root}/conversation-1/a/b/c.txt"))->toBe('deep');
+    expect(File::get("{$this->workspace}/a/b/c.bin"))->toBe("\x00\xff");
 });
 
-test('commands run in the workspace without the application environment', function () {
+test('commands run in the working directory without the application environment', function () {
     putenv('AI_SANDBOX_SECRET=leaked');
     $_ENV['AI_SANDBOX_SECRET'] = 'leaked';
 
-    $result = $this->sandbox->exec('pwd; echo "[$AI_SANDBOX_SECRET]"; echo "[$EXTRA]"', env: ['EXTRA' => 'given']);
+    $this->sandbox->mkdir('repo');
+
+    $result = $this->sandbox->withCwd('repo')->exec('pwd; echo "[$AI_SANDBOX_SECRET]"; echo "[$EXTRA]"', env: ['EXTRA' => 'given']);
 
     putenv('AI_SANDBOX_SECRET');
     unset($_ENV['AI_SANDBOX_SECRET']);
 
-    expect($result->stdout)->toBe(realpath("{$this->root}/conversation-1")."\n[]\n[given]\n")
-        ->and($result->successful())->toBeTrue();
+    expect($result->stdout)->toBe(realpath("{$this->workspace}/repo")."\n[]\n[given]\n")
+        ->and($result->successful())->toBeTrue()
+        ->and(fn () => $this->sandbox->exec('true', env: ['NOT-VALID' => 'x']))->toThrow(InvalidArgumentException::class);
+});
+
+test('command output streams as it is written and still comes back whole', function () {
+    $chunks = [];
+
+    $result = $this->sandbox->exec('echo one; echo two >&2; sleep 0.2; echo three', onOutput: function (string $type, string $chunk) use (&$chunks) {
+        $chunks[] = [$type, $chunk];
+    });
+
+    expect($result->stdout)->toBe("one\nthree\n")
+        ->and($result->stderr)->toBe("two\n")
+        ->and(collect($chunks)->where(0, 'stdout')->pluck(1)->implode(''))->toBe("one\nthree\n")
+        ->and(collect($chunks)->where(0, 'stderr')->pluck(1)->implode(''))->toBe("two\n");
+});
+
+test('an output callback that throws stops the command', function () {
+    $started = microtime(true);
+
+    expect(fn () => $this->sandbox->exec('echo go; sleep 5; echo late > late.txt', onOutput: fn () => throw new RuntimeException('stop')))
+        ->toThrow(RuntimeException::class, 'stop');
+
+    expect(microtime(true) - $started)->toBeLessThan(4)
+        ->and(File::exists("{$this->workspace}/late.txt"))->toBeFalse();
 });
 
 test('a command that runs past its timeout is stopped and reported', function () {
@@ -72,7 +152,7 @@ test('a command that runs past its timeout is stopped and reported', function ()
 test('an isolated sandbox only writes inside its workspace', function () {
     isolationAvailable();
 
-    $sandbox = (new LocalFactory(['root' => $this->root, 'isolate' => true]))->create('conversation-1');
+    $sandbox = (new LocalProvider(['root' => $this->root, 'driver' => 'local', 'isolate' => true]))->get($this->sandbox->id());
 
     $result = $sandbox->exec('echo inside > in.txt; echo outside > ../out.txt; echo done > /dev/null; cat in.txt');
 
@@ -83,183 +163,65 @@ test('an isolated sandbox only writes inside its workspace', function () {
 test('an isolated sandbox can be cut off from the network', function () {
     isolationAvailable();
 
-    $offline = (new LocalFactory(['root' => $this->root, 'isolate' => true, 'network' => false]))->create('conversation-1');
+    $offline = (new LocalProvider(['root' => $this->root, 'driver' => 'local', 'isolate' => true]))->create(['network' => false]);
 
     $result = $offline->exec('php -r \'echo @fsockopen("1.1.1.1", 80, $code, $error, 2) ? "online" : "offline";\'');
 
     expect($result->stdout)->toBe('offline');
 });
 
-test('the local driver isolates by default and refuses to run when the isolation tool is missing', function () {
+test('the local provider isolates by default and refuses to run when the isolation tool is missing', function () {
     $path = getenv('PATH');
     putenv('PATH=/nonexistent');
 
     try {
-        $sandbox = (new LocalFactory(['root' => $this->root]))->create('conversation-1');
+        $sandbox = (new LocalProvider(['root' => $this->root, 'driver' => 'local']))->get($this->sandbox->id());
 
-        expect(fn () => $sandbox->exec('echo hi > ran.txt'))->toThrow(RuntimeException::class, 'Isolated local sandboxes')
-            ->and(File::exists("{$this->root}/conversation-1/ran.txt"))->toBeFalse();
+        expect(fn () => $sandbox->exec('echo hi > ran.txt'))->toThrow(SandboxException::class, 'Isolated local sandboxes')
+            ->and(File::exists("{$this->workspace}/ran.txt"))->toBeFalse();
     } finally {
         putenv("PATH={$path}");
     }
 });
 
 test('an isolation tool that cannot start fails loudly instead of reporting a failed command', function () {
-    if ((new ExecutableFinder)->find(PHP_OS_FAMILY === 'Darwin' ? 'sandbox-exec' : 'bwrap') === null) {
-        $this->markTestSkipped('OS-level isolation is not available.');
-    }
+    isolationAvailable();
 
     Process::fake(['*' => Process::result(errorOutput: 'bwrap: setting up uid map: Permission denied', exitCode: 1)]);
 
-    $sandbox = (new LocalFactory(['root' => $this->root]))->create('conversation-1');
+    $sandbox = (new LocalProvider(['root' => $this->root, 'driver' => 'local']))->get($this->sandbox->id());
 
-    expect(fn () => $sandbox->exec('echo hi'))->toThrow(RuntimeException::class, 'could not start: bwrap: setting up uid map');
+    expect(fn () => $sandbox->exec('echo hi'))->toThrow(SandboxException::class, 'could not start: bwrap: setting up uid map');
 });
 
 test('restoring a local checkpoint brings back the workspace without following symlinks', function () {
-    $factory = new LocalFactory(['root' => $this->root, 'isolate' => false]);
-
     $this->sandbox->write('notes.txt', 'v1');
-    symlink('/etc', "{$this->root}/conversation-1/etc-link");
+    symlink('/etc', "{$this->workspace}/etc-link");
 
-    $checkpoint = $factory->checkpoint('conversation-1');
+    $checkpoint = $this->provider->checkpoint($this->sandbox->id());
 
     $this->sandbox->write('notes.txt', 'v2');
     $this->sandbox->write('later.txt', 'later');
 
-    $factory->restore('conversation-1', $checkpoint);
+    $restored = $this->provider->restore($this->sandbox->id(), $checkpoint);
 
-    expect($this->sandbox->read('notes.txt'))->toBe('v1')
-        ->and($this->sandbox->exists('later.txt'))->toBeFalse()
-        ->and(is_link("{$this->root}/conversation-1/etc-link"))->toBeTrue()
-        ->and(File::exists("{$this->root}/.checkpoints/conversation-1/{$checkpoint}/etc-link/hosts"))->toBeTrue()
-        ->and(is_link("{$this->root}/.checkpoints/conversation-1/{$checkpoint}/etc-link"))->toBeTrue()
-        ->and(fn () => $factory->restore('conversation-1', 'missing'))->toThrow(RuntimeException::class);
+    $saved = "{$this->root}/.checkpoints/{$this->sandbox->id()}/{$checkpoint}";
 
-    $factory->forgetCheckpoint('conversation-1', $checkpoint);
+    expect($restored->id())->toBe($this->sandbox->id())
+        ->and($restored->read('notes.txt'))->toBe('v1')
+        ->and($restored->exists('later.txt'))->toBeFalse()
+        ->and(is_link("{$this->workspace}/etc-link"))->toBeTrue()
+        ->and(is_link("{$saved}/etc-link"))->toBeTrue()
+        ->and(fn () => $this->provider->restore($this->sandbox->id(), 'missing'))->toThrow(SandboxException::class);
 
-    expect(File::exists("{$this->root}/.checkpoints/conversation-1/{$checkpoint}"))->toBeFalse()
-        ->and($this->sandbox->read('notes.txt'))->toBe('v1');
+    $this->provider->forgetCheckpoint($this->sandbox->id(), $checkpoint);
 
-    $factory->checkpoint('conversation-1');
-    $factory->forget('conversation-1');
+    expect(File::exists($saved))->toBeFalse();
 
-    expect(File::exists("{$this->root}/.checkpoints/conversation-1"))->toBeFalse();
-});
+    $this->provider->checkpoint($this->sandbox->id());
+    $this->provider->delete($this->sandbox->id());
 
-test('a factory forgets a sandbox by removing its workspace', function () {
-    $this->sandbox->write('a.txt', 'a');
-
-    (new LocalFactory(['root' => $this->root]))->forget('conversation-1');
-
-    expect(File::exists("{$this->root}/conversation-1"))->toBeFalse();
-});
-
-test('read returns a line window and says how to continue', function () {
-    $this->sandbox->write('lines.txt', "one\ntwo\nthree\nfour");
-
-    expect((new Read($this->sandbox))->handle(new Request(['path' => 'lines.txt', 'offset' => 2, 'limit' => 2])))
-        ->toBe("two\nthree\n[lines 2-3 of 4; pass offset to read more]")
-        ->and((new Read($this->sandbox))->handle(new Request(['path' => 'missing.txt'])))
-        ->toBe('File [missing.txt] does not exist.')
-        ->and((new Read($this->sandbox))->handle(new Request(['path' => '../escape.txt'])))
-        ->toStartWith('Path [../escape.txt] is outside the sandbox directory');
-});
-
-test('read returns the start of a line longer than the output limit', function () {
-    $this->sandbox->write('min.js', str_repeat('x', 60 * 1024)."\nnext");
-
-    $output = (new Read($this->sandbox))->handle(new Request(['path' => 'min.js']));
-
-    expect($output)->toStartWith(str_repeat('x', 100))
-        ->toContain('[line truncated]')
-        ->toContain('[lines 1-1 of 2;');
-});
-
-test('bash keeps output that is only a zero', function () {
-    expect((new Bash($this->sandbox))->handle(new Request(['command' => 'echo 0'])))->toBe("0\n[exit code 0]");
-});
-
-test('glob reports a directory that does not exist', function () {
-    expect((new Glob($this->sandbox))->handle(new Request(['pattern' => '*', 'path' => 'missing'])))->toBe('Directory [missing] does not exist.');
-});
-
-test('read refuses binary files', function () {
-    $this->sandbox->write('image.png', "\x89PNG\0\0");
-
-    expect((new Read($this->sandbox))->handle(new Request(['path' => 'image.png'])))
-        ->toBe('File [image.png] is binary and cannot be read as text.');
-});
-
-test('edit replaces one exact match and refuses missing or ambiguous text', function () {
-    $this->sandbox->write('app.php', "a = 1\nb = 1\n");
-
-    $edit = new Edit($this->sandbox);
-
-    expect($edit->handle(new Request(['path' => 'app.php', 'old' => '= 1', 'new' => '= 2'])))
-        ->toBe('The text to replace appears 2 times in [app.php]. Include more surrounding text or set replace_all.')
-        ->and($edit->handle(new Request(['path' => 'app.php', 'old' => 'c = 1', 'new' => 'c = 2'])))
-        ->toBe('The text to replace was not found in [app.php].')
-        ->and($edit->handle(new Request(['path' => 'nope.php', 'old' => 'a', 'new' => 'b'])))
-        ->toBe('File [nope.php] does not exist.')
-        ->and($edit->handle(new Request(['path' => 'app.php', 'old' => 'a = 1', 'new' => 'a = 2'])))
-        ->toBe('Replaced 1 occurrence(s) in [app.php].')
-        ->and($edit->handle(new Request(['path' => 'app.php', 'old' => '= ', 'new' => ':= ', 'replace_all' => true])))
-        ->toBe('Replaced 2 occurrence(s) in [app.php].')
-        ->and($this->sandbox->read('app.php'))->toBe("a := 2\nb := 1\n");
-});
-
-test('glob matches workspace-relative paths and skips dependency directories', function () {
-    $this->sandbox->write('src/App.php', '');
-    $this->sandbox->write('src/Http/Kernel.php', '');
-    $this->sandbox->write('src/readme.md', '');
-    $this->sandbox->write('vendor/lib/Lib.php', '');
-
-    $glob = new Glob($this->sandbox);
-
-    expect($glob->handle(new Request(['pattern' => '**/*.php'])))->toBe("src/App.php\nsrc/Http/Kernel.php")
-        ->and($glob->handle(new Request(['pattern' => '*.php', 'path' => 'src'])))->toBe('src/App.php')
-        ->and($glob->handle(new Request(['pattern' => '*.rb'])))->toBe('No files found.');
-});
-
-test('grep returns matching lines relative to the workspace', function () {
-    $this->sandbox->write('src/App.php', "<?php\n\nclass App {}\n");
-    $this->sandbox->write('src/notes.md', "class notes\n");
-
-    $grep = new Grep($this->sandbox);
-
-    expect($grep->handle(new Request(['pattern' => 'class App', 'glob' => '*.php'])))->toBe('src/App.php:3:class App {}')
-        ->and($grep->handle(new Request(['pattern' => 'CLASS NOTES', 'ignore_case' => true])))->toBe('src/notes.md:1:class notes')
-        ->and($grep->handle(new Request(['pattern' => 'missing'])))->toBe('No matches found.');
-});
-
-test('custom drivers register through the manager', function () {
-    $factory = new LocalFactory(['root' => $this->root]);
-
-    config(['ai.sandboxes.custom' => ['driver' => 'custom']]);
-
-    Ai::extendSandbox('custom', fn ($app, array $config) => $factory);
-
-    expect(Ai::sandbox('custom'))->toBe($factory)
-        ->and(Ai::sandbox())->toBeInstanceOf(LocalFactory::class);
-});
-
-test('a deferred sandbox is not created until it is used', function () {
-    $created = 0;
-
-    $sandbox = Sandbox::defer(function () use (&$created) {
-        $created++;
-
-        return $this->sandbox;
-    })->withCwd('repo');
-
-    expect($created)->toBe(0);
-
-    $sandbox->write('a.txt', 'a');
-    $sandbox->read('a.txt');
-
-    expect($created)->toBe(1)
-        ->and(File::get("{$this->root}/conversation-1/repo/a.txt"))->toBe('a');
+    expect(File::exists("{$this->root}/.checkpoints/{$this->sandbox->id()}"))->toBeFalse();
 });
 
 function isolationAvailable(): void

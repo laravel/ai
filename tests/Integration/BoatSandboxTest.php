@@ -1,33 +1,39 @@
 <?php
 
-use Laravel\Ai\Sandboxes\BoatFactory;
+use Laravel\Ai\Sandboxes\BoatProvider;
 
 beforeEach(function (): void {
     requiresApiKey('BOAT_API_KEY');
 
-    $this->factory = new BoatFactory(['key' => env('BOAT_API_KEY'), 'type' => 'small', 'ttl' => 600]);
-    $this->id = 'integration-'.uniqid();
+    $this->provider = new BoatProvider(['name' => 'boat', 'driver' => 'boat', 'key' => env('BOAT_API_KEY'), 'type' => 'small', 'ttl' => 600]);
+    $this->ids = [];
 });
 
 afterEach(function (): void {
-    if (isset($this->factory)) {
-        $this->factory->forget($this->id);
+    foreach ($this->ids ?? [] as $id) {
+        $this->provider->delete($id);
     }
 });
 
-test('a boat sandbox runs commands and keeps files across a suspend and a checkpoint', function (): void {
-    $sandbox = $this->factory->create($this->id);
+test('a boat sandbox runs commands, keeps files across a suspend, and restores a checkpoint into a new sandbox', function (): void {
+    $sandbox = $this->provider->create();
+    $this->ids[] = $sandbox->id();
 
     $sandbox->write('notes.txt', 'v1');
 
     expect($sandbox->exec('cat notes.txt && pwd')->stdout)->toBe("v1/home/user\n");
 
-    $checkpoint = $this->factory->checkpoint($this->id);
+    $checkpoint = $this->provider->checkpoint($sandbox->id());
 
     $sandbox->write('notes.txt', 'v2');
 
-    $this->factory->suspend($this->id);
-    $this->factory->restore($this->id, $checkpoint);
+    $this->provider->suspend($sandbox->id());
+    $this->provider->resume($sandbox->id());
 
-    expect($this->factory->create($this->id)->read('notes.txt'))->toBe('v1');
+    $restored = $this->provider->restore($sandbox->id(), $checkpoint);
+    $this->ids[] = $restored->id();
+
+    expect($restored->read('notes.txt'))->toBe('v1');
+
+    $this->provider->forgetCheckpoint($restored->id(), $checkpoint);
 });

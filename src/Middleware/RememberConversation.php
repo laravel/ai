@@ -47,8 +47,6 @@ class RememberConversation
             ? (string) Str::uuid7()
             : null;
 
-        $prompt->setConversationId($agent->currentConversation() ?? $pendingConversationId);
-
         try {
             $response = $next($prompt);
         } catch (Throwable $exception) {

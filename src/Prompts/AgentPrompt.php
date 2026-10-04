@@ -12,7 +12,6 @@ use Laravel\Ai\Exceptions\FailoverableException;
 use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Providers\Tools\ProviderTool;
-use Laravel\Ai\Sandboxes\Sandbox;
 use Throwable;
 
 class AgentPrompt extends Prompt
@@ -46,13 +45,6 @@ class AgentPrompt extends Prompt
     protected readonly bool $isFinalAttempt;
 
     protected ?RunContext $runContext = null;
-
-    protected ?string $conversationId = null;
-
-    protected ?Sandbox $sandbox = null;
-
-    /** @var array<int, Tool> */
-    protected array $sandboxTools = [];
 
     /**
      * @param  bool  $isFinalAttempt  Whether the caller has run out of providers to retry this prompt against.
@@ -191,55 +183,6 @@ class AgentPrompt extends Prompt
     public function isFinalAttempt(): bool
     {
         return $this->isFinalAttempt;
-    }
-
-    /**
-     * Set the conversation this run belongs to, including one created when it completes.
-     *
-     * @internal
-     */
-    public function setConversationId(?string $conversationId): void
-    {
-        $this->conversationId = $conversationId;
-    }
-
-    /**
-     * The conversation this run belongs to, including one created when it completes.
-     */
-    public function conversationId(): ?string
-    {
-        return $this->conversationId;
-    }
-
-    /**
-     * Set the sandbox this run works in and the tools it works with.
-     *
-     * @param  array<int, Tool>  $tools
-     *
-     * @internal
-     */
-    public function setSandbox(?Sandbox $sandbox, array $tools = []): void
-    {
-        $this->sandbox = $sandbox;
-        $this->sandboxTools = $tools;
-    }
-
-    /**
-     * The sandbox this run works in, if the agent has one.
-     */
-    public function sandbox(): ?Sandbox
-    {
-        return $this->sandbox;
-    }
-
-    /**
-     * The tools the run works in its sandbox with.
-     *
-     * @return array<int, Tool>
-     */
-    public function sandboxTools(): array
-    {
-        return $this->sandboxTools;
     }
 
     /**

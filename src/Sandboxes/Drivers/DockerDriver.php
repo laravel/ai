@@ -2,23 +2,32 @@
 
 namespace Laravel\Ai\Sandboxes\Drivers;
 
+use Closure;
 use Illuminate\Contracts\Process\ProcessResult;
+use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Sandbox\SandboxDriver;
-use Laravel\Ai\Sandboxes\Exceptions\SandboxDied;
+use Laravel\Ai\Sandboxes\Concerns\RunsProcesses;
+use Laravel\Ai\Sandboxes\Exceptions\SandboxException;
+use Laravel\Ai\Sandboxes\Exceptions\SandboxNotFound;
+use Laravel\Ai\Sandboxes\Exceptions\SandboxStateException;
 use Laravel\Ai\Sandboxes\FileStat;
+use Laravel\Ai\Sandboxes\SandboxState;
 use Laravel\Ai\Sandboxes\ShellResult;
-use RuntimeException;
 
 class DockerDriver implements SandboxDriver
 {
+    use RunsProcesses;
+
     /**
      * The exit codes GNU and BusyBox timeout report when they stop a command.
      */
     protected const TIMED_OUT = [124, 143];
 
     public function __construct(
+        protected string $provider,
+        protected string $id,
         protected string $container,
         protected array $config = [],
     ) {}
@@ -26,19 +35,40 @@ class DockerDriver implements SandboxDriver
     /**
      * {@inheritdoc}
      */
-    public function exec(string $command, string $cwd, array $env = [], ?int $timeout = null): ShellResult
+    public function state(): SandboxState
+    {
+        $result = $this->process()->run([$this->binary(), 'inspect', '-f', '{{.State.Status}}', $this->container]);
+
+        if (! $result->successful()) {
+            return SandboxState::Terminated;
+        }
+
+        return match (trim($result->output())) {
+            'created', 'restarting' => SandboxState::Creating,
+            'running' => SandboxState::Running,
+            'paused', 'exited' => SandboxState::Stopped,
+            'removing' => SandboxState::Terminated,
+            default => SandboxState::Error,
+        };
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function exec(string $command, string $cwd, array $env = [], ?int $timeout = null, ?Closure $onOutput = null): ShellResult
     {
         $timeout ??= $this->config['timeout'] ?? 120;
 
-        $variables = collect([...$this->config['env'] ?? [], ...$env])
-            ->flatMap(fn ($value, $key) => ['-e', "{$key}={$value}"])
-            ->all();
+        $variables = collect($env)->flatMap(fn ($value, $key) => ['-e', "{$key}={$value}"])->all();
 
         // The command is stopped inside the container; stopping only the docker CLI would leave it running there...
-        $result = $this->docker(
-            ['exec', '-w', $cwd, ...$variables, $this->container, 'timeout', (string) $timeout, 'sh', '-c', $command],
-            timeout: $timeout + 10,
+        $result = $this->runProcess(
+            $this->process($timeout + 10),
+            [$this->binary(), 'exec', '-w', $cwd, ...$variables, $this->container, 'timeout', (string) $timeout, 'sh', '-c', $command],
+            $onOutput,
         );
+
+        $this->ensureRunning($result);
 
         return new ShellResult(
             $result->output(),
@@ -108,13 +138,15 @@ class DockerDriver implements SandboxDriver
      * Run a docker command that must succeed.
      *
      * @param  array<int, string>  $arguments
+     *
+     * @throws SandboxException
      */
     protected function succeed(array $arguments, ?string $input = null): ProcessResult
     {
         $result = $this->docker($arguments, $input);
 
         if (! $result->successful()) {
-            throw new RuntimeException(trim($result->errorOutput()) ?: "Docker command failed with exit code {$result->exitCode()}.");
+            throw new SandboxException(trim($result->errorOutput()) ?: "Docker command failed with exit code {$result->exitCode()}.", $this->provider, $this->id);
         }
 
         return $result;
@@ -124,19 +156,46 @@ class DockerDriver implements SandboxDriver
      * Run the docker CLI with the given arguments.
      *
      * @param  array<int, string>  $arguments
-     *
-     * @throws SandboxDied
      */
     protected function docker(array $arguments, ?string $input = null, int $timeout = 60): ProcessResult
     {
-        $result = Process::timeout($timeout)
-            ->input($input)
-            ->run([$this->config['binary'] ?? 'docker', ...$arguments]);
+        $result = $this->process($timeout)->input($input)->run([$this->binary(), ...$arguments]);
 
-        if (Str::contains($result->errorOutput(), ['is not running', 'No such container'])) {
-            throw SandboxDied::for($this->container, trim($result->errorOutput()));
-        }
+        $this->ensureRunning($result);
 
         return $result;
+    }
+
+    /**
+     * Fail when the container is gone or stopped, which Docker reports only through its error output.
+     *
+     * @throws SandboxNotFound
+     * @throws SandboxStateException
+     */
+    protected function ensureRunning(ProcessResult $result): void
+    {
+        if (Str::contains($result->errorOutput(), 'No such container')) {
+            throw SandboxNotFound::for($this->provider, $this->id);
+        }
+
+        if (Str::contains($result->errorOutput(), 'is not running')) {
+            throw SandboxStateException::for($this->provider, $this->id, SandboxState::Stopped, SandboxState::Running);
+        }
+    }
+
+    /**
+     * Create a pending process with the given timeout.
+     */
+    protected function process(int $timeout = 60): PendingProcess
+    {
+        return Process::timeout($timeout);
+    }
+
+    /**
+     * Get the docker binary.
+     */
+    protected function binary(): string
+    {
+        return $this->config['binary'] ?? 'docker';
     }
 }

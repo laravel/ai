@@ -2,42 +2,63 @@
 
 namespace Laravel\Ai\Sandboxes\Drivers;
 
+use Closure;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Process;
 use Laravel\Ai\Contracts\Sandbox\SandboxDriver;
+use Laravel\Ai\Sandboxes\Concerns\RunsProcesses;
+use Laravel\Ai\Sandboxes\Exceptions\SandboxException;
+use Laravel\Ai\Sandboxes\Exceptions\SandboxNotFound;
 use Laravel\Ai\Sandboxes\Exceptions\SandboxPathException;
 use Laravel\Ai\Sandboxes\FileStat;
+use Laravel\Ai\Sandboxes\SandboxState;
 use Laravel\Ai\Sandboxes\ShellResult;
-use RuntimeException;
 use Symfony\Component\Process\ExecutableFinder;
 
 class LocalDriver implements SandboxDriver
 {
+    use RunsProcesses;
+
     /**
      * The environment variables forwarded from the host process.
      */
     protected const FORWARDED_ENV = ['PATH', 'HOME', 'LANG', 'TERM', 'TMPDIR'];
 
     public function __construct(
+        protected string $provider,
+        protected string $id,
+        protected string $root,
         protected array $config = [],
         protected Filesystem $files = new Filesystem,
-        protected ?string $root = null,
     ) {}
 
     /**
      * {@inheritdoc}
      */
-    public function exec(string $command, string $cwd, array $env = [], ?int $timeout = null): ShellResult
+    public function state(): SandboxState
     {
-        $isolate = $this->config['isolate'] ?? true;
+        return is_dir($this->root) ? SandboxState::Running : SandboxState::Terminated;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function exec(string $command, string $cwd, array $env = [], ?int $timeout = null, ?Closure $onOutput = null): ShellResult
+    {
+        $this->ensureExists();
+
+        $pending = Process::path($cwd)
+            ->env($this->environment($env))
+            ->timeout($timeout ?? $this->config['timeout'] ?? 120);
 
         try {
-            $result = Process::path($cwd)
-                ->env($this->environment($env))
-                ->timeout($timeout ?? $this->config['timeout'] ?? 120)
-                ->run($isolate ? $this->isolated($command, $cwd) : $command);
+            $result = $this->runProcess(
+                $pending,
+                ($this->config['isolate'] ?? true) ? $this->isolated($command, $cwd) : ['sh', '-c', $command],
+                $onOutput,
+            );
         } catch (ProcessTimedOutException $exception) {
             return new ShellResult(
                 $exception->result->output(),
@@ -48,9 +69,11 @@ class LocalDriver implements SandboxDriver
         }
 
         // The isolation tool prefixes its own setup errors with its name, which the command's errors never carry...
-        if ($isolate && preg_match('/^(bwrap|sandbox-exec): /', $result->errorOutput())) {
-            throw new RuntimeException(
+        if (($this->config['isolate'] ?? true) && preg_match('/^(bwrap|sandbox-exec): /', $result->errorOutput())) {
+            throw new SandboxException(
                 'Isolated local sandboxes could not start: '.trim($result->errorOutput()).'. On Ubuntu 24.04 and later, allow bwrap to create user namespaces with an AppArmor profile, or set AI_SANDBOX_ISOLATE=false to run commands unisolated.',
+                $this->provider,
+                $this->id,
             );
         }
 
@@ -65,7 +88,7 @@ class LocalDriver implements SandboxDriver
         $this->confine($path);
 
         if (! $this->files->isFile($path)) {
-            throw new RuntimeException("File [{$path}] does not exist.");
+            throw new SandboxException("File [{$path}] does not exist.", $this->provider, $this->id);
         }
 
         return $this->files->get($path);
@@ -79,7 +102,7 @@ class LocalDriver implements SandboxDriver
         $this->confine($path);
 
         if (! $this->files->isDirectory(dirname($path))) {
-            throw new RuntimeException('Directory ['.dirname($path).'] does not exist.');
+            throw new SandboxException('Directory ['.dirname($path).'] does not exist.', $this->provider, $this->id);
         }
 
         $this->files->put($path, $contents);
@@ -111,6 +134,10 @@ class LocalDriver implements SandboxDriver
     {
         $this->confine($path);
 
+        if (! $this->files->isDirectory($path)) {
+            throw new SandboxException("Directory [{$path}] does not exist.", $this->provider, $this->id);
+        }
+
         return array_values(array_diff(scandir($path) ?: [], ['.', '..']));
     }
 
@@ -136,7 +163,7 @@ class LocalDriver implements SandboxDriver
         }
 
         if (! $this->files->exists($path)) {
-            throw new RuntimeException("Path [{$path}] does not exist.");
+            throw new SandboxException("Path [{$path}] does not exist.", $this->provider, $this->id);
         }
 
         match (true) {
@@ -151,11 +178,11 @@ class LocalDriver implements SandboxDriver
      *
      * @return array<int, string>
      *
-     * @throws RuntimeException
+     * @throws SandboxException
      */
     protected function isolated(string $command, string $cwd): array
     {
-        $workspace = realpath($this->root ?? $cwd) ?: $cwd;
+        $workspace = realpath($this->root) ?: $this->root;
         $network = $this->config['network'] ?? true;
 
         return match (PHP_OS_FAMILY) {
@@ -176,19 +203,21 @@ class LocalDriver implements SandboxDriver
                 '--chdir', $cwd,
                 'sh', '-c', $command,
             ],
-            default => throw new RuntimeException('Isolated local sandboxes are only supported on macOS and Linux.'),
+            default => throw new SandboxException('Isolated local sandboxes are only supported on macOS and Linux.', $this->provider, $this->id),
         };
     }
 
     /**
      * Find the given isolation binary, failing loudly rather than running the command unisolated.
      *
-     * @throws RuntimeException
+     * @throws SandboxException
      */
     protected function binary(string $name): string
     {
-        return (new ExecutableFinder)->find($name) ?? throw new RuntimeException(
+        return (new ExecutableFinder)->find($name) ?? throw new SandboxException(
             "Isolated local sandboxes need [{$name}]. Install it or set AI_SANDBOX_ISOLATE=false to run commands unisolated.",
+            $this->provider,
+            $this->id,
         );
     }
 
@@ -201,15 +230,26 @@ class LocalDriver implements SandboxDriver
     }
 
     /**
+     * Fail when the workspace was deleted.
+     *
+     * @throws SandboxNotFound
+     */
+    protected function ensureExists(): void
+    {
+        if (! is_dir($this->root)) {
+            throw SandboxNotFound::for($this->provider, $this->id);
+        }
+    }
+
+    /**
      * Reject a path that a symlink resolves outside the sandbox root.
      *
+     * @throws SandboxNotFound
      * @throws SandboxPathException
      */
     protected function confine(string $path): void
     {
-        if ($this->root === null) {
-            return;
-        }
+        $this->ensureExists();
 
         $existing = $path;
 
