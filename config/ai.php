@@ -86,36 +86,6 @@ return [
             'timeout' => 120,
         ],
 
-        'e2b' => [
-            'driver' => 'e2b',
-            'key' => env('E2B_API_KEY'),
-            'template' => env('E2B_TEMPLATE', 'base'),
-            'ttl' => 900,
-            'env' => [],
-            'timeout' => 120,
-        ],
-
-        'daytona' => [
-            'driver' => 'daytona',
-            'key' => env('DAYTONA_API_KEY'),
-            'snapshot' => env('DAYTONA_SNAPSHOT'),
-            'ttl' => 900,
-            'env' => [],
-            'timeout' => 120,
-        ],
-
-        'fly' => [
-            'driver' => 'fly',
-            'key' => env('FLY_API_TOKEN'),
-            'app' => env('FLY_SANDBOX_APP'),
-            'region' => env('FLY_SANDBOX_REGION'),
-            'image' => env('FLY_SANDBOX_IMAGE', 'ubuntu:24.04'),
-            'cpus' => 1,
-            'memory' => 1024,
-            'env' => [],
-            'timeout' => 120,
-        ],
-
         'cloudflare' => [
             'driver' => 'cloudflare',
             'url' => env('CLOUDFLARE_SANDBOX_URL'),
@@ -129,14 +99,6 @@ return [
             'key' => env('BOXLITE_API_KEY'),
             'image' => env('BOXLITE_IMAGE', 'alpine:latest'),
             'ttl' => 900,
-            'env' => [],
-            'timeout' => 120,
-        ],
-
-        'upstash' => [
-            'driver' => 'upstash',
-            'key' => env('UPSTASH_BOX_API_KEY'),
-            'size' => 'small',
             'env' => [],
             'timeout' => 120,
         ],

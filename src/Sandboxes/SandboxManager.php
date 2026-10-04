@@ -73,30 +73,6 @@ class SandboxManager extends MultipleInstanceManager
     }
 
     /**
-     * Create the E2B sandbox provider.
-     */
-    protected function createE2bDriver(array $config): E2bProvider
-    {
-        return new E2bProvider($config);
-    }
-
-    /**
-     * Create the Daytona sandbox provider.
-     */
-    protected function createDaytonaDriver(array $config): DaytonaProvider
-    {
-        return new DaytonaProvider($config);
-    }
-
-    /**
-     * Create the Fly.io Machines sandbox provider.
-     */
-    protected function createFlyDriver(array $config): FlyProvider
-    {
-        return new FlyProvider($config);
-    }
-
-    /**
      * Create the Cloudflare Sandbox bridge sandbox provider.
      */
     protected function createCloudflareDriver(array $config): CloudflareProvider
@@ -110,14 +86,6 @@ class SandboxManager extends MultipleInstanceManager
     protected function createBoxliteDriver(array $config): BoxLiteProvider
     {
         return new BoxLiteProvider($config);
-    }
-
-    /**
-     * Create the Upstash Box sandbox provider.
-     */
-    protected function createUpstashDriver(array $config): UpstashProvider
-    {
-        return new UpstashProvider($config);
     }
 
     /**
