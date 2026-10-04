@@ -47,6 +47,14 @@ class SandboxManager extends MultipleInstanceManager
     }
 
     /**
+     * Create the Boat sandbox factory.
+     */
+    protected function createBoatDriver(array $config): BoatFactory
+    {
+        return new BoatFactory($config);
+    }
+
+    /**
      * {@inheritdoc}
      */
     public function getDefaultInstance()

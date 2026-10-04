@@ -76,6 +76,16 @@ return [
             'timeout' => 120,
             'suspend_after_turn' => env('AI_SANDBOX_SUSPEND', true),
         ],
+
+        'boat' => [
+            'driver' => 'boat',
+            'key' => env('BOAT_API_KEY'),
+            'type' => 'small',
+            'ttl' => 900,
+            'no_env' => true,
+            'env' => [],
+            'timeout' => 120,
+        ],
     ],
 
     /*
