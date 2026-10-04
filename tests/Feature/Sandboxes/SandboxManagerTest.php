@@ -8,7 +8,7 @@ use Laravel\Ai\Sandboxes\FakeProvider;
 use Laravel\Ai\Sandboxes\LocalProvider;
 
 beforeEach(function () {
-    Config::set('ai.sandboxes.local.root', $this->root = sys_get_temp_dir().'/ai-sandboxes-'.uniqid());
+    Config::set('ai.sandboxes.local.workdir', $this->root = sys_get_temp_dir().'/ai-sandboxes-'.uniqid());
     Config::set('ai.sandboxes.local.isolate', false);
 });
 
@@ -30,7 +30,7 @@ test('the default provider creates, attaches to and deletes sandboxes through th
 });
 
 test('providers resolve by configured name and carry that name into handles and locks', function () {
-    Config::set('ai.sandboxes.scratch', ['driver' => 'local', 'root' => $this->root, 'isolate' => false]);
+    Config::set('ai.sandboxes.scratch', ['driver' => 'local', 'workdir' => $this->root, 'isolate' => false]);
 
     $provider = Sandbox::provider('scratch');
     $sandbox = $provider->create();
@@ -48,7 +48,7 @@ test('providers resolve by configured name and carry that name into handles and 
 });
 
 test('custom drivers register through the manager', function () {
-    $custom = new LocalProvider(['name' => 'custom', 'driver' => 'custom', 'root' => $this->root, 'isolate' => false]);
+    $custom = new LocalProvider(['name' => 'custom', 'driver' => 'custom', 'workdir' => $this->root, 'isolate' => false]);
 
     Config::set('ai.sandboxes.custom', ['driver' => 'custom']);
     Sandbox::extend('custom', fn ($app, array $config) => $custom);

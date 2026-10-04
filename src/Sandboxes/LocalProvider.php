@@ -175,9 +175,9 @@ class LocalProvider extends Provider implements Checkpointable
     /**
      * Get the directory the workspaces live in.
      */
-    protected function root(): string
+    protected function workdir(): string
     {
-        return rtrim($this->config['root'] ?? storage_path('app/sandboxes'), '/');
+        return rtrim($this->config['workdir'] ?? storage_path('app/sandboxes'), '/');
     }
 
     /**
@@ -185,7 +185,7 @@ class LocalProvider extends Provider implements Checkpointable
      */
     protected function path(string $id): string
     {
-        return $this->root().'/'.$id;
+        return $this->workdir().'/'.$id;
     }
 
     /**
@@ -193,7 +193,7 @@ class LocalProvider extends Provider implements Checkpointable
      */
     protected function optionsPath(string $id): string
     {
-        return $this->root().'/.options/'.$id.'.json';
+        return $this->workdir().'/.options/'.$id.'.json';
     }
 
     /**
@@ -201,6 +201,6 @@ class LocalProvider extends Provider implements Checkpointable
      */
     protected function checkpointPath(string $id, ?string $checkpoint = null): string
     {
-        return $this->root().'/.checkpoints/'.$id.($checkpoint ? '/'.$checkpoint : '');
+        return $this->workdir().'/.checkpoints/'.$id.($checkpoint ? '/'.$checkpoint : '');
     }
 }

@@ -73,14 +73,6 @@ class SandboxManager extends MultipleInstanceManager
     }
 
     /**
-     * Create the Cloudflare Sandbox bridge sandbox provider.
-     */
-    protected function createCloudflareDriver(array $config): CloudflareProvider
-    {
-        return new CloudflareProvider($config);
-    }
-
-    /**
      * Create the BoxLite sandbox provider.
      */
     protected function createBoxliteDriver(array $config): BoxLiteProvider

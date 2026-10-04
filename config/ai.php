@@ -57,10 +57,10 @@ return [
     'sandboxes' => [
         'local' => [
             'driver' => 'local',
+            'workdir' => env('AI_SANDBOX_WORKDIR', storage_path('app/sandboxes')),
             'network' => env('AI_SANDBOX_NETWORK', true),
             'env' => [],
             'timeout' => env('AI_SANDBOX_TIMEOUT', 120),
-            'root' => env('AI_SANDBOX_ROOT', storage_path('app/sandboxes')),
             'isolate' => env('AI_SANDBOX_ISOLATE', true),
         ],
 
@@ -84,13 +84,6 @@ return [
             'timeout' => env('AI_SANDBOX_TIMEOUT', 120),
             'type' => 'small',
             'no_env' => true,
-        ],
-
-        'cloudflare' => [
-            'driver' => 'cloudflare',
-            'url' => env('CLOUDFLARE_SANDBOX_URL'),
-            'key' => env('CLOUDFLARE_SANDBOX_API_KEY'),
-            'timeout' => env('AI_SANDBOX_TIMEOUT', 120),
         ],
 
         'boxlite' => [

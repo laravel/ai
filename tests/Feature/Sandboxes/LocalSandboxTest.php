@@ -12,7 +12,7 @@ use Symfony\Component\Process\ExecutableFinder;
 
 beforeEach(function () {
     $this->root = sys_get_temp_dir().'/ai-sandboxes-'.uniqid();
-    $this->provider = new LocalProvider(['name' => 'local', 'driver' => 'local', 'root' => $this->root, 'timeout' => 5, 'isolate' => false]);
+    $this->provider = new LocalProvider(['name' => 'local', 'driver' => 'local', 'workdir' => $this->root, 'timeout' => 5, 'isolate' => false]);
     $this->sandbox = $this->provider->create();
     $this->workspace = "{$this->root}/{$this->sandbox->id()}";
 });
@@ -23,7 +23,7 @@ test('each create makes a new workspace that a later request can attach to by ID
     $this->sandbox->write('notes.txt', 'kept');
 
     $other = $this->provider->create();
-    $attached = (new LocalProvider(['name' => 'local', 'driver' => 'local', 'root' => $this->root, 'isolate' => false]))->get($this->sandbox->id());
+    $attached = (new LocalProvider(['name' => 'local', 'driver' => 'local', 'workdir' => $this->root, 'isolate' => false]))->get($this->sandbox->id());
 
     expect($other->id())->not->toBe($this->sandbox->id())
         ->and($other->exists('notes.txt'))->toBeFalse()
@@ -152,7 +152,7 @@ test('a command that runs past its timeout is stopped and reported', function ()
 test('an isolated sandbox only writes inside its workspace', function () {
     isolationAvailable();
 
-    $sandbox = (new LocalProvider(['root' => $this->root, 'driver' => 'local', 'isolate' => true]))->get($this->sandbox->id());
+    $sandbox = (new LocalProvider(['workdir' => $this->root, 'driver' => 'local', 'isolate' => true]))->get($this->sandbox->id());
 
     $result = $sandbox->exec('echo inside > in.txt; echo outside > ../out.txt; echo done > /dev/null; cat in.txt');
 
@@ -163,7 +163,7 @@ test('an isolated sandbox only writes inside its workspace', function () {
 test('an isolated sandbox can be cut off from the network', function () {
     isolationAvailable();
 
-    $offline = (new LocalProvider(['root' => $this->root, 'driver' => 'local', 'isolate' => true]))->create(['network' => false]);
+    $offline = (new LocalProvider(['workdir' => $this->root, 'driver' => 'local', 'isolate' => true]))->create(['network' => false]);
 
     $result = $offline->exec('php -r \'echo @fsockopen("1.1.1.1", 80, $code, $error, 2) ? "online" : "offline";\'');
 
@@ -175,7 +175,7 @@ test('the local provider isolates by default and refuses to run when the isolati
     putenv('PATH=/nonexistent');
 
     try {
-        $sandbox = (new LocalProvider(['root' => $this->root, 'driver' => 'local']))->get($this->sandbox->id());
+        $sandbox = (new LocalProvider(['workdir' => $this->root, 'driver' => 'local']))->get($this->sandbox->id());
 
         expect(fn () => $sandbox->exec('echo hi > ran.txt'))->toThrow(SandboxException::class, 'Isolated local sandboxes')
             ->and(File::exists("{$this->workspace}/ran.txt"))->toBeFalse();
@@ -189,7 +189,7 @@ test('an isolation tool that cannot start fails loudly instead of reporting a fa
 
     Process::fake(['*' => Process::result(errorOutput: 'bwrap: setting up uid map: Permission denied', exitCode: 1)]);
 
-    $sandbox = (new LocalProvider(['root' => $this->root, 'driver' => 'local']))->get($this->sandbox->id());
+    $sandbox = (new LocalProvider(['workdir' => $this->root, 'driver' => 'local']))->get($this->sandbox->id());
 
     expect(fn () => $sandbox->exec('echo hi'))->toThrow(SandboxException::class, 'could not start: bwrap: setting up uid map');
 });
