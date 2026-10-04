@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Process;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Sandboxes\Exceptions\SandboxPathException;
 use Laravel\Ai\Sandboxes\LocalFactory;
@@ -103,6 +104,18 @@ test('the local driver isolates by default and refuses to run when the isolation
     }
 });
 
+test('an isolation tool that cannot start fails loudly instead of reporting a failed command', function () {
+    if ((new ExecutableFinder)->find(PHP_OS_FAMILY === 'Darwin' ? 'sandbox-exec' : 'bwrap') === null) {
+        $this->markTestSkipped('OS-level isolation is not available.');
+    }
+
+    Process::fake(['*' => Process::result(errorOutput: 'bwrap: setting up uid map: Permission denied', exitCode: 1)]);
+
+    $sandbox = (new LocalFactory(['root' => $this->root]))->create('conversation-1');
+
+    expect(fn () => $sandbox->exec('echo hi'))->toThrow(RuntimeException::class, 'could not start: bwrap: setting up uid map');
+});
+
 test('restoring a local checkpoint brings back the workspace without following symlinks', function () {
     $factory = new LocalFactory(['root' => $this->root, 'isolate' => false]);
 
@@ -123,6 +136,12 @@ test('restoring a local checkpoint brings back the workspace without following s
         ->and(is_link("{$this->root}/.checkpoints/conversation-1/{$checkpoint}/etc-link"))->toBeTrue()
         ->and(fn () => $factory->restore('conversation-1', 'missing'))->toThrow(RuntimeException::class);
 
+    $factory->forgetCheckpoint('conversation-1', $checkpoint);
+
+    expect(File::exists("{$this->root}/.checkpoints/conversation-1/{$checkpoint}"))->toBeFalse()
+        ->and($this->sandbox->read('notes.txt'))->toBe('v1');
+
+    $factory->checkpoint('conversation-1');
     $factory->forget('conversation-1');
 
     expect(File::exists("{$this->root}/.checkpoints/conversation-1"))->toBeFalse();

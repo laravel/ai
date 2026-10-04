@@ -50,13 +50,15 @@ class LocalFactory implements Checkpointable, ForgetsSandboxes, SandboxFactory
      */
     public function checkpoint(string $id): string
     {
-        $checkpoint = strtolower((string) Str::ulid());
+        return Sandbox::exclusively($id, function () use ($id): string {
+            $checkpoint = strtolower((string) Str::ulid());
 
-        $this->files->ensureDirectoryExists($target = $this->checkpointPath($id, $checkpoint));
+            $this->files->ensureDirectoryExists($target = $this->checkpointPath($id, $checkpoint));
 
-        $this->copy($this->create($id)->cwd(), $target);
+            $this->copy($this->create($id)->cwd(), $target);
 
-        return $checkpoint;
+            return $checkpoint;
+        });
     }
 
     /**
@@ -68,10 +70,20 @@ class LocalFactory implements Checkpointable, ForgetsSandboxes, SandboxFactory
             throw new RuntimeException("Checkpoint [{$checkpoint}] of sandbox [{$id}] does not exist.");
         }
 
-        $this->files->deleteDirectory($this->path($id));
-        $this->files->ensureDirectoryExists($this->path($id));
+        Sandbox::exclusively($id, function () use ($id, $source): void {
+            $this->files->deleteDirectory($this->path($id));
+            $this->files->ensureDirectoryExists($this->path($id));
 
-        $this->copy($source, $this->path($id));
+            $this->copy($source, $this->path($id));
+        });
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function forgetCheckpoint(string $id, string $checkpoint): void
+    {
+        $this->files->deleteDirectory($this->checkpointPath($id, $checkpoint));
     }
 
     /**

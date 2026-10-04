@@ -130,6 +130,37 @@ test('forgetting a sandbox removes its checkpoints', function () {
         ->and(Process::run(['docker', 'volume', 'inspect', $this->factory->name($this->id).'-'.$checkpoint])->successful())->toBeFalse();
 });
 
+test('a forgotten checkpoint removes its image and volume', function () {
+    $this->factory->create($this->id)->write('a.txt', 'a');
+
+    $checkpoint = $this->factory->checkpoint($this->id);
+
+    $this->factory->forgetCheckpoint($this->id, $checkpoint);
+
+    expect(Process::run(['docker', 'image', 'inspect', strtolower($this->factory->name($this->id)).':'.$checkpoint])->successful())->toBeFalse()
+        ->and(Process::run(['docker', 'volume', 'inspect', $this->factory->name($this->id).'-'.$checkpoint])->successful())->toBeFalse();
+});
+
+test('a checkpoint without its workspace copy is refused before the workspace is touched', function () {
+    $this->factory->create($this->id)->write('notes.txt', 'v1');
+
+    $checkpoint = $this->factory->checkpoint($this->id);
+
+    Process::run(['docker', 'volume', 'rm', '-f', $this->factory->name($this->id).'-'.$checkpoint]);
+
+    expect(fn () => $this->factory->restore($this->id, $checkpoint))->toThrow(RuntimeException::class)
+        ->and($this->factory->create($this->id)->read('notes.txt'))->toBe('v1');
+});
+
+test('checkpointing a suspended sandbox leaves it stopped', function () {
+    $this->factory->create($this->id)->write('a.txt', 'a');
+    $this->factory->suspend($this->id);
+
+    $this->factory->checkpoint($this->id);
+
+    expect(trim(Process::run(['docker', 'inspect', '-f', '{{.State.Running}}', $this->factory->name($this->id)])->output()))->toBe('false');
+});
+
 test('a suspended sandbox stops its container and resumes with its files on the next create', function () {
     $this->factory->create($this->id)->write('kept.txt', 'kept');
 
@@ -170,5 +201,6 @@ test('a remembered agent keeps its container workspace across turns', function (
     $second = (new SandboxedAgent)->continue($first->conversationId, $user)->prompt('Read the output');
 
     expect($second->toolResults[0]->result)->toBe("built\n")
-        ->and(Ai::sandbox('docker'))->toBeInstanceOf(DockerFactory::class);
+        ->and(Ai::sandbox('docker'))->toBeInstanceOf(DockerFactory::class)
+        ->and(trim(Process::run(['docker', 'inspect', '-f', '{{.State.Running}}', $this->factory->name($this->id)])->output()))->toBe('false');
 });

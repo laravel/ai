@@ -31,17 +31,26 @@ class LocalDriver implements SandboxDriver
      */
     public function exec(string $command, string $cwd, array $env = [], ?int $timeout = null): ShellResult
     {
+        $isolate = $this->config['isolate'] ?? true;
+
         try {
             $result = Process::path($cwd)
                 ->env($this->environment($env))
                 ->timeout($timeout ?? $this->config['timeout'] ?? 120)
-                ->run(($this->config['isolate'] ?? true) ? $this->isolated($command, $cwd) : $command);
+                ->run($isolate ? $this->isolated($command, $cwd) : $command);
         } catch (ProcessTimedOutException $exception) {
             return new ShellResult(
                 $exception->result->output(),
                 $exception->result->errorOutput(),
                 $exception->result->exitCode() ?? 124,
                 timedOut: true,
+            );
+        }
+
+        // The isolation tool prefixes its own setup errors with its name, which the command's errors never carry...
+        if ($isolate && preg_match('/^(bwrap|sandbox-exec): /', $result->errorOutput())) {
+            throw new RuntimeException(
+                'Isolated local sandboxes could not start: '.trim($result->errorOutput()).'. On Ubuntu 24.04 and later, allow bwrap to create user namespaces with an AppArmor profile, or set AI_SANDBOX_ISOLATE=false to run commands unisolated.',
             );
         }
 

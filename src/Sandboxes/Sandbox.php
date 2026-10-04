@@ -3,12 +3,20 @@
 namespace Laravel\Ai\Sandboxes;
 
 use Closure;
+use Illuminate\Contracts\Cache\Lock;
+use Illuminate\Support\Facades\Cache;
 use Laravel\Ai\Contracts\Sandbox\SandboxDriver;
+use Laravel\Ai\Sandboxes\Exceptions\SandboxBusy;
 use Laravel\Ai\Sandboxes\Exceptions\SandboxPathException;
 use Throwable;
 
 final class Sandbox
 {
+    /**
+     * The number of seconds a turn may hold its sandbox before another turn can take it.
+     */
+    public const LOCK_SECONDS = 600;
+
     protected ?Sandbox $resolved = null;
 
     /**
@@ -36,6 +44,39 @@ final class Sandbox
     public static function defer(Closure $resolver): self
     {
         return new self(resolver: $resolver);
+    }
+
+    /**
+     * Get the lock a turn holds while it works in the sandbox with the given ID.
+     */
+    public static function lock(string $id): Lock
+    {
+        return Cache::lock("ai:sandbox:{$id}", self::LOCK_SECONDS);
+    }
+
+    /**
+     * Run the callback while holding the sandbox with the given ID, failing when a turn is working in it.
+     *
+     * @template TReturn
+     *
+     * @param  Closure(): TReturn  $callback
+     * @return TReturn
+     *
+     * @throws SandboxBusy
+     */
+    public static function exclusively(string $id, Closure $callback): mixed
+    {
+        $lock = self::lock($id);
+
+        if (! $lock->get()) {
+            throw SandboxBusy::for($id);
+        }
+
+        try {
+            return $callback();
+        } finally {
+            $lock->release();
+        }
     }
 
     /**

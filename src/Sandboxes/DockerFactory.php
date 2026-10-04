@@ -56,16 +56,16 @@ class DockerFactory implements Checkpointable, ForgetsSandboxes, SandboxFactory,
      */
     public function checkpoint(string $id): string
     {
-        $this->create($id);
+        return Sandbox::exclusively($id, function () use ($id): string {
+            $checkpoint = strtolower((string) Str::ulid());
 
-        $checkpoint = strtolower((string) Str::ulid());
+            // A commit leaves out mounted volumes, so the workspace is copied into a volume of its own...
+            $this->succeed(['commit', $this->name($id), $this->image($id, $checkpoint)]);
+            $this->succeed(['volume', 'create', '--label', static::LABEL.'='.$id, $this->volume($id, $checkpoint)]);
+            $this->copyVolume($this->name($id), $this->volume($id, $checkpoint));
 
-        // A commit leaves out mounted volumes, so the workspace is copied into a volume of its own...
-        $this->succeed(['commit', $this->name($id), $this->image($id, $checkpoint)]);
-        $this->succeed(['volume', 'create', '--label', static::LABEL.'='.$id, $this->volume($id, $checkpoint)]);
-        $this->copyVolume($this->name($id), $this->volume($id, $checkpoint));
-
-        return $checkpoint;
+            return $checkpoint;
+        });
     }
 
     /**
@@ -73,12 +73,24 @@ class DockerFactory implements Checkpointable, ForgetsSandboxes, SandboxFactory,
      */
     public function restore(string $id, string $checkpoint): void
     {
-        $this->succeed(['image', 'inspect', $this->image($id, $checkpoint)]);
+        Sandbox::exclusively($id, function () use ($id, $checkpoint): void {
+            $this->succeed(['image', 'inspect', $this->image($id, $checkpoint)]);
+            $this->succeed(['volume', 'inspect', $this->volume($id, $checkpoint)]);
 
-        $this->docker(['rm', '-f', $this->name($id)]);
+            $this->docker(['rm', '-f', $this->name($id)]);
 
-        $this->copyVolume($this->volume($id, $checkpoint), $this->name($id));
-        $this->succeed($this->start($id, $this->image($id, $checkpoint)));
+            $this->copyVolume($this->volume($id, $checkpoint), $this->name($id));
+            $this->succeed($this->start($id, $this->image($id, $checkpoint)));
+        });
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function forgetCheckpoint(string $id, string $checkpoint): void
+    {
+        $this->docker(['rmi', '-f', $this->image($id, $checkpoint)]);
+        $this->docker(['volume', 'rm', '-f', $this->volume($id, $checkpoint)]);
     }
 
     /**
@@ -94,7 +106,7 @@ class DockerFactory implements Checkpointable, ForgetsSandboxes, SandboxFactory,
      */
     public function suspendsAfterTurn(): bool
     {
-        return (bool) ($this->config['suspend_after_turn'] ?? false);
+        return (bool) ($this->config['suspend_after_turn'] ?? true);
     }
 
     /**
@@ -109,6 +121,14 @@ class DockerFactory implements Checkpointable, ForgetsSandboxes, SandboxFactory,
 
         $this->docker(['volume', 'rm', '-f', $this->name($id), ...array_filter(explode("\n", $volumes))]);
         $this->docker(['rmi', '-f', ...array_unique(array_filter(explode("\n", $images)))]);
+    }
+
+    /**
+     * Get the container and volume name of the sandbox with the given ID.
+     */
+    public function name(string $id): string
+    {
+        return 'ai-sandbox-'.preg_replace('/[^a-zA-Z0-9_.-]/', '-', $id);
     }
 
     /**
@@ -174,18 +194,10 @@ class DockerFactory implements Checkpointable, ForgetsSandboxes, SandboxFactory,
         $result = $arguments instanceof ProcessResult ? $arguments : $this->docker($arguments, timeout: 300);
 
         if (! $result->successful()) {
-            throw new RuntimeException('Sandbox checkpoint failed: '.trim($result->errorOutput()));
+            throw new RuntimeException('Docker command failed: '.trim($result->errorOutput()));
         }
 
         return $result;
-    }
-
-    /**
-     * Get the container and volume name of the sandbox with the given ID.
-     */
-    public function name(string $id): string
-    {
-        return 'ai-sandbox-'.preg_replace('/[^a-zA-Z0-9_.-]/', '-', $id);
     }
 
     /**

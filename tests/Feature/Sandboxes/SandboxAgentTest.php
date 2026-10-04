@@ -247,3 +247,30 @@ test('checkpoints of a fake sandbox restore its files', function () {
 
     expect($sandbox->create('conversation-1')->read('notes.txt'))->toBe('v1');
 });
+
+test('a checkpoint cannot be restored while a turn works in the sandbox', function () {
+    $sandbox = Ai::fakeSandbox(['notes.txt' => 'v1']);
+
+    $checkpoint = $sandbox->checkpoint('conversation-1');
+
+    $sandbox->create('conversation-1')->write('notes.txt', 'v2');
+
+    $lock = Cache::lock('ai:sandbox:conversation-1', 60);
+    $lock->get();
+
+    expect(fn () => $sandbox->restore('conversation-1', $checkpoint))->toThrow(SandboxBusy::class)
+        ->and(fn () => $sandbox->checkpoint('conversation-1'))->toThrow(SandboxBusy::class)
+        ->and($sandbox->create('conversation-1')->read('notes.txt'))->toBe('v2');
+
+    $lock->release();
+});
+
+test('a forgotten checkpoint of a fake sandbox can no longer be restored', function () {
+    $sandbox = Ai::fakeSandbox(['notes.txt' => 'v1']);
+
+    $checkpoint = $sandbox->checkpoint('conversation-1');
+
+    $sandbox->forgetCheckpoint('conversation-1', $checkpoint);
+
+    expect(fn () => $sandbox->restore('conversation-1', $checkpoint))->toThrow(RuntimeException::class);
+});

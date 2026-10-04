@@ -13,4 +13,9 @@ interface Checkpointable
      * Return the sandbox with the given ID to the given checkpoint.
      */
     public function restore(string $id, string $checkpoint): void;
+
+    /**
+     * Delete the given checkpoint of the sandbox with the given ID.
+     */
+    public function forgetCheckpoint(string $id, string $checkpoint): void;
 }

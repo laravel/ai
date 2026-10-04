@@ -4,7 +4,6 @@ namespace Laravel\Ai\Middleware;
 
 use Closure;
 use Illuminate\Contracts\Events\Dispatcher;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Laravel\Ai\Attributes\Sandbox as SandboxAttribute;
 use Laravel\Ai\Contracts\Agent;
@@ -23,11 +22,6 @@ use Throwable;
 
 class ResolveSandbox
 {
-    /**
-     * The number of seconds a turn may hold its sandbox before another turn can take it.
-     */
-    protected const LOCK_SECONDS = 600;
-
     public function __construct(
         protected SandboxManager $sandboxes,
         protected Dispatcher $events,
@@ -66,8 +60,7 @@ class ResolveSandbox
             $id ??= $prompt->conversationId() ?? (string) Str::ulid();
 
             if ($lock === null) {
-                // ponytail: fixed lease, a turn running past it lets the next turn in; renew per tool call if that bites
-                $candidate = Cache::lock("ai:sandbox:{$id}", static::LOCK_SECONDS);
+                $candidate = Sandbox::lock($id);
 
                 if (! $candidate->get()) {
                     throw SandboxBusy::for($id);

@@ -83,16 +83,18 @@ class FakeFactory implements Checkpointable, ForgetsSandboxes, SandboxFactory, S
      */
     public function checkpoint(string $id): string
     {
-        $this->create($id);
+        return Sandbox::exclusively($id, function () use ($id): string {
+            $this->create($id);
 
-        $driver = $this->drivers[$id];
+            $driver = $this->drivers[$id];
 
-        $this->checkpoints[$checkpoint = "{$id}:".count($this->checkpoints)] = [
-            'files' => $driver->files,
-            'directories' => $driver->directories,
-        ];
+            $this->checkpoints[$checkpoint = "{$id}:".Str::ulid()] = [
+                'files' => $driver->files,
+                'directories' => $driver->directories,
+            ];
 
-        return $checkpoint;
+            return $checkpoint;
+        });
     }
 
     /**
@@ -102,12 +104,22 @@ class FakeFactory implements Checkpointable, ForgetsSandboxes, SandboxFactory, S
     {
         $snapshot = $this->checkpoints[$checkpoint] ?? throw new RuntimeException("Checkpoint [{$checkpoint}] does not exist.");
 
-        $this->create($id);
+        Sandbox::exclusively($id, function () use ($id, $snapshot): void {
+            $this->create($id);
 
-        $driver = $this->drivers[$id];
+            $driver = $this->drivers[$id];
 
-        $driver->files = $snapshot['files'];
-        $driver->directories = $snapshot['directories'];
+            $driver->files = $snapshot['files'];
+            $driver->directories = $snapshot['directories'];
+        });
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function forgetCheckpoint(string $id, string $checkpoint): void
+    {
+        unset($this->checkpoints[$checkpoint]);
     }
 
     /**
