@@ -65,21 +65,6 @@ class LoadSkill implements Tool
     }
 
     /**
-     * Get a copy of the tool that also loads the given skills.
-     *
-     * @param  iterable<Closure|Skill|string>  $sources
-     */
-    public function withSkills(iterable $sources): static
-    {
-        $tool = clone $this;
-
-        $tool->sources = [...($this->sources ?: [resource_path('skills')]), ...$sources];
-        $tool->skills = null;
-
-        return $tool;
-    }
-
-    /**
      * Get the description of the tool's purpose.
      */
     public function description(): Stringable|string
@@ -225,5 +210,20 @@ class LoadSkill implements Tool
         return collect(glob(rtrim($directory, '/\\').'/*/SKILL.md') ?: [])
             ->map(fn (string $file): ?Skill => Skill::fromDirectory(dirname($file)))
             ->filter();
+    }
+
+    /**
+     * Get a copy of the tool that also loads the given skills.
+     *
+     * @param  iterable<Closure|Skill|string>  $sources
+     */
+    protected function withSkills(iterable $sources): static
+    {
+        $tool = clone $this;
+
+        $tool->sources = [...($this->sources ?: [resource_path('skills')]), ...$sources];
+        $tool->skills = null;
+
+        return $tool;
     }
 }
