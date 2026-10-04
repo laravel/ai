@@ -61,7 +61,7 @@ class LoadSkill implements Tool
             }
         }
 
-        return [...$tools, new static($skills)];
+        return [...$tools, new self($skills)];
     }
 
     /**
