@@ -2,16 +2,21 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Approvals\Decisions;
+use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasMiddleware;
+use Laravel\Ai\Contracts\HasSkills;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\PendingStep;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Skills\Skill;
+use Laravel\Ai\Tools\LoadSkill;
 use Laravel\Ai\Vercel\Vercel;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\NamedToolAgent;
@@ -201,4 +206,66 @@ test('a resume prompt keeps its tools when middleware attempts a swap', function
     );
 
     expect($prompt->withTools([new NamedTool]))->toBe($prompt);
+});
+
+test('an agent with skills receives the load skill tool', function (): void {
+    $agent = new class implements Agent, HasSkills
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function skills(): iterable
+        {
+            return [new Skill('pdf', 'Extract PDF text.', 'Use pdftotext.')];
+        }
+    };
+
+    Ai::fakeAgent($agent::class, [
+        new ToolCall('call_1', 'LoadSkill', ['name' => 'pdf']),
+        'Done.',
+    ]);
+
+    expect($agent->prompt('Read the PDF')->toolResults->first()->result)
+        ->toBe("<skill_content name=\"pdf\">\nUse pdftotext.\n</skill_content>");
+});
+
+test('an agent declaring a load skill tool has its skills merged into it with a warning', function (): void {
+    $agent = new #[MaxSteps(3)] class implements Agent, HasSkills, HasTools
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function tools(): iterable
+        {
+            return [new LoadSkill([new Skill('pdf', 'Extract PDF text.', 'Use pdftotext.')])];
+        }
+
+        public function skills(): iterable
+        {
+            return [new Skill('csv', 'Parse CSV files.', 'Use fgetcsv.')];
+        }
+    };
+
+    Log::spy();
+
+    Ai::fakeAgent($agent::class, [
+        new ToolCall('call_1', 'LoadSkill', ['name' => 'pdf']),
+        new ToolCall('call_2', 'LoadSkill', ['name' => 'csv']),
+        'Done.',
+    ]);
+
+    expect($agent->prompt('Read both files')->toolResults->pluck('result')->all())->toBe([
+        "<skill_content name=\"pdf\">\nUse pdftotext.\n</skill_content>",
+        "<skill_content name=\"csv\">\nUse fgetcsv.\n</skill_content>",
+    ]);
+
+    Log::shouldHaveReceived('warning')->once()->with('Agent ['.$agent::class.'] declares both skills and a LoadSkill tool; its skills were merged into that tool.');
 });

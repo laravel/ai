@@ -7,7 +7,9 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Laravel\Ai\Contracts\HasSkills;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Skills\Skill;
 use Stringable;
@@ -35,6 +37,46 @@ class LoadSkill implements Tool
     public function __construct(protected array $sources = [])
     {
         //
+    }
+
+    /**
+     * Add the agent's skills to the tools, merging them into a skill loading tool the agent already declares.
+     *
+     * @param  array<int, mixed>  $tools
+     * @return array<int, mixed>
+     */
+    public static function mergeInto(array $tools, HasSkills $agent): array
+    {
+        if (($skills = [...$agent->skills()]) === []) {
+            return $tools;
+        }
+
+        foreach ($tools as $index => $tool) {
+            if ($tool instanceof self) {
+                Log::warning('Agent ['.$agent::class.'] declares both skills and a LoadSkill tool; its skills were merged into that tool.');
+
+                $tools[$index] = $tool->withSkills($skills);
+
+                return $tools;
+            }
+        }
+
+        return [...$tools, new static($skills)];
+    }
+
+    /**
+     * Get a copy of the tool that also loads the given skills.
+     *
+     * @param  iterable<Closure|Skill|string>  $sources
+     */
+    public function withSkills(iterable $sources): static
+    {
+        $tool = clone $this;
+
+        $tool->sources = [...($this->sources ?: [resource_path('skills')]), ...$sources];
+        $tool->skills = null;
+
+        return $tool;
     }
 
     /**

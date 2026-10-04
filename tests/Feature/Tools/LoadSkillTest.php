@@ -3,6 +3,7 @@
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
+use Laravel\Ai\Contracts\HasSkills;
 use Laravel\Ai\Skills\Skill;
 use Laravel\Ai\Tools\LoadSkill;
 use Laravel\Ai\Tools\Request;
@@ -198,4 +199,16 @@ test('it squishes every skill description into one catalog line', function (): v
     expect($tool->description())
         ->toContain("- audit: Review invoices. Flag duplicates.\n")
         ->toEndWith('- pdf: Extract PDF text. Use when handling PDFs.');
+});
+
+test('an agent without skills does not receive the load skill tool', function (): void {
+    $agent = new class implements HasSkills
+    {
+        public function skills(): iterable
+        {
+            return [];
+        }
+    };
+
+    expect(LoadSkill::mergeInto([], $agent))->toBe([]);
 });
