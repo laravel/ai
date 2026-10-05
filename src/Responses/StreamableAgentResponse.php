@@ -154,6 +154,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
     /**
      * Stream the response using the Vercel AI SDK data stream protocol.
+     *
+     * The message ID is the assistant message being continued, not the "messageId" sent by useChat.
      */
     public function usingVercelDataProtocol(?string $messageId = null): self
     {

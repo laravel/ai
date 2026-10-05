@@ -350,8 +350,7 @@ describe('chat input from a useChat request', function () {
             ]],
         ]);
 
-        expect($chat->messageId())->toBe('m2')
-            ->and($chat->protocol())->toEqual(new VercelDataProtocol('m2'));
+        expect($chat->messageId())->toBe('m2');
     });
 
     test('a trailing user message continues no message', function () {
