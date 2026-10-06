@@ -6,6 +6,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
+use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Files\Base64Audio;
 use Laravel\Ai\Files\Base64Document;
@@ -92,6 +93,20 @@ trait MapsAttachments
                     ],
                 ],
                 $attachment instanceof Audio => [
+                    'type' => 'input_audio',
+                    'input_audio' => [
+                        'format' => $this->audioFormat($attachment->mimeType() ?? 'audio/mp3'),
+                        'data' => base64_encode($attachment->content()),
+                    ],
+                ],
+                $attachment instanceof Base64Audio => [
+                    'type' => 'input_audio',
+                    'input_audio' => [
+                        'format' => $this->audioFormat($attachment->mime ?? 'audio/mp3'),
+                        'data' => $attachment->base64,
+                    ],
+                ],
+                $attachment instanceof Audio && $attachment instanceof StorableFile => [
                     'type' => 'input_audio',
                     'input_audio' => [
                         'format' => $this->audioFormat($attachment->mimeType() ?? 'audio/mp3'),
