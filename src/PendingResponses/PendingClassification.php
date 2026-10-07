@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\PendingResponses;
 
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Traits\Conditionable;
 use InvalidArgumentException;
 use Laravel\Ai\Ai;
@@ -9,6 +10,7 @@ use Laravel\Ai\Contracts\Question;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
+use Laravel\Ai\Files\File;
 use Laravel\Ai\PendingResponses\Concerns\ResolvesProviderOptions;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\ClassificationResponse;
@@ -27,11 +29,13 @@ class PendingClassification
      * Create a new pending classification instance.
      *
      * @param  string|array<string, mixed>  $state
+     * @param  array<int, File|UploadedFile>  $attachments
      *
      * @throws InvalidArgumentException if the state is blank.
      */
     public function __construct(
         protected string|array $state,
+        protected array $attachments = [],
     ) {
         if (blank($state)) {
             throw new InvalidArgumentException('A non-blank state is required to classify.');
@@ -104,7 +108,7 @@ class PendingClassification
             $model ??= $provider->defaultClassificationModel();
 
             try {
-                return $provider->withHeaders($headers)->classify($this->state, $this->questions, $model, $this->timeout, $providerOptions);
+                return $provider->withHeaders($headers)->classify($this->state, $this->questions, $model, $this->timeout, $providerOptions, $this->attachments);
             } catch (FailoverableException $e) {
                 $lastException = $e;
 

@@ -3,7 +3,9 @@
 namespace Laravel\Ai;
 
 use Closure;
+use Illuminate\Http\UploadedFile;
 use InvalidArgumentException;
+use Laravel\Ai\Files\File;
 use Laravel\Ai\Gateway\FakeClassificationGateway;
 use Laravel\Ai\PendingResponses\PendingClassification;
 
@@ -13,12 +15,13 @@ class Classification
      * Create a new pending classification for the given state.
      *
      * @param  string|array<string, mixed>  $state
+     * @param  array<int, File|UploadedFile>  $attachments
      *
      * @throws InvalidArgumentException if the state is blank.
      */
-    public static function of(string|array $state): PendingClassification
+    public static function of(string|array $state, array $attachments = []): PendingClassification
     {
-        return new PendingClassification($state);
+        return new PendingClassification($state, $attachments);
     }
 
     /**
