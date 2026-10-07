@@ -66,7 +66,7 @@ describe('request structure', function (): void {
         Http::assertSent(fn ($request): bool => $request->data()['max_tokens'] === 64000);
     });
 
-    test('temperature and top_p are included when set via attributes', function (): void {
+    test('temperature and top_p are included when set via attributes', function (string $model): void {
         Http::fake([
             'api.anthropic.com/*' => $this->fakeTextResponse(),
         ]);
@@ -74,6 +74,7 @@ describe('request structure', function (): void {
         (new AttributeAgent)->prompt(
             'Hi',
             provider: 'anthropic',
+            model: $model,
         );
 
         Http::assertSent(function ($request): bool {
@@ -82,7 +83,26 @@ describe('request structure', function (): void {
             return $body['temperature'] === 0.7
                 && $body['top_p'] === 0.8;
         });
-    });
+    })->with(['claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-sonnet-4-20250514', 'claude-3-7-sonnet-20250219']);
+
+    test('temperature and top_p are dropped for models that reject sampling parameters', function (string $model): void {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse(),
+        ]);
+
+        (new AttributeAgent)->prompt(
+            'Hi',
+            provider: 'anthropic',
+            model: $model,
+        );
+
+        Http::assertSent(function ($request): bool {
+            $body = $request->data();
+
+            return ! array_key_exists('temperature', $body)
+                && ! array_key_exists('top_p', $body);
+        });
+    })->with(['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-4-7', 'claude-fable-5-1']);
 
     test('temperature and top_p are excluded when not set', function (): void {
         Http::fake([
