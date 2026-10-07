@@ -1,5 +1,19 @@
 # Upgrade Guide
 
+## Upgrading To 1.2 From 1.0
+
+### Classification Signatures Accept Attachments
+
+**Likelihood Of Impact: Low**
+
+Classification is an experimental API, so this change ships in a minor release. It only affects custom classification providers and gateways. `ClassificationProvider::classify()` and `ClassificationGateway::classify()` now accept a trailing `$attachments` argument:
+
+```php
+public function classify(string|array $state, array $questions, ?string $model = null, int $timeout = 30, array $providerOptions = [], array $attachments = []): ClassificationResponse;
+```
+
+Add `array $attachments = []` as the last parameter of the `classify()` method on the corresponding `ClassificationGateway` implementations.
+
 ## Upgrading To 1.0 From 0.11
 
 ### Upgrading Using AI
