@@ -65,10 +65,12 @@ trait BuildsTextRequests
             }
         }
 
-        $body = array_merge($body, Arr::whereNotNull([
-            'temperature' => $options?->temperature,
-            'top_p' => $options?->topP,
-        ]));
+        if ($this->supportsSamplingParameters($model)) {
+            $body = array_merge($body, Arr::whereNotNull([
+                'temperature' => $options?->temperature,
+                'top_p' => $options?->temperature === null ? $options?->topP : null,
+            ]));
+        }
 
         if (isset($body['output_config'], $providerOptions['output_config'])) {
             $providerOptions['output_config'] = array_merge($body['output_config'], $providerOptions['output_config']);
@@ -127,6 +129,14 @@ trait BuildsTextRequests
     protected function cacheControl(?string $ttl): array
     {
         return array_filter(['type' => 'ephemeral', 'ttl' => $ttl]);
+    }
+
+    /**
+     * Determine if the model accepts temperature and top_p.
+     */
+    protected function supportsSamplingParameters(string $model): bool
+    {
+        return (bool) preg_match('/^claude-(3-|(opus|sonnet|haiku)-4(-[0-6])?(-\d{8})?$)/', $model);
     }
 
     /**
