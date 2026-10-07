@@ -4,15 +4,20 @@ namespace Laravel\Ai\Tools;
 
 use Generator;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Ai\Approvals\Approval;
+use Laravel\Ai\Concerns\InteractsWithApprovals;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\CanActAsTool;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Stringable;
 use Throwable;
 
-class AgentTool implements Tool
+class AgentTool implements Approvable, Tool
 {
+    use InteractsWithApprovals;
+
     public function __construct(protected Agent $agent)
     {
         //
@@ -88,5 +93,13 @@ class AgentTool implements Tool
     public function agent(): Agent
     {
         return $this->agent;
+    }
+
+    /**
+     * Determine whether the tool needs approval for the given request.
+     */
+    protected function needsApproval(Request $request): Approval|bool
+    {
+        return false;
     }
 }

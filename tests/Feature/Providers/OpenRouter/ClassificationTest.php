@@ -6,6 +6,7 @@ use Laravel\Ai\Classification;
 use Laravel\Ai\Classification\Boolean;
 use Laravel\Ai\Classification\Choice;
 use Laravel\Ai\Classification\Score;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Responses\Data\BooleanAnswer;
 use Laravel\Ai\Responses\Data\ChoiceAnswer;
 use Laravel\Ai\Responses\Data\ScoreAnswer;
@@ -151,4 +152,14 @@ test('answers without the optional distribution fields fall back to the question
         ->and($response['urgency']->legend)->toBe(['Next release', 'This week', 'Blocking revenue'])
         ->and($response['urgency']->label())->toBe('Blocking revenue')
         ->and($response['urgency']->normalized())->toBe(1.0);
+});
+
+test('attachments are rejected before any request', function (): void {
+    Http::fake();
+
+    expect(fn () => Classification::of('Inspect this.', [Image::fromBase64(base64_encode('photo'), 'image/png')])
+        ->question('damaged', new Boolean('Damaged?'))
+        ->classify(provider: 'openrouter'))->toThrow(LogicException::class, 'Provider [openrouter] does not support classification attachments.');
+
+    Http::assertNothingSent();
 });

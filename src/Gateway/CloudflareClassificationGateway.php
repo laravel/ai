@@ -5,10 +5,12 @@ namespace Laravel\Ai\Gateway;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
+use Illuminate\Http\UploadedFile;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\ClassificationGateway;
 use Laravel\Ai\Contracts\Providers\ClassificationProvider;
 use Laravel\Ai\Contracts\Question;
+use Laravel\Ai\Files\File;
 use Laravel\Ai\Responses\ClassificationResponse;
 use Laravel\Ai\Responses\Data\Answer;
 use Laravel\Ai\Responses\Data\Meta;
@@ -35,6 +37,7 @@ class CloudflareClassificationGateway implements ClassificationGateway
      * @param  string|array<string, mixed>  $state
      * @param  array<string, Question>  $questions
      * @param  array<string, mixed>  $providerOptions
+     * @param  array<int, File|UploadedFile>  $attachments
      */
     public function classify(
         ClassificationProvider $provider,
@@ -43,6 +46,7 @@ class CloudflareClassificationGateway implements ClassificationGateway
         array $questions,
         int $timeout = 30,
         array $providerOptions = [],
+        array $attachments = [],
     ): ClassificationResponse {
         $selector = match ($model) {
             '@cf/cloudflare/clef' => 'clef',

@@ -39,6 +39,18 @@ test('transcription request sends diarize=true when enabled', function (): void 
     );
 });
 
+test('transcription sends enable_logging as a query parameter instead of in the body', function (): void {
+    Http::fake(['*' => fakeElevenTranscriptionResponse()]);
+
+    Transcription::of(base64_encode('fake-audio'))
+        ->withProviderOptions(['enable_logging' => false, 'tag_audio_events' => 'true'])
+        ->generate(provider: 'eleven', model: 'scribe_v2');
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.elevenlabs.io/v1/speech-to-text?enable_logging=false'
+        && ! collect($request->data())->contains(fn ($part): bool => $part['name'] === 'enable_logging')
+        && collect($request->data())->contains(fn ($part): bool => $part['name'] === 'tag_audio_events' && $part['contents'] === 'true'));
+});
+
 test('transcription request sends xi-api-key header', function (): void {
     Http::fake(['*' => fakeElevenTranscriptionResponse()]);
 

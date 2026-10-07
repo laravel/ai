@@ -3,12 +3,14 @@
 namespace Laravel\Ai\Gateway;
 
 use Closure;
+use Illuminate\Http\UploadedFile;
 use Laravel\Ai\Classification\Boolean;
 use Laravel\Ai\Classification\Choice;
 use Laravel\Ai\Classification\Score;
 use Laravel\Ai\Contracts\Gateway\ClassificationGateway;
 use Laravel\Ai\Contracts\Providers\ClassificationProvider;
 use Laravel\Ai\Contracts\Question;
+use Laravel\Ai\Files\File;
 use Laravel\Ai\Prompts\ClassificationPrompt;
 use Laravel\Ai\Responses\ClassificationResponse;
 use Laravel\Ai\Responses\Data\Answer;
@@ -35,6 +37,7 @@ class FakeClassificationGateway implements ClassificationGateway
      * @param  string|array<string, mixed>  $state
      * @param  array<string, Question>  $questions
      * @param  array<string, mixed>  $providerOptions
+     * @param  array<int, File|UploadedFile>  $attachments
      */
     public function classify(
         ClassificationProvider $provider,
@@ -43,8 +46,9 @@ class FakeClassificationGateway implements ClassificationGateway
         array $questions,
         int $timeout = 30,
         array $providerOptions = [],
+        array $attachments = [],
     ): ClassificationResponse {
-        $prompt = new ClassificationPrompt($state, $questions, $provider, $model, $timeout, $providerOptions);
+        $prompt = new ClassificationPrompt($state, $questions, $provider, $model, $timeout, $providerOptions, $attachments);
 
         return $this->nextResponse($provider, $model, $prompt);
     }

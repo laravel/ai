@@ -74,7 +74,7 @@ test('reranking uses default model when none specified', function (): void {
 
     Reranking::of(['Doc A', 'Doc B'])->rerank('query', provider: 'cohere');
 
-    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['model'] === 'rerank-v3.5');
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['model'] === 'rerank-v4.0-pro');
 });
 
 test('reranking maps documents by index when results are returned out of order', function (): void {

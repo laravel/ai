@@ -32,7 +32,7 @@ trait MapsMessages
 
             match ($message->role) {
                 MessageRole::User => $this->mapUserMessage($message, $input, $provider),
-                MessageRole::Assistant => $this->mapAssistantMessage($message, $input),
+                MessageRole::Assistant => $this->mapAssistantMessage($message, $input, $provider),
                 MessageRole::ToolResult => $this->mapToolResultMessage($message, $input),
             };
         }
@@ -62,10 +62,14 @@ trait MapsMessages
     /**
      * Map an assistant message to OpenAI format.
      */
-    protected function mapAssistantMessage(AssistantMessage|Message $message, array &$input): void
+    protected function mapAssistantMessage(AssistantMessage|Message $message, array &$input, Provider $provider): void
     {
         if ($message instanceof AssistantMessage && filled($message->replayBlocks)) {
-            foreach ($message->replayBlocks as $block) {
+            $blocks = $this->isStateless($provider)
+                ? $this->withoutStoredOnlyItems($message->replayBlocks)
+                : $message->replayBlocks;
+
+            foreach ($blocks as $block) {
                 $input[] = $block;
             }
 
@@ -109,6 +113,20 @@ trait MapsMessages
                 ],
             ];
         }
+    }
+
+    /**
+     * Remove file_search_call items, which the API resolves by id and so rejects when store is false.
+     *
+     * @param  array<int, array<string, mixed>>  $blocks
+     * @return array<int, array<string, mixed>>
+     */
+    protected function withoutStoredOnlyItems(array $blocks): array
+    {
+        return array_values(array_filter(
+            $blocks,
+            fn (array $block): bool => ($block['type'] ?? null) !== 'file_search_call',
+        ));
     }
 
     /**

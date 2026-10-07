@@ -15,6 +15,7 @@ use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\SupportsCodeExecution;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
+use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Enums\Lab;
@@ -25,7 +26,7 @@ use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsCodeExecution, SupportsFileSearch, SupportsWebSearch, TextProvider
+class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsCodeExecution, SupportsFileSearch, SupportsToolSearch, SupportsWebSearch, TextProvider
 {
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
@@ -75,7 +76,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
      */
     public function defaultTextModel(): string
     {
-        return $this->config['deployment'] ?? 'gpt-4o';
+        return $this->config['deployment'] ?? 'gpt-6-sol';
     }
 
     /**
@@ -83,7 +84,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
      */
     public function cheapestTextModel(): string
     {
-        return $this->config['deployment'] ?? 'gpt-4o-mini';
+        return $this->config['deployment'] ?? 'gpt-6-luna';
     }
 
     /**
@@ -91,7 +92,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
      */
     public function smartestTextModel(): string
     {
-        return $this->config['deployment'] ?? 'gpt-4o';
+        return $this->config['deployment'] ?? 'gpt-6-astra';
     }
 
     /**
@@ -107,7 +108,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
      */
     public function defaultImageModel(): string
     {
-        return $this->config['image_deployment'] ?? 'gpt-image-1';
+        return $this->config['image_deployment'] ?? 'gpt-image-2.5-flare';
     }
 
     /**

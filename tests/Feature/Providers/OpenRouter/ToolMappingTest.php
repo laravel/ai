@@ -197,6 +197,23 @@ test('web search tool sends allowed_domains', function (): void {
     });
 });
 
+test('web search tool sends user_location', function (): void {
+    Http::fake(['*' => fakeOpenRouterResponse('done')]);
+
+    agent(tools: [(new WebSearch)->location(city: 'San Francisco', country: 'US')])->prompt('Search the web', provider: 'openrouter');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'openrouter:web_search');
+
+        return data_get($tool, 'parameters.user_location') === [
+            'type' => 'approximate',
+            'city' => 'San Francisco',
+            'country' => 'US',
+        ];
+    });
+});
+
 test('web search tool forwards provider options into parameters', function (): void {
     Http::fake(['*' => fakeOpenRouterResponse('done')]);
 

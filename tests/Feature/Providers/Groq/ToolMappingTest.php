@@ -2,6 +2,8 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Providers\Tools\CodeExecution;
+use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
@@ -85,5 +87,25 @@ test('tool parameters are not wrapped in schema definition', function (): void {
 
         return ! array_key_exists('schema_definition', $function['parameters']['properties'] ?? [])
             && ! in_array('schema_definition', $function['parameters']['required'] ?? []);
+    });
+});
+
+test('web search tool is sent as browser_search type', function (): void {
+    Http::fake(['*' => fakeGroqResponse('done')]);
+
+    agent(tools: [new WebSearch])->prompt('Search the web', provider: 'groq');
+
+    Http::assertSent(function (Request $request): bool {
+        return data_get(json_decode($request->body(), true), 'tools') === [['type' => 'browser_search']];
+    });
+});
+
+test('code execution tool is sent as code_interpreter type', function (): void {
+    Http::fake(['*' => fakeGroqResponse('done')]);
+
+    agent(tools: [new CodeExecution])->prompt('Run some code', provider: 'groq');
+
+    Http::assertSent(function (Request $request): bool {
+        return data_get(json_decode($request->body(), true), 'tools') === [['type' => 'code_interpreter']];
     });
 });

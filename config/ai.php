@@ -63,9 +63,9 @@ return [
             'key' => env('AZURE_OPENAI_API_KEY'),
             'url' => env('AZURE_OPENAI_URL'),
             'api_version' => env('AZURE_OPENAI_API_VERSION', '2025-04-01-preview'),
-            'deployment' => env('AZURE_OPENAI_DEPLOYMENT', 'gpt-4o'),
+            'deployment' => env('AZURE_OPENAI_DEPLOYMENT', 'gpt-6-sol'),
             'embedding_deployment' => env('AZURE_OPENAI_EMBEDDING_DEPLOYMENT', 'text-embedding-3-small'),
-            'image_deployment' => env('AZURE_OPENAI_IMAGE_DEPLOYMENT', 'gpt-image-1'),
+            'image_deployment' => env('AZURE_OPENAI_IMAGE_DEPLOYMENT', 'gpt-image-2.5-flare'),
             'store' => env('AZURE_OPENAI_STORE', true),
         ],
 

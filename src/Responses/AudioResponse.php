@@ -32,6 +32,10 @@ class AudioResponse implements \Stringable
     {
         return once(fn (): string => Str::random(40).match ($this->mime) {
             'audio/wav', 'audio/x-wav' => '.wav',
+            'audio/opus' => '.opus',
+            'audio/pcm' => '.pcm',
+            'audio/ulaw' => '.ulaw',
+            'audio/alaw' => '.alaw',
             default => '.mp3',
         });
     }

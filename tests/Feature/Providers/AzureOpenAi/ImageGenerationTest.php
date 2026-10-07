@@ -205,7 +205,7 @@ test('default image model falls back to gpt-image-1', function (): void {
     Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
-        return $body['model'] === 'gpt-image-1';
+        return $body['model'] === 'gpt-image-2.5-flare';
     });
 });
 

@@ -16,6 +16,7 @@ use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\ProviderConnectionException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Prompts\ClassificationPrompt;
 use Laravel\Ai\Providers\CloudflareProvider;
 use Laravel\Ai\Responses\ClassificationResponse;
@@ -249,6 +250,17 @@ test('a missing account fails before sending a request', function (): void {
 
     Classification::of('text')->question('urgent', new Boolean('Urgent?'))->classify(provider: 'cloudflare');
 })->throws(InvalidArgumentException::class, 'A Cloudflare account ID is required');
+
+test('attachments are rejected before any Cloudflare request', function (): void {
+    Http::fake();
+
+    expect(fn () => Classification::of('Inspect this.', [Image::fromBase64(base64_encode('photo'), 'image/png')])
+        ->question('damaged', new Boolean('Damaged?'))
+        ->classify(provider: 'cloudflare'))
+        ->toThrow(LogicException::class, 'Provider [cloudflare] does not support classification attachments.');
+
+    Http::assertNothingSent();
+});
 
 test('HTTP authentication and request errors are not classified successfully', function (int $status): void {
     Http::fake(['*' => Http::response(['success' => false, 'errors' => [['code' => 10000, 'message' => 'Request rejected']]], $status)]);

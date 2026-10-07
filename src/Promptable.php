@@ -20,6 +20,7 @@ use Laravel\Ai\Attributes\WithoutBroadcasting;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\AgentInput;
 use Laravel\Ai\Contracts\Conversational;
+use Laravel\Ai\Contracts\HasSkills;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
@@ -41,6 +42,7 @@ use Laravel\Ai\Responses\QueuedAgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
+use Laravel\Ai\Tools\LoadSkill;
 use Laravel\Ai\Vercel\Vercel;
 use Laravel\SerializableClosure\SerializableClosure;
 use LogicException;
@@ -386,7 +388,9 @@ trait Promptable
      */
     private function declaredTools(): array
     {
-        return $this instanceof HasTools ? [...$this->tools()] : [];
+        $tools = $this instanceof HasTools ? [...$this->tools()] : [];
+
+        return $this instanceof HasSkills ? LoadSkill::mergeInto($tools, $this) : $tools;
     }
 
     /**

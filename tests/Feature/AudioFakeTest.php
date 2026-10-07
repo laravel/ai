@@ -152,16 +152,19 @@ test('audio is stored under a random name derived from its mime type', function 
         new AudioResponse(base64_encode('wav-bytes'), new Usage, new Meta, 'audio/wav'),
         new AudioResponse(base64_encode('alias-bytes'), new Usage, new Meta, 'audio/x-wav'),
         new AudioResponse(base64_encode('mp3-bytes'), new Usage, new Meta),
+        new AudioResponse(base64_encode('pcm-bytes'), new Usage, new Meta, 'audio/pcm'),
     ]);
 
     $wav = Audio::of('First text')->generate()->store('generated', 'audio');
     $alias = Audio::of('Second text')->generate()->store('generated', 'audio');
     $default = Audio::of('Third text')->generate()->store('generated', 'audio');
+    $pcm = Audio::of('Fourth text')->generate()->store('generated', 'audio');
 
     expect($wav)->toStartWith('generated/')
         ->and($wav)->toEndWith('.wav')
         ->and($alias)->toEndWith('.wav')
         ->and($default)->toEndWith('.mp3')
+        ->and($pcm)->toEndWith('.pcm')
         ->and(Storage::disk('audio')->get($wav))->toBe('wav-bytes')
         ->and(Storage::disk('audio')->get($default))->toBe('mp3-bytes');
 });

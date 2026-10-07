@@ -62,6 +62,14 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
 
     protected const STRUCTURED_OUTPUT_TOOL = 'structured_output';
 
+    // Substring match on the model ID, so application inference profile ARNs are not detected.
+    protected const MODELS_REJECTING_FORCED_TOOL_CHOICE = [
+        'claude-sonnet-5-5',
+        'claude-opus-5-5',
+        'claude-fable-5-1',
+        'claude-mythos-5-1',
+    ];
+
     public function __construct()
     {
         //
@@ -144,7 +152,8 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
         StepContext $stepContext,
     ): array {
         $conversationMessages = $this->formatMessages($messages);
-        $schemaTools = $schema ? $this->buildSchemaTools($schema, $tools) : null;
+        $jsonSchema = $schema && $this->rejectsForcedToolChoice($model) ? $schema : null;
+        $schemaTools = $schema && $jsonSchema === null ? $this->buildSchemaTools($schema, $tools) : null;
         $formattedTools = $schemaTools === null && $tools !== [] ? $this->formatTools($tools) : null;
 
         return $this->buildConverseParameters(
@@ -156,6 +165,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             $tools === [],
             $options,
             isFinalStep: $stepContext->isFinalStep,
+            jsonSchema: $jsonSchema,
         );
     }
 
@@ -212,6 +222,10 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                 $block['toolUse']['name'],
                 $block['toolUse']['input'] ?? [],
             );
+        }
+
+        if ($structured && $toolCalls === [] && $this->rejectsForcedToolChoice($model)) {
+            $structuredOutput = $output;
         }
 
         $finishReason = $this->extractFinishReason($result);
@@ -654,6 +668,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
      * @param  array<string, mixed>|null  $schemaTools
      * @param  array<string, mixed>|null  $formattedTools  Pre-formatted real tools (used when no schema is active).
      * @param  bool  $toolsEmpty  Whether the caller passed any real tools at all.
+     * @param  array<string, mixed>|null  $jsonSchema
      */
     protected function buildConverseParameters(
         string $model,
@@ -664,6 +679,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
         bool $toolsEmpty,
         ?TextGenerationOptions $options,
         bool $isFinalStep,
+        ?array $jsonSchema = null,
     ): array {
         $parameters = [
             'modelId' => $model,
@@ -689,6 +705,10 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
         }
 
         $parameters = array_merge($parameters, $providerOptions);
+
+        if ($jsonSchema !== null) {
+            $parameters['system'][] = ['text' => $this->jsonInstruction($jsonSchema)];
+        }
 
         $this->ensureValidPromptCacheOrder($options);
 
@@ -787,6 +807,23 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                 ],
             ], $toolResults),
         ];
+    }
+
+    /**
+     * Determine if the model rejects a forced tool choice, so structured output must come from the text answer.
+     */
+    protected function rejectsForcedToolChoice(string $model): bool
+    {
+        return Str::contains($model, self::MODELS_REJECTING_FORCED_TOOL_CHOICE);
+    }
+
+    /**
+     * Build the system instruction that asks for the final answer as JSON matching the schema.
+     */
+    protected function jsonInstruction(array $schema): string
+    {
+        return "JSON schema:\n".json_encode((new ObjectSchema($schema))->toArray())
+            ."\n\nYou must answer with only a JSON object that matches the JSON schema above. Do not wrap it in markdown fences or include any other text.";
     }
 
     /**

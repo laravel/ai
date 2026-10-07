@@ -98,7 +98,7 @@ class VoyageAiProvider extends Provider implements EmbeddingProvider, RerankingP
      */
     public function defaultRerankingModel(): string
     {
-        return $this->config['models']['reranking']['default'] ?? 'rerank-2.5-lite';
+        return $this->config['models']['reranking']['default'] ?? 'rerank-3';
     }
 
     /**

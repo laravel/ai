@@ -7,10 +7,15 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
+use Laravel\Ai\Approvals\Approval;
+use Laravel\Ai\Concerns\InteractsWithApprovals;
+use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Tool;
 
-class SimilaritySearch implements Tool
+class SimilaritySearch implements Approvable, Tool
 {
+    use InteractsWithApprovals;
+
     protected ?string $description = null;
 
     protected bool $rerank = false;
@@ -130,5 +135,13 @@ class SimilaritySearch implements Tool
                 ->description('The search query.')
                 ->required(),
         ];
+    }
+
+    /**
+     * Determine whether the tool needs approval for the given request.
+     */
+    protected function needsApproval(Request $request): Approval|bool
+    {
+        return false;
     }
 }

@@ -3,9 +3,11 @@
 namespace Laravel\Ai\Providers;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Contracts\Gateway\ClassificationGateway;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
+use Laravel\Ai\Contracts\Providers\ClassificationProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
@@ -17,20 +19,23 @@ use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Gateway\OpenAi\OpenAiClassificationGateway;
 use Laravel\Ai\Gateway\OpenAi\OpenAiFileGateway;
 use Laravel\Ai\Gateway\OpenAi\OpenAiStoreGateway;
 use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsCodeExecution, SupportsFileSearch, SupportsToolSearch, SupportsWebSearch, TextProvider, TranscriptionProvider
+class OpenAiProvider extends Provider implements AudioProvider, ClassificationProvider, EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsCodeExecution, SupportsFileSearch, SupportsToolSearch, SupportsWebSearch, TextProvider, TranscriptionProvider
 {
+    use Concerns\Classifies;
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
     use Concerns\GeneratesTranscriptions;
     use Concerns\HasAudioGateway;
+    use Concerns\HasClassificationGateway;
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasFileGateway;
     use Concerns\HasImageGateway;
@@ -101,7 +106,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'gpt-6-sol';
+        return $this->config['models']['text']['default'] ?? 'gpt-6.1-sol';
     }
 
     /**
@@ -125,7 +130,7 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultImageModel(): string
     {
-        return $this->config['models']['image']['default'] ?? 'gpt-image-2';
+        return $this->config['models']['image']['default'] ?? 'gpt-image-2.5-flare';
     }
 
     /**
@@ -174,6 +179,30 @@ class OpenAiProvider extends Provider implements AudioProvider, EmbeddingProvide
     public function defaultEmbeddingsDimensions(): int
     {
         return $this->config['models']['embeddings']['dimensions'] ?? 1536;
+    }
+
+    /**
+     * Get the name of the default classification model.
+     */
+    public function defaultClassificationModel(): string
+    {
+        return $this->config['models']['classification']['default'] ?? 'gpt-6-luna';
+    }
+
+    /**
+     * Determine if the provider can classify attachments alongside the state.
+     */
+    public function supportsClassificationAttachments(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Get the provider's classification gateway.
+     */
+    public function classificationGateway(): ClassificationGateway
+    {
+        return $this->classificationGateway ??= new OpenAiClassificationGateway;
     }
 
     /**

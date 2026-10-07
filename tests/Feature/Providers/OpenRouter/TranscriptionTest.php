@@ -138,7 +138,7 @@ test('transcription uses default model when none specified', function (): void {
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openrouter');
 
-    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['model'] === 'openai/whisper-1');
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['model'] === 'openai/gpt-transcribe');
 });
 
 test('transcription response text is correctly parsed', function (): void {
@@ -149,7 +149,7 @@ test('transcription response text is correctly parsed', function (): void {
     expect($response->text)->toBe('Hello, world!')
         ->and($response->segments)->toHaveCount(0)
         ->and($response->meta->provider)->toBe('openrouter')
-        ->and($response->meta->model)->toBe('openai/whisper-1');
+        ->and($response->meta->model)->toBe('openai/gpt-transcribe');
 });
 
 test('transcription usage is correctly parsed', function (): void {

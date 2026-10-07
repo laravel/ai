@@ -1,6 +1,34 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/ai/compare/v1.0.1...1.x)
+## [Unreleased](https://github.com/laravel/ai/compare/v1.1.0...1.x)
+
+## [v1.1.0](https://github.com/laravel/ai/compare/v1.0.1...v1.1.0) - 2026-10-05
+
+### What's Changed
+
+* Skip provider tools the provider does not support by [@yognevoy](https://github.com/yognevoy) in https://github.com/laravel/ai/pull/1080
+* Support self-hosted Laya through the TypeSafe driver by [@mysticseagull](https://github.com/mysticseagull) in https://github.com/laravel/ai/pull/1081
+* [1.x] Add Cohere text generation support by [@mssayari](https://github.com/mssayari) in https://github.com/laravel/ai/pull/1078
+* Share the provider capability check in AiManager by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/1064
+* Document Boost and Laravel MCP 1.0 upgrade requirements by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/1087
+* Update provider default models to the latest releases by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/1095
+* Add Agent Skills support by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/1054
+* Allow built-in tools to require approval by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/1097
+* Send web search location to OpenRouter by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/1098
+* Add Azure tool search and Groq web search and code execution by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/1099
+* Add a MoveFile filesystem tool by [@yognevoy](https://github.com/yognevoy) in https://github.com/laravel/ai/pull/1092
+* fix: resolve stateless OpenAI file search replay by [@owenvoke](https://github.com/owenvoke) in https://github.com/laravel/ai/pull/1089
+* [ 1.x ] Fix: Stop an edited useChat user message from being replaced by the assistant reply message by [@vinitkadam03](https://github.com/vinitkadam03) in https://github.com/laravel/ai/pull/1076
+* Add HasSkills contract that gives agents the LoadSkill tool by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/1102
+* Send ElevenLabs query parameters in the query string by [@Taldres](https://github.com/Taldres) in https://github.com/laravel/ai/pull/1103
+
+### New Contributors
+
+* [@mysticseagull](https://github.com/mysticseagull) made their first contribution in https://github.com/laravel/ai/pull/1081
+* [@owenvoke](https://github.com/owenvoke) made their first contribution in https://github.com/laravel/ai/pull/1089
+* [@Taldres](https://github.com/Taldres) made their first contribution in https://github.com/laravel/ai/pull/1103
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v1.0.1...v1.1.0
 
 ## [v1.0.1](https://github.com/laravel/ai/compare/v1.0.0...v1.0.1) - 2026-09-29
 

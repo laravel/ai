@@ -18,6 +18,7 @@ use Laravel\Ai\Models\ConversationMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
+use Laravel\Ai\Streaming\Protocols\VercelDataProtocol;
 use Laravel\Ai\Vercel\Vercel;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
@@ -339,6 +340,24 @@ describe('chat input from a useChat request', function () {
         ]);
 
         expect($chat->decisions())->toBeNull();
+    });
+
+    test('a resume turn continues the trailing assistant message', function () {
+        $chat = Vercel::chat([
+            ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Delete a.txt']]],
+            ['id' => 'm2', 'role' => 'assistant', 'parts' => [
+                ['type' => 'tool-DeleteFile', 'toolCallId' => 'call-1', 'state' => 'approval-responded', 'input' => ['path' => 'a.txt'], 'approval' => ['id' => 'call-1', 'approved' => true]],
+            ]],
+        ]);
+
+        expect($chat->messageId())->toBe('m2');
+    });
+
+    test('a trailing user message continues no message', function () {
+        $chat = Vercel::chat(useChatMessages());
+
+        expect($chat->messageId())->toBeNull()
+            ->and($chat->protocol())->toEqual(new VercelDataProtocol);
     });
 
     test('a chat prompts an agent directly', function () {

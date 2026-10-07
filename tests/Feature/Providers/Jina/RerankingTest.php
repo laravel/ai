@@ -70,7 +70,7 @@ test('reranking uses default model when none specified', function (): void {
 
     Reranking::of(['Doc A', 'Doc B'])->rerank('query', provider: 'jina');
 
-    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['model'] === 'jina-reranker-v3');
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['model'] === 'jina-reranker-v3.5');
 });
 
 test('reranking maps documents by index when results are returned out of order', function (): void {

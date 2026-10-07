@@ -1,6 +1,9 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Attributes\TopP;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
@@ -66,7 +69,7 @@ describe('request structure', function (): void {
         Http::assertSent(fn ($request): bool => $request->data()['max_tokens'] === 64000);
     });
 
-    test('temperature and top_p are included when set via attributes', function (): void {
+    test('only temperature is sent when temperature and top_p are both set', function (string $model): void {
         Http::fake([
             'api.anthropic.com/*' => $this->fakeTextResponse(),
         ]);
@@ -74,15 +77,60 @@ describe('request structure', function (): void {
         (new AttributeAgent)->prompt(
             'Hi',
             provider: 'anthropic',
+            model: $model,
         );
 
         Http::assertSent(function ($request): bool {
             $body = $request->data();
 
             return $body['temperature'] === 0.7
-                && $body['top_p'] === 0.8;
+                && ! array_key_exists('top_p', $body);
+        });
+    })->with(['claude-sonnet-4-6', 'claude-haiku-4-5-20251001']);
+
+    test('top_p is sent when temperature is not set', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse(),
+        ]);
+
+        $agent = new #[TopP(0.8)] class implements Agent
+        {
+            use Promptable;
+
+            public function instructions(): string
+            {
+                return 'You are a helpful assistant.';
+            }
+        };
+
+        $agent->prompt('Hi', provider: 'anthropic', model: 'claude-sonnet-4-6');
+
+        Http::assertSent(function ($request): bool {
+            $body = $request->data();
+
+            return $body['top_p'] === 0.8
+                && ! array_key_exists('temperature', $body);
         });
     });
+
+    test('temperature and top_p are dropped for models that reject sampling parameters', function (string $model): void {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse(),
+        ]);
+
+        (new AttributeAgent)->prompt(
+            'Hi',
+            provider: 'anthropic',
+            model: $model,
+        );
+
+        Http::assertSent(function ($request): bool {
+            $body = $request->data();
+
+            return ! array_key_exists('temperature', $body)
+                && ! array_key_exists('top_p', $body);
+        });
+    })->with(['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-4-7', 'claude-fable-5-1']);
 
     test('temperature and top_p are excluded when not set', function (): void {
         Http::fake([
@@ -207,6 +255,25 @@ describe('structured output', function (): void {
 
             return $body['output_config']['format']['type'] === 'json_schema'
                 && ! $hasStructuredTool;
+        });
+    });
+
+    test('native structured output keeps its format when provider options set output_config', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeStructuredResponse(['name' => 'Taylor', 'age' => 30]),
+        ]);
+
+        (new StructuredWithThinkingAgent)->prompt(
+            'Tell me about Taylor',
+            provider: 'anthropic',
+        );
+
+        Http::assertSent(function ($request): bool {
+            $body = $request->data();
+
+            return $body['output_config']['format']['type'] === 'json_schema'
+                && $body['output_config']['effort'] === 'low'
+                && $body['thinking']['type'] === 'enabled';
         });
     });
 

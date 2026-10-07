@@ -4,7 +4,9 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Providers\Tools\CodeExecution;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
+use Tests\Fixtures\Tools\DeferredTool;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
@@ -255,5 +257,21 @@ test('code execution tool sends type code_interpreter with auto container', func
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'code_interpreter');
 
         return data_get($tool, 'container') === ['type' => 'auto'];
+    });
+});
+
+test('tool search emits a tool_search entry with azure options and defers its nested tools', function (): void {
+    Http::fake(['*' => fakeAzureResponse('ok')]);
+
+    $search = (new ToolSearch(tools: [new DeferredTool]))
+        ->withProviderOptions(fn (Lab|string $lab): array => $lab === Lab::Azure ? ['execution' => 'client'] : []);
+
+    agent(tools: [$search])->prompt('Hi', provider: 'azure');
+
+    Http::assertSent(function (Request $request): bool {
+        $tools = collect(data_get(json_decode($request->body(), true), 'tools'));
+
+        return $tools->firstWhere('type', 'tool_search') === ['type' => 'tool_search', 'execution' => 'client']
+            && ($tools->firstWhere('name', 'DeferredTool')['defer_loading'] ?? false) === true;
     });
 });
