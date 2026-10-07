@@ -70,6 +70,10 @@ trait BuildsTextRequests
             'top_p' => $options?->topP,
         ]));
 
+        if (isset($body['output_config'], $providerOptions['output_config'])) {
+            $providerOptions['output_config'] = array_merge($body['output_config'], $providerOptions['output_config']);
+        }
+
         return $this->applyPromptCacheBreakpoints(array_merge($body, $providerOptions), $options);
     }
 

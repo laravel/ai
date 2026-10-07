@@ -210,6 +210,25 @@ describe('structured output', function (): void {
         });
     });
 
+    test('native structured output keeps its format when provider options set output_config', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeStructuredResponse(['name' => 'Taylor', 'age' => 30]),
+        ]);
+
+        (new StructuredWithThinkingAgent)->prompt(
+            'Tell me about Taylor',
+            provider: 'anthropic',
+        );
+
+        Http::assertSent(function ($request): bool {
+            $body = $request->data();
+
+            return $body['output_config']['format']['type'] === 'json_schema'
+                && $body['output_config']['effort'] === 'low'
+                && $body['thinking']['type'] === 'enabled';
+        });
+    });
+
     test('native structured output strips unsupported constraints and folds them into descriptions', function (): void {
         Http::fake([
             'api.anthropic.com/*' => $this->fakeStructuredResponse(['score' => 5, 'tags' => ['a']]),
