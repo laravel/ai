@@ -64,8 +64,13 @@ dataset('reranking-providers', [
 ]);
 
 dataset('classification-providers', [
+    'openai' => ['openai', 'OPENAI_API_KEY'],
     'openrouter' => ['openrouter', 'OPENROUTER_API_KEY'],
     'typesafe' => ['typesafe', 'TYPESAFE_API_KEY'],
+]);
+
+dataset('classification-image-providers', [
+    'openai' => ['openai', 'OPENAI_API_KEY'],
 ]);
 
 dataset('agent-providers', [

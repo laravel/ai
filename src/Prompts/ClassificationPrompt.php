@@ -3,9 +3,11 @@
 namespace Laravel\Ai\Prompts;
 
 use Countable;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Providers\ClassificationProvider;
 use Laravel\Ai\Contracts\Question;
+use Laravel\Ai\Files\File;
 
 class ClassificationPrompt implements Countable
 {
@@ -15,6 +17,7 @@ class ClassificationPrompt implements Countable
      * @param  string|array<string, mixed>  $state
      * @param  array<string, Question>  $questions
      * @param  array<string, mixed>  $providerOptions
+     * @param  array<int, File|UploadedFile>  $attachments
      */
     public function __construct(
         public readonly string|array $state,
@@ -23,6 +26,7 @@ class ClassificationPrompt implements Countable
         public readonly string $model,
         public readonly int $timeout = 30,
         public readonly array $providerOptions = [],
+        public readonly array $attachments = [],
     ) {}
 
     /**

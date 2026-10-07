@@ -2,11 +2,13 @@
 
 namespace Laravel\Ai\Gateway\Concerns;
 
+use Illuminate\Http\UploadedFile;
 use Laravel\Ai\Classification\Boolean;
 use Laravel\Ai\Classification\Choice;
 use Laravel\Ai\Classification\Score;
 use Laravel\Ai\Contracts\Providers\ClassificationProvider;
 use Laravel\Ai\Contracts\Question;
+use Laravel\Ai\Files\File;
 use Laravel\Ai\Responses\ClassificationResponse;
 use Laravel\Ai\Responses\Data\Answer;
 use Laravel\Ai\Responses\Data\BooleanAnswer;
@@ -14,6 +16,7 @@ use Laravel\Ai\Responses\Data\ChoiceAnswer;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ScoreAnswer;
 use Laravel\Ai\Responses\Data\TextUsage;
+use LogicException;
 
 trait AnswersQuestions
 {
@@ -28,6 +31,7 @@ trait AnswersQuestions
      * @param  string|array<string, mixed>  $state
      * @param  array<string, Question>  $questions
      * @param  array<string, mixed>  $providerOptions
+     * @param  array<int, File|UploadedFile>  $attachments
      */
     public function classify(
         ClassificationProvider $provider,
@@ -36,7 +40,12 @@ trait AnswersQuestions
         array $questions,
         int $timeout = 30,
         array $providerOptions = [],
+        array $attachments = [],
     ): ClassificationResponse {
+        if ($attachments !== []) {
+            throw new LogicException("Provider [{$provider->name()}] does not support classification attachments.");
+        }
+
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post($this->classificationEndpoint(), array_merge($providerOptions, [

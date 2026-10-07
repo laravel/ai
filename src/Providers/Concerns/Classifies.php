@@ -2,11 +2,13 @@
 
 namespace Laravel\Ai\Providers\Concerns;
 
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Question;
 use Laravel\Ai\Events\Classified;
 use Laravel\Ai\Events\Classifying;
+use Laravel\Ai\Files\File;
 use Laravel\Ai\Prompts\ClassificationPrompt;
 use Laravel\Ai\Responses\ClassificationResponse;
 
@@ -18,14 +20,15 @@ trait Classifies
      * @param  string|array<string, mixed>  $state
      * @param  array<string, Question>  $questions
      * @param  array<string, mixed>  $providerOptions
+     * @param  array<int, File|UploadedFile>  $attachments
      */
-    public function classify(string|array $state, array $questions, ?string $model = null, int $timeout = 30, array $providerOptions = []): ClassificationResponse
+    public function classify(string|array $state, array $questions, ?string $model = null, int $timeout = 30, array $providerOptions = [], array $attachments = []): ClassificationResponse
     {
         $invocationId = (string) Str::uuid7();
 
         $model ??= $this->defaultClassificationModel();
 
-        $prompt = new ClassificationPrompt($state, $questions, $this, $model, $timeout, $providerOptions);
+        $prompt = new ClassificationPrompt($state, $questions, $this, $model, $timeout, $providerOptions, $attachments);
 
         if (Ai::classificationIsFaked()) {
             Ai::recordClassification($prompt);
@@ -42,6 +45,7 @@ trait Classifies
             $questions,
             $timeout,
             $providerOptions,
+            $attachments,
         ), fn (ClassificationResponse $response) => $this->events->dispatch(new Classified(
             $invocationId, $this, $model, $prompt, $response,
         )));

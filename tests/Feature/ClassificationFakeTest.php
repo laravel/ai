@@ -5,6 +5,7 @@ use Laravel\Ai\Classification\Boolean;
 use Laravel\Ai\Classification\Choice;
 use Laravel\Ai\Classification\Score;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Prompts\ClassificationPrompt;
 use Laravel\Ai\Responses\Data\BooleanAnswer;
 use Laravel\Ai\Responses\Data\ChoiceAnswer;
@@ -100,6 +101,16 @@ test('can assert classified', function (): void {
     Classification::assertNotClassified(fn (ClassificationPrompt $prompt): bool => $prompt->asks('department'));
 });
 
+test('fake records the attachments a classification was given', function (): void {
+    Classification::fake();
+
+    $image = Image::fromBase64(base64_encode('photo'), 'image/png');
+
+    Classification::of('Inspect this.', [$image])->question('damaged', new Boolean('Damaged?'))->classify(provider: Lab::OpenAI);
+
+    Classification::assertClassified(fn (ClassificationPrompt $prompt): bool => $prompt->attachments === [$image]);
+});
+
 test('can assert nothing classified', function (): void {
     Classification::fake();
 
@@ -121,5 +132,5 @@ test('missing answer throws', function (): void {
 test('non-classification providers throw', function (): void {
     Classification::fake();
 
-    Classification::of('text')->question('is_urgent', new Boolean('Urgent?'))->classify(provider: 'openai');
+    Classification::of('text')->question('is_urgent', new Boolean('Urgent?'))->classify(provider: 'anthropic');
 })->throws(LogicException::class, 'does not support classification');
