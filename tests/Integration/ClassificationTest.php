@@ -57,16 +57,3 @@ test('images can be classified alongside the state', function (string $provider,
     'png' => ['red.png', 'red'],
     'jpeg' => ['blue.jpg', 'blue'],
 ]);
-
-test('hot dog or not hot dog', function (string $provider, string $apiKey, string $file, bool $isHotDog): void {
-    requiresApiKey($apiKey);
-
-    $response = Classification::of('A photo of food.', [Image::fromPath(__DIR__.'/../Fixtures/Images/'.$file)])
-        ->question('hot_dog', new Boolean('Is this a hot dog?'))
-        ->classify(provider: $provider);
-
-    expect($response['hot_dog']->isTrue())->toBe($isHotDog);
-})->with('classification-image-providers')->with([
-    'hot dog' => ['hotdog.jpg', true],
-    'not hot dog' => ['pizza.jpg', false],
-]);

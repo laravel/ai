@@ -155,10 +155,27 @@ class OpenAiClassificationGateway implements ClassificationGateway
                 'type' => 'score',
                 'name' => $name,
                 'instructions' => $this->toText($question->instructions),
-                'levels' => array_map(fn ($level): array => ['label' => $this->toText($level)], $question->levels),
+                'levels' => array_map($this->mapLevel(...), $question->levels),
             ],
             default => ['name' => $name, ...$question->toArray()],
         };
+    }
+
+    /**
+     * Map a score level to a label, keeping the description of levels given as a label and description.
+     *
+     * @param  string|array<string, mixed>  $level
+     */
+    protected function mapLevel(string|array $level): array
+    {
+        if (is_string($level) || ! is_string($level['label'] ?? null)) {
+            return ['label' => $this->toText($level)];
+        }
+
+        return array_filter([
+            'label' => $level['label'],
+            'description' => isset($level['description']) ? $this->toText($level['description']) : null,
+        ], fn ($value) => $value !== null);
     }
 
     /**

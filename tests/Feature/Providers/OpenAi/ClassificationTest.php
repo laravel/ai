@@ -60,7 +60,11 @@ test('classification posts questions to the decisions endpoint in the openai wir
                 'billing' => 'Payments and refunds.',
                 'shipping' => null,
             ]),
-            'severity' => new Score(['ask' => 'How severe?'], ['Cosmetic', 'Workaround available', 'Fully blocked']),
+            'severity' => new Score(['ask' => 'How severe?'], [
+                'Cosmetic',
+                ['label' => 'Workaround available', 'description' => 'Usable with extra steps.'],
+                ['impact' => 'total'],
+            ]),
         ])
         ->classify(provider: 'openai');
 
@@ -93,8 +97,8 @@ test('classification posts questions to the decisions endpoint in the openai wir
                         'instructions' => '{"ask":"How severe?"}',
                         'levels' => [
                             ['label' => 'Cosmetic'],
-                            ['label' => 'Workaround available'],
-                            ['label' => 'Fully blocked'],
+                            ['label' => 'Workaround available', 'description' => 'Usable with extra steps.'],
+                            ['label' => '{"impact":"total"}'],
                         ],
                     ],
                 ],
@@ -115,14 +119,12 @@ test('structured state is sent as json text', function (): void {
 test('image attachments are sent inline with the state as a user message', function (): void {
     Http::fake(['*' => Http::response(fakeOpenAiDecisionsResponse())]);
 
-    $path = tempnam(sys_get_temp_dir(), 'ai');
-    file_put_contents($path, 'local-bytes');
-
+    $jpeg = file_get_contents(__DIR__.'/../../../Fixtures/Images/blue.jpg');
     $png = file_get_contents(__DIR__.'/../../../Fixtures/Images/red.png');
 
     Classification::of('Inspect the product in this photo.', [
-        Image::fromBase64(base64_encode('base64-bytes'), 'image/jpeg')->withProviderOptions(['detail' => 'high']),
-        Image::fromPath($path, 'image/png'),
+        Image::fromBase64(base64_encode('base64-bytes'), 'image/jpeg')->withProviderOptions(['custom' => 'value']),
+        Image::fromPath(__DIR__.'/../../../Fixtures/Images/blue.jpg'),
         UploadedFile::fake()->createWithContent('upload.webp', 'upload-bytes')->mimeType('image/webp'),
         Image::fromBase64(base64_encode($png)),
     ])
@@ -133,8 +135,8 @@ test('image attachments are sent inline with the state as a user message', funct
         'role' => 'user',
         'content' => [
             ['type' => 'input_text', 'text' => 'Inspect the product in this photo.'],
-            ['detail' => 'high', 'type' => 'input_image', 'image_url' => 'data:image/jpeg;base64,'.base64_encode('base64-bytes')],
-            ['type' => 'input_image', 'image_url' => 'data:image/png;base64,'.base64_encode('local-bytes')],
+            ['custom' => 'value', 'type' => 'input_image', 'image_url' => 'data:image/jpeg;base64,'.base64_encode('base64-bytes')],
+            ['type' => 'input_image', 'image_url' => 'data:image/jpeg;base64,'.base64_encode($jpeg)],
             ['type' => 'input_image', 'image_url' => 'data:image/webp;base64,'.base64_encode('upload-bytes')],
             ['type' => 'input_image', 'image_url' => 'data:image/png;base64,'.base64_encode($png)],
         ],
@@ -177,7 +179,7 @@ test('attachments that are not supported images are rejected before any request'
     'provider image' => [fn () => Image::fromId('file_123'), 'OpenAI decisions only accept images with inline content; [Laravel\\Ai\\Files\\ProviderImage] given.'],
     'pdf upload' => [fn () => UploadedFile::fake()->createWithContent('invoice.pdf', 'pdf-bytes')->mimeType('application/pdf'), '[application/pdf] given.'],
     'heic upload' => [fn () => UploadedFile::fake()->createWithContent('photo.heic', 'heic-bytes')->mimeType('image/heic'), '[image/heic] given.'],
-    'heic file' => [fn () => Image::fromPath(tempnam(sys_get_temp_dir(), 'ai'), 'image/heic'), '[image/heic] given.'],
+    'heic file' => [fn () => Image::fromPath(__DIR__.'/../../../Fixtures/Images/red.png', 'image/heic'), '[image/heic] given.'],
     'html served as a remote image' => [fn () => Image::fromUrl('https://example.com/product.png'), '[text/html] given.'],
 ]);
 
@@ -216,4 +218,16 @@ test('classification uses the configured classification model', function (): voi
     Classification::of('text')->question('is_urgent', new Boolean('Urgent?'))->classify(provider: 'openai');
 
     Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['model'] === 'gpt-6-luna-preview');
+});
+
+test('attachments fail loudly instead of failing over to a provider that cannot classify them', function (): void {
+    config(['ai.providers.typesafe.key' => 'test-key']);
+
+    Http::fake(['api.openai.com/*' => Http::response([], 503)]);
+
+    expect(fn () => Classification::of('Inspect this.', [Image::fromBase64(base64_encode('photo'), 'image/png')])
+        ->question('damaged', new Boolean('Damaged?'))
+        ->classify(provider: ['openai', 'typesafe']))->toThrow(LogicException::class, 'Provider [typesafe] does not support classification attachments.');
+
+    Http::assertSentCount(1);
 });
