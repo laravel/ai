@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Exceptions;
+use Laravel\Ai\Approvals\ApprovalSignature;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data;
@@ -193,7 +194,7 @@ test('a paused stream emits an approval request part for each pending approval',
         ['type' => 'start', 'messageId' => 'msg-1'],
         ['type' => 'start-step'],
         ['type' => 'tool-input-available', 'toolCallId' => 'call-1', 'toolName' => 'DeleteFile', 'input' => ['path' => 'a.txt']],
-        ['type' => 'tool-approval-request', 'toolCallId' => 'call-1', 'approvalId' => 'call-1', 'reason' => 'Destructive operation.'],
+        ['type' => 'tool-approval-request', 'toolCallId' => 'call-1', 'approvalId' => ApprovalSignature::sign('call-1', 'DeleteFile', ['path' => 'a.txt']), 'reason' => 'Destructive operation.'],
         ['type' => 'finish-step'],
         vercelFinishPart('tool-calls'),
         ['type' => 'done'],
