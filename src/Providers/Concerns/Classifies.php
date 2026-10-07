@@ -11,6 +11,7 @@ use Laravel\Ai\Events\Classifying;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Prompts\ClassificationPrompt;
 use Laravel\Ai\Responses\ClassificationResponse;
+use LogicException;
 
 trait Classifies
 {
@@ -24,6 +25,10 @@ trait Classifies
      */
     public function classify(string|array $state, array $questions, ?string $model = null, int $timeout = 30, array $providerOptions = [], array $attachments = []): ClassificationResponse
     {
+        if ($attachments !== [] && ! $this->supportsClassificationAttachments()) {
+            throw new LogicException("Provider [{$this->name()}] does not support classification attachments.");
+        }
+
         $invocationId = (string) Str::uuid7();
 
         $model ??= $this->defaultClassificationModel();
@@ -49,5 +54,13 @@ trait Classifies
         ), fn (ClassificationResponse $response) => $this->events->dispatch(new Classified(
             $invocationId, $this, $model, $prompt, $response,
         )));
+    }
+
+    /**
+     * Determine if the provider can classify attachments alongside the state.
+     */
+    public function supportsClassificationAttachments(): bool
+    {
+        return false;
     }
 }

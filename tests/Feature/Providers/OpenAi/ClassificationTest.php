@@ -118,10 +118,13 @@ test('image attachments are sent inline with the state as a user message', funct
     $path = tempnam(sys_get_temp_dir(), 'ai');
     file_put_contents($path, 'local-bytes');
 
+    $png = file_get_contents(__DIR__.'/../../../Fixtures/Images/red.png');
+
     Classification::of('Inspect the product in this photo.', [
-        Image::fromBase64(base64_encode('base64-bytes'), 'image/jpeg'),
+        Image::fromBase64(base64_encode('base64-bytes'), 'image/jpeg')->withProviderOptions(['detail' => 'high']),
         Image::fromPath($path, 'image/png'),
         UploadedFile::fake()->createWithContent('upload.webp', 'upload-bytes')->mimeType('image/webp'),
+        Image::fromBase64(base64_encode($png)),
     ])
         ->question('visible_damage', new Boolean('Does the product have visible damage?'))
         ->classify(provider: 'openai');
@@ -130,9 +133,10 @@ test('image attachments are sent inline with the state as a user message', funct
         'role' => 'user',
         'content' => [
             ['type' => 'input_text', 'text' => 'Inspect the product in this photo.'],
-            ['type' => 'input_image', 'image_url' => 'data:image/jpeg;base64,'.base64_encode('base64-bytes')],
+            ['detail' => 'high', 'type' => 'input_image', 'image_url' => 'data:image/jpeg;base64,'.base64_encode('base64-bytes')],
             ['type' => 'input_image', 'image_url' => 'data:image/png;base64,'.base64_encode('local-bytes')],
             ['type' => 'input_image', 'image_url' => 'data:image/webp;base64,'.base64_encode('upload-bytes')],
+            ['type' => 'input_image', 'image_url' => 'data:image/png;base64,'.base64_encode($png)],
         ],
     ]]);
 });
@@ -146,8 +150,8 @@ test('remote and stored images are downloaded and sent inline', function (): voi
     Storage::fake('photos')->put('product.png', 'stored-bytes');
 
     Classification::of('Inspect this.', [
-        Image::fromUrl('https://example.com/product.gif'),
-        Image::fromStorage('product.png', 'photos'),
+        'front' => Image::fromUrl('https://example.com/product.gif'),
+        'back' => Image::fromStorage('product.png', 'photos'),
     ])
         ->question('visible_damage', new Boolean('Damaged?'))
         ->classify(provider: 'openai');
@@ -159,23 +163,23 @@ test('remote and stored images are downloaded and sent inline', function (): voi
         ]);
 });
 
-test('images that cannot be sent inline are rejected before any request', function (): void {
-    Http::fake();
+test('attachments that are not supported images are rejected before any request', function (mixed $attachment, string $message): void {
+    Http::fake([
+        'example.com/*' => Http::response('<html></html>', 200, ['Content-Type' => 'text/html']),
+    ]);
 
-    expect(fn () => Classification::of('Inspect this.', [Image::fromId('file_123')])
+    expect(fn () => Classification::of('Inspect this.', [$attachment()])
         ->question('visible_damage', new Boolean('Damaged?'))
-        ->classify(provider: 'openai'))->toThrow(InvalidArgumentException::class);
+        ->classify(provider: 'openai'))->toThrow(InvalidArgumentException::class, $message);
 
-    expect(fn () => Classification::of('Inspect this.', [UploadedFile::fake()->createWithContent('invoice.pdf', 'pdf-bytes')->mimeType('application/pdf')])
-        ->question('visible_damage', new Boolean('Damaged?'))
-        ->classify(provider: 'openai'))->toThrow(InvalidArgumentException::class);
-
-    expect(fn () => Classification::of('Inspect this.', [UploadedFile::fake()->createWithContent('photo.heic', 'heic-bytes')->mimeType('image/heic')])
-        ->question('visible_damage', new Boolean('Damaged?'))
-        ->classify(provider: 'openai'))->toThrow(InvalidArgumentException::class);
-
-    Http::assertNothingSent();
-});
+    Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'api.openai.com'));
+})->with([
+    'provider image' => [fn () => Image::fromId('file_123'), 'OpenAI decisions only accept images with inline content; [Laravel\\Ai\\Files\\ProviderImage] given.'],
+    'pdf upload' => [fn () => UploadedFile::fake()->createWithContent('invoice.pdf', 'pdf-bytes')->mimeType('application/pdf'), '[application/pdf] given.'],
+    'heic upload' => [fn () => UploadedFile::fake()->createWithContent('photo.heic', 'heic-bytes')->mimeType('image/heic'), '[image/heic] given.'],
+    'heic file' => [fn () => Image::fromPath(tempnam(sys_get_temp_dir(), 'ai'), 'image/heic'), '[image/heic] given.'],
+    'html served as a remote image' => [fn () => Image::fromUrl('https://example.com/product.png'), '[text/html] given.'],
+]);
 
 test('decisions answers are matched to questions by name', function (): void {
     Http::fake(['*' => Http::response(fakeOpenAiDecisionsResponse())]);

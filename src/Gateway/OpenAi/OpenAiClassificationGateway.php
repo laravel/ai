@@ -2,19 +2,19 @@
 
 namespace Laravel\Ai\Gateway\OpenAi;
 
+use finfo;
 use Illuminate\Http\UploadedFile;
 use InvalidArgumentException;
 use Laravel\Ai\Classification\Boolean;
 use Laravel\Ai\Classification\Choice;
 use Laravel\Ai\Classification\Score;
+use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\ClassificationGateway;
 use Laravel\Ai\Contracts\Providers\ClassificationProvider;
 use Laravel\Ai\Contracts\Question;
-use Laravel\Ai\Files\Base64Image;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\File;
-use Laravel\Ai\Files\LocalImage;
-use Laravel\Ai\Files\RemoteImage;
-use Laravel\Ai\Files\StoredImage;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\ClassificationResponse;
 use Laravel\Ai\Responses\Data\Answer;
@@ -27,7 +27,6 @@ use Laravel\Ai\Responses\Data\TextUsage;
 class OpenAiClassificationGateway implements ClassificationGateway
 {
     use Concerns\CreatesOpenAiClient;
-    use Concerns\MapsAttachments;
     use HandlesFailoverErrors;
 
     /**
@@ -98,7 +97,7 @@ class OpenAiClassificationGateway implements ClassificationGateway
             'role' => 'user',
             'content' => [
                 ['type' => 'input_text', 'text' => $text],
-                ...array_map($this->mapImage(...), $attachments),
+                ...array_map($this->mapImage(...), array_values($attachments)),
             ],
         ]];
     }
@@ -106,18 +105,30 @@ class OpenAiClassificationGateway implements ClassificationGateway
     /**
      * Map an image to an input image part, which the decisions endpoint only accepts as an inline data URL.
      *
-     * @throws InvalidArgumentException if the attachment cannot be sent inline.
+     * @throws InvalidArgumentException if the attachment is not a JPEG, PNG, GIF, or WebP image with inline content.
      */
     protected function mapImage(File|UploadedFile $image): array
     {
-        $url = match (true) {
-            $image instanceof Base64Image => 'data:'.($image->mimeType() ?? 'image/png').';base64,'.$image->base64,
-            $image instanceof LocalImage, $image instanceof RemoteImage, $image instanceof StoredImage => 'data:'.($image->mimeType() ?? 'image/png').';base64,'.base64_encode($image->content()),
-            $image instanceof UploadedFile && $this->isImage($image) => 'data:'.$image->getClientMimeType().';base64,'.base64_encode((string) $image->get()),
-            default => throw new InvalidArgumentException('OpenAI decisions only accept base64, local, remote, stored, or uploaded images; ['.get_debug_type($image).'] given.'),
-        };
+        if ($image instanceof UploadedFile) {
+            $image = Image::fromUpload($image);
+        }
 
-        return ['type' => 'input_image', 'image_url' => $url];
+        if (! $image instanceof Image || ! $image instanceof StorableFile) {
+            throw new InvalidArgumentException('OpenAI decisions only accept images with inline content; ['.get_debug_type($image).'] given.');
+        }
+
+        $content = $image->content();
+
+        $mime = $image->mimeType() ?? (new finfo(FILEINFO_MIME_TYPE))->buffer($content);
+
+        if (! in_array($mime, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) {
+            throw new InvalidArgumentException("OpenAI decisions only accept JPEG, PNG, GIF, or WebP images; [{$mime}] given.");
+        }
+
+        return array_merge($image->providerOptions(Lab::OpenAI), [
+            'type' => 'input_image',
+            'image_url' => 'data:'.$mime.';base64,'.base64_encode($content),
+        ]);
     }
 
     /**

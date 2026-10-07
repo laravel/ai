@@ -111,6 +111,14 @@ test('fake records the attachments a classification was given', function (): voi
     Classification::assertClassified(fn (ClassificationPrompt $prompt): bool => $prompt->attachments === [$image]);
 });
 
+test('fakes reject attachments for providers that cannot classify them', function (): void {
+    Classification::fake();
+
+    Classification::of('Inspect this.', [Image::fromBase64(base64_encode('photo'), 'image/png')])
+        ->question('damaged', new Boolean('Damaged?'))
+        ->classify(provider: Lab::TypeSafe);
+})->throws(LogicException::class, 'Provider [typesafe] does not support classification attachments.');
+
 test('can assert nothing classified', function (): void {
     Classification::fake();
 

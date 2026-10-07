@@ -16,7 +16,6 @@ use Laravel\Ai\Responses\Data\ChoiceAnswer;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\ScoreAnswer;
 use Laravel\Ai\Responses\Data\TextUsage;
-use LogicException;
 
 trait AnswersQuestions
 {
@@ -42,10 +41,6 @@ trait AnswersQuestions
         array $providerOptions = [],
         array $attachments = [],
     ): ClassificationResponse {
-        if ($attachments !== []) {
-            throw new LogicException("Provider [{$provider->name()}] does not support classification attachments.");
-        }
-
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post($this->classificationEndpoint(), array_merge($providerOptions, [

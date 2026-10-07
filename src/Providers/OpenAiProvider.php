@@ -190,6 +190,14 @@ class OpenAiProvider extends Provider implements AudioProvider, ClassificationPr
     }
 
     /**
+     * Determine if the provider can classify attachments alongside the state.
+     */
+    public function supportsClassificationAttachments(): bool
+    {
+        return true;
+    }
+
+    /**
      * Get the provider's classification gateway.
      */
     public function classificationGateway(): ClassificationGateway
