@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Classification;
 use Laravel\Ai\Classification\Boolean;
 use Laravel\Ai\Classification\Choice;
@@ -136,6 +137,28 @@ test('image attachments are sent inline with the state as a user message', funct
     ]]);
 });
 
+test('remote and stored images are downloaded and sent inline', function (): void {
+    Http::fake([
+        'example.com/*' => Http::response('remote-bytes', 200, ['Content-Type' => 'image/gif']),
+        '*' => Http::response(fakeOpenAiDecisionsResponse()),
+    ]);
+
+    Storage::fake('photos')->put('product.png', 'stored-bytes');
+
+    Classification::of('Inspect this.', [
+        Image::fromUrl('https://example.com/product.gif'),
+        Image::fromStorage('product.png', 'photos'),
+    ])
+        ->question('visible_damage', new Boolean('Damaged?'))
+        ->classify(provider: 'openai');
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.openai.com/v1/decisions'
+        && array_slice(json_decode($request->body(), true)['input'][0]['content'], 1) === [
+            ['type' => 'input_image', 'image_url' => 'data:image/gif;base64,'.base64_encode('remote-bytes')],
+            ['type' => 'input_image', 'image_url' => 'data:image/png;base64,'.base64_encode('stored-bytes')],
+        ]);
+});
+
 test('images that cannot be sent inline are rejected before any request', function (): void {
     Http::fake();
 
@@ -144,6 +167,10 @@ test('images that cannot be sent inline are rejected before any request', functi
         ->classify(provider: 'openai'))->toThrow(InvalidArgumentException::class);
 
     expect(fn () => Classification::of('Inspect this.', [UploadedFile::fake()->createWithContent('invoice.pdf', 'pdf-bytes')->mimeType('application/pdf')])
+        ->question('visible_damage', new Boolean('Damaged?'))
+        ->classify(provider: 'openai'))->toThrow(InvalidArgumentException::class);
+
+    expect(fn () => Classification::of('Inspect this.', [UploadedFile::fake()->createWithContent('photo.heic', 'heic-bytes')->mimeType('image/heic')])
         ->question('visible_damage', new Boolean('Damaged?'))
         ->classify(provider: 'openai'))->toThrow(InvalidArgumentException::class);
 

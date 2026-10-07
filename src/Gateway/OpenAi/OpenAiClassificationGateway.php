@@ -27,6 +27,7 @@ use Laravel\Ai\Responses\Data\TextUsage;
 class OpenAiClassificationGateway implements ClassificationGateway
 {
     use Concerns\CreatesOpenAiClient;
+    use Concerns\MapsAttachments;
     use HandlesFailoverErrors;
 
     /**
@@ -107,12 +108,12 @@ class OpenAiClassificationGateway implements ClassificationGateway
      *
      * @throws InvalidArgumentException if the attachment cannot be sent inline.
      */
-    protected function mapImage(mixed $image): array
+    protected function mapImage(File|UploadedFile $image): array
     {
         $url = match (true) {
             $image instanceof Base64Image => 'data:'.($image->mimeType() ?? 'image/png').';base64,'.$image->base64,
             $image instanceof LocalImage, $image instanceof RemoteImage, $image instanceof StoredImage => 'data:'.($image->mimeType() ?? 'image/png').';base64,'.base64_encode($image->content()),
-            $image instanceof UploadedFile && str_starts_with($image->getClientMimeType(), 'image/') => 'data:'.$image->getClientMimeType().';base64,'.base64_encode((string) $image->get()),
+            $image instanceof UploadedFile && $this->isImage($image) => 'data:'.$image->getClientMimeType().';base64,'.base64_encode((string) $image->get()),
             default => throw new InvalidArgumentException('OpenAI decisions only accept base64, local, remote, stored, or uploaded images; ['.get_debug_type($image).'] given.'),
         };
 
