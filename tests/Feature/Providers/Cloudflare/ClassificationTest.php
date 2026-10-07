@@ -2,8 +2,10 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Classification;
 use Laravel\Ai\Classification\Boolean;
@@ -251,17 +253,6 @@ test('a missing account fails before sending a request', function (): void {
     Classification::of('text')->question('urgent', new Boolean('Urgent?'))->classify(provider: 'cloudflare');
 })->throws(InvalidArgumentException::class, 'A Cloudflare account ID is required');
 
-test('attachments are rejected before any Cloudflare request', function (): void {
-    Http::fake();
-
-    expect(fn () => Classification::of('Inspect this.', [Image::fromBase64(base64_encode('photo'), 'image/png')])
-        ->question('damaged', new Boolean('Damaged?'))
-        ->classify(provider: 'cloudflare'))
-        ->toThrow(LogicException::class, 'Provider [cloudflare] does not support classification attachments.');
-
-    Http::assertNothingSent();
-});
-
 test('HTTP authentication and request errors are not classified successfully', function (int $status): void {
     Http::fake(['*' => Http::response(['success' => false, 'errors' => [['code' => 10000, 'message' => 'Request rejected']]], $status)]);
 
@@ -373,6 +364,117 @@ test('Cloudflare can be the failover destination', function (): void {
 
     $response = Classification::of('text')->question('urgent', new Boolean('Urgent?'))
         ->classify(provider: ['typesafe', 'cloudflare']);
+
+    expect($response->meta->provider)->toBe('cloudflare')->and($response['urgent']->probability)->toBe(0.92);
+    Http::assertSentCount(2);
+});
+
+test('image attachments are sent inline before the state as data urls', function (): void {
+    Http::fake(['*' => Http::response(cloudflareResponse())]);
+
+    $jpeg = file_get_contents(__DIR__.'/../../../Fixtures/Images/blue.jpg');
+    $png = file_get_contents(__DIR__.'/../../../Fixtures/Images/red.png');
+
+    Classification::of('Inspect the product in this photo.', [
+        Image::fromBase64(base64_encode('base64-bytes'), 'image/jpeg'),
+        Image::fromPath(__DIR__.'/../../../Fixtures/Images/blue.jpg'),
+        UploadedFile::fake()->createWithContent('upload.webp', 'upload-bytes')->mimeType('image/webp'),
+        Image::fromBase64(base64_encode($png)),
+    ])
+        ->question('urgent', new Boolean('Urgent?'))
+        ->classify(provider: 'cloudflare');
+
+    Http::assertSent(function (Request $request) use ($jpeg, $png): bool {
+        $body = json_decode($request->body(), true);
+
+        return $request->url() === 'https://api.cloudflare.com/client/v4/accounts/test-account/ai/run/@cf/cloudflare/clef'
+            && array_keys($body) === ['model', 'images', 'state', 'questions']
+            && $body['images'] === [
+                'data:image/jpeg;base64,'.base64_encode('base64-bytes'),
+                'data:image/jpeg;base64,'.base64_encode($jpeg),
+                'data:image/webp;base64,'.base64_encode('upload-bytes'),
+                'data:image/png;base64,'.base64_encode($png),
+            ];
+    });
+});
+
+test('remote and stored images are downloaded and sent as data urls', function (): void {
+    Http::fake([
+        'example.com/*' => Http::response('remote-bytes', 200, ['Content-Type' => 'image/png']),
+        'api.cloudflare.com/*' => Http::response(cloudflareResponse()),
+    ]);
+
+    Storage::fake('photos')->put('product.jpg', 'stored-bytes');
+
+    Classification::of('Inspect this.', [
+        'front' => Image::fromUrl('https://example.com/product.png'),
+        'back' => Image::fromStorage('product.jpg', 'photos'),
+    ])
+        ->question('urgent', new Boolean('Urgent?'))
+        ->classify(provider: 'cloudflare');
+
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), 'api.cloudflare.com')
+        && json_decode($request->body(), true)['images'] === [
+            'data:image/png;base64,'.base64_encode('remote-bytes'),
+            'data:image/jpeg;base64,'.base64_encode('stored-bytes'),
+        ]);
+});
+
+test('attachments that are not supported images are rejected before any request', function (mixed $attachment, string $message): void {
+    Http::fake([
+        'example.com/*' => Http::response('<html></html>', 200, ['Content-Type' => 'text/html']),
+    ]);
+
+    expect(fn () => Classification::of('Inspect this.', [$attachment()])
+        ->question('urgent', new Boolean('Urgent?'))
+        ->classify(provider: 'cloudflare'))->toThrow(InvalidArgumentException::class, $message);
+
+    Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'api.cloudflare.com'));
+})->with([
+    'provider image' => [fn () => Image::fromId('file_123'), 'Cloudflare Clef only accepts images with inline content; [Laravel\\Ai\\Files\\ProviderImage] given.'],
+    'pdf upload' => [fn () => UploadedFile::fake()->createWithContent('invoice.pdf', 'pdf-bytes')->mimeType('application/pdf'), '[application/pdf] given.'],
+    'gif upload' => [fn () => UploadedFile::fake()->createWithContent('animation.gif', 'gif-bytes')->mimeType('image/gif'), '[image/gif] given.'],
+    'gif file' => [fn () => Image::fromBase64(base64_encode('gif-bytes'), 'image/gif'), '[image/gif] given.'],
+    'heic upload' => [fn () => UploadedFile::fake()->createWithContent('photo.heic', 'heic-bytes')->mimeType('image/heic'), '[image/heic] given.'],
+    'heic file' => [fn () => Image::fromPath(__DIR__.'/../../../Fixtures/Images/red.png', 'image/heic'), '[image/heic] given.'],
+    'html served as a remote image' => [fn () => Image::fromUrl('https://example.com/product.png'), '[text/html] given.'],
+]);
+
+test('more than 4 image attachments are rejected before any request', function (): void {
+    Http::fake();
+
+    $images = array_map(fn () => Image::fromBase64(base64_encode('bytes'), 'image/png'), range(1, 5));
+
+    expect(fn () => Classification::of('Inspect these.', $images)
+        ->question('urgent', new Boolean('Urgent?'))
+        ->classify(provider: 'cloudflare'))->toThrow(InvalidArgumentException::class, 'Cloudflare Clef accepts a maximum of 4 image attachments.');
+
+    Http::assertNothingSent();
+});
+
+test('attachments fail loudly instead of failing over to a provider that cannot classify them', function (): void {
+    config(['ai.providers.typesafe.key' => 'test-key']);
+
+    Http::fake(['api.cloudflare.com/*' => Http::response([], 503)]);
+
+    expect(fn () => Classification::of('Inspect this.', [Image::fromBase64(base64_encode('photo'), 'image/png')])
+        ->question('urgent', new Boolean('Urgent?'))
+        ->classify(provider: ['cloudflare', 'typesafe']))->toThrow(LogicException::class, 'Provider [typesafe] does not support classification attachments.');
+
+    Http::assertSentCount(1);
+});
+
+test('Cloudflare can be the failover destination with attachments', function (): void {
+    config(['ai.providers.openai.key' => 'test-key']);
+
+    Http::fake([
+        'api.openai.com/*' => Http::response([], 503),
+        'api.cloudflare.com/*' => Http::response(cloudflareResponse()),
+    ]);
+
+    $response = Classification::of('Inspect this.', [Image::fromBase64(base64_encode('photo'), 'image/png')])
+        ->question('urgent', new Boolean('Urgent?'))
+        ->classify(provider: ['openai', 'cloudflare']);
 
     expect($response->meta->provider)->toBe('cloudflare')->and($response['urgent']->probability)->toBe(0.92);
     Http::assertSentCount(2);

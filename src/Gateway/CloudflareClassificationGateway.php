@@ -2,15 +2,18 @@
 
 namespace Laravel\Ai\Gateway;
 
+use finfo;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Http\UploadedFile;
 use InvalidArgumentException;
+use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\ClassificationGateway;
 use Laravel\Ai\Contracts\Providers\ClassificationProvider;
 use Laravel\Ai\Contracts\Question;
 use Laravel\Ai\Files\File;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Responses\ClassificationResponse;
 use Laravel\Ai\Responses\Data\Answer;
 use Laravel\Ai\Responses\Data\Meta;
@@ -54,13 +57,20 @@ class CloudflareClassificationGateway implements ClassificationGateway
             default => throw new InvalidArgumentException("Unsupported Cloudflare classification model [{$model}]."),
         };
 
+        if (count($attachments) > 4) {
+            throw new InvalidArgumentException('Cloudflare Clef accepts a maximum of 4 image attachments.');
+        }
+
+        $payload = array_merge($providerOptions, [
+            'model' => $selector,
+            ...($attachments === [] ? [] : ['images' => array_map($this->mapImage(...), array_values($attachments))]),
+            'state' => $state,
+            'questions' => array_map($this->mapQuestion(...), $questions),
+        ]);
+
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post($this->classificationEndpoint().'/'.$model, array_merge($providerOptions, [
-                'model' => $selector,
-                'state' => $state,
-                'questions' => array_map($this->mapQuestion(...), $questions),
-            ])),
+            fn () => $this->client($provider, $timeout)->post($this->classificationEndpoint().'/'.$model, $payload),
         );
 
         $data = $this->classificationResponseData($response);
@@ -99,6 +109,36 @@ class CloudflareClassificationGateway implements ClassificationGateway
         }
 
         return $data['result'];
+    }
+
+    /**
+     * Map an image to a data URL accepted by Cloudflare Clef.
+     *
+     * @throws InvalidArgumentException if the attachment is not a JPEG, PNG, or WebP image with inline content.
+     */
+    protected function mapImage(File|UploadedFile $image): string
+    {
+        if ($image instanceof UploadedFile) {
+            $image = Image::fromUpload($image);
+        }
+
+        if (! $image instanceof Image || ! $image instanceof StorableFile) {
+            throw new InvalidArgumentException('Cloudflare Clef only accepts images with inline content; ['.get_debug_type($image).'] given.');
+        }
+
+        $content = $image->content();
+
+        $mime = $image->mimeType() ?? (new finfo(FILEINFO_MIME_TYPE))->buffer($content);
+
+        if ($mime === 'image/jpg') {
+            $mime = 'image/jpeg';
+        }
+
+        if (! in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true)) {
+            throw new InvalidArgumentException("Cloudflare Clef only accepts JPEG, PNG, or WebP images; [{$mime}] given.");
+        }
+
+        return 'data:'.$mime.';base64,'.base64_encode($content);
     }
 
     /**
