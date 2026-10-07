@@ -1,6 +1,21 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/ai/compare/v1.1.0...1.x)
+## [Unreleased](https://github.com/laravel/ai/compare/v1.2.0...1.x)
+
+## [v1.2.0](https://github.com/laravel/ai/compare/v1.1.0...v1.2.0) - 2026-10-07
+
+### What's Changed
+
+* Keep structured output format when provider options set output_config by [@kachelle](https://github.com/kachelle) in https://github.com/laravel/ai/pull/1105
+* Add OpenAI Decisions classification with image attachments by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/1106
+* fix: Fix structured output for Bedrock models without forced tool choice by [@cwilsn](https://github.com/cwilsn) in https://github.com/laravel/ai/pull/1104
+* Update Anthropic model defaults and skip sampling params on Claude 4.7+ by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/1107
+
+### New Contributors
+
+* [@cwilsn](https://github.com/cwilsn) made their first contribution in https://github.com/laravel/ai/pull/1104
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v1.1.0...v1.2.0
 
 ## [v1.1.0](https://github.com/laravel/ai/compare/v1.0.1...v1.1.0) - 2026-10-05
 
