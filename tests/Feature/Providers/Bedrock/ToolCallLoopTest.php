@@ -101,13 +101,15 @@ describe('tool call loop', function (): void {
     });
 
     test('structured output is parsed from the synthetic tool call', function (): void {
-        $client = $this->fakeBedrockConverse([
+        $requests = [];
+
+        $client = $this->fakeBedrockConverseSequence([[
             'output' => ['message' => ['content' => [
                 ['toolUse' => ['toolUseId' => 's1', 'name' => 'structured_output', 'input' => ['symbol' => 'Fe']]],
             ]]],
             'usage' => ['inputTokens' => 8, 'outputTokens' => 4],
             'stopReason' => 'tool_use',
-        ]);
+        ]], $requests);
 
         $gateway = $this->gatewayWithClient($client);
 
@@ -122,7 +124,59 @@ describe('tool call loop', function (): void {
             ->and($response->structured)->toMatchArray(['symbol' => 'Fe'])
             ->and($response->steps)->toHaveCount(1)
             ->and($response->usage->inputTokens)->toBe(8)
-            ->and($response->usage->outputTokens)->toBe(4);
+            ->and($response->usage->outputTokens)->toBe(4)
+            ->and($requests[0]['toolConfig']['toolChoice'])->toBe(['tool' => ['name' => 'structured_output']])
+            ->and($requests[0])->not->toHaveKey('system');
+    });
+
+    test('structured output is parsed from the json answer of models that reject forced tool choice', function (): void {
+        $requests = [];
+
+        $client = $this->fakeBedrockConverseSequence([
+            bedrockTextResponse('{"symbol": "Fe"}'),
+        ], $requests);
+
+        $response = (new TextGenerationLoop($this->gatewayWithClient($client)))->generate(
+            $this->bedrockProvider(),
+            'us.anthropic.claude-sonnet-5-5',
+            'You are a helpful assistant.',
+            schema: ['symbol' => (new JsonSchemaTypeFactory)->string()],
+        );
+
+        expect($response)->toBeInstanceOf(StructuredTextResponse::class)
+            ->and($response->structured)->toBe(['symbol' => 'Fe'])
+            ->and($requests[0])->not->toHaveKey('toolConfig')
+            ->and($requests[0]['system'])->toHaveCount(2)
+            ->and($requests[0]['system'][0])->toBe(['text' => 'You are a helpful assistant.'])
+            ->and($requests[0]['system'][1]['text'])->toContain('"symbol"');
+    });
+
+    test('models that reject forced tool choice keep real tools on auto selection before the json answer', function (): void {
+        $requests = [];
+
+        $client = $this->fakeBedrockConverseSequence([
+            bedrockToolCallResponse('t1'),
+            bedrockTextResponse('{"number": 42}'),
+        ], $requests);
+
+        $response = (new TextGenerationLoop($this->gatewayWithClient($client)))->generate(
+            $this->bedrockProvider(),
+            'us.anthropic.claude-opus-5-5',
+            null,
+            messages: [new UserMessage('Generate a number')],
+            tools: [new FixedNumberGenerator],
+            schema: ['number' => (new JsonSchemaTypeFactory)->integer()],
+            options: new TextGenerationOptions(maxSteps: 2),
+        );
+
+        expect($response->structured)->toBe(['number' => 42])
+            ->and($response->toolResults)->toHaveCount(1)
+            ->and($requests)->toHaveCount(2);
+
+        foreach ($requests as $request) {
+            expect($request['toolConfig'])->not->toHaveKey('toolChoice')
+                ->and(array_column(array_column($request['toolConfig']['tools'], 'toolSpec'), 'name'))->toBe(['FixedNumberGenerator']);
+        }
     });
 
     test('streaming tool loop emits a single stream end with accumulated usage', function (): void {
