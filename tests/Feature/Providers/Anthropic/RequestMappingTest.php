@@ -1,6 +1,9 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Attributes\TopP;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
@@ -66,7 +69,7 @@ describe('request structure', function (): void {
         Http::assertSent(fn ($request): bool => $request->data()['max_tokens'] === 64000);
     });
 
-    test('temperature and top_p are included when set via attributes', function (string $model): void {
+    test('only temperature is sent when temperature and top_p are both set', function (string $model): void {
         Http::fake([
             'api.anthropic.com/*' => $this->fakeTextResponse(),
         ]);
@@ -81,9 +84,34 @@ describe('request structure', function (): void {
             $body = $request->data();
 
             return $body['temperature'] === 0.7
-                && $body['top_p'] === 0.8;
+                && ! array_key_exists('top_p', $body);
         });
-    })->with(['claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-sonnet-4-20250514', 'claude-3-7-sonnet-20250219']);
+    })->with(['claude-sonnet-4-6', 'claude-haiku-4-5-20251001']);
+
+    test('top_p is sent when temperature is not set', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeTextResponse(),
+        ]);
+
+        $agent = new #[TopP(0.8)] class implements Agent
+        {
+            use Promptable;
+
+            public function instructions(): string
+            {
+                return 'You are a helpful assistant.';
+            }
+        };
+
+        $agent->prompt('Hi', provider: 'anthropic', model: 'claude-sonnet-4-6');
+
+        Http::assertSent(function ($request): bool {
+            $body = $request->data();
+
+            return $body['top_p'] === 0.8
+                && ! array_key_exists('temperature', $body);
+        });
+    });
 
     test('temperature and top_p are dropped for models that reject sampling parameters', function (string $model): void {
         Http::fake([

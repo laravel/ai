@@ -68,7 +68,7 @@ trait BuildsTextRequests
         if ($this->supportsSamplingParameters($model)) {
             $body = array_merge($body, Arr::whereNotNull([
                 'temperature' => $options?->temperature,
-                'top_p' => $options?->topP,
+                'top_p' => $options?->temperature === null ? $options?->topP : null,
             ]));
         }
 
