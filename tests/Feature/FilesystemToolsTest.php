@@ -198,7 +198,27 @@ test('copy file duplicates a file', function (): void {
 test('copy file reports a missing source', function (): void {
     $result = (new CopyFile('local'))->handle(new Request(['from' => 'missing.txt', 'to' => 'dst.txt']));
 
-    expect($result)->toBe('Unable to copy [missing.txt] to [dst.txt]. The source file may not exist.');
+    expect($result)->toBe('File [missing.txt] does not exist.');
+});
+
+test('copy file does not copy directories', function (): void {
+    Storage::disk('local')->makeDirectory('photos');
+
+    $result = (new CopyFile('local'))->handle(new Request(['from' => 'photos', 'to' => 'archive/photos']));
+
+    expect($result)->toBe('File [photos] does not exist.');
+    Storage::disk('local')->assertExists('photos');
+    Storage::disk('local')->assertMissing('archive/photos');
+});
+
+test('copy file reports copy failures', function (): void {
+    $disk = Double::for(Filesystem::class);
+    $disk->expects('size')->with('a.txt')->returns(1);
+    $disk->expects('copy')->with('a.txt', 'b.txt')->returns(false);
+
+    $result = (new CopyFile($disk))->handle(new Request(['from' => 'a.txt', 'to' => 'b.txt']));
+
+    expect($result)->toBe('Unable to copy [a.txt] to [b.txt].');
 });
 
 test('move file relocates a file', function (): void {
