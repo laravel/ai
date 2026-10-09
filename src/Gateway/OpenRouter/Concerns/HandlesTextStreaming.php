@@ -33,6 +33,7 @@ trait HandlesTextStreaming
     ): Generator {
         $messageId = $this->generateEventId();
         $reasoningId = null;
+        $reasoningDetails = [];
         $streamModel = $model;
         $streamStartEmitted = false;
         $textStartEmitted = false;
@@ -93,6 +94,8 @@ trait HandlesTextStreaming
                     time(),
                 ))->withInvocationId($invocationId);
             }
+
+            $reasoningDetails = $this->mergeReasoningDetails($reasoningDetails, $delta['reasoning_details'] ?? []);
 
             $reasoning = $delta['reasoning'] ?? '';
 
@@ -238,7 +241,45 @@ trait HandlesTextStreaming
             finishReason: $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
             usage: $usage ?? new TextUsage(0, 0),
             meta: new Meta($provider->name(), $streamModel),
+            replayBlocks: array_values($reasoningDetails),
         );
+    }
+
+    /**
+     * Merge a delta's reasoning details into those received so far.
+     *
+     * A detail arrives in fragments that share its index: the text, summary
+     * and encrypted data are concatenated, every other field keeps the last
+     * value sent, which leaves each detail as the non-streaming response
+     * would have returned it.
+     *
+     * @param  array<int, array<string, mixed>>  $merged
+     * @param  array<int, array<string, mixed>>  $details
+     * @return array<int, array<string, mixed>>
+     */
+    protected function mergeReasoningDetails(array $merged, array $details): array
+    {
+        foreach ($details as $detail) {
+            $index = $detail['index'] ?? count($merged);
+
+            if (! isset($merged[$index])) {
+                $merged[$index] = $detail;
+
+                continue;
+            }
+
+            foreach ($detail as $key => $value) {
+                if (in_array($key, ['text', 'summary', 'data'], true) && is_string($value)) {
+                    $merged[$index][$key] = ($merged[$index][$key] ?? '').$value;
+                } elseif ($value !== null) {
+                    $merged[$index][$key] = $value;
+                }
+            }
+        }
+
+        ksort($merged);
+
+        return $merged;
     }
 
     /**
