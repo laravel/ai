@@ -12,8 +12,11 @@ use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\ClassificationGateway;
 use Laravel\Ai\Contracts\Providers\ClassificationProvider;
 use Laravel\Ai\Contracts\Question;
+use Laravel\Ai\Files\Audio;
+use Laravel\Ai\Files\Base64Audio;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\Video;
 use Laravel\Ai\Responses\ClassificationResponse;
 use Laravel\Ai\Responses\Data\Answer;
 use Laravel\Ai\Responses\Data\Meta;
@@ -54,16 +57,13 @@ class CloudflareClassificationGateway implements ClassificationGateway
         $selector = match ($model) {
             '@cf/cloudflare/clef' => 'clef',
             '@cf/cloudflare/clef-flash' => 'clef-flash',
+            '@cf/cloudflare/clef-omni' => 'clef-omni',
             default => throw new InvalidArgumentException("Unsupported Cloudflare classification model [{$model}]."),
         };
 
-        if (count($attachments) > 4) {
-            throw new InvalidArgumentException('Cloudflare Clef accepts a maximum of 4 image attachments.');
-        }
-
         $payload = array_merge($providerOptions, [
             'model' => $selector,
-            ...($attachments === [] ? [] : ['images' => array_map($this->mapImage(...), array_values($attachments))]),
+            ...$this->mapAttachments($attachments, $model),
             'state' => $state,
             'questions' => array_map($this->mapQuestion(...), $questions),
         ]);
@@ -112,30 +112,100 @@ class CloudflareClassificationGateway implements ClassificationGateway
     }
 
     /**
-     * Map an image to a data URL accepted by Cloudflare Clef.
+     * Group attachments by modality and map them to embedded data URLs.
      *
-     * @throws InvalidArgumentException if the attachment is not a JPEG, PNG, or WebP image with inline content.
+     * @param  array<int, File|UploadedFile>  $attachments
+     * @return array<string, list<string>>
      */
-    protected function mapImage(File|UploadedFile $image): string
+    protected function mapAttachments(array $attachments, string $model): array
     {
-        if ($image instanceof UploadedFile) {
-            $image = Image::fromUpload($image);
+        $groups = ['images' => [], 'audio' => [], 'videos' => []];
+
+        foreach ($attachments as $attachment) {
+            if ($attachment instanceof UploadedFile) {
+                $mime = $attachment->getMimeType() ?? $attachment->getClientMimeType();
+
+                $attachment = match (true) {
+                    str_starts_with($mime, 'audio/') => Base64Audio::fromUpload($attachment, $mime),
+                    str_starts_with($mime, 'video/') => Video::fromUpload($attachment, $mime),
+                    default => Image::fromUpload($attachment, $mime),
+                };
+            }
+
+            if (($attachment instanceof Audio || $attachment instanceof Video) && $model !== '@cf/cloudflare/clef-omni') {
+                throw new InvalidArgumentException('Cloudflare audio and video classification requires the Clef Omni model.');
+            }
+
+            if (! $attachment instanceof StorableFile || (! $attachment instanceof Image && ! $attachment instanceof Audio && ! $attachment instanceof Video)) {
+                $types = $model === '@cf/cloudflare/clef-omni' ? 'images, audio, or videos' : 'images';
+
+                throw new InvalidArgumentException('Cloudflare Clef only accepts '.$types.' with inline content; ['.get_debug_type($attachment).'] given.');
+            }
+
+            $type = match (true) {
+                $attachment instanceof Image => 'images',
+                $attachment instanceof Audio => 'audio',
+                default => 'videos',
+            };
+
+            $groups[$type][] = $attachment;
         }
 
-        if (! $image instanceof Image || ! $image instanceof StorableFile) {
-            throw new InvalidArgumentException('Cloudflare Clef only accepts images with inline content; ['.get_debug_type($image).'] given.');
+        foreach (['images' => [4, 'image'], 'audio' => [4, 'audio'], 'videos' => [2, 'video']] as $type => [$limit, $label]) {
+            if (count($groups[$type]) > $limit) {
+                throw new InvalidArgumentException("Cloudflare Clef accepts a maximum of {$limit} {$label} attachments.");
+            }
         }
 
-        $content = $image->content();
+        $mapped = [];
+        $sizes = ['images' => 0, 'audio' => 0, 'videos' => 0];
 
-        $mime = $image->mimeType() ?? (new finfo(FILEINFO_MIME_TYPE))->buffer($content);
+        foreach ($groups as $type => $files) {
+            foreach ($files as $file) {
+                $content = $file->content();
+                $sizes[$type] += strlen($content);
 
-        if ($mime === 'image/jpg') {
-            $mime = 'image/jpeg';
+                if ($sizes['images'] > 8 * 1024 * 1024) {
+                    throw new InvalidArgumentException('Cloudflare Clef image attachments may not exceed 8 MiB in total.');
+                }
+
+                if (16 * 1024 * 1024 < $sizes['audio'] + $sizes['videos']) {
+                    throw new InvalidArgumentException('Cloudflare Clef audio and video attachments may not exceed 16 MiB in total.');
+                }
+
+                $mapped[$type][] = $this->mapAttachment($file, $content, $type);
+            }
         }
 
-        if (! in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true)) {
-            throw new InvalidArgumentException("Cloudflare Clef only accepts JPEG, PNG, or WebP images; [{$mime}] given.");
+        return $mapped;
+    }
+
+    /**
+     * Validate an attachment and encode its content as a data URL.
+     */
+    protected function mapAttachment(File $file, string $content, string $type): string
+    {
+        $mime = $file->mimeType() ?? (new finfo(FILEINFO_MIME_TYPE))->buffer($content);
+
+        $mime = match ($mime) {
+            'image/jpg' => 'image/jpeg',
+            'audio/mp3' => 'audio/mpeg',
+            'audio/x-wav', 'audio/wave', 'audio/vnd.wave' => 'audio/wav',
+            default => $mime,
+        };
+
+        [$mimes, $formats, $maxMiB] = match ($type) {
+            'images' => [['image/jpeg', 'image/png', 'image/webp'], 'JPEG, PNG, or WebP images', 4],
+            'audio' => [['audio/wav', 'audio/mpeg'], 'WAV or MP3 audio', 8],
+            'videos' => [['video/mp4', 'video/webm'], 'MP4 or WebM videos', 16],
+        };
+
+        if (! in_array($mime, $mimes, true)) {
+            throw new InvalidArgumentException("Cloudflare Clef only accepts {$formats}; [{$mime}] given.");
+        }
+
+        if (strlen($content) > $maxMiB * 1024 * 1024) {
+            throw new InvalidArgumentException("Cloudflare Clef {$type} attachments may not exceed {$maxMiB} MiB each.");
         }
 
         return 'data:'.$mime.';base64,'.base64_encode($content);

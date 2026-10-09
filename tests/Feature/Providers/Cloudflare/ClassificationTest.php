@@ -18,7 +18,11 @@ use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\ProviderConnectionException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use Laravel\Ai\Files\Audio;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\Video;
 use Laravel\Ai\Prompts\ClassificationPrompt;
 use Laravel\Ai\Providers\CloudflareProvider;
 use Laravel\Ai\Responses\ClassificationResponse;
@@ -114,6 +118,7 @@ test('classification sends the Workers AI URL, token and System One payload', fu
 })->with([
     'Clef' => ['@cf/cloudflare/clef', 'clef'],
     'Clef-flash' => ['@cf/cloudflare/clef-flash', 'clef-flash'],
+    'Clef-omni' => ['@cf/cloudflare/clef-omni', 'clef-omni'],
 ]);
 
 test('classification unwraps typed answers, probabilities, confidence, usage and metadata', function (string $selector): void {
@@ -144,7 +149,7 @@ test('classification unwraps typed answers, probabilities, confidence, usage and
         ->and($response->usage->outputTokens)->toBe(48)
         ->and($response->meta->provider)->toBe('cloudflare')
         ->and($response->meta->model)->toBe($selector);
-})->with(['clef', 'clef-flash']);
+})->with(['clef', 'clef-flash', 'clef-omni']);
 
 test('classification sends structured state without converting it to text', function (array $state): void {
     Http::fake(['*' => Http::response(cloudflareResponse())]);
@@ -170,16 +175,16 @@ test('classification uses Clef by default without changing existing defaults', f
     Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/@cf/cloudflare/clef') && $request['model'] === 'clef');
 });
 
-test('classification supports a configured default model', function (): void {
-    config(['ai.providers.cloudflare.models.classification.default' => '@cf/cloudflare/clef-flash']);
+test('classification supports a configured default model', function (string $selector): void {
+    config(['ai.providers.cloudflare.models.classification.default' => '@cf/cloudflare/'.$selector]);
 
-    Http::fake(['*' => Http::response(cloudflareResponse('clef-flash'))]);
+    Http::fake(['*' => Http::response(cloudflareResponse($selector))]);
 
     Classification::of('text')->question('urgent', new Boolean('Urgent?'))->classify(provider: 'cloudflare');
 
-    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/@cf/cloudflare/clef-flash')
-        && $request['model'] === 'clef-flash');
-});
+    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/@cf/cloudflare/'.$selector)
+        && $request['model'] === $selector);
+})->with(['clef-flash', 'clef-omni']);
 
 test('classification falls back to Clef when no model configuration is present', function (): void {
     config(['ai.providers.cloudflare.models' => []]);
@@ -329,7 +334,7 @@ test('classification fake works without Cloudflare credentials or HTTP requests'
     Classification::assertClassified(fn (ClassificationPrompt $prompt): bool => $prompt->provider->name() === 'cloudflare'
         && $prompt->model === $model && $prompt->contains('Help'));
     Http::assertNothingSent();
-})->with(['@cf/cloudflare/clef', '@cf/cloudflare/clef-flash']);
+})->with(['@cf/cloudflare/clef', '@cf/cloudflare/clef-flash', '@cf/cloudflare/clef-omni']);
 
 test('classification fails over from Cloudflare using the existing provider events', function (int $status): void {
     Event::fake([ProviderFailedOver::class]);
@@ -369,7 +374,7 @@ test('Cloudflare can be the failover destination', function (): void {
     Http::assertSentCount(2);
 });
 
-test('image attachments are sent inline before the state as data urls', function (): void {
+test('image attachments are sent inline before the state as data urls', function (string $selector): void {
     Http::fake(['*' => Http::response(cloudflareResponse())]);
 
     $jpeg = file_get_contents(__DIR__.'/../../../Fixtures/Images/blue.jpg');
@@ -382,12 +387,12 @@ test('image attachments are sent inline before the state as data urls', function
         Image::fromBase64(base64_encode($png)),
     ])
         ->question('urgent', new Boolean('Urgent?'))
-        ->classify(provider: 'cloudflare');
+        ->classify(provider: 'cloudflare', model: '@cf/cloudflare/'.$selector);
 
-    Http::assertSent(function (Request $request) use ($jpeg, $png): bool {
+    Http::assertSent(function (Request $request) use ($jpeg, $png, $selector): bool {
         $body = json_decode($request->body(), true);
 
-        return $request->url() === 'https://api.cloudflare.com/client/v4/accounts/test-account/ai/run/@cf/cloudflare/clef'
+        return $request->url() === 'https://api.cloudflare.com/client/v4/accounts/test-account/ai/run/@cf/cloudflare/'.$selector
             && array_keys($body) === ['model', 'images', 'state', 'questions']
             && $body['images'] === [
                 'data:image/jpeg;base64,'.base64_encode('base64-bytes'),
@@ -396,7 +401,7 @@ test('image attachments are sent inline before the state as data urls', function
                 'data:image/png;base64,'.base64_encode($png),
             ];
     });
-});
+})->with(['clef', 'clef-flash', 'clef-omni']);
 
 test('remote and stored images are downloaded and sent as data urls', function (): void {
     Http::fake([
@@ -425,27 +430,27 @@ test('attachments that are not supported images are rejected before any request'
         'example.com/*' => Http::response('<html></html>', 200, ['Content-Type' => 'text/html']),
     ]);
 
-    expect(fn () => Classification::of('Inspect this.', [$attachment()])
+    expect(fn (): ClassificationResponse => Classification::of('Inspect this.', [$attachment()])
         ->question('urgent', new Boolean('Urgent?'))
         ->classify(provider: 'cloudflare'))->toThrow(InvalidArgumentException::class, $message);
 
     Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'api.cloudflare.com'));
 })->with([
-    'provider image' => [fn () => Image::fromId('file_123'), 'Cloudflare Clef only accepts images with inline content; [Laravel\\Ai\\Files\\ProviderImage] given.'],
+    'provider image' => [fn (): File => Image::fromId('file_123'), 'Cloudflare Clef only accepts images with inline content; [Laravel\\Ai\\Files\\ProviderImage] given.'],
     'pdf upload' => [fn () => UploadedFile::fake()->createWithContent('invoice.pdf', 'pdf-bytes')->mimeType('application/pdf'), '[application/pdf] given.'],
     'gif upload' => [fn () => UploadedFile::fake()->createWithContent('animation.gif', 'gif-bytes')->mimeType('image/gif'), '[image/gif] given.'],
-    'gif file' => [fn () => Image::fromBase64(base64_encode('gif-bytes'), 'image/gif'), '[image/gif] given.'],
+    'gif file' => [fn (): File => Image::fromBase64(base64_encode('gif-bytes'), 'image/gif'), '[image/gif] given.'],
     'heic upload' => [fn () => UploadedFile::fake()->createWithContent('photo.heic', 'heic-bytes')->mimeType('image/heic'), '[image/heic] given.'],
-    'heic file' => [fn () => Image::fromPath(__DIR__.'/../../../Fixtures/Images/red.png', 'image/heic'), '[image/heic] given.'],
-    'html served as a remote image' => [fn () => Image::fromUrl('https://example.com/product.png'), '[text/html] given.'],
+    'heic file' => [fn (): File => Image::fromPath(__DIR__.'/../../../Fixtures/Images/red.png', 'image/heic'), '[image/heic] given.'],
+    'html served as a remote image' => [fn (): File => Image::fromUrl('https://example.com/product.png'), '[text/html] given.'],
 ]);
 
 test('more than 4 image attachments are rejected before any request', function (): void {
     Http::fake();
 
-    $images = array_map(fn () => Image::fromBase64(base64_encode('bytes'), 'image/png'), range(1, 5));
+    $images = array_map(fn (): File => Image::fromBase64(base64_encode('bytes'), 'image/png'), range(1, 5));
 
-    expect(fn () => Classification::of('Inspect these.', $images)
+    expect(fn (): ClassificationResponse => Classification::of('Inspect these.', $images)
         ->question('urgent', new Boolean('Urgent?'))
         ->classify(provider: 'cloudflare'))->toThrow(InvalidArgumentException::class, 'Cloudflare Clef accepts a maximum of 4 image attachments.');
 
@@ -457,7 +462,7 @@ test('attachments fail loudly instead of failing over to a provider that cannot 
 
     Http::fake(['api.cloudflare.com/*' => Http::response([], 503)]);
 
-    expect(fn () => Classification::of('Inspect this.', [Image::fromBase64(base64_encode('photo'), 'image/png')])
+    expect(fn (): ClassificationResponse => Classification::of('Inspect this.', [Image::fromBase64(base64_encode('photo'), 'image/png')])
         ->question('urgent', new Boolean('Urgent?'))
         ->classify(provider: ['cloudflare', 'typesafe']))->toThrow(LogicException::class, 'Provider [typesafe] does not support classification attachments.');
 
@@ -479,3 +484,203 @@ test('Cloudflare can be the failover destination with attachments', function ():
     expect($response->meta->provider)->toBe('cloudflare')->and($response['urgent']->probability)->toBe(0.92);
     Http::assertSentCount(2);
 });
+
+test('Omni sends mixed attachments in separate modality arrays', function (): void {
+    Event::fake([Classifying::class, Classified::class]);
+    Http::fake(['*' => Http::response(cloudflareResponse('clef-omni'))]);
+
+    $attachments = [
+        'video' => Video::fromBase64(base64_encode('video-bytes'), 'video/mp4'),
+        'photo' => Image::fromBase64(base64_encode('image-bytes'), 'image/png'),
+        'audio' => Audio::fromBase64(base64_encode('audio-bytes'), 'audio/mpeg'),
+    ];
+
+    $response = Classification::of('Inspect the product.', $attachments)
+        ->questions(cloudflareQuestions())
+        ->classify(provider: Lab::Cloudflare, model: '@cf/cloudflare/clef-omni');
+
+    Http::assertSentCount(1);
+    Http::assertSent(fn (Request $request): bool => $request['model'] === 'clef-omni'
+        && $request['images'] === ['data:image/png;base64,'.base64_encode('image-bytes')]
+        && $request['audio'] === ['data:audio/mpeg;base64,'.base64_encode('audio-bytes')]
+        && $request['videos'] === ['data:video/mp4;base64,'.base64_encode('video-bytes')]);
+    expect($response['urgent']->probability)->toBe(0.92)
+        ->and($response->meta->model)->toBe('clef-omni');
+    Event::assertDispatched(Classifying::class, fn (Classifying $event): bool => $event->prompt->attachments === $attachments);
+    Event::assertDispatched(Classified::class, fn (Classified $event): bool => $event->response === $response);
+});
+
+test('Omni reads audio and video from SDK file sources', function (string $type, string $class, string $mime, string $extension, string $source): void {
+    Http::fake([
+        'example.com/*' => Http::response('media-bytes', 200, ['Content-Type' => $mime]),
+        'api.cloudflare.com/*' => Http::response(cloudflareResponse('clef-omni')),
+    ]);
+    Storage::fake('media')->put('clip.'.$extension, 'media-bytes');
+
+    $attachment = match ($source) {
+        'base64' => $class::fromBase64(base64_encode('media-bytes'), $mime),
+        'path' => $class::fromPath(Storage::disk('media')->path('clip.'.$extension), $mime),
+        'storage' => $class::fromStorage('clip.'.$extension, 'media')->withMimeType($mime),
+        'url' => $class::fromUrl('https://example.com/clip.'.$extension),
+        'upload' => UploadedFile::fake()->createWithContent('clip.'.$extension, 'media-bytes')->mimeType($mime),
+    };
+
+    Classification::of('Inspect this.', [$attachment])
+        ->question('urgent', new Boolean('Urgent?'))
+        ->classify(provider: 'cloudflare', model: '@cf/cloudflare/clef-omni');
+
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), 'api.cloudflare.com')
+        && $request[$type] === ['data:'.$mime.';base64,'.base64_encode('media-bytes')]
+        && array_keys($request->data()) === ['model', $type, 'state', 'questions']);
+})->with([
+    'MP3' => ['audio', Audio::class, 'audio/mpeg', 'mp3'],
+    'WAV' => ['audio', Audio::class, 'audio/wav', 'wav'],
+    'MP4' => ['videos', Video::class, 'video/mp4', 'mp4'],
+    'WebM' => ['videos', Video::class, 'video/webm', 'webm'],
+])->with(['base64', 'path', 'storage', 'url', 'upload']);
+
+test('Omni detects audio MIME types and normalizes common aliases', function (?string $mime): void {
+    Http::fake(['*' => Http::response(cloudflareResponse('clef-omni'))]);
+    $audio = file_get_contents(__DIR__.'/../../../Fixtures/audio.mp3');
+
+    Classification::of('Listen to this.', [Audio::fromBase64(base64_encode($audio), $mime)])
+        ->question('urgent', new Boolean('Urgent?'))
+        ->classify(provider: 'cloudflare', model: '@cf/cloudflare/clef-omni');
+
+    Http::assertSent(fn (Request $request): bool => $request['audio'] === ['data:audio/mpeg;base64,'.base64_encode($audio)]);
+})->with([null, 'audio/mp3', 'audio/mpeg']);
+
+test('Omni normalizes WAV MIME aliases', function (string $mime): void {
+    Http::fake(['*' => Http::response(cloudflareResponse('clef-omni'))]);
+
+    Classification::of('Listen to this.', [Audio::fromBase64(base64_encode('wav-bytes'), $mime)])
+        ->question('urgent', new Boolean('Urgent?'))
+        ->classify(provider: 'cloudflare', model: '@cf/cloudflare/clef-omni');
+
+    Http::assertSent(fn (Request $request): bool => $request['audio'] === ['data:audio/wav;base64,'.base64_encode('wav-bytes')]);
+})->with(['audio/x-wav', 'audio/wave', 'audio/vnd.wave']);
+
+test('audio and video require Omni before remote media is downloaded', function (string $model, string $class): void {
+    Http::fake();
+
+    expect(fn (): ClassificationResponse => Classification::of('Inspect this.', [$class::fromUrl('https://example.com/media')])
+        ->question('urgent', new Boolean('Urgent?'))
+        ->classify(provider: 'cloudflare', model: $model))
+        ->toThrow(InvalidArgumentException::class, 'Cloudflare audio and video classification requires the Clef Omni model.');
+
+    Http::assertNothingSent();
+})->with(['@cf/cloudflare/clef', '@cf/cloudflare/clef-flash'])->with([Audio::class, Video::class]);
+
+test('Omni rejects unsupported attachment types and formats', function (Closure $attachment): void {
+    Http::fake();
+
+    expect(fn (): ClassificationResponse => Classification::of('Inspect this.', [$attachment()])
+        ->question('urgent', new Boolean('Urgent?'))
+        ->classify(provider: 'cloudflare', model: '@cf/cloudflare/clef-omni'))->toThrow(InvalidArgumentException::class);
+
+    Http::assertNothingSent();
+})->with([
+    'document' => [fn (): File => Document::fromBase64(base64_encode('pdf'), 'application/pdf')],
+    'provider image' => [fn (): File => Image::fromId('file_123')],
+    'OGG audio' => [fn (): File => Audio::fromBase64(base64_encode('ogg'), 'audio/ogg')],
+    'QuickTime video' => [fn (): File => Video::fromBase64(base64_encode('mov'), 'video/quicktime')],
+    'video declared as audio' => [fn (): File => Audio::fromBase64(base64_encode('video'), 'video/mp4')],
+    'audio declared as video' => [fn (): File => Video::fromBase64(base64_encode('audio'), 'audio/mpeg')],
+    'OGG upload' => [fn () => UploadedFile::fake()->createWithContent('clip.ogg', 'ogg')->mimeType('audio/ogg')],
+]);
+
+test('Omni enforces attachment counts before downloading remote media', function (string $class, int $count, string $message): void {
+    Http::fake();
+
+    expect(fn (): ClassificationResponse => Classification::of('Inspect this.', array_fill(0, $count, $class::fromUrl('https://example.com/media')))
+        ->question('urgent', new Boolean('Urgent?'))
+        ->classify(provider: 'cloudflare', model: '@cf/cloudflare/clef-omni'))->toThrow(InvalidArgumentException::class, $message);
+
+    Http::assertNothingSent();
+})->with([
+    'images' => [Image::class, 5, 'maximum of 4 image attachments'],
+    'audio' => [Audio::class, 5, 'maximum of 4 audio attachments'],
+    'videos' => [Video::class, 3, 'maximum of 2 video attachments'],
+]);
+
+test('Omni applies attachment count limits per modality', function (): void {
+    Http::fake(['*' => Http::response(cloudflareResponse('clef-omni'))]);
+
+    Classification::of('Inspect this.', [
+        ...array_fill(0, 4, Image::fromBase64(base64_encode('photo'), 'image/png')),
+        ...array_fill(0, 4, Audio::fromBase64(base64_encode('audio'), 'audio/wav')),
+        ...array_fill(0, 2, Video::fromBase64(base64_encode('video'), 'video/mp4')),
+    ])->question('urgent', new Boolean('Urgent?'))
+        ->classify(provider: 'cloudflare', model: '@cf/cloudflare/clef-omni');
+
+    Http::assertSent(fn (Request $request): bool => count($request['images']) === 4
+        && count($request['audio']) === 4 && count($request['videos']) === 2);
+});
+
+test('Omni rejects oversized attachments', function (string $class, string $mime, int $maxMiB): void {
+    Http::fake();
+    Storage::fake('media')->put('large-file', str_repeat('x', $maxMiB * 1024 * 1024 + 1));
+
+    expect(fn (): ClassificationResponse => Classification::of('Inspect this.', [$class::fromStorage('large-file', 'media')->withMimeType($mime)])
+        ->question('urgent', new Boolean('Urgent?'))
+        ->classify(provider: 'cloudflare', model: '@cf/cloudflare/clef-omni'))->toThrow(InvalidArgumentException::class);
+
+    Http::assertNothingSent();
+})->with([
+    'image' => [Image::class, 'image/png', 4],
+    'audio' => [Audio::class, 'audio/wav', 8],
+    'video' => [Video::class, 'video/mp4', 16],
+]);
+
+test('Omni enforces total decoded attachment sizes', function (bool $images): void {
+    Http::fake();
+    Storage::fake('media');
+    Storage::disk('media')->put('first-file', str_repeat('x', ($images ? 3 : 8) * 1024 * 1024));
+
+    if (! $images) {
+        Storage::disk('media')->put('second-file', str_repeat('x', 8 * 1024 * 1024 + 1));
+    }
+
+    $attachments = $images
+        ? array_fill(0, 3, Image::fromStorage('first-file', 'media')->withMimeType('image/png'))
+        : [
+            Audio::fromStorage('first-file', 'media')->withMimeType('audio/wav'),
+            Video::fromStorage('second-file', 'media')->withMimeType('video/mp4'),
+        ];
+
+    expect(fn (): ClassificationResponse => Classification::of('Inspect this.', $attachments)
+        ->question('urgent', new Boolean('Urgent?'))
+        ->classify(provider: 'cloudflare', model: '@cf/cloudflare/clef-omni'))
+        ->toThrow(InvalidArgumentException::class, $images ? 'image attachments may not exceed 8 MiB in total' : 'audio and video attachments may not exceed 16 MiB in total');
+
+    Http::assertNothingSent();
+})->with([true, false]);
+
+test('Omni fakes preserve mixed attachments without downloading media', function (): void {
+    Http::fake();
+    Classification::fake([['urgent' => new BooleanAnswer(0.9)]]);
+    $attachments = [
+        Image::fromUrl('https://example.com/photo.jpg'),
+        Audio::fromUrl('https://example.com/clip.mp3'),
+        Video::fromUrl('https://example.com/clip.mp4'),
+    ];
+
+    Classification::of('Inspect this.', $attachments)->question('urgent', new Boolean('Urgent?'))
+        ->classify(provider: 'cloudflare', model: '@cf/cloudflare/clef-omni');
+
+    Classification::assertClassified(fn (ClassificationPrompt $prompt): bool => $prompt->attachments === $attachments
+        && $prompt->model === '@cf/cloudflare/clef-omni');
+    Http::assertNothingSent();
+});
+
+test('Omni failover preserves media and rejects incompatible destinations', function (string $class): void {
+    config(['ai.providers.openai.key' => 'test-key']);
+    Http::fake(['api.cloudflare.com/*' => Http::response([], 503)]);
+
+    expect(fn (): ClassificationResponse => Classification::of('Inspect this.', [$class::fromBase64(base64_encode('media'), $class === Audio::class ? 'audio/wav' : 'video/mp4')])
+        ->question('urgent', new Boolean('Urgent?'))
+        ->classify(provider: ['cloudflare' => '@cf/cloudflare/clef-omni', 'openai']))
+        ->toThrow(InvalidArgumentException::class, 'OpenAI decisions only accept images with inline content');
+
+    Http::assertSentCount(1);
+})->with([Audio::class, Video::class]);
