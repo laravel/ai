@@ -29,6 +29,24 @@ class CloudflareClassificationGateway implements ClassificationGateway
     use Concerns\CreatesClient;
     use Concerns\HandlesFailoverErrors;
 
+    private const BYTES_PER_MIB = 1024 * 1024;
+
+    private const MAX_ATTACHMENTS = [
+        'images' => 4,
+        'audio' => 4,
+        'videos' => 2,
+    ];
+
+    private const MAX_ATTACHMENT_BYTES = [
+        'images' => 4 * self::BYTES_PER_MIB,
+        'audio' => 8 * self::BYTES_PER_MIB,
+        'videos' => 16 * self::BYTES_PER_MIB,
+    ];
+
+    private const MAX_TOTAL_IMAGE_BYTES = 8 * self::BYTES_PER_MIB;
+
+    private const MAX_TOTAL_AUDIO_VIDEO_BYTES = 16 * self::BYTES_PER_MIB;
+
     /**
      * Get the path of the endpoint that answers questions.
      */
@@ -151,7 +169,9 @@ class CloudflareClassificationGateway implements ClassificationGateway
             $groups[$type][] = $attachment;
         }
 
-        foreach (['images' => [4, 'image'], 'audio' => [4, 'audio'], 'videos' => [2, 'video']] as $type => [$limit, $label]) {
+        foreach (['images' => 'image', 'audio' => 'audio', 'videos' => 'video'] as $type => $label) {
+            $limit = self::MAX_ATTACHMENTS[$type];
+
             if (count($groups[$type]) > $limit) {
                 throw new InvalidArgumentException("Cloudflare Clef accepts a maximum of {$limit} {$label} attachments.");
             }
@@ -165,12 +185,16 @@ class CloudflareClassificationGateway implements ClassificationGateway
                 $content = $file->content();
                 $sizes[$type] += strlen($content);
 
-                if ($sizes['images'] > 8 * 1024 * 1024) {
-                    throw new InvalidArgumentException('Cloudflare Clef image attachments may not exceed 8 MiB in total.');
+                if ($sizes['images'] > self::MAX_TOTAL_IMAGE_BYTES) {
+                    $maxMiB = self::MAX_TOTAL_IMAGE_BYTES / self::BYTES_PER_MIB;
+
+                    throw new InvalidArgumentException("Cloudflare Clef image attachments may not exceed {$maxMiB} MiB in total.");
                 }
 
-                if (16 * 1024 * 1024 < $sizes['audio'] + $sizes['videos']) {
-                    throw new InvalidArgumentException('Cloudflare Clef audio and video attachments may not exceed 16 MiB in total.');
+                if ($sizes['audio'] + $sizes['videos'] > self::MAX_TOTAL_AUDIO_VIDEO_BYTES) {
+                    $maxMiB = self::MAX_TOTAL_AUDIO_VIDEO_BYTES / self::BYTES_PER_MIB;
+
+                    throw new InvalidArgumentException("Cloudflare Clef audio and video attachments may not exceed {$maxMiB} MiB in total.");
                 }
 
                 $mapped[$type][] = $this->mapAttachment($file, $content, $type);
@@ -194,17 +218,19 @@ class CloudflareClassificationGateway implements ClassificationGateway
             default => $mime,
         };
 
-        [$mimes, $formats, $maxMiB] = match ($type) {
-            'images' => [['image/jpeg', 'image/png', 'image/webp'], 'JPEG, PNG, or WebP images', 4],
-            'audio' => [['audio/wav', 'audio/mpeg'], 'WAV or MP3 audio', 8],
-            'videos' => [['video/mp4', 'video/webm'], 'MP4 or WebM videos', 16],
+        [$mimes, $formats] = match ($type) {
+            'images' => [['image/jpeg', 'image/png', 'image/webp'], 'JPEG, PNG, or WebP images'],
+            'audio' => [['audio/wav', 'audio/mpeg'], 'WAV or MP3 audio'],
+            'videos' => [['video/mp4', 'video/webm'], 'MP4 or WebM videos'],
         };
 
         if (! in_array($mime, $mimes, true)) {
             throw new InvalidArgumentException("Cloudflare Clef only accepts {$formats}; [{$mime}] given.");
         }
 
-        if (strlen($content) > $maxMiB * 1024 * 1024) {
+        if (strlen($content) > self::MAX_ATTACHMENT_BYTES[$type]) {
+            $maxMiB = self::MAX_ATTACHMENT_BYTES[$type] / self::BYTES_PER_MIB;
+
             throw new InvalidArgumentException("Cloudflare Clef {$type} attachments may not exceed {$maxMiB} MiB each.");
         }
 
