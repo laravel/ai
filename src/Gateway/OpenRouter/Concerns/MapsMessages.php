@@ -13,12 +13,7 @@ trait MapsMessages
     }
 
     /**
-     * Map an assistant message to Chat Completions format.
-     *
-     * The reasoning details that produced a step's tool calls are sent back
-     * unmodified, so the model continues the tool loop with its own reasoning
-     * instead of starting over. OpenAI and Anthropic models carry encrypted or
-     * signed blocks there that the upstream expects back as they were sent.
+     * Map an assistant message, replaying its reasoning details with its tool calls.
      */
     protected function mapAssistantMessage(AssistantMessage|Message $message, array &$chatMessages): void
     {

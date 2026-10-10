@@ -1,7 +1,6 @@
 <?php
 
 use GuzzleHttp\Promise\PromiseInterface;
-use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
@@ -121,7 +120,7 @@ test('an encrypted reasoning detail drives no reasoning events', function (): vo
 
 function openRouterFollowUpAssistantMessage(): array
 {
-    $requests = Http::recorded(fn (Request $request): true => true);
+    $requests = Http::recorded();
     $messages = json_decode((string) $requests[1][0]->body(), true)['messages'];
 
     return collect($messages)->first(fn (array $message): bool => $message['role'] === 'assistant' && isset($message['tool_calls']));

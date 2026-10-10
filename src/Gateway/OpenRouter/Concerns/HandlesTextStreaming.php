@@ -246,12 +246,7 @@ trait HandlesTextStreaming
     }
 
     /**
-     * Merge a delta's reasoning details into those received so far.
-     *
-     * A detail arrives in fragments that share its index: the text, summary
-     * and encrypted data are concatenated, every other field keeps the last
-     * value sent, which leaves each detail as the non-streaming response
-     * would have returned it.
+     * Merge a delta's reasoning detail fragments by index.
      *
      * @param  array<int, array<string, mixed>>  $merged
      * @param  array<int, array<string, mixed>>  $details
