@@ -42,6 +42,66 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Sandboxes
+    |--------------------------------------------------------------------------
+    |
+    | A sandbox is a filesystem and shell your application creates, attaches
+    | to by ID, and deletes. The local provider runs commands on this host,
+    | where "isolate" confines writes with sandbox-exec or bwrap. The other
+    | providers run each sandbox in its own container or virtual machine.
+    |
+    */
+
+    'default_sandbox' => env('AI_SANDBOX', 'local'),
+
+    'sandboxes' => [
+        'local' => [
+            'driver' => 'local',
+            'workdir' => env('AI_SANDBOX_WORKDIR', storage_path('app/sandboxes')),
+            'network' => env('AI_SANDBOX_NETWORK', true),
+            'env' => [],
+            'timeout' => env('AI_SANDBOX_TIMEOUT', 120),
+            'isolate' => env('AI_SANDBOX_ISOLATE', true),
+        ],
+
+        'docker' => [
+            'driver' => 'docker',
+            'image' => env('AI_SANDBOX_IMAGE', 'ubuntu:24.04'),
+            'workdir' => '/workspace',
+            'cpus' => 1,
+            'memory' => 512,
+            'network' => env('AI_SANDBOX_NETWORK', false),
+            'env' => [],
+            'timeout' => env('AI_SANDBOX_TIMEOUT', 120),
+            'binary' => env('AI_SANDBOX_DOCKER_BINARY', 'docker'),
+        ],
+
+        'boat' => [
+            'driver' => 'boat',
+            'key' => env('BOAT_API_KEY'),
+            'ttl' => 900,
+            'env' => [],
+            'timeout' => env('AI_SANDBOX_TIMEOUT', 120),
+            'type' => 'small',
+            'no_env' => true,
+        ],
+
+        'boxlite' => [
+            'driver' => 'boxlite',
+            'url' => env('BOXLITE_URL', 'http://localhost:8100'),
+            'key' => env('BOXLITE_API_KEY'),
+            'image' => env('AI_SANDBOX_IMAGE', 'alpine:latest'),
+            'workdir' => '/workspace',
+            'cpus' => 1,
+            'memory' => 512,
+            'ttl' => 900,
+            'env' => [],
+            'timeout' => env('AI_SANDBOX_TIMEOUT', 120),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | AI Providers
     |--------------------------------------------------------------------------
     |
