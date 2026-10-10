@@ -141,13 +141,7 @@ class CloudflareClassificationGateway implements ClassificationGateway
 
         foreach ($attachments as $attachment) {
             if ($attachment instanceof UploadedFile) {
-                $mime = $attachment->getMimeType() ?? $attachment->getClientMimeType();
-
-                $attachment = match (true) {
-                    str_starts_with($mime, 'audio/') => Base64Audio::fromUpload($attachment, $mime),
-                    str_starts_with($mime, 'video/') => Video::fromUpload($attachment, $mime),
-                    default => Image::fromUpload($attachment, $mime),
-                };
+                $attachment = $this->normalizeUploadedFile($attachment);
             }
 
             if (($attachment instanceof Audio || $attachment instanceof Video) && $model !== '@cf/cloudflare/clef-omni') {
@@ -185,23 +179,47 @@ class CloudflareClassificationGateway implements ClassificationGateway
                 $content = $file->content();
                 $sizes[$type] += strlen($content);
 
-                if ($sizes['images'] > self::MAX_TOTAL_IMAGE_BYTES) {
-                    $maxMiB = self::MAX_TOTAL_IMAGE_BYTES / self::BYTES_PER_MIB;
-
-                    throw new InvalidArgumentException("Cloudflare Clef image attachments may not exceed {$maxMiB} MiB in total.");
-                }
-
-                if ($sizes['audio'] + $sizes['videos'] > self::MAX_TOTAL_AUDIO_VIDEO_BYTES) {
-                    $maxMiB = self::MAX_TOTAL_AUDIO_VIDEO_BYTES / self::BYTES_PER_MIB;
-
-                    throw new InvalidArgumentException("Cloudflare Clef audio and video attachments may not exceed {$maxMiB} MiB in total.");
-                }
+                $this->validateTotalAttachmentSizes($sizes);
 
                 $mapped[$type][] = $this->mapAttachment($file, $content, $type);
             }
         }
 
         return $mapped;
+    }
+
+    /**
+     * Convert an uploaded file to the corresponding SDK attachment.
+     */
+    protected function normalizeUploadedFile(UploadedFile $file): File
+    {
+        $mime = $file->getMimeType() ?? $file->getClientMimeType();
+
+        return match (true) {
+            str_starts_with($mime, 'audio/') => Base64Audio::fromUpload($file, $mime),
+            str_starts_with($mime, 'video/') => Video::fromUpload($file, $mime),
+            default => Image::fromUpload($file, $mime),
+        };
+    }
+
+    /**
+     * Validate the total decoded size of the image and audio/video attachments.
+     *
+     * @param  array{images: int, audio: int, videos: int}  $sizes
+     */
+    protected function validateTotalAttachmentSizes(array $sizes): void
+    {
+        if ($sizes['images'] > self::MAX_TOTAL_IMAGE_BYTES) {
+            $maxMiB = self::MAX_TOTAL_IMAGE_BYTES / self::BYTES_PER_MIB;
+
+            throw new InvalidArgumentException("Cloudflare Clef image attachments may not exceed {$maxMiB} MiB in total.");
+        }
+
+        if ($sizes['audio'] + $sizes['videos'] > self::MAX_TOTAL_AUDIO_VIDEO_BYTES) {
+            $maxMiB = self::MAX_TOTAL_AUDIO_VIDEO_BYTES / self::BYTES_PER_MIB;
+
+            throw new InvalidArgumentException("Cloudflare Clef audio and video attachments may not exceed {$maxMiB} MiB in total.");
+        }
     }
 
     /**
