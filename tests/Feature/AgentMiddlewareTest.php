@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Contracts\HasMiddleware;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\AgentFailed;
@@ -19,8 +20,10 @@ use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\Middleware\Stop;
 use Laravel\Ai\PendingStep;
 use Laravel\Ai\Providers\Tools\WebSearch;
+use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TextUsage;
@@ -35,6 +38,7 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\ToolChoice;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
+use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\CapturingStepGateway;
 use Tests\Fixtures\FakeConversationStore;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
@@ -291,6 +295,108 @@ test('agent middleware may short-circuit a streamed step', function (): void {
 
     expect(array_map(fn (object $event): string => $event::class, $events))->toBe([StreamStart::class, TextStart::class, TextDelta::class, TextEnd::class, StreamEnd::class])
         ->and($response->text)->toBe('Short-circuited response');
+});
+
+test('a stop middleware ends the run before the next model call', function (): void {
+    AssistantAgent::fake([
+        new ToolCall('call_1', 'FixedNumberGenerator', []),
+        new ToolCall('call_2', 'FixedNumberGenerator', []),
+        'Fake response',
+    ]);
+
+    $response = (new AssistantAgent)
+        ->withTools([new FixedNumberGenerator])
+        ->withMiddleware([Stop::when(fn (PendingStep $step): bool => $step->number === 1)])
+        ->prompt('Test prompt');
+
+    expect($response->steps)->toHaveCount(1)
+        ->and($response->toolResults)->toHaveCount(1)
+        ->and($response->text)->toBe('');
+});
+
+test('a stop middleware ends a stream with a cancelled finish reason', function (): void {
+    AssistantAgent::fake([
+        new ToolCall('call_1', 'FixedNumberGenerator', []),
+        'Fake response',
+    ]);
+
+    $response = (new AssistantAgent)
+        ->withTools([new FixedNumberGenerator])
+        ->withMiddleware([Stop::unless(fn (PendingStep $step): bool => $step->isFirstStep())])
+        ->stream('Test prompt');
+
+    $events = iterator_to_array($response, false);
+
+    expect(end($events))->toBeInstanceOf(StreamEnd::class)
+        ->and(end($events)->reason)->toBe(FinishReason::Cancelled->value)
+        ->and(end($events)->steps)->toHaveCount(1)
+        ->and(end($events)->steps->last()->finishReason)->toBe(FinishReason::ToolCalls);
+});
+
+test('a stop middleware on the first step returns an empty response without a step', function (): void {
+    AssistantAgent::fake(['Fake response']);
+
+    $response = (new AssistantAgent)
+        ->withMiddleware([Stop::when(true)])
+        ->prompt('Test prompt');
+
+    expect($response->text)->toBe('')
+        ->and($response->steps)->toBeEmpty();
+});
+
+test('a structured agent stopped before its first step returns an unstructured response', function (): void {
+    $agent = new class extends StructuredAgent implements HasMiddleware
+    {
+        public function middleware(): array
+        {
+            return [Stop::when(true)];
+        }
+    };
+
+    $agent::fake();
+
+    $response = $agent->prompt('Test prompt');
+
+    expect($response::class)->toBe(AgentResponse::class)
+        ->and($response->text)->toBe('');
+});
+
+test('a stopped turn is remembered up to its last tool result', function (): void {
+    RememberingAssistantAgent::fake([
+        new ToolCall('call_1', 'FixedNumberGenerator', []),
+        'Fake response',
+    ]);
+
+    $user = (object) ['id' => 1];
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', $user->id, 'Stopped conversation');
+
+    (new RememberingAssistantAgent)
+        ->withTools([new FixedNumberGenerator])
+        ->withMiddleware([Stop::unless(fn (PendingStep $step): bool => $step->isFirstStep())])
+        ->continue($conversationId, $user)
+        ->prompt('Test prompt');
+
+    expect($store->getLatestConversationMessages($conversationId, 10)->map(fn ($message): string => $message::class)->all())->toBe([
+        Message::class, AssistantMessage::class, ToolResultMessage::class,
+    ]);
+});
+
+test('a turn stopped before its first step is remembered without an assistant message', function (): void {
+    RememberingAssistantAgent::fake(['Fake response']);
+
+    $user = (object) ['id' => 1];
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', $user->id, 'Stopped conversation');
+
+    (new RememberingAssistantAgent)
+        ->withMiddleware([Stop::when(true)])
+        ->continue($conversationId, $user)
+        ->prompt('Test prompt');
+
+    expect($store->getLatestConversationMessages($conversationId, 10)->map(fn ($message): string => $message::class)->all())->toBe([
+        Message::class,
+    ]);
 });
 
 test('agent middleware may change the model and options for a step', function (): void {
