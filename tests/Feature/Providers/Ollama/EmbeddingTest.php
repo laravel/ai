@@ -167,6 +167,11 @@ test('embeddings request omits dimensions when an explicit model is passed', fun
     });
 });
 
+test('automatic embedding fakes require dimensions when the model dimensions are unknown', function (): void {
+    Embeddings::fake();
+
+    Embeddings::for(['Hello'])->generate(provider: 'ollama', model: 'qwen3-embedding:0.6b');
+})->throws(RuntimeException::class, 'Unable to generate fake embeddings without positive dimensions');
 
 function fakeOllamaEmbeddingsResponse()
 {
