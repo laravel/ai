@@ -9,6 +9,7 @@ use Laravel\Ai\Concerns\InteractsWithApprovals;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\CanActAsTool;
+use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Stringable;
@@ -66,6 +67,11 @@ class AgentTool implements Approvable, Tool
      */
     public function stream(Request $request): Generator
     {
+        // Structured output cannot be streamed yet, so a structured sub-agent answers through a regular prompt...
+        if ($this->agent instanceof HasStructuredOutput) {
+            return $this->handle($request);
+        }
+
         try {
             $stream = $this->agent->stream((string) $request['task']);
 

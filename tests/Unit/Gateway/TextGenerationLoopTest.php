@@ -11,6 +11,7 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\CanActAsTool;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
+use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -41,6 +42,7 @@ use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult as ToolResultData;
 use Laravel\Ai\Responses\StreamableAgentResponse;
+use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamEvent;
@@ -1492,6 +1494,24 @@ test('a sub-agent runs synchronously through the non-streaming loop', function (
 
     expect($response->text)->toBe('done')
         ->and($response->toolResults[0]->result)->toBe('synchronous result');
+});
+
+test('a structured sub-agent answers through a regular prompt in the streamed loop', function (): void {
+    $agent = Double::for(Agent::class, CanActAsTool::class, HasStructuredOutput::class);
+    $agent->allows('name')->returns('research_agent');
+    $agent->expects('stream')->never();
+    $agent->expects('prompt')->returns(new StructuredAgentResponse(
+        'sub-invocation', ['answer' => 42], '{"answer":42}', new TextUsage(3, 4), new Meta('fake', 'sub-model')
+    ));
+
+    $toolCall = new ToolCall('call-sub-agent', 'research_agent', ['task' => 'Research'], 'call-sub-agent');
+
+    $toolResults = collect(textGenerationLoopSubAgentStream([new AgentTool($agent)], [$toolCall]))
+        ->whereInstanceOf(ToolResultEvent::class);
+
+    expect($toolResults)->toHaveCount(1)
+        ->and($toolResults->first()->preliminary)->toBeFalse()
+        ->and($toolResults->first()->toolResult->result)->toBe('{"answer":42}');
 });
 
 test('a sub-agent is not executed on the final streamed step', function (): void {
