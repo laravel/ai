@@ -96,6 +96,14 @@ class OllamaProvider extends Provider implements EmbeddingProvider, TextProvider
      */
     public function defaultEmbeddingsDimensions(): int
     {
-        return $this->config['models']['embeddings']['dimensions'] ?? 768;
+        return $this->config['models']['embeddings']['dimensions'] ?? 0;
+    }
+
+    /**
+     * Determine if the provider may omit dimensions and use a model's native embedding dimensions.
+     */
+    protected function supportsNativeEmbeddingDimensions(): bool
+    {
+        return true;
     }
 }
