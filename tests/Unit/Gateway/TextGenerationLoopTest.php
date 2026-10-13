@@ -1497,21 +1497,36 @@ test('a sub-agent runs synchronously through the non-streaming loop', function (
 });
 
 test('a structured sub-agent answers through a regular prompt in the streamed loop', function (): void {
+    $parent = null;
+
     $agent = Double::for(Agent::class, CanActAsTool::class, HasStructuredOutput::class);
     $agent->allows('name')->returns('research_agent');
     $agent->expects('stream')->never();
-    $agent->expects('prompt')->returns(new StructuredAgentResponse(
-        'sub-invocation', ['answer' => 42], '{"answer":42}', new TextUsage(3, 4), new Meta('fake', 'sub-model')
-    ));
+    $agent->expects('prompt')->resolves(function () use (&$parent): StructuredAgentResponse {
+        $parent = ParentInvocation::current();
+
+        return new StructuredAgentResponse(
+            'sub-invocation', ['answer' => 42], '{"answer":42}', new TextUsage(3, 4), new Meta('fake', 'sub-model')
+        );
+    });
+
+    $invoked = [];
+
+    $dispatcher = new Dispatcher;
+
+    $dispatcher->listen(ToolInvoked::class, function (ToolInvoked $event) use (&$invoked): void {
+        $invoked[] = $event->result;
+    });
 
     $toolCall = new ToolCall('call-sub-agent', 'research_agent', ['task' => 'Research'], 'call-sub-agent');
 
-    $toolResults = collect(textGenerationLoopSubAgentStream([new AgentTool($agent)], [$toolCall]))
-        ->whereInstanceOf(ToolResultEvent::class);
+    textGenerationLoopSubAgentStream([new AgentTool($agent)], [$toolCall], context: new RunContext(
+        'invocation-1', Double::for(Agent::class), textGenerationLoopProvider(), 'model', $dispatcher,
+    ));
 
-    expect($toolResults)->toHaveCount(1)
-        ->and($toolResults->first()->preliminary)->toBeFalse()
-        ->and($toolResults->first()->toolResult->result)->toBe('{"answer":42}');
+    expect($parent[0])->toBe('invocation-1')
+        ->and($parent[1])->not->toBeNull()
+        ->and($invoked)->toBe(['{"answer":42}']);
 });
 
 test('a sub-agent is not executed on the final streamed step', function (): void {
