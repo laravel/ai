@@ -8,6 +8,7 @@ use Laravel\Ai\Tools\AgentTool;
 use Tests\Fixtures\Agents\DelegatingAgent;
 use Tests\Fixtures\Agents\MiddleManagerAgent;
 use Tests\Fixtures\Agents\OrchestratorAgent;
+use Tests\Fixtures\Agents\ParentModelResearchAgent;
 use Tests\Fixtures\Agents\ResearchAgent;
 
 test('agent returned from tools is invoked when called by parent agent', function (): void {
@@ -118,4 +119,50 @@ test('nested agent delegates through a middle manager to a research agent', func
         ->and($response->toolCalls->first()->name)->toBe('middle_manager')
         ->and($response->toolResults)->toHaveCount(1)
         ->and($response->toolResults->first()->result)->toBe('Research delegated.');
+});
+
+test('a sub agent using the parent model runs on the provider and model of the run that delegated to it', function (): void {
+    DelegatingAgent::fake([
+        new ToolCall('call_1', 'research_agent', ['task' => 'Research Laravel']),
+        'Research delegated.',
+    ]);
+
+    ParentModelResearchAgent::fake(['Research result']);
+
+    (new DelegatingAgent)
+        ->withTools([new ParentModelResearchAgent])
+        ->prompt('Delegate research about Laravel', provider: 'anthropic', model: 'parent-model');
+
+    ParentModelResearchAgent::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->provider->name() === 'anthropic'
+        && $prompt->model === 'parent-model');
+});
+
+test('a sub agent using the parent model inherits it from a streamed run', function (): void {
+    DelegatingAgent::fake([
+        new ToolCall('call_1', 'research_agent', ['task' => 'Research Laravel']),
+        'Research delegated.',
+    ]);
+
+    ParentModelResearchAgent::fake(['Research result']);
+
+    iterator_to_array((new DelegatingAgent)
+        ->withTools([new ParentModelResearchAgent])
+        ->stream('Delegate research about Laravel', provider: 'anthropic', model: 'parent-model'), false);
+
+    ParentModelResearchAgent::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->provider->name() === 'anthropic'
+        && $prompt->model === 'parent-model');
+});
+
+test('a sub agent without the parent model attribute keeps running on its own configuration', function (): void {
+    DelegatingAgent::fake([
+        new ToolCall('call_1', 'research_agent', ['task' => 'Research Laravel']),
+        'Research delegated.',
+    ]);
+
+    ResearchAgent::fake(['Research result']);
+
+    (new DelegatingAgent)->prompt('Delegate research about Laravel', provider: 'anthropic', model: 'parent-model');
+
+    ResearchAgent::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->provider->name() === config('ai.default')
+        && $prompt->model === $prompt->provider->defaultTextModel());
 });

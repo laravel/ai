@@ -730,10 +730,10 @@ class TextGenerationLoop
         $events = $tool->stream(new Request($arguments, $toolCallId, $toolInvocationId));
 
         // Advanced by hand so every resumption of the child run, not only the first, sees this tool call as its parent...
-        while (ParentInvocation::within($parentInvocationId, $toolInvocationId, fn (): bool => $events->valid())) {
+        while (ParentInvocation::within($parentInvocationId, $toolInvocationId, fn (): bool => $events->valid(), $context)) {
             yield $events->current();
 
-            ParentInvocation::within($parentInvocationId, $toolInvocationId, fn () => $events->next());
+            ParentInvocation::within($parentInvocationId, $toolInvocationId, fn () => $events->next(), $context);
         }
 
         $result = (string) $events->getReturn();

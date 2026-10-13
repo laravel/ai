@@ -15,6 +15,7 @@ use Laravel\Ai\Attributes\Model as ModelAttribute;
 use Laravel\Ai\Attributes\Provider as ProviderAttribute;
 use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
 use Laravel\Ai\Attributes\UseCheapestModel;
+use Laravel\Ai\Attributes\UseParentModel;
 use Laravel\Ai\Attributes\UseSmartestModel;
 use Laravel\Ai\Attributes\WithoutBroadcasting;
 use Laravel\Ai\Contracts\Agent;
@@ -497,6 +498,12 @@ trait Promptable
 
                 $model = $attributes === [] ? null : $attributes[0]->newInstance()->value;
             }
+        }
+
+        // A model only exists on its own provider, so the parent's pair is inherited only by an agent that names neither...
+        if (is_null($provider) && is_null($model) && (new ReflectionClass($this))->getAttributes(UseParentModel::class) !== []) {
+            $provider = ParentInvocation::runContext()?->provider->name();
+            $model = ParentInvocation::runContext()?->model;
         }
 
         $resolved = $provider ?? config('ai.default');
