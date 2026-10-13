@@ -310,7 +310,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             return [
                 ...$stored,
                 ...$reasons->has($toolCall->id) ? ['approval_reason' => $reasons[$toolCall->id]] : [],
-                ...$result === null ? [] : Arr::only($result->toArray(), ['result', 'denied', 'failed']),
+                ...$result === null ? [] : Arr::only($result->toArray(), ['result', 'denied', 'failed', 'usage']),
             ];
         })->values()->all();
     }
@@ -639,7 +639,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                     return $result === null || PendingApproval::isAnswered($toolCall)
                         ? $toolCall
                         // Arguments come along because an edited approval runs the tool with different ones than the call asked for...
-                        : [...$toolCall, ...Arr::only($result->toArray(), ['arguments', 'result', 'denied', 'failed'])];
+                        : [...$toolCall, ...Arr::only($result->toArray(), ['arguments', 'result', 'denied', 'failed', 'usage'])];
                 }, $step['tool_calls']);
 
                 return $step;

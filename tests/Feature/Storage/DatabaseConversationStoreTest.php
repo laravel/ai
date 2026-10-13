@@ -449,6 +449,36 @@ test('it round trips tool result failure status through storage', function (): v
         ->and($result->error())->toBe('Tool not found');
 });
 
+test('it round trips the usage of a sub-agent tool result through storage', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    $prompt = new AgentPrompt(
+        new ToolUsingAgent,
+        'Research Laravel',
+        [],
+        Double::for(TextProvider::class),
+        'test-model',
+    );
+
+    $response = new AgentResponse('invocation-id', '', new TextUsage, new Meta);
+    $response->toolCalls = collect([new ToolCall('call-1', 'research_agent', ['task' => 'Research Laravel'])]);
+    $response->toolResults = collect([
+        new ToolResult('call-1', 'research_agent', ['task' => 'Research Laravel'], 'Research result', usage: new TextUsage(3, 4)),
+    ]);
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $result = $store->getLatestConversationMessages($conversationId, 10)
+        ->first(fn (Message $message): bool => $message instanceof ToolResultMessage)
+        ?->toolResults
+        ->first();
+
+    expect($result->usage)->toEqual(new TextUsage(3, 4))
+        ->and($store->paginateConversationMessages($conversationId, 1)->items()[0]->toolResults()[0]['usage'])->toBe((new TextUsage(3, 4))->toArray())
+        ->and(ConversationMessage::query()->where('role', 'assistant')->first()->tool_results[0]['usage'])->toBe((new TextUsage(3, 4))->toArray());
+});
+
 test('it stores a tool result id on the call that made it', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
@@ -1101,6 +1131,26 @@ test('resolving an edited approval records the arguments the tool actually ran w
         'id' => 'call-1',
         'arguments' => ['path' => 'y'],
         'result' => 'Deleted y',
+    ]);
+});
+
+test('resolving an approval records the usage of the sub-agent it ran', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    insertAssistantTurn($conversationId, 'message-1', '', [
+        assistantStep([['id' => 'call-1', 'name' => 'research_agent', 'arguments' => ['task' => 'Research']]]),
+    ], ['call-1' => 'Runs the research agent']);
+
+    $store->storeApprovalResults($conversationId, [
+        new ToolResult('call-1', 'research_agent', ['task' => 'Research'], 'Research result', usage: new TextUsage(3, 4)),
+    ]);
+
+    $steps = DB::table('agent_conversation_messages')->where('id', 'message-1')->value('steps');
+
+    expect($steps)->json()->{'0'}->tool_calls->toHaveCount(1)->each->toMatchArray([
+        'id' => 'call-1',
+        'usage' => (new TextUsage(3, 4))->toArray(),
     ]);
 });
 

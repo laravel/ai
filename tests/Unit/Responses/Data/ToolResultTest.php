@@ -1,5 +1,6 @@
 <?php
 
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolResult;
 
 test('tool result stores all properties', function (): void {
@@ -56,6 +57,16 @@ test('tool result to array includes the failed key only when failed', function (
 test('tool result from array hydrates the failed flag from its key', function (): void {
     expect(ToolResult::fromArray(['id' => 'id', 'name' => 'name', 'arguments' => [], 'result' => 'val'])->failed)->toBeFalse()
         ->and(ToolResult::fromArray(['id' => 'id', 'name' => 'name', 'arguments' => [], 'result' => 'val', 'failed' => true])->failed)->toBeTrue();
+});
+
+test('tool result to array includes the usage key only when it carries usage', function (): void {
+    expect((new ToolResult('id', 'name', [], 'val'))->toArray())->not->toHaveKey('usage')
+        ->and((new ToolResult('id', 'name', [], 'val', usage: new TextUsage(3, 4)))->toArray())->toHaveKey('usage', (new TextUsage(3, 4))->toArray());
+});
+
+test('tool result from array hydrates its usage from its key', function (): void {
+    expect(ToolResult::fromArray(['id' => 'id', 'name' => 'name', 'arguments' => [], 'result' => 'val'])->usage)->toBeNull()
+        ->and(ToolResult::fromArray(['id' => 'id', 'name' => 'name', 'arguments' => [], 'result' => 'val', 'usage' => ['input_tokens' => 3, 'output_tokens' => 4]])->usage)->toEqual(new TextUsage(3, 4));
 });
 
 test('tool result reports its error only when the call did not succeed', function (): void {

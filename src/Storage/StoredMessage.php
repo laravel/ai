@@ -111,7 +111,7 @@ class StoredMessage implements Arrayable, JsonSerializable
     public function toolResults(): array
     {
         return array_values(array_map(
-            fn (array $toolCall): array => Arr::only($toolCall, ['id', 'name', 'arguments', 'result', 'result_id', 'denied', 'failed']),
+            fn (array $toolCall): array => Arr::only($toolCall, ['id', 'name', 'arguments', 'result', 'result_id', 'denied', 'failed', 'usage']),
             array_filter($this->toolCalls(), fn (array $toolCall): bool => array_key_exists('result', $toolCall)),
         ));
     }

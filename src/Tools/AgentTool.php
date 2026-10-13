@@ -10,6 +10,9 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\CanActAsTool;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\Data\TextUsage;
+use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Stringable;
 use Throwable;
@@ -17,6 +20,11 @@ use Throwable;
 class AgentTool implements Approvable, Tool
 {
     use InteractsWithApprovals;
+
+    /**
+     * The usage of the sub-agent's latest run and the agents it delegated to, or null when that run failed.
+     */
+    protected ?TextUsage $usage = null;
 
     public function __construct(protected Agent $agent)
     {
@@ -51,8 +59,10 @@ class AgentTool implements Approvable, Tool
      */
     public function handle(Request $request): string
     {
+        $this->usage = null;
+
         try {
-            return $this->agent->prompt((string) $request['task'])->text;
+            return $this->agent->prompt((string) $request['task'])->then($this->recordUsage(...))->text;
         } catch (Throwable $throwable) {
             // Degraded to a result so the parent run survives; the failure surfaces as the sub-agent's own AgentFailed...
             return 'Agent failed: '.$throwable->getMessage();
@@ -66,8 +76,10 @@ class AgentTool implements Approvable, Tool
      */
     public function stream(Request $request): Generator
     {
+        $this->usage = null;
+
         try {
-            $stream = $this->agent->stream((string) $request['task']);
+            $stream = $this->agent->stream((string) $request['task'])->then($this->recordUsage(...));
 
             yield from $stream;
 
@@ -85,6 +97,25 @@ class AgentTool implements Approvable, Tool
         return [
             'task' => $schema->string()->description('The task to delegate to this agent.')->required(),
         ];
+    }
+
+    /**
+     * Get the usage of the sub-agent's latest run and the agents it delegated to.
+     */
+    public function usage(): ?TextUsage
+    {
+        return $this->usage;
+    }
+
+    /**
+     * Record the usage of the given sub-agent run, adding the usage of the agents it delegated to.
+     */
+    protected function recordUsage(AgentResponse $response): void
+    {
+        $this->usage = $response->toolResults->reduce(
+            fn (TextUsage $usage, ToolResult $result): TextUsage => $result->usage ? $usage->add($result->usage) : $usage,
+            $response->usage,
+        );
     }
 
     /**

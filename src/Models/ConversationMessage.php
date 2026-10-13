@@ -80,7 +80,7 @@ class ConversationMessage extends Model
     protected function toolResults(): Attribute
     {
         return Attribute::get(fn (): array => array_values(array_map(
-            fn (array $toolCall): array => Arr::only($toolCall, ['id', 'name', 'arguments', 'result', 'result_id', 'denied', 'failed']),
+            fn (array $toolCall): array => Arr::only($toolCall, ['id', 'name', 'arguments', 'result', 'result_id', 'denied', 'failed', 'usage']),
             array_filter($this->tool_calls, PendingApproval::isAnswered(...)),
         )));
     }

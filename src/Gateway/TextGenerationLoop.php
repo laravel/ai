@@ -669,7 +669,7 @@ class TextGenerationLoop
 
             yield from $this->preliminaryToolResults($events, $toolCall, $invocationId);
 
-            $toolResults[] = $this->recordedToolResult($this->toolResult($toolCall, $events->getReturn()), $context);
+            $toolResults[] = $this->recordedToolResult($this->toolResult($toolCall, $events->getReturn(), usage: $tool->usage()), $context);
         }
 
         return [$toolResults, $pendingApprovals];
@@ -775,6 +775,7 @@ class TextGenerationLoop
                 default => $this->executeTool($tool, $toolCall->arguments, $toolCall->id, $context),
             },
             failed: ! $tool instanceof Tool || $isFinalStep,
+            usage: $tool instanceof AgentTool && ! $isFinalStep ? $tool->usage() : null,
         ), $context);
     }
 
@@ -791,7 +792,7 @@ class TextGenerationLoop
     /**
      * Create a tool result for the given tool call.
      */
-    protected function toolResult(ToolCall $toolCall, mixed $result, bool $failed = false): ToolResult
+    protected function toolResult(ToolCall $toolCall, mixed $result, bool $failed = false, ?TextUsage $usage = null): ToolResult
     {
         return new ToolResult(
             $toolCall->id,
@@ -800,6 +801,7 @@ class TextGenerationLoop
             $result,
             $toolCall->resultId,
             failed: $failed,
+            usage: $usage,
         );
     }
 
@@ -940,6 +942,7 @@ class TextGenerationLoop
                 $result,
                 $toolCall->resultId,
                 failed: $failed,
+                usage: $tool instanceof AgentTool ? $tool->usage() : null,
             );
         }
 

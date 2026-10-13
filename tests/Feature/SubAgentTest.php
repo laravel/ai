@@ -3,7 +3,11 @@
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\Streaming\Events\ToolResult as StreamedToolResult;
 use Laravel\Ai\Tools\AgentTool;
 use Tests\Fixtures\Agents\DelegatingAgent;
 use Tests\Fixtures\Agents\MiddleManagerAgent;
@@ -119,3 +123,37 @@ test('nested agent delegates through a middle manager to a research agent', func
         ->and($response->toolResults)->toHaveCount(1)
         ->and($response->toolResults->first()->result)->toBe('Research delegated.');
 });
+
+test('a sub-agent tool result carries the usage of the sub-agent and the agents it delegated to', function (): void {
+    fakeNestedSubAgentUsage();
+
+    $response = (new OrchestratorAgent)->prompt('Do a deep dive on Laravel caching');
+
+    expect($response->toolResults->first()->usage)->toEqual(new TextUsage(23, 6));
+});
+
+test('a streamed sub-agent tool result carries the usage of the sub-agent and the agents it delegated to', function (): void {
+    fakeNestedSubAgentUsage();
+
+    $result = collect(iterator_to_array((new OrchestratorAgent)->stream('Do a deep dive on Laravel caching'), false))
+        ->whereInstanceOf(StreamedToolResult::class)
+        ->reject->preliminary
+        ->first();
+
+    expect($result->toolResult->usage)->toEqual(new TextUsage(23, 6));
+});
+
+function fakeNestedSubAgentUsage(): void
+{
+    OrchestratorAgent::fake([
+        new ToolCall('call_001', 'middle_manager', ['task' => 'Deep-dive on Laravel caching']),
+        new TextResponse('Delegated to middle manager.', new TextUsage(100, 10), new Meta),
+    ]);
+
+    MiddleManagerAgent::fake([
+        new ToolCall('call_002', 'research_agent', ['task' => 'Research Laravel caching internals']),
+        new TextResponse('Research delegated.', new TextUsage(20, 2), new Meta),
+    ]);
+
+    ResearchAgent::fake([new TextResponse('Deep research result', new TextUsage(3, 4), new Meta)]);
+}

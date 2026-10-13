@@ -1494,6 +1494,60 @@ test('a sub-agent runs synchronously through the non-streaming loop', function (
         ->and($response->toolResults[0]->result)->toBe('synchronous result');
 });
 
+test('a sub-agent call left unrun on the final step does not report the usage of an earlier call', function (): void {
+    $agent = Double::for(Agent::class, CanActAsTool::class);
+    $agent->allows('name')->returns('research_agent');
+    $agent->expects('prompt')->returns(new AgentResponse(
+        'sub-invocation', 'synchronous result', new TextUsage(3, 4), new Meta('fake', 'sub-model')
+    ));
+
+    $gateway = new TextGenerationLoopFakeGateway([
+        new StepResponse('', [new ToolCall('call-first', 'research_agent', ['task' => 'First'])], FinishReason::ToolCalls, new TextUsage, new Meta('fake', 'model')),
+        new StepResponse('', [new ToolCall('call-second', 'research_agent', ['task' => 'Second'])], FinishReason::ToolCalls, new TextUsage, new Meta('fake', 'model')),
+    ]);
+
+    $response = (new TextGenerationLoop($gateway))->generate(
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [new AgentTool($agent)],
+        null,
+        new TextGenerationOptions(maxSteps: 2),
+        null,
+    );
+
+    expect($response->toolResults->pluck('usage')->all())->toEqual([new TextUsage(3, 4), null]);
+});
+
+test('an approved sub-agent reports its usage when the run resumes', function (): void {
+    $agent = Double::for(Agent::class, CanActAsTool::class);
+    $agent->allows('name')->returns('research_agent');
+    $agent->expects('prompt')->returns(new AgentResponse(
+        'sub-invocation', 'approved result', new TextUsage(3, 4), new Meta('fake', 'sub-model')
+    ));
+
+    $toolCall = new ToolCall('call-sub-agent', 'research_agent', ['task' => 'Research'], 'call-sub-agent');
+    $gateway = new TextGenerationLoopFakeGateway([
+        new StepResponse('done', [], FinishReason::Stop, new TextUsage, new Meta('fake', 'model')),
+    ]);
+
+    $response = (new TextGenerationLoop($gateway))->generate(
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [new AssistantMessage('', collect([$toolCall]))],
+        [(new AgentTool($agent))->requireApproval()],
+        null,
+        new TextGenerationOptions(maxSteps: 2),
+        null,
+        ['call-sub-agent' => Decision::approve()],
+    );
+
+    expect($response->toolResults[0]->result)->toBe('approved result')
+        ->and($response->toolResults[0]->usage)->toEqual(new TextUsage(3, 4));
+});
+
 test('a sub-agent is not executed on the final streamed step', function (): void {
     $agent = Double::for(Agent::class, CanActAsTool::class);
     $agent->allows('name')->returns('research_agent');

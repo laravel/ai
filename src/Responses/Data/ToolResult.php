@@ -15,6 +15,7 @@ class ToolResult implements Arrayable, JsonSerializable
         public ?string $resultId = null,
         public bool $denied = false,
         public bool $failed = false,
+        public ?TextUsage $usage = null,
     ) {}
 
     /**
@@ -30,6 +31,7 @@ class ToolResult implements Arrayable, JsonSerializable
             resultId: $data['result_id'] ?? null,
             denied: $data['denied'] ?? false,
             failed: $data['failed'] ?? false,
+            usage: isset($data['usage']) ? TextUsage::fromArray($data['usage']) : null,
         );
     }
 
@@ -62,7 +64,7 @@ class ToolResult implements Arrayable, JsonSerializable
     }
 
     /**
-     * Get the instance as an array, only including the denied and failed keys when they apply.
+     * Get the instance as an array, only including the denied, failed and usage keys when they apply.
      */
     public function toArray(): array
     {
@@ -74,6 +76,7 @@ class ToolResult implements Arrayable, JsonSerializable
             'result_id' => $this->resultId,
             ...($this->denied ? ['denied' => true] : []),
             ...($this->failed ? ['failed' => true] : []),
+            ...($this->usage ? ['usage' => $this->usage->toArray()] : []),
         ];
     }
 

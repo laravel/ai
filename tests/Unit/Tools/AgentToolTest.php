@@ -2,6 +2,7 @@
 
 use JMac\Testing\Double;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\StreamableAgentResponse;
@@ -37,4 +38,21 @@ test('a failing sub-agent surfaces its error as the tool result on the streaming
 
     expect(iterator_to_array($generator))->toBe([])
         ->and($generator->getReturn())->toBe('Agent failed: provider exploded');
+});
+
+test('a failing sub-agent does not report the usage of the run before it', function (): void {
+    $agent = Double::for(Agent::class);
+    $agent->expects('prompt')->returns(new AgentResponse('invocation-sub', 'sub answer', new TextUsage(3, 4), new Meta('fake', 'model')));
+    $agent->expects('stream')->throws(new RuntimeException('provider exploded'));
+
+    $tool = new AgentTool($agent);
+
+    $tool->handle(new Request(['task' => 'First']));
+
+    $usage = $tool->usage();
+
+    iterator_to_array($tool->stream(new Request(['task' => 'Second'])));
+
+    expect($usage)->toEqual(new TextUsage(3, 4))
+        ->and($tool->usage())->toBeNull();
 });
