@@ -67,7 +67,6 @@ class AgentTool implements Approvable, Tool
      */
     public function stream(Request $request): Generator
     {
-        // Structured output cannot be streamed yet, so a structured sub-agent answers through a regular prompt...
         if ($this->agent instanceof HasStructuredOutput) {
             return $this->handle($request);
         }
