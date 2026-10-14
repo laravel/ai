@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway;
 
 use Closure;
 use Generator;
+use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Approvals\Approval;
@@ -12,6 +13,7 @@ use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Attributes\RepairToolCalls;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
+use Laravel\Ai\Contracts\NeedsInput;
 use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
@@ -24,6 +26,7 @@ use Laravel\Ai\Gateway\Concerns\MeasuresDuration;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -39,6 +42,7 @@ use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\Request;
+use Laravel\Ai\Tools\Response;
 use Laravel\Ai\Tools\ToolNameResolver;
 use LogicException;
 use Throwable;
@@ -400,12 +404,7 @@ class TextGenerationLoop
             $approval = $tool instanceof Tool ? $this->approvalForTool($tool, $toolCall) : null;
 
             if ($approval instanceof Approval) {
-                $pendingApprovals->push(new PendingApproval(
-                    $toolCall->id,
-                    $toolCall->name,
-                    $toolCall->arguments,
-                    $approval->reason,
-                ));
+                $pendingApprovals->push($this->pendingApproval($toolCall, $approval));
 
                 continue;
             }
@@ -421,18 +420,19 @@ class TextGenerationLoop
             [$toolCall, $tool] = $pair;
 
             $result = match (true) {
-                ! $tool instanceof Tool && $this->repairsToolCalls => "Tool '{$toolCall->name}' does not exist. Available tools: {$this->availableToolNames($tools)}.",
-                $isFinalStep => 'The agent reached its maximum number of steps without running this tool call.',
-                default => $this->executeTool($tool, $toolCall->arguments, $toolCall->id, $context),
+                ! $tool instanceof Tool && $this->repairsToolCalls => new Response("Tool '{$toolCall->name}' does not exist. Available tools: {$this->availableToolNames($tools)}."),
+                $isFinalStep => new Response('The agent reached its maximum number of steps without running this tool call.'),
+                default => $this->invokeTool($tool, $toolCall->arguments, $toolCall->id, $context),
             };
 
             return new ToolResult(
                 $toolCall->id,
                 $toolCall->name,
                 $toolCall->arguments,
-                $result,
+                (string) $result,
                 $toolCall->resultId,
                 failed: ! $tool instanceof Tool || $isFinalStep,
+                data: $result->data,
             );
         }, $resolved);
 
@@ -514,33 +514,50 @@ class TextGenerationLoop
                 continue;
             }
 
-            $arguments = $decision->arguments ?? $toolCall->arguments;
             $tool = $resolvedTools[$toolCall->id];
 
             if (! $tool instanceof Tool) {
                 throw new NoSuchToolException($toolCall->name);
             }
 
+            $arguments = $this->argumentsForDecision($decision, $toolCall, $tool);
             $failed = false;
 
             try {
-                $result = $this->executeTool($tool, $arguments, $toolCall->id, $context);
+                $result = $this->invokeTool($tool, $arguments, $toolCall->id, $context);
             } catch (Throwable $exception) {
                 $failed = true;
-                $result = 'The tool call failed: '.$exception->getMessage();
+                $result = new Response('The tool call failed: '.$exception->getMessage());
             }
 
             $toolResults[] = new ToolResult(
                 $toolCall->id,
                 $toolCall->name,
                 $arguments,
-                $result,
+                (string) $result,
                 $toolCall->resultId,
                 failed: $failed,
+                data: $result->data,
             );
         }
 
         return [$toolResults, ! $hasBareRejection];
+    }
+
+    /**
+     * Resolve the arguments a decision executes the tool with.
+     *
+     * @return array<string, mixed>
+     */
+    protected function argumentsForDecision(Decision $decision, ToolCall $toolCall, Tool $tool): array
+    {
+        if (! $decision->isSubmitted()) {
+            return $decision->arguments ?? $toolCall->arguments;
+        }
+
+        $properties = $this->approvalForTool($tool, $toolCall)?->schema['properties'] ?? [];
+
+        return [...$toolCall->arguments, ...array_intersect_key($decision->arguments ?? [], $properties)];
     }
 
     /**
@@ -591,6 +608,22 @@ class TextGenerationLoop
             throw new ApprovalMismatchException('There are no tool calls pending approval.', collect());
         }
 
+        $incomplete = $gated->filter(function (ToolCall $toolCall) use ($approval, $approvals) {
+            $decision = $approval[$toolCall->id] ?? $approval['*'] ?? null;
+
+            return $decision?->isRejected() === false && array_diff(
+                $approvals[$toolCall->id]->requiredKeys(),
+                array_keys($decision->arguments ?? []),
+            ) !== [];
+        });
+
+        if ($incomplete->isNotEmpty()) {
+            throw new ApprovalMismatchException(
+                'Approval decisions are missing values the tool asked for.',
+                $this->pendingApprovalsFor($incomplete, $approvals),
+            );
+        }
+
         return [$pendingToolCalls, $resolvedTools];
     }
 
@@ -599,9 +632,47 @@ class TextGenerationLoop
      */
     protected function approvalForTool(?Tool $tool, ToolCall $toolCall): ?Approval
     {
-        return $tool instanceof Approvable
-            ? $tool->shouldRequestApproval(new Request($toolCall->arguments, $toolCall->id))
-            : null;
+        $request = new Request($toolCall->arguments, $toolCall->id);
+
+        $approval = $tool instanceof Approvable ? $tool->shouldRequestApproval($request) : null;
+
+        if ($tool instanceof NeedsInput && ($schema = $this->outstandingInput($tool, $request)) !== null) {
+            return new Approval($approval?->reason, $schema, $approval?->data);
+        }
+
+        return $approval;
+    }
+
+    /**
+     * Get the input schema of a tool still missing values, or null once the call carries them all.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function outstandingInput(NeedsInput $tool, Request $request): ?array
+    {
+        $schema = (new ObjectSchema($tool->needsInput(new JsonSchemaTypeFactory, $request)))->toSchema();
+
+        $outstanding = array_filter(
+            $schema['required'] ?? [],
+            fn (string $key) => ($request[$key] ?? null) === null,
+        );
+
+        return $outstanding === [] ? null : $schema;
+    }
+
+    /**
+     * Build the pending approval handed to the caller.
+     */
+    protected function pendingApproval(ToolCall $toolCall, Approval $approval): PendingApproval
+    {
+        return new PendingApproval(
+            $toolCall->id,
+            $toolCall->name,
+            $toolCall->arguments,
+            $approval->reason,
+            $approval->schema,
+            $approval->data,
+        );
     }
 
     /**
