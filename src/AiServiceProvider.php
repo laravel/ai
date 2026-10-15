@@ -20,6 +20,7 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\BooleanAnswer;
+use Laravel\Ai\Sandboxes\SandboxManager;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 
 class AiServiceProvider extends ServiceProvider
@@ -31,6 +32,8 @@ class AiServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(AiManager::class, fn ($app): AiManager => new AiManager($app));
+
+        $this->app->singleton(SandboxManager::class, fn ($app): SandboxManager => new SandboxManager($app));
 
         $this->app->singleton(ConversationStore::class, fn (): DatabaseConversationStore => new DatabaseConversationStore(
             config('ai.conversations.connection'),
