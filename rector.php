@@ -14,6 +14,7 @@ use Rector\TypeDeclaration\Rector\FunctionLike\AddClosureParamTypeForArrayMapRec
 use Rector\TypeDeclaration\Rector\FunctionLike\AddClosureParamTypeForArrayReduceRector;
 use Rector\TypeDeclaration\Rector\StmtsAwareInterface\SafeDeclareStrictTypesRector;
 use RectorLaravel\Rector\Class_\TablePropertyToTableAttributeRector;
+use RectorLaravel\Rector\Class_\WithoutIncrementingPropertyToWithoutIncrementingAttributeRector;
 use RectorLaravel\Set\LaravelSetProvider;
 
 return RectorConfig::configure()
@@ -37,6 +38,8 @@ return RectorConfig::configure()
         // Skipped for now to keep the diff focused (no declare(strict_types=1) churn).
         SafeDeclareStrictTypesRector::class,
         TablePropertyToTableAttributeRector::class,
+        // The WithoutIncrementing attribute requires Laravel 13.2, but Laravel 12 is still supported.
+        WithoutIncrementingPropertyToWithoutIncrementingAttributeRector::class,
     ])
     ->withPreparedSets(
         deadCode: true,

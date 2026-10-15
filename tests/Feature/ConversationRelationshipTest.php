@@ -156,6 +156,34 @@ test('conversation can retrieve its participant using relationship', function ()
         ->and($conversation->participant->is($user))->toBeTrue();
 });
 
+test('conversation and message keep their string keys when created', function (): void {
+    $user = ConversationRelationshipUser::create(['name' => 'Taylor']);
+
+    $conversation = Conversation::create([
+        'id' => 'conversation-1',
+        'participant_type' => $user->getMorphClass(),
+        'participant_id' => $user->id,
+        'title' => 'Conversation',
+    ]);
+
+    $message = $conversation->messages()->create([
+        'id' => 'message-1',
+        'participant_type' => $user->getMorphClass(),
+        'participant_id' => $user->id,
+        'agent' => 'Agent',
+        'role' => 'user',
+        'content' => 'Hello',
+        'attachments' => [],
+        'steps' => [],
+        'usage' => [],
+        'meta' => [],
+        'status' => MessageStatus::Completed,
+    ]);
+
+    expect($conversation->id)->toBe('conversation-1')
+        ->and($message->id)->toBe('message-1');
+});
+
 test('conversation model uses configured database connection', function (): void {
     config(['database.connections.secondary' => [
         'driver' => 'sqlite',

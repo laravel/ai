@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Models;
 
-use Illuminate\Database\Eloquent\Attributes\WithoutIncrementing;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -21,9 +20,15 @@ use Laravel\Ai\Enums\MessageStatus;
  * @property-read array $tool_results
  * @property MessageStatus $status
  */
-#[WithoutIncrementing]
 class ConversationMessage extends Model
 {
+    /**
+     * Indicates if the model's ID is auto-incrementing.
+     *
+     * @var bool
+     */
+    public $incrementing = false;
+
     /**
      * The data type of the primary key ID.
      *

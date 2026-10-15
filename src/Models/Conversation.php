@@ -2,15 +2,20 @@
 
 namespace Laravel\Ai\Models;
 
-use Illuminate\Database\Eloquent\Attributes\WithoutIncrementing;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use InvalidArgumentException;
 
-#[WithoutIncrementing]
 class Conversation extends Model
 {
+    /**
+     * Indicates if the model's ID is auto-incrementing.
+     *
+     * @var bool
+     */
+    public $incrementing = false;
+
     /**
      * The data type of the primary key ID.
      *
