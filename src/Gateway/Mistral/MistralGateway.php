@@ -10,6 +10,7 @@ use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
+use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
@@ -20,6 +21,9 @@ use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\PerformsChatCompletionSteps;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Providers\Tools\FileSearch;
+use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
@@ -61,6 +65,20 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
         StepContext $stepContext,
     ): array {
         return $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
+    }
+
+    /**
+     * Map a provider tool to a Chat Completions tool definition.
+     */
+    protected function mapProviderTool(ProviderTool $tool, Provider $provider): array
+    {
+        return match (true) {
+            $tool instanceof FileSearch && $provider instanceof SupportsFileSearch => [
+                'type' => 'document_library',
+                ...$provider->fileSearchToolOptions($tool),
+            ],
+            default => throw new RuntimeException('Mistral does not support ['.class_basename($tool).'] provider tools.'),
+        };
     }
 
     /**

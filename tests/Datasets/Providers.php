@@ -55,6 +55,7 @@ dataset('store-providers', [
 dataset('file-search-providers', [
     'openai' => ['openai', 'OPENAI_API_KEY'],
     'azure' => ['azure', 'AZURE_OPENAI_API_KEY'],
+    'mistral' => ['mistral', 'MISTRAL_API_KEY', 'mistral-medium-latest'],
 ]);
 
 dataset('reranking-providers', [

@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\Mistral\Concerns;
 
+use Illuminate\Support\Collection;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
@@ -40,18 +41,25 @@ trait ParsesTextResponses
         bool $structured,
     ): StepResponse {
         $choice = $data['choices'][0] ?? [];
-        $message = $choice['message'] ?? [];
         $model = $data['model'] ?? '';
 
-        $text = $this->extractContentText($message['content'] ?? '');
-        $rawToolCalls = $message['tool_calls'] ?? [];
+        $messages = new Collection($choice['messages'] ?? [$choice['message'] ?? []]);
+        $assistantMessages = $messages->where('role', 'assistant');
+        $serverToolCallIds = $messages->where('role', 'tool')->pluck('tool_call_id')->all();
 
-        $toolCalls = array_map(fn (array $toolCall): ToolCall => new ToolCall(
-            $toolCall['id'] ?? '',
-            $toolCall['function']['name'] ?? '',
-            json_decode($toolCall['function']['arguments'] ?? '{}', true) ?? [],
-            $toolCall['id'] ?? null,
-        ), $rawToolCalls);
+        $text = $assistantMessages->map(fn (array $message): string => $this->extractContentText($message['content'] ?? ''))->implode('');
+
+        $toolCalls = $assistantMessages
+            ->flatMap(fn (array $message): array => $message['tool_calls'] ?? [])
+            ->reject(fn (array $toolCall): bool => in_array($toolCall['id'] ?? null, $serverToolCallIds, true))
+            ->map(fn (array $toolCall): ToolCall => new ToolCall(
+                $toolCall['id'] ?? '',
+                $toolCall['function']['name'] ?? '',
+                json_decode($toolCall['function']['arguments'] ?? '{}', true) ?? [],
+                $toolCall['id'] ?? null,
+            ))
+            ->values()
+            ->all();
 
         return new StepResponse(
             text: $text,
