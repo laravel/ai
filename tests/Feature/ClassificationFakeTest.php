@@ -112,12 +112,14 @@ test('fake records the attachments a classification was given', function (): voi
 });
 
 test('fakes reject attachments for providers that cannot classify them', function (): void {
+    registerTextOnlyClassifier();
+
     Classification::fake();
 
     Classification::of('Inspect this.', [Image::fromBase64(base64_encode('photo'), 'image/png')])
         ->question('damaged', new Boolean('Damaged?'))
-        ->classify(provider: Lab::TypeSafe);
-})->throws(LogicException::class, 'Provider [typesafe] does not support classification attachments.');
+        ->classify(provider: 'text-only');
+})->throws(LogicException::class, 'Provider [text-only] does not support classification attachments.');
 
 test('can assert nothing classified', function (): void {
     Classification::fake();

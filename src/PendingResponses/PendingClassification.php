@@ -29,7 +29,7 @@ class PendingClassification
      * Create a new pending classification instance.
      *
      * @param  string|array<string, mixed>  $state
-     * @param  array<int, File|UploadedFile>  $attachments
+     * @param  array<int|string, File|UploadedFile>  $attachments
      *
      * @throws InvalidArgumentException if the state is blank.
      */

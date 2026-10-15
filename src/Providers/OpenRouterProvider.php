@@ -245,6 +245,14 @@ class OpenRouterProvider extends Provider implements AudioProvider, Classificati
     }
 
     /**
+     * Determine if the provider can classify attachments alongside the state.
+     */
+    public function supportsClassificationAttachments(): bool
+    {
+        return true;
+    }
+
+    /**
      * Get the provider's reranking gateway.
      */
     public function rerankingGateway(): RerankingGateway

@@ -1,11 +1,13 @@
 <?php
 
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Classification;
 use Laravel\Ai\Classification\Boolean;
 use Laravel\Ai\Classification\Choice;
 use Laravel\Ai\Classification\Score;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Responses\Data\BooleanAnswer;
 use Laravel\Ai\Responses\Data\ChoiceAnswer;
@@ -154,12 +156,51 @@ test('answers without the optional distribution fields fall back to the question
         ->and($response['urgency']->normalized())->toBe(1.0);
 });
 
-test('attachments are rejected before any request', function (): void {
+test('image attachments are appended to the state as data url image parts', function (): void {
+    Http::fake(['*' => Http::response(fakeDecisionsResponse())]);
+
+    $jpeg = file_get_contents(__DIR__.'/../../../Fixtures/Images/blue.jpg');
+
+    Classification::of('A product photo uploaded by a customer.', [
+        'front' => Image::fromPath(__DIR__.'/../../../Fixtures/Images/blue.jpg')->withProviderOptions(fn ($provider) => $provider === Lab::OpenRouter ? ['custom' => 'value'] : null),
+        'back' => UploadedFile::fake()->createWithContent('back.png', 'upload-bytes')->mimeType('image/png'),
+    ])
+        ->question('damaged', new Boolean('Is the product damaged?'))
+        ->classify(provider: 'openrouter');
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://openrouter.ai/api/alpha/decisions'
+        && ! $request->hasHeader('TypeSafe-Danger-Zone-Images')
+        && json_decode($request->body(), true)['state'] === [
+            'A product photo uploaded by a customer.',
+            ['custom' => 'value', 'type' => 'image_url', 'image_url' => ['url' => 'data:image/jpeg;base64,'.base64_encode($jpeg)]],
+            ['type' => 'image_url', 'image_url' => ['url' => 'data:image/png;base64,'.base64_encode('upload-bytes')]],
+        ]);
+});
+
+test('image parts follow the items of a list state and the object of a structured state', function (array $state, array $expected): void {
+    Http::fake(['*' => Http::response(fakeDecisionsResponse())]);
+
+    Classification::of($state, [Image::fromBase64(base64_encode('photo'), 'image/png')])
+        ->question('damaged', new Boolean('Damaged?'))
+        ->classify(provider: 'openrouter');
+
+    $part = ['type' => 'image_url', 'image_url' => ['url' => 'data:image/png;base64,'.base64_encode('photo')]];
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['state'] === [...$expected, $part]);
+})->with([
+    'list' => [['first message', 'second message'], ['first message', 'second message']],
+    'object' => [['subject' => 'Broken lamp'], [['subject' => 'Broken lamp']]],
+]);
+
+test('attachments that are not inline jpeg or png images are rejected before any request', function (mixed $attachment, string $message): void {
     Http::fake();
 
-    expect(fn () => Classification::of('Inspect this.', [Image::fromBase64(base64_encode('photo'), 'image/png')])
+    expect(fn () => Classification::of('Inspect this.', [$attachment()])
         ->question('damaged', new Boolean('Damaged?'))
-        ->classify(provider: 'openrouter'))->toThrow(LogicException::class, 'Provider [openrouter] does not support classification attachments.');
+        ->classify(provider: 'openrouter'))->toThrow(InvalidArgumentException::class, $message);
 
     Http::assertNothingSent();
-});
+})->with([
+    'provider image' => [fn () => Image::fromId('file_123'), 'System One only accepts images with inline content; [Laravel\\Ai\\Files\\ProviderImage] given.'],
+    'webp upload' => [fn () => UploadedFile::fake()->createWithContent('photo.webp', 'webp-bytes')->mimeType('image/webp'), 'System One only accepts JPEG or PNG images; [image/webp] given.'],
+]);

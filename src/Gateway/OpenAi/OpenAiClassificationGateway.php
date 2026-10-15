@@ -2,20 +2,18 @@
 
 namespace Laravel\Ai\Gateway\OpenAi;
 
-use finfo;
 use Illuminate\Http\UploadedFile;
 use InvalidArgumentException;
 use Laravel\Ai\Classification\Boolean;
 use Laravel\Ai\Classification\Choice;
 use Laravel\Ai\Classification\Score;
-use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\ClassificationGateway;
 use Laravel\Ai\Contracts\Providers\ClassificationProvider;
 use Laravel\Ai\Contracts\Question;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\File;
-use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
+use Laravel\Ai\Gateway\Concerns\ResolvesInlineImages;
 use Laravel\Ai\Responses\ClassificationResponse;
 use Laravel\Ai\Responses\Data\Answer;
 use Laravel\Ai\Responses\Data\BooleanAnswer;
@@ -28,6 +26,7 @@ class OpenAiClassificationGateway implements ClassificationGateway
 {
     use Concerns\CreatesOpenAiClient;
     use HandlesFailoverErrors;
+    use ResolvesInlineImages;
 
     /**
      * Answer the given questions about the state.
@@ -35,7 +34,7 @@ class OpenAiClassificationGateway implements ClassificationGateway
      * @param  string|array<string, mixed>  $state
      * @param  array<string, Question>  $questions
      * @param  array<string, mixed>  $providerOptions
-     * @param  array<int, File|UploadedFile>  $attachments
+     * @param  array<int|string, File|UploadedFile>  $attachments
      */
     public function classify(
         ClassificationProvider $provider,
@@ -83,7 +82,7 @@ class OpenAiClassificationGateway implements ClassificationGateway
      * Map the state and attachments to the decisions input.
      *
      * @param  string|array<string, mixed>  $state
-     * @param  array<int, File|UploadedFile>  $attachments
+     * @param  array<int|string, File|UploadedFile>  $attachments
      */
     protected function mapInput(string|array $state, array $attachments): string|array
     {
@@ -107,19 +106,10 @@ class OpenAiClassificationGateway implements ClassificationGateway
      *
      * @throws InvalidArgumentException if the attachment is not a JPEG, PNG, GIF, or WebP image with inline content.
      */
-    protected function mapImage(File|UploadedFile $image): array
+    protected function mapImage(File|UploadedFile $attachment): array
     {
-        if ($image instanceof UploadedFile) {
-            $image = Image::fromUpload($image);
-        }
-
-        if (! $image instanceof Image || ! $image instanceof StorableFile) {
-            throw new InvalidArgumentException('OpenAI decisions only accept images with inline content; ['.get_debug_type($image).'] given.');
-        }
-
-        $content = $image->content();
-
-        $mime = $image->mimeType() ?? (new finfo(FILEINFO_MIME_TYPE))->buffer($content);
+        [$image, $content, $mime] = $this->resolveInlineImage($attachment)
+            ?? throw new InvalidArgumentException('OpenAI decisions only accept images with inline content; ['.get_debug_type($attachment).'] given.');
 
         if (! in_array($mime, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) {
             throw new InvalidArgumentException("OpenAI decisions only accept JPEG, PNG, GIF, or WebP images; [{$mime}] given.");

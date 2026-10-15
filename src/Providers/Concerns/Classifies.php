@@ -23,7 +23,7 @@ trait Classifies
      * @param  string|array<string, mixed>  $state
      * @param  array<string, Question>  $questions
      * @param  array<string, mixed>  $providerOptions
-     * @param  array<int, File|UploadedFile>  $attachments
+     * @param  array<int|string, File|UploadedFile>  $attachments
      */
     public function classify(string|array $state, array $questions, ?string $model = null, int $timeout = 30, array $providerOptions = [], array $attachments = []): ClassificationResponse
     {

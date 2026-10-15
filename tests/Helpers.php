@@ -1,8 +1,11 @@
 <?php
 
 use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Ai;
+use Laravel\Ai\Providers\TypeSafeProvider;
 
 function requiresApiKey(string ...$keys): void
 {
@@ -11,6 +14,19 @@ function requiresApiKey(string ...$keys): void
             test()->markTestSkipped("Missing {$key} — skipping external test.");
         }
     }
+}
+
+function registerTextOnlyClassifier(): void
+{
+    config(['ai.providers.text-only' => ['driver' => 'text-only', 'key' => 'test-key']]);
+
+    Ai::extend('text-only', fn ($app, array $config): TypeSafeProvider => new class($config, $app->make(Dispatcher::class)) extends TypeSafeProvider
+    {
+        public function supportsClassificationAttachments(): bool
+        {
+            return false;
+        }
+    });
 }
 
 function sentRequest(): Request

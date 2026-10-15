@@ -221,13 +221,13 @@ test('classification uses the configured classification model', function (): voi
 });
 
 test('attachments fail loudly instead of failing over to a provider that cannot classify them', function (): void {
-    config(['ai.providers.typesafe.key' => 'test-key']);
+    registerTextOnlyClassifier();
 
     Http::fake(['api.openai.com/*' => Http::response([], 503)]);
 
     expect(fn () => Classification::of('Inspect this.', [Image::fromBase64(base64_encode('photo'), 'image/png')])
         ->question('damaged', new Boolean('Damaged?'))
-        ->classify(provider: ['openai', 'typesafe']))->toThrow(LogicException::class, 'Provider [typesafe] does not support classification attachments.');
+        ->classify(provider: ['openai', 'text-only']))->toThrow(LogicException::class, 'Provider [text-only] does not support classification attachments.');
 
     Http::assertSentCount(1);
 });
