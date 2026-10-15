@@ -7,16 +7,20 @@ use Laravel\Ai\Contracts\Gateway\AudioGateway;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
+use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Contracts\Providers\UploadsDocumentsToStore;
 use Laravel\Ai\Gateway\Mistral\MistralFileGateway;
 use Laravel\Ai\Gateway\Mistral\MistralGateway;
+use Laravel\Ai\Gateway\Mistral\MistralStoreGateway;
 
-class MistralProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, TextProvider, TranscriptionProvider
+class MistralProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, StoreProvider, TextProvider, TranscriptionProvider, UploadsDocumentsToStore
 {
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
@@ -25,10 +29,13 @@ class MistralProvider extends Provider implements AudioProvider, EmbeddingProvid
     use Concerns\HasAudioGateway;
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasFileGateway;
+    use Concerns\HasStoreGateway;
     use Concerns\HasTextGateway;
     use Concerns\HasTranscriptionGateway;
     use Concerns\ManagesFiles;
+    use Concerns\ManagesStores;
     use Concerns\StreamsText;
+    use Concerns\UploadsStoreDocuments;
 
     protected ?MistralGateway $mistralGateway = null;
 
@@ -75,6 +82,14 @@ class MistralProvider extends Provider implements AudioProvider, EmbeddingProvid
     public function fileGateway(): FileGateway
     {
         return $this->fileGateway ??= new MistralFileGateway;
+    }
+
+    /**
+     * Get the provider's store gateway.
+     */
+    public function storeGateway(): StoreGateway
+    {
+        return $this->storeGateway ??= new MistralStoreGateway;
     }
 
     /**

@@ -49,6 +49,7 @@ dataset('store-providers', [
     'openai' => ['openai', 'OPENAI_API_KEY'],
     'gemini' => ['gemini', 'GEMINI_API_KEY'],
     'azure' => ['azure', 'AZURE_OPENAI_API_KEY'],
+    'mistral' => ['mistral', 'MISTRAL_API_KEY'],
 ]);
 
 dataset('file-search-providers', [

@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Audio;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
+use Laravel\Ai\Stores;
 
 use function Laravel\Ai\agent;
 
@@ -84,6 +85,37 @@ test('mistral file requests use the configured base url', function (): void {
     mistralAssertRequestSent('POST', "{$this->customUrl}/files");
     mistralAssertRequestSent('GET', "{$this->customUrl}/files/file-123");
     mistralAssertRequestSent('DELETE', "{$this->customUrl}/files/file-123");
+});
+
+test('mistral store requests use the configured base url', function (): void {
+    configureMistralProvider($this->customUrl);
+
+    Http::fake(fn (Request $request) => match ([$request->method(), $request->url()]) {
+        ['POST', "{$this->customUrl}/libraries"] => Http::response(['id' => 'lib-123', 'name' => 'Local Store', 'nb_documents' => 0]),
+        ['GET', "{$this->customUrl}/libraries/lib-123"] => Http::response(['id' => 'lib-123', 'name' => 'Local Store', 'nb_documents' => 0]),
+        ['POST', "{$this->customUrl}/libraries/lib-123/documents"] => Http::response(['id' => 'doc-123'], 201),
+        ['DELETE', "{$this->customUrl}/libraries/lib-123/documents/doc-123"] => Http::response([], 204),
+        ['DELETE', "{$this->customUrl}/libraries/lib-123"] => Http::response(['id' => 'lib-123']),
+        default => Http::response(['unexpected_url' => $request->url()], 500),
+    });
+
+    $store = Stores::create('Local Store', provider: 'mistral')->refresh();
+    $document = $store->add(Document::fromString('Hello, World!', 'text/plain')->as('hello.txt'));
+    $removed = $store->remove($document->id());
+    $deleted = $store->delete();
+
+    expect($store->id)->toBe('lib-123')
+        ->and($store->name)->toBe('Local Store')
+        ->and($document->id())->toBe('doc-123')
+        ->and($removed)->toBeTrue()
+        ->and($deleted)->toBeTrue();
+
+    Http::assertSentCount(5);
+    mistralAssertRequestSent('POST', "{$this->customUrl}/libraries");
+    mistralAssertRequestSent('GET', "{$this->customUrl}/libraries/lib-123");
+    mistralAssertRequestSent('POST', "{$this->customUrl}/libraries/lib-123/documents");
+    mistralAssertRequestSent('DELETE', "{$this->customUrl}/libraries/lib-123/documents/doc-123");
+    mistralAssertRequestSent('DELETE', "{$this->customUrl}/libraries/lib-123");
 });
 
 function configureMistralProvider(?string $url = null): void

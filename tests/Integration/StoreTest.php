@@ -42,7 +42,7 @@ function createFileSearchStore(string $provider): array
         return $refreshed;
     }, 2000);
 
-    return [$store, $fileIds];
+    return [$store, array_values(array_filter($fileIds))];
 }
 
 test('can create get and delete store', function (string $provider, string $apiKey): void {
@@ -89,31 +89,22 @@ test('can create store with expiration', function (string $provider, string $api
 test('can add and remove file from store', function (string $provider, string $apiKey): void {
     requiresApiKey($apiKey);
 
-    // Create a store...
     $store = Stores::create('File Test Store', provider: $provider);
 
-    // Upload a file to the provider...
-    $file = Files::put(
+    $documentId = $store->add(
         Document::fromString('This is test content for the vector store.', 'text/plain')->as('test.txt'),
-        provider: $provider,
     );
-
-    // Add the file to the store...
-    $documentId = $store->add($file);
 
     expect($documentId)->not->toBeEmpty();
 
-    // Refresh the store to see updated file counts...
     $refreshed = $store->refresh();
 
     expect($refreshed->fileCounts->completed + $refreshed->fileCounts->pending)->toBeGreaterThanOrEqual(0);
 
-    // Remove the file from the store....
     $removed = $store->remove($documentId, deleteFile: true);
 
     expect($removed)->toBeTrue();
 
-    // Clean up...
     $store->delete();
 })->with('store-providers');
 
