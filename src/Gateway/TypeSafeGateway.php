@@ -59,48 +59,32 @@ class TypeSafeGateway implements ClassificationGateway
     }
 
     /**
-     * Place the image references in the state, keyed by their attachment keys when given.
+     * Place the image references in the state: keyed by name into a structured state, or labelled by name in a list.
      *
      * @param  string|array<string, mixed>  $state
      * @param  array<int|string, string>  $references
      *
-     * @throws InvalidArgumentException
+     * @throws InvalidArgumentException if a structured state already uses a key the images need.
      */
     protected function stateWithImages(string|array $state, array $references): array
     {
-        $keys = array_keys($references);
+        if (is_string($state) || array_is_list($state)) {
+            $labeled = array_map(fn (int|string $name, string $reference): string => is_string($name) ? "{$name}: {$reference}" : $reference, array_keys($references), $references);
 
-        $named = array_filter($keys, is_string(...)) !== [];
-
-        if ($named && array_filter($keys, is_int(...)) !== []) {
-            throw new InvalidArgumentException('TypeSafe needs every image attachment named, or none.');
+            return [...(is_string($state) ? [$state] : $state), ...$labeled];
         }
 
-        if ($named && is_array($state) && array_is_list($state)) {
-            throw new InvalidArgumentException('TypeSafe cannot key named images into a list state; pass the state as an object.');
+        $images = array_filter($references, is_string(...), ARRAY_FILTER_USE_KEY);
+
+        if ($unnamed = array_values(array_filter($references, is_int(...), ARRAY_FILTER_USE_KEY))) {
+            $images['images'] = $unnamed;
         }
 
-        if (is_string($state)) {
-            $state = $named ? ['text' => $state] : [$state];
+        if ($duplicates = array_intersect_key($state, $images)) {
+            throw new InvalidArgumentException('TypeSafe adds images to a structured state under their attachment names, or [images] when unnamed; ['.implode(', ', array_keys($duplicates)).'] already in the state.');
         }
 
-        if (! $named && array_is_list($state)) {
-            return [...$state, ...$references];
-        }
-
-        if (! $named && array_key_exists('images', $state)) {
-            throw new InvalidArgumentException('TypeSafe adds unnamed images to a structured state under [images], which the state already uses; name the attachments instead.');
-        }
-
-        if (! $named) {
-            $references = ['images' => array_values($references)];
-        }
-
-        if ($duplicates = array_intersect_key($state, $references)) {
-            throw new InvalidArgumentException('System One attachment keys must not repeat state keys; ['.implode(', ', array_keys($duplicates)).'] given.');
-        }
-
-        return [...$state, ...$references];
+        return [...$state, ...$images];
     }
 
     /**
@@ -110,12 +94,9 @@ class TypeSafeGateway implements ClassificationGateway
      */
     protected function mapImage(File|UploadedFile $attachment): array
     {
-        [$image, $content, $mime] = $this->resolveInlineImage($attachment)
-            ?? throw new InvalidArgumentException('System One only accepts images with inline content; ['.get_debug_type($attachment).'] given.');
-
-        if (! in_array($mime, ['image/jpeg', 'image/png'], true)) {
-            throw new InvalidArgumentException("System One only accepts JPEG or PNG images; [{$mime}] given.");
-        }
+        [$image, $content, $mime] = $this->resolveInlineImage($attachment, 'TypeSafe decisions', [
+            'image/jpeg' => 'JPEG', 'image/png' => 'PNG',
+        ]);
 
         return array_merge($image->providerOptions(Lab::TypeSafe), [
             'type' => 'image',

@@ -2,9 +2,10 @@
 
 namespace Laravel\Ai\Gateway\Concerns;
 
-use Closure;
 use finfo;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
+use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\Image;
@@ -12,45 +13,29 @@ use Laravel\Ai\Files\Image;
 trait ResolvesInlineImages
 {
     /**
-     * Resolve an attachment to an image with its content and MIME type, or null when it has no inline content.
+     * Resolve an attachment to an image with its content and MIME type.
      *
-     * @return array{Image&StorableFile, string, string}|null
+     * @param  array<string, string>  $formats
+     * @return array{Image&StorableFile, string, string}
+     *
+     * @throws InvalidArgumentException if the attachment is not an image with inline content in one of the formats.
      */
-    protected function resolveInlineImage(File|UploadedFile $image): ?array
+    protected function resolveInlineImage(File|UploadedFile $attachment, string $endpoint, array $formats): array
     {
-        if ($image instanceof UploadedFile) {
-            $image = Image::fromUpload($image);
-        }
+        $image = $attachment instanceof UploadedFile ? Image::fromUpload($attachment) : $attachment;
 
         if (! $image instanceof Image || ! $image instanceof StorableFile) {
-            return null;
+            throw new InvalidArgumentException("{$endpoint} only accept images with inline content; [".get_debug_type($attachment).'] given.');
         }
 
         $content = $image->content();
 
-        return [$image, $content, $image->mimeType() ?? (new finfo(FILEINFO_MIME_TYPE))->buffer($content)];
-    }
+        $mime = $image->mimeType() ?? (new finfo(FILEINFO_MIME_TYPE))->buffer($content);
 
-    /**
-     * Map the attachments to image parts, each named attachment preceded by a label part so questions can refer to it.
-     *
-     * @param  array<int|string, File|UploadedFile>  $attachments
-     * @param  Closure(string): mixed  $label
-     * @param  Closure(File|UploadedFile): array<string, mixed>  $image
-     * @return array<int, mixed>
-     */
-    protected function labeledImageParts(array $attachments, Closure $label, Closure $image): array
-    {
-        $parts = [];
-
-        foreach ($attachments as $name => $attachment) {
-            if (is_string($name)) {
-                $parts[] = $label("{$name}:");
-            }
-
-            $parts[] = $image($attachment);
+        if (! array_key_exists($mime, $formats)) {
+            throw new InvalidArgumentException("{$endpoint} only accept ".Arr::join($formats, ', ', count($formats) > 2 ? ', or ' : ' or ')." images; [{$mime}] given.");
         }
 
-        return $parts;
+        return [$image, $content, $mime];
     }
 }

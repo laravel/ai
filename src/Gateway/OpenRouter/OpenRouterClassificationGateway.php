@@ -55,18 +55,24 @@ class OpenRouterClassificationGateway implements ClassificationGateway
     }
 
     /**
-     * Append the images to the state as data URL image parts, labelling those attached under a name.
+     * Append the images to the state as data URL image parts, each named image preceded by its name.
      *
      * @param  string|array<string, mixed>  $state
      * @param  array<int|string, File|UploadedFile>  $attachments
-     *
-     * @throws InvalidArgumentException
      */
     protected function stateWithImages(string|array $state, array $attachments): array
     {
-        $images = $this->labeledImageParts($attachments, fn (string $label): string => $label, $this->mapImage(...));
+        $state = is_array($state) && array_is_list($state) ? $state : [$state];
 
-        return is_array($state) && array_is_list($state) ? [...$state, ...$images] : [$state, ...$images];
+        foreach ($attachments as $name => $attachment) {
+            if (is_string($name)) {
+                $state[] = "{$name}:";
+            }
+
+            $state[] = $this->mapImage($attachment);
+        }
+
+        return $state;
     }
 
     /**
@@ -76,12 +82,9 @@ class OpenRouterClassificationGateway implements ClassificationGateway
      */
     protected function mapImage(File|UploadedFile $attachment): array
     {
-        [$image, $content, $mime] = $this->resolveInlineImage($attachment)
-            ?? throw new InvalidArgumentException('OpenRouter decisions only accept images with inline content; ['.get_debug_type($attachment).'] given.');
-
-        if (! in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true)) {
-            throw new InvalidArgumentException("OpenRouter decisions only accept JPEG, PNG, or WebP images; [{$mime}] given.");
-        }
+        [$image, $content, $mime] = $this->resolveInlineImage($attachment, 'OpenRouter decisions', [
+            'image/jpeg' => 'JPEG', 'image/png' => 'PNG', 'image/webp' => 'WebP',
+        ]);
 
         return array_merge($image->providerOptions(Lab::OpenRouter), [
             'type' => 'image_url',

@@ -92,13 +92,17 @@ class OpenAiClassificationGateway implements ClassificationGateway
             return $text;
         }
 
-        return [[
-            'role' => 'user',
-            'content' => [
-                ['type' => 'input_text', 'text' => $text],
-                ...$this->labeledImageParts($attachments, fn (string $label): array => ['type' => 'input_text', 'text' => $label], $this->mapImage(...)),
-            ],
-        ]];
+        $content = [['type' => 'input_text', 'text' => $text]];
+
+        foreach ($attachments as $name => $attachment) {
+            if (is_string($name)) {
+                $content[] = ['type' => 'input_text', 'text' => "{$name}:"];
+            }
+
+            $content[] = $this->mapImage($attachment);
+        }
+
+        return [['role' => 'user', 'content' => $content]];
     }
 
     /**
@@ -108,12 +112,9 @@ class OpenAiClassificationGateway implements ClassificationGateway
      */
     protected function mapImage(File|UploadedFile $attachment): array
     {
-        [$image, $content, $mime] = $this->resolveInlineImage($attachment)
-            ?? throw new InvalidArgumentException('OpenAI decisions only accept images with inline content; ['.get_debug_type($attachment).'] given.');
-
-        if (! in_array($mime, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) {
-            throw new InvalidArgumentException("OpenAI decisions only accept JPEG, PNG, GIF, or WebP images; [{$mime}] given.");
-        }
+        [$image, $content, $mime] = $this->resolveInlineImage($attachment, 'OpenAI decisions', [
+            'image/jpeg' => 'JPEG', 'image/png' => 'PNG', 'image/gif' => 'GIF', 'image/webp' => 'WebP',
+        ]);
 
         return array_merge($image->providerOptions(Lab::OpenAI), [
             'type' => 'input_image',
