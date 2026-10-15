@@ -156,7 +156,7 @@ test('answers without the optional distribution fields fall back to the question
         ->and($response['urgency']->normalized())->toBe(1.0);
 });
 
-test('image attachments are appended to the state as data url image parts', function (): void {
+test('image attachments are appended to the state as data url image parts labelled by name', function (): void {
     Http::fake(['*' => Http::response(fakeDecisionsResponse())]);
 
     $jpeg = file_get_contents(__DIR__.'/../../../Fixtures/Images/blue.jpg');
@@ -172,7 +172,9 @@ test('image attachments are appended to the state as data url image parts', func
         && ! $request->hasHeader('TypeSafe-Danger-Zone-Images')
         && json_decode($request->body(), true)['state'] === [
             'A product photo uploaded by a customer.',
+            'front:',
             ['custom' => 'value', 'type' => 'image_url', 'image_url' => ['url' => 'data:image/jpeg;base64,'.base64_encode($jpeg)]],
+            'back:',
             ['type' => 'image_url', 'image_url' => ['url' => 'data:image/png;base64,'.base64_encode('upload-bytes')]],
         ]);
 });

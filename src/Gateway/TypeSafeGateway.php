@@ -76,6 +76,10 @@ class TypeSafeGateway implements ClassificationGateway
             return [...$state, ...$references];
         }
 
+        if (! $named && array_key_exists('images', $state)) {
+            throw new InvalidArgumentException('TypeSafe adds unnamed images to a structured state under [images], which the state already uses; name the attachments instead.');
+        }
+
         if (! $named) {
             $references = ['images' => array_values($references)];
         }

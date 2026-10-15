@@ -53,7 +53,7 @@ class OpenRouterClassificationGateway implements ClassificationGateway
     }
 
     /**
-     * Append the images to the state as data URL image parts.
+     * Append the images to the state as data URL image parts, labelling those attached under a name.
      *
      * @param  string|array<string, mixed>  $state
      * @param  array<int|string, File|UploadedFile>  $attachments
@@ -62,14 +62,14 @@ class OpenRouterClassificationGateway implements ClassificationGateway
      */
     protected function stateWithImages(string|array $state, array $attachments): array
     {
-        $images = array_map(function (File|UploadedFile $attachment): array {
+        $images = $this->labeledImageParts($attachments, fn (string $label): string => $label, function (File|UploadedFile $attachment): array {
             [$image, $content, $mime] = $this->systemOneImage($attachment);
 
             return array_merge($image->providerOptions(Lab::OpenRouter), [
                 'type' => 'image_url',
                 'image_url' => ['url' => 'data:'.$mime.';base64,'.base64_encode($content)],
             ]);
-        }, array_values($attachments));
+        });
 
         return is_array($state) && array_is_list($state) ? [...$state, ...$images] : [$state, ...$images];
     }

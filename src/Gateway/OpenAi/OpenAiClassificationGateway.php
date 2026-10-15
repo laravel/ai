@@ -96,7 +96,7 @@ class OpenAiClassificationGateway implements ClassificationGateway
             'role' => 'user',
             'content' => [
                 ['type' => 'input_text', 'text' => $text],
-                ...array_map($this->mapImage(...), array_values($attachments)),
+                ...$this->labeledImageParts($attachments, fn (string $label): array => ['type' => 'input_text', 'text' => $label], $this->mapImage(...)),
             ],
         ]];
     }

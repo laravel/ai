@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\Concerns;
 
+use Closure;
 use finfo;
 use Illuminate\Http\UploadedFile;
 use Laravel\Ai\Contracts\Files\StorableFile;
@@ -28,5 +29,28 @@ trait ResolvesInlineImages
         $content = $image->content();
 
         return [$image, $content, $image->mimeType() ?? (new finfo(FILEINFO_MIME_TYPE))->buffer($content)];
+    }
+
+    /**
+     * Map the attachments to image parts, each named attachment preceded by a label part so questions can refer to it.
+     *
+     * @param  array<int|string, File|UploadedFile>  $attachments
+     * @param  Closure(string): mixed  $label
+     * @param  Closure(File|UploadedFile): array<string, mixed>  $image
+     * @return array<int, mixed>
+     */
+    protected function labeledImageParts(array $attachments, Closure $label, Closure $image): array
+    {
+        $parts = [];
+
+        foreach ($attachments as $name => $attachment) {
+            if (is_string($name)) {
+                $parts[] = $label("{$name}:");
+            }
+
+            $parts[] = $image($attachment);
+        }
+
+        return $parts;
     }
 }

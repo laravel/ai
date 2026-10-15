@@ -143,7 +143,7 @@ test('image attachments are sent inline with the state as a user message', funct
     ]]);
 });
 
-test('remote and stored images are downloaded and sent inline', function (): void {
+test('remote and stored images are downloaded and sent inline after their name labels', function (): void {
     Http::fake([
         'example.com/*' => Http::response('remote-bytes', 200, ['Content-Type' => 'image/gif']),
         '*' => Http::response(fakeOpenAiDecisionsResponse()),
@@ -160,7 +160,9 @@ test('remote and stored images are downloaded and sent inline', function (): voi
 
     Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.openai.com/v1/decisions'
         && array_slice(json_decode($request->body(), true)['input'][0]['content'], 1) === [
+            ['type' => 'input_text', 'text' => 'front:'],
             ['type' => 'input_image', 'image_url' => 'data:image/gif;base64,'.base64_encode('remote-bytes')],
+            ['type' => 'input_text', 'text' => 'back:'],
             ['type' => 'input_image', 'image_url' => 'data:image/png;base64,'.base64_encode('stored-bytes')],
         ]);
 });

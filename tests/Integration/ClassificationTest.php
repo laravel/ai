@@ -57,3 +57,19 @@ test('images can be classified alongside the state', function (string $provider,
     'png' => ['red.png', 'red'],
     'jpeg' => ['blue.jpg', 'blue'],
 ]);
+
+test('named images can be referred to by name', function (string $provider, string $apiKey): void {
+    requiresApiKey($apiKey);
+
+    $response = Classification::of('Two product photos uploaded by a customer.', [
+        'front' => Image::fromPath(__DIR__.'/../Fixtures/Images/red.png'),
+        'back' => Image::fromPath(__DIR__.'/../Fixtures/Images/blue.jpg'),
+    ])
+        ->questions([
+            'front_color' => new Choice('What color is the background of `front`?', ['red' => null, 'green' => null, 'blue' => null]),
+            'back_color' => new Choice('What color is the background of `back`?', ['red' => null, 'green' => null, 'blue' => null]),
+        ])->classify(provider: $provider);
+
+    expect($response['front_color']->choice)->toBe('red')
+        ->and($response['back_color']->choice)->toBe('blue');
+})->with('classification-image-providers');

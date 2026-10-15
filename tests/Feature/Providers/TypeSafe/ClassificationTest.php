@@ -341,3 +341,13 @@ test('integer keyed images are appended to the state like a list', function (): 
         return $body['state'] === ['first', 'second', ...array_keys($body['assets'])];
     });
 });
+
+test('unnamed images are rejected when the structured state already uses the images key', function (): void {
+    Http::fake();
+
+    expect(fn () => Classification::of(['images' => 'none attached'], [Image::fromBase64(base64_encode('photo'), 'image/png')])
+        ->question('damaged', new Boolean('Damaged?'))
+        ->classify(provider: 'typesafe'))->toThrow(InvalidArgumentException::class, 'TypeSafe adds unnamed images to a structured state under [images], which the state already uses; name the attachments instead.');
+
+    Http::assertNothingSent();
+});
