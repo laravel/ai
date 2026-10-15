@@ -310,6 +310,27 @@ test('attachment keys that repeat state keys are rejected before any request', f
     Http::assertNothingSent();
 });
 
+test('attachment keys that would change the shape of the state are rejected before any request', function (string|array $state, array $attachments, string $message): void {
+    Http::fake();
+
+    expect(fn () => Classification::of($state, $attachments)
+        ->question('damaged', new Boolean('Damaged?'))
+        ->classify(provider: 'typesafe'))->toThrow(InvalidArgumentException::class, $message);
+
+    Http::assertNothingSent();
+})->with([
+    'mixed keys' => [
+        ['subject' => 'Broken lamp'],
+        ['front' => Image::fromBase64(base64_encode('a'), 'image/png'), Image::fromBase64(base64_encode('b'), 'image/png')],
+        'TypeSafe needs every image attachment named, or none.',
+    ],
+    'named images with a list state' => [
+        ['first', 'second'],
+        ['front' => Image::fromBase64(base64_encode('a'), 'image/png')],
+        'TypeSafe cannot key named images into a list state; pass the state as an object.',
+    ],
+]);
+
 test('attachments that are not supported images are rejected before any request', function (mixed $attachment, string $message): void {
     Http::fake([
         'example.com/*' => Http::response('<html></html>', 200, ['Content-Type' => 'text/html']),

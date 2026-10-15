@@ -12,6 +12,7 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Gateway\Concerns\AnswersQuestions;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
+use Laravel\Ai\Gateway\Concerns\ResolvesInlineImages;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\ClassificationResponse;
 
@@ -24,6 +25,7 @@ class OpenRouterClassificationGateway implements ClassificationGateway
         baseUrl as openRouterBaseUrl;
     }
     use HandlesFailoverErrors;
+    use ResolvesInlineImages;
 
     /**
      * Answer the given questions about the state, sending image attachments as image parts of the state.
@@ -62,16 +64,29 @@ class OpenRouterClassificationGateway implements ClassificationGateway
      */
     protected function stateWithImages(string|array $state, array $attachments): array
     {
-        $images = $this->labeledImageParts($attachments, fn (string $label): string => $label, function (File|UploadedFile $attachment): array {
-            [$image, $content, $mime] = $this->systemOneImage($attachment);
-
-            return array_merge($image->providerOptions(Lab::OpenRouter), [
-                'type' => 'image_url',
-                'image_url' => ['url' => 'data:'.$mime.';base64,'.base64_encode($content)],
-            ]);
-        });
+        $images = $this->labeledImageParts($attachments, fn (string $label): string => $label, $this->mapImage(...));
 
         return is_array($state) && array_is_list($state) ? [...$state, ...$images] : [$state, ...$images];
+    }
+
+    /**
+     * Map an image to a data URL image part.
+     *
+     * @throws InvalidArgumentException if the attachment is not a JPEG, PNG, or WebP image with inline content.
+     */
+    protected function mapImage(File|UploadedFile $attachment): array
+    {
+        [$image, $content, $mime] = $this->resolveInlineImage($attachment)
+            ?? throw new InvalidArgumentException('OpenRouter decisions only accept images with inline content; ['.get_debug_type($attachment).'] given.');
+
+        if (! in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true)) {
+            throw new InvalidArgumentException("OpenRouter decisions only accept JPEG, PNG, or WebP images; [{$mime}] given.");
+        }
+
+        return array_merge($image->providerOptions(Lab::OpenRouter), [
+            'type' => 'image_url',
+            'image_url' => ['url' => 'data:'.$mime.';base64,'.base64_encode($content)],
+        ]);
     }
 
     /**

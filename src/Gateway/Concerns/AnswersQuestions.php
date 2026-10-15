@@ -3,15 +3,12 @@
 namespace Laravel\Ai\Gateway\Concerns;
 
 use Illuminate\Http\UploadedFile;
-use InvalidArgumentException;
 use Laravel\Ai\Classification\Boolean;
 use Laravel\Ai\Classification\Choice;
 use Laravel\Ai\Classification\Score;
-use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Providers\ClassificationProvider;
 use Laravel\Ai\Contracts\Question;
 use Laravel\Ai\Files\File;
-use Laravel\Ai\Files\Image;
 use Laravel\Ai\Responses\ClassificationResponse;
 use Laravel\Ai\Responses\Data\Answer;
 use Laravel\Ai\Responses\Data\BooleanAnswer;
@@ -22,8 +19,6 @@ use Laravel\Ai\Responses\Data\TextUsage;
 
 trait AnswersQuestions
 {
-    use ResolvesInlineImages;
-
     /**
      * Get the path of the endpoint that answers questions.
      */
@@ -73,25 +68,6 @@ trait AnswersQuestions
             ),
             new Meta($provider->name(), $this->answeringModel($data, $model)),
         );
-    }
-
-    /**
-     * Resolve an attachment to an inline image, which System One models only accept as a JPEG or PNG.
-     *
-     * @return array{Image&StorableFile, string, string}
-     *
-     * @throws InvalidArgumentException
-     */
-    protected function systemOneImage(File|UploadedFile $attachment): array
-    {
-        [$image, $content, $mime] = $this->resolveInlineImage($attachment)
-            ?? throw new InvalidArgumentException('System One only accepts images with inline content; ['.get_debug_type($attachment).'] given.');
-
-        if (! in_array($mime, ['image/jpeg', 'image/png'], true)) {
-            throw new InvalidArgumentException("System One only accepts JPEG or PNG images; [{$mime}] given.");
-        }
-
-        return [$image, $content, $mime];
     }
 
     /**

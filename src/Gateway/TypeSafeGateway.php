@@ -13,6 +13,7 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Gateway\Concerns\AnswersQuestions;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
+use Laravel\Ai\Gateway\Concerns\ResolvesInlineImages;
 use Laravel\Ai\Responses\ClassificationResponse;
 
 class TypeSafeGateway implements ClassificationGateway
@@ -22,6 +23,7 @@ class TypeSafeGateway implements ClassificationGateway
     }
     use Concerns\CreatesClient;
     use HandlesFailoverErrors;
+    use ResolvesInlineImages;
 
     /**
      * Answer the given questions about the state, sending image attachments as referenced assets.
@@ -66,7 +68,17 @@ class TypeSafeGateway implements ClassificationGateway
      */
     protected function stateWithImages(string|array $state, array $references): array
     {
-        $named = array_filter(array_keys($references), is_string(...)) !== [];
+        $keys = array_keys($references);
+
+        $named = array_filter($keys, is_string(...)) !== [];
+
+        if ($named && array_filter($keys, is_int(...)) !== []) {
+            throw new InvalidArgumentException('TypeSafe needs every image attachment named, or none.');
+        }
+
+        if ($named && is_array($state) && array_is_list($state)) {
+            throw new InvalidArgumentException('TypeSafe cannot key named images into a list state; pass the state as an object.');
+        }
 
         if (is_string($state)) {
             $state = $named ? ['text' => $state] : [$state];
@@ -92,13 +104,18 @@ class TypeSafeGateway implements ClassificationGateway
     }
 
     /**
-     * Map an image to an asset, which the System One endpoint only accepts as inline base64.
+     * Map an image to a base64 System One asset.
      *
-     * @throws InvalidArgumentException
+     * @throws InvalidArgumentException if the attachment is not a JPEG or PNG image with inline content.
      */
     protected function mapImage(File|UploadedFile $attachment): array
     {
-        [$image, $content, $mime] = $this->systemOneImage($attachment);
+        [$image, $content, $mime] = $this->resolveInlineImage($attachment)
+            ?? throw new InvalidArgumentException('System One only accepts images with inline content; ['.get_debug_type($attachment).'] given.');
+
+        if (! in_array($mime, ['image/jpeg', 'image/png'], true)) {
+            throw new InvalidArgumentException("System One only accepts JPEG or PNG images; [{$mime}] given.");
+        }
 
         return array_merge($image->providerOptions(Lab::TypeSafe), [
             'type' => 'image',
