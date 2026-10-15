@@ -10,7 +10,7 @@ class FileAddedToStore
         public string $invocationId,
         public Provider $provider,
         public string $storeId,
-        public string $fileId,
+        public ?string $fileId,
         public string $documentId,
     ) {}
 }

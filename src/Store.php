@@ -8,6 +8,7 @@ use Laravel\Ai\Contracts\Files\HasProviderId;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Contracts\Providers\UploadsDocumentsToStore;
 use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Responses\AddedDocumentResponse;
@@ -32,6 +33,16 @@ class Store
     ): AddedDocumentResponse {
         if ($file instanceof UploadedFile) {
             $file = LocalDocument::fromUploadedFile($file);
+        }
+
+        if ($file instanceof StorableFile && $this->provider instanceof UploadsDocumentsToStore) {
+            if (Ai::storesAreFaked()) {
+                Ai::recordFileAddition($this->id, Files::fakeIdFor($file), $file);
+            }
+
+            return new AddedDocumentResponse(
+                $this->provider->uploadDocumentToStore($this->id, $file, $metadata),
+            );
         }
 
         $originalFile = $file;
@@ -69,7 +80,7 @@ class Store
     {
         $removed = $this->provider->removeFileFromStore($this->id, $documentId);
 
-        if ($deleteFile && $removed) {
+        if ($deleteFile && $removed && ! $this->provider instanceof UploadsDocumentsToStore) {
             Files::delete(
                 $documentId instanceof HasProviderId ? $documentId->id() : $documentId,
                 provider: $this->provider->name()
@@ -159,6 +170,7 @@ class Store
         return match (true) {
             $file instanceof HasProviderId => $file->id() === $expectedFileId,
             is_string($file) => $file === $expectedFileId,
+            $file instanceof StorableFile => Files::fakeIdFor($file) === $expectedFileId,
             default => false,
         };
     }

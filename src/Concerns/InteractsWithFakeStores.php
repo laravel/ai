@@ -303,6 +303,7 @@ trait InteractsWithFakeStores
         return match (true) {
             $file instanceof HasProviderId => $file->id() === $expectedFileId,
             is_string($file) => $file === $expectedFileId,
+            $file instanceof StorableFile => Files::fakeIdFor($file) === $expectedFileId,
             default => false,
         };
     }
