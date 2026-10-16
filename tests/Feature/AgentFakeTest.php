@@ -137,6 +137,16 @@ describe('prompt responses', function (): void {
         expect($response['symbol'])->toBeString();
     });
 
+    test('agents with structured output faked with a string still return a structured response', function (): void {
+        StructuredAgent::fake(['Plain text']);
+
+        $response = (new StructuredAgent)->prompt('Gold prompt');
+
+        expect($response)->toBeInstanceOf(StructuredAgentResponse::class)
+            ->and($response->structured)->toBe([])
+            ->and($response->text)->toBe('Plain text');
+    });
+
     test('fake closures can throw exceptions', function (): void {
         AssistantAgent::fake(function (): void {
             throw new Exception('Something went wrong');

@@ -9,6 +9,7 @@ use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
+use Tests\Fixtures\Tools\ApprovableNumberGenerator;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 function bedrockToolCallResponse(string $toolUseId): array
@@ -177,6 +178,31 @@ describe('tool call loop', function (): void {
             expect($request['toolConfig'])->not->toHaveKey('toolChoice')
                 ->and(array_column(array_column($request['toolConfig']['tools'], 'toolSpec'), 'name'))->toBe(['FixedNumberGenerator']);
         }
+    });
+
+    test('structured runs paused for tool approval keep the structured response shape', function (): void {
+        $client = $this->fakeBedrockConverseSequence([[
+            'output' => ['message' => ['content' => [
+                ['toolUse' => ['toolUseId' => 't1', 'name' => 'ApprovableNumberGenerator', 'input' => []]],
+            ]]],
+            'usage' => ['inputTokens' => 7, 'outputTokens' => 3],
+            'stopReason' => 'tool_use',
+        ]]);
+
+        $response = (new TextGenerationLoop($this->gatewayWithClient($client)))->generate(
+            $this->bedrockProvider(),
+            'anthropic.claude-opus-4-7-v1:0',
+            null,
+            messages: [new UserMessage('Generate a number')],
+            tools: [new ApprovableNumberGenerator],
+            schema: ['number' => (new JsonSchemaTypeFactory)->integer()],
+            options: new TextGenerationOptions(maxSteps: 2),
+        );
+
+        expect($response)->toBeInstanceOf(StructuredTextResponse::class)
+            ->and($response->structured)->toBe([])
+            ->and($response->pendingApprovals)->toHaveCount(1)
+            ->and($response->pendingApprovals[0]->id)->toBe('t1');
     });
 
     test('streaming tool loop emits a single stream end with accumulated usage', function (): void {

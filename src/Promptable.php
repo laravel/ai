@@ -21,6 +21,7 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\AgentInput;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasSkills;
+use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
@@ -41,6 +42,7 @@ use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\QueuedAgentResponse;
 use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Tools\LoadSkill;
 use Laravel\Ai\Vercel\Vercel;
@@ -79,6 +81,8 @@ trait Promptable
 
     /**
      * Invoke the agent with a given prompt, or resume a paused run with tool approval decisions.
+     *
+     * @return ($this is HasStructuredOutput ? StructuredAgentResponse : AgentResponse)
      */
     public function prompt(
         AgentInput|UserMessage|Decisions|string $prompt,

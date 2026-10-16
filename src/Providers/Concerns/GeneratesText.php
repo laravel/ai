@@ -88,8 +88,14 @@ trait GeneratesText
                         $this->throwIfNotResumable($prompt);
                     }
 
-                    $agentResponse = $response instanceof StructuredTextResponse
-                        ? (new StructuredAgentResponse($invocationId, $response->structured, $response->text, $response->usage, $response->meta))
+                    $agentResponse = filled($schema)
+                        ? (new StructuredAgentResponse(
+                            $invocationId,
+                            $response instanceof StructuredTextResponse ? $response->structured : [],
+                            $response->text,
+                            $response->usage,
+                            $response->meta,
+                        ))
                             ->withMessages($response->messages)
                             ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
                             ->withSteps($response->steps)

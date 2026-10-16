@@ -8,9 +8,11 @@ use Laravel\Ai\Enums\MessageStatus;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 use Tests\Fixtures\Agents\RememberingApprovableAgent;
 use Tests\Fixtures\Agents\RememberingMultiStepApprovableAgent;
+use Tests\Fixtures\Agents\RememberingStructuredApprovableAgent;
 use Tests\Fixtures\Agents\RememberingToolUsingAgent;
 use Tests\Fixtures\Tools\ApprovableNumberGenerator;
 
@@ -796,6 +798,38 @@ test('a rejected resume stores and rehydrates the tool result as denied', functi
     $toolResultMessage = $messages->first(fn ($message) => $message instanceof ToolResultMessage);
 
     expect($toolResultMessage->toolResults->first()->denied)->toBeTrue();
+});
+
+test('a rejected resume of a structured agent returns a structured response', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'id' => 'msg_tool_1',
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-4-6',
+            'content' => [[
+                'type' => 'tool_use',
+                'id' => 'toolu_1',
+                'name' => 'ApprovableNumberGenerator',
+                'input' => (object) [],
+            ]],
+            'stop_reason' => 'tool_use',
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingStructuredApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+
+    $rejected = (new RememberingStructuredApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(Decisions::from(['toolu_1' => false]), provider: 'anthropic');
+
+    expect($rejected)->toBeInstanceOf(StructuredAgentResponse::class)
+        ->and($rejected->structured)->toBe([]);
 });
 
 test('a wildcard rejection resume records the denial once, on the paused row', function () {

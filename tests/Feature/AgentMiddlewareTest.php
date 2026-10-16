@@ -23,12 +23,12 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Middleware\Stop;
 use Laravel\Ai\PendingStep;
 use Laravel\Ai\Providers\Tools\WebSearch;
-use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
@@ -344,7 +344,7 @@ test('a stop middleware on the first step returns an empty response without a st
         ->and($response->steps)->toBeEmpty();
 });
 
-test('a structured agent stopped before its first step returns an unstructured response', function (): void {
+test('a structured agent stopped before its first step returns an empty structured response', function (): void {
     $agent = new class extends StructuredAgent implements HasMiddleware
     {
         public function middleware(): array
@@ -357,7 +357,8 @@ test('a structured agent stopped before its first step returns an unstructured r
 
     $response = $agent->prompt('Test prompt');
 
-    expect($response::class)->toBe(AgentResponse::class)
+    expect($response)->toBeInstanceOf(StructuredAgentResponse::class)
+        ->and($response->structured)->toBe([])
         ->and($response->text)->toBe('');
 });
 
