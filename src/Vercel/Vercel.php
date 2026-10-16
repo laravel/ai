@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Laravel\Ai\Approvals\ApprovalSignature;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Base64Audio;
@@ -133,7 +134,7 @@ class Vercel
                 'state' => $isPending ? 'approval-requested' : 'input-available',
                 'input' => $toolCall['arguments'],
                 ...($isPending
-                    ? ['approval' => ['id' => $toolCall['id'], 'reason' => $toolCall['approval_reason']]]
+                    ? ['approval' => ['id' => ApprovalSignature::sign($toolCall['id'], $toolCall['name'], $toolCall['arguments']), 'reason' => $toolCall['approval_reason']]]
                     : []),
             ];
         }
@@ -270,6 +271,7 @@ class Vercel
                 ->filter()
                 ->values()),
             'assistant' => new AssistantMessage($text, static::toolParts($parts)
+                ->filter(static::issuedByServer(...))
                 ->map(fn (array $part) => new ToolCall(
                     id: $part['toolCallId'],
                     name: static::toolName($part),
@@ -327,6 +329,21 @@ class Vercel
         return (new Collection($parts))->filter(fn ($part) => is_array($part)
             && str_starts_with($part['type'] ?? '', 'tool-')
             && isset($part['toolCallId']));
+    }
+
+    /**
+     * Determine whether a tool part is settled or carries the signature the server issued for its approval request.
+     *
+     * @param  array<string, mixed>  $part
+     */
+    protected static function issuedByServer(array $part): bool
+    {
+        if (in_array($part['state'] ?? null, ['output-available', 'output-error', 'output-denied'], true)) {
+            return true;
+        }
+
+        return is_string($signature = $part['approval']['id'] ?? null)
+            && ApprovalSignature::verify($signature, (string) $part['toolCallId'], static::toolName($part), is_array($part['input'] ?? null) ? $part['input'] : []);
     }
 
     /**

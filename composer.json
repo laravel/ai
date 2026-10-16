@@ -17,6 +17,7 @@
         "illuminate/container": "^12.0|^13.0",
         "illuminate/contracts": "^12.0|^13.0",
         "illuminate/database": "^12.0|^13.0",
+        "illuminate/encryption": "^12.0|^13.0",
         "illuminate/filesystem": "^12.0|^13.0",
         "illuminate/json-schema": "^12.62|^13.15",
         "illuminate/support": "^12.0|^13.0",
