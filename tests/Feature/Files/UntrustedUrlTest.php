@@ -1,5 +1,7 @@
 <?php
 
+use GuzzleHttp\Psr7\Response as Psr7Response;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Files\RemoteImage;
@@ -107,4 +109,64 @@ test('too many redirects throws', function (): void {
         ->toThrow(InvalidArgumentException::class, 'redirected too many times');
 
     Http::assertSentCount(6);
+});
+
+test('a body larger than the size limit is rejected', function (): void {
+    config(['ai.remote_files.max_bytes' => 1024]);
+
+    Http::fake(function (Request $request, array $options) {
+        if ($options['sink']->write(str_repeat('a', 1025)) === 0) {
+            throw new ConnectionException('cURL error 23: Failure writing output to destination');
+        }
+
+        return Http::response('bytes');
+    });
+
+    expect(fn () => (new RemoteImage('https://example.com/photo.png'))->content())
+        ->toThrow(InvalidArgumentException::class, 'exceeds the maximum size of 1024 bytes');
+});
+
+test('a declared length larger than the size limit is rejected before the body is read', function (): void {
+    config(['ai.remote_files.max_bytes' => 1024]);
+
+    $read = false;
+
+    Http::fake(function (Request $request, array $options) use (&$read) {
+        try {
+            $options['on_headers'](new Psr7Response(200, ['Content-Length' => '1025']));
+        } catch (RuntimeException $e) {
+            throw new ConnectionException('An error was encountered during the on_headers event', 0, $e);
+        }
+
+        $read = true;
+
+        return Http::response('bytes');
+    });
+
+    expect(fn () => (new RemoteImage('https://example.com/photo.png'))->content())
+        ->toThrow(InvalidArgumentException::class, 'exceeds the maximum size of 1024 bytes')
+        ->and($read)->toBeFalse();
+});
+
+test('a body within the size limit is fetched', function (): void {
+    config(['ai.remote_files.max_bytes' => 1024]);
+
+    Http::fake(function (Request $request, array $options) {
+        $options['on_headers'](new Psr7Response(200, ['Content-Length' => '1024']));
+
+        if ($options['sink']->write(str_repeat('a', 1024)) === 0) {
+            throw new ConnectionException('cURL error 23: Failure writing output to destination');
+        }
+
+        return Http::response('bytes');
+    });
+
+    expect((new RemoteImage('https://example.com/photo.png'))->content())->toBe('bytes');
+});
+
+test('a transport failure unrelated to the size limit is rethrown', function (): void {
+    Http::fake(fn () => throw new ConnectionException('cURL error 7: Failed to connect'));
+
+    expect(fn () => (new RemoteImage('https://example.com/photo.png'))->content())
+        ->toThrow(ConnectionException::class, 'Failed to connect');
 });

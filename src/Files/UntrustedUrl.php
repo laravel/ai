@@ -3,17 +3,24 @@
 namespace Laravel\Ai\Files;
 
 use Closure;
+use GuzzleHttp\Psr7\FnStream;
 use GuzzleHttp\Psr7\Uri;
 use GuzzleHttp\Psr7\UriResolver;
+use GuzzleHttp\Psr7\Utils;
+use Illuminate\Http\Client\HttpClientException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Psr\Http\Message\ResponseInterface;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\IpUtils;
 
 class UntrustedUrl
 {
     protected const MAX_REDIRECTS = 5;
+
+    protected const MAX_BYTES = 100 * 1024 * 1024;
 
     protected const BLOCKED_HOSTS = ['localhost'];
 
@@ -24,16 +31,44 @@ class UntrustedUrl
     /**
      * Fetch the URL, validating it and every redirect hop against private and internal addresses.
      *
-     * @throws InvalidArgumentException if the URL or a redirect target is blocked, or the URL redirects too many times.
+     * @throws InvalidArgumentException if the URL or a redirect target is blocked, the URL redirects too many times, or the body exceeds the size limit.
      */
     public static function fetch(string $url): Response
     {
+        $limit = (int) (config('ai.remote_files.max_bytes') ?? static::MAX_BYTES);
+
         for ($hop = 0; $hop <= static::MAX_REDIRECTS; $hop++) {
             $uri = new Uri($url);
+            $body = Utils::streamFor();
+            $tooLarge = false;
 
-            $response = Http::withoutRedirecting()
-                ->withOptions(['curl' => [CURLOPT_RESOLVE => static::validate($uri)]])
-                ->get($url);
+            try {
+                $response = Http::withoutRedirecting()
+                    ->withOptions([
+                        'curl' => [CURLOPT_RESOLVE => static::validate($uri)],
+                        'on_headers' => function (ResponseInterface $response) use ($limit, &$tooLarge): void {
+                            if ((int) $response->getHeaderLine('Content-Length') > $limit) {
+                                $tooLarge = true;
+
+                                throw new RuntimeException('The remote file declares a body larger than the size limit.');
+                            }
+                        },
+                        'sink' => FnStream::decorate($body, [
+                            'write' => function (string $chunk) use ($body, $limit, &$tooLarge): int {
+                                if ($body->getSize() + strlen($chunk) > $limit) {
+                                    $tooLarge = true;
+
+                                    return 0;
+                                }
+
+                                return $body->write($chunk);
+                            },
+                        ]),
+                    ])
+                    ->get($url);
+            } catch (HttpClientException $e) {
+                throw $tooLarge ? new InvalidArgumentException("The remote file URL [{$uri}] exceeds the maximum size of {$limit} bytes.") : $e;
+            }
 
             if (! $response->redirect() || blank($response->header('Location'))) {
                 return $response;
