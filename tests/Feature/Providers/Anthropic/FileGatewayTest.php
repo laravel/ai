@@ -68,3 +68,14 @@ test('delete file sends correct request', function (): void {
         && $request->url() === 'https://api.anthropic.com/v1/files/file-abc123'
         && $request->hasHeader('x-api-key', 'test-key'));
 });
+
+test('delete file encodes the id as a single path segment', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(['id' => 'file-abc123']),
+    ]);
+
+    Files::delete('../skills/skill-123?beta=true', provider: 'anthropic');
+
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'DELETE'
+        && $request->url() === 'https://api.anthropic.com/v1/files/..%2Fskills%2Fskill-123%3Fbeta%3Dtrue');
+});

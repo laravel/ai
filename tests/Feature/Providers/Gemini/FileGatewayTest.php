@@ -143,3 +143,22 @@ test('file gateway uses custom base url', function (): void {
 
     Http::assertSent(fn ($request): bool => str_contains((string) $request->url(), 'custom.api.example.com/v1beta/files/abc123'));
 });
+
+test('delete file encodes the id as a single path segment', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([], 200),
+    ]);
+
+    Files::delete('files/../fileSearchStores/store123?force=true', provider: 'gemini');
+
+    Http::assertSent(fn ($request): bool => $request->method() === 'DELETE'
+        && $request->url() === 'https://generativelanguage.googleapis.com/v1beta/files/..%2FfileSearchStores%2Fstore123%3Fforce%3Dtrue');
+});
+
+test('delete file rejects a prefixed dot segment id', function (): void {
+    Http::fake();
+
+    expect(fn () => Files::delete('files/..', provider: 'gemini'))->toThrow(InvalidArgumentException::class);
+
+    Http::assertNothingSent();
+});

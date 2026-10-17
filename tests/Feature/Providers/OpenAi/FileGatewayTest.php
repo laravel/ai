@@ -89,3 +89,22 @@ test('delete file sends correct request', function (): void {
         && $request->url() === 'https://api.openai.com/v1/files/file-abc123'
         && $request->hasHeader('Authorization', 'Bearer test-key'));
 });
+
+test('delete file encodes the id as a single path segment', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response(['deleted' => true]),
+    ]);
+
+    Files::delete('../vector_stores/vs-123', provider: 'openai');
+
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'DELETE'
+        && $request->url() === 'https://api.openai.com/v1/files/..%2Fvector_stores%2Fvs-123');
+});
+
+test('delete file rejects dot segment ids', function (string $fileId): void {
+    Http::fake();
+
+    expect(fn () => Files::delete($fileId, provider: 'openai'))->toThrow(InvalidArgumentException::class);
+
+    Http::assertNothingSent();
+})->with(['', '.', '..']);
