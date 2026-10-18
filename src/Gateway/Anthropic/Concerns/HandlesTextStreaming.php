@@ -47,6 +47,8 @@ trait HandlesTextStreaming
         $currentServerToolInput = '';
         $pendingToolCalls = [];
         $responseContent = [];
+        $hadInterveningTool = false;
+        $accumulatedText = '';
 
         $messageUsage = [];
         $usage = null;
@@ -130,6 +132,7 @@ trait HandlesTextStreaming
                         yield $event;
                     }
                 } elseif ($blockType === 'tool_use') {
+                    $hadInterveningTool = true;
                     $currentToolIndex++;
 
                     $pendingToolCalls[$currentToolIndex] = [
@@ -138,6 +141,7 @@ trait HandlesTextStreaming
                         'arguments' => '',
                     ];
                 } elseif ($blockType === 'server_tool_use') {
+                    $hadInterveningTool = true;
                     $currentServerToolInput = '';
 
                     yield (new ProviderToolEvent(
@@ -150,6 +154,7 @@ trait HandlesTextStreaming
                         provider: $provider->name(),
                     ))->withInvocationId($invocationId);
                 } elseif ($this->isProviderToolResultBlock($blockType)) {
+                    $hadInterveningTool = true;
                     $fetchResult = $data['content_block']['content'] ?? [];
 
                     if ($blockType === 'web_fetch_tool_result' && ($fetchResult['type'] ?? '') === 'web_fetch_result' && filled($fetchResult['url'] ?? null)) {
@@ -187,10 +192,19 @@ trait HandlesTextStreaming
                     $textDelta = (string) ($data['delta']['text'] ?? '');
 
                     if ($textDelta !== '') {
+                        if ($hadInterveningTool && $accumulatedText !== '') {
+                            if (! str_ends_with($accumulatedText, "\n") && ! str_starts_with($textDelta, "\n")) {
+                                $textDelta = "\n\n".$textDelta;
+                            }
+
+                            $hadInterveningTool = false;
+                        }
+
                         if (($event = $emitTextStart()) instanceof StreamEvent) {
                             yield $event;
                         }
 
+                        $accumulatedText .= $textDelta;
                         $currentBlockText .= $textDelta;
 
                         yield (new TextDelta(

@@ -104,9 +104,28 @@ trait ParsesTextResponses
      */
     protected function extractText(array $content): string
     {
-        $textBlocks = array_filter($content, fn (array $block): bool => ($block['type'] ?? '') === 'text');
+        $text = '';
+        $hadInterveningTool = false;
 
-        return implode('', array_column($textBlocks, 'text'));
+        foreach ($content as $block) {
+            $type = $block['type'] ?? '';
+
+            if ($type === 'text') {
+                $blockText = (string) ($block['text'] ?? '');
+
+                if ($hadInterveningTool && $text !== '') {
+                    $separator = ! str_ends_with($text, "\n") && ! str_starts_with($blockText, "\n") ? "\n\n" : '';
+                    $text .= $separator;
+                }
+
+                $text .= $blockText;
+                $hadInterveningTool = false;
+            } elseif ($type !== 'thinking') {
+                $hadInterveningTool = true;
+            }
+        }
+
+        return $text;
     }
 
     /**

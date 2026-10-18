@@ -79,6 +79,8 @@ describe('text streaming', function (): void {
             ->and($textEnds[0]->messageId)->toBe($textStarts[0]->messageId)
             ->and($textDeltas[0]->messageId)->toBe($textStarts[0]->messageId)
             ->and($textDeltas[1]->messageId)->toBe($textStarts[0]->messageId)
+            ->and($textDeltas[0]->delta)->toBe('First')
+            ->and($textDeltas[1]->delta)->toBe("\n\nSecond")
             ->and(array_search($textEnds[0], $events, true))->toBeGreaterThan(array_search($textDeltas[1], $events, true));
     });
 
