@@ -898,3 +898,53 @@ test('it deep-merges overlapping properties across allOf branches', function ():
         'maxLength' => 10,
     ]);
 });
+
+test('it inlines a $ref shared by sibling properties at every use', function (): void {
+    $normalized = SchemaNormalizer::normalize([
+        'type' => 'object',
+        'properties' => [
+            'billing' => ['$ref' => '#/$defs/Address'],
+            'shipping' => ['$ref' => '#/$defs/Address', 'description' => 'Ship to.'],
+            'returns' => ['type' => 'array', 'items' => ['$ref' => '#/$defs/Address']],
+        ],
+        '$defs' => [
+            'Address' => [
+                'type' => 'object',
+                'properties' => ['city' => ['type' => 'string']],
+                'required' => ['city'],
+            ],
+        ],
+    ]);
+
+    $address = [
+        'type' => 'object',
+        'properties' => ['city' => ['type' => 'string']],
+        'required' => ['city'],
+    ];
+
+    expect($normalized)->toBe([
+        'type' => 'object',
+        'properties' => [
+            'billing' => $address,
+            'shipping' => [...$address, 'description' => 'Ship to.'],
+            'returns' => ['type' => 'array', 'items' => $address],
+        ],
+    ]);
+});
+
+test('it rejects a schema whose shared $ref expansion exceeds the node budget', function (): void {
+    $defs = ['a13' => ['type' => 'string']];
+
+    for ($i = 0; $i < 13; $i++) {
+        $defs["a{$i}"] = [
+            'type' => 'object',
+            'properties' => [
+                'left' => ['$ref' => '#/$defs/a'.($i + 1)],
+                'right' => ['$ref' => '#/$defs/a'.($i + 1)],
+            ],
+        ];
+    }
+
+    expect(fn () => SchemaNormalizer::normalize(['$ref' => '#/$defs/a0', '$defs' => $defs]))
+        ->toThrow(InvalidArgumentException::class, 'Schema expands to more than 10000 nodes.');
+});
