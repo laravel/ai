@@ -35,15 +35,15 @@ test('toHtml falls back to image/png when the image has no mime type', function 
     );
 });
 
-test('toHtml escapes the alt attribute', function (): void {
+test('toHtml escapes the image attributes', function (): void {
     $response = new ImageResponse(
-        new Collection([new GeneratedImage('aGVsbG8=', 'image/png')]),
+        new Collection([new GeneratedImage('aGVsbG8=" onload="alert(2)', 'image/png" onerror="alert(1)')]),
         new ImageUsage,
         new Meta('openai', 'gpt-image-1'),
     );
 
     expect($response->toHtml('"><script>alert(1)</script>'))->toBe(
-        '<img src="data:image/png;base64,aGVsbG8=" alt="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;" />'
+        '<img src="data:image/png&quot; onerror=&quot;alert(1);base64,aGVsbG8=&quot; onload=&quot;alert(2)" alt="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;" />'
     );
 });
 
