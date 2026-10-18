@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\FileSearch;
+use Laravel\Ai\Providers\Tools\FileSearchQuery;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Agents\NamedToolAgent;
 use Tests\Fixtures\Agents\NestedObjectToolAgent;
@@ -134,6 +135,72 @@ test('provider tools are sent without a tool choice', function (): void {
         'type' => 'file_search',
         'file_search_store_names' => ['fileSearchStores/store123'],
     ])->and(sentRequest()->data()['generation_config'] ?? [])->not->toHaveKey('tool_choice');
+});
+
+test('file search metadata filter escapes quotes and trailing backslashes', function (string $method, string $expected): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new FileSearch(['fileSearchStores/store123'], where: function (FileSearchQuery $query) use ($method): void {
+        if (in_array($method, ['whereIn', 'whereNotIn'])) {
+            $query->{$method}('category', ['x" OR tenant="globex', 'x\\']);
+        } else {
+            $query->{$method}('category', 'x" OR tenant="globex')->{$method}('path', 'x\\');
+        }
+    })])->prompt('Question?', provider: 'gemini');
+
+    expect(sentRequest()->data()['tools'][0]['metadata_filter'])->toBe($expected);
+})->with([
+    'where' => ['where', '(category="x\\" OR tenant=\\"globex") AND (path="x\\\\")'],
+    'whereNot' => ['whereNot', '(category!="x\\" OR tenant=\\"globex") AND (path!="x\\\\")'],
+    'whereIn' => ['whereIn', '(category="x\\" OR tenant=\\"globex" OR category="x\\\\")'],
+    'whereNotIn' => ['whereNotIn', '(category!="x\\" OR tenant=\\"globex" AND category!="x\\\\")'],
+]);
+
+test('file search metadata filter rejects invalid keys before sending a request', function (string $key): void {
+    Http::fake();
+
+    expect(fn () => agent(tools: [new FileSearch(['fileSearchStores/store123'], where: [$key => 'value'])])
+        ->prompt('Question?', provider: 'gemini'))
+        ->toThrow(InvalidArgumentException::class, "Invalid metadata filter key [{$key}].");
+
+    Http::assertNothingSent();
+})->with(['tenant="acme" OR category', 'tenant name', 'tenant-name', '1tenant', '', "tenant\n"]);
+
+test('file search metadata filter groups ordinary conditions and preserves numeric values', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new FileSearch(['fileSearchStores/store123'], where: fn (FileSearchQuery $query) => $query
+        ->where('tenant', 'acme')
+        ->whereIn('category', ['guide', 'reference'])
+        ->whereNot('_status', 'draft')
+        ->where('version.number', 2.5)
+        ->whereIn('year', [2024, '2025'])
+        ->whereNot('revision', 0)
+    )])->prompt('Question?', provider: 'gemini');
+
+    expect(sentRequest()->data()['tools'][0]['metadata_filter'])->toBe(
+        '(tenant="acme") AND (category="guide" OR category="reference") AND (_status!="draft") AND (version.number=2.5) AND (year=2024 OR year=2025) AND (revision!=0)'
+    );
+});
+
+test('file search metadata filter supports whereNotIn', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new FileSearch(['fileSearchStores/store123'], where: fn (FileSearchQuery $query) => $query
+        ->where('tenant', 'acme')
+        ->whereNotIn('category', ['draft', 'internal'])
+        ->whereNotIn('year', [2023, '2024'])
+    )])->prompt('Question?', provider: 'gemini');
+
+    expect(sentRequest()->data()['tools'][0]['metadata_filter'])->toBe(
+        '(tenant="acme") AND (category!="draft" AND category!="internal") AND (year!=2023 AND year!=2024)'
+    );
 });
 
 test('mixed function and provider tools are sent side by side', function (): void {

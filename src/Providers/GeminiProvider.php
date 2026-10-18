@@ -63,15 +63,21 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     protected function formatMetadataFilter(array $filters): string
     {
-        return (new Collection($filters))->map(fn ($filter): string => match ($filter['type']) {
-            'eq' => is_numeric($filter['value'])
-                ? "{$filter['key']}={$filter['value']}"
-                : "{$filter['key']}=\"{$filter['value']}\"",
-            'ne' => is_numeric($filter['value'])
-                ? "{$filter['key']}!={$filter['value']}"
-                : "{$filter['key']}!=\"{$filter['value']}\"",
-            'in' => '('.(new Collection($filter['value']))->map(fn ($v): string => is_numeric($v) ? "{$filter['key']}={$v}" : "{$filter['key']}=\"{$v}\""
-            )->implode(' OR ').')',
+        $formatValue = fn ($value): string => is_numeric($value)
+            ? (string) $value
+            : '"'.str_replace(['\\', '"'], ['\\\\', '\\"'], (string) $value).'"';
+
+        return (new Collection($filters))->map(function ($filter) use ($formatValue): string {
+            if (! preg_match('/^[A-Za-z_][A-Za-z0-9_.]*$/D', $filter['key'])) {
+                throw new InvalidArgumentException("Invalid metadata filter key [{$filter['key']}].");
+            }
+
+            return '('.match ($filter['type']) {
+                'eq' => $filter['key'].'='.$formatValue($filter['value']),
+                'ne' => $filter['key'].'!='.$formatValue($filter['value']),
+                'in' => (new Collection($filter['value']))->map(fn ($value): string => $filter['key'].'='.$formatValue($value))->implode(' OR '),
+                'nin' => (new Collection($filter['value']))->map(fn ($value): string => $filter['key'].'!='.$formatValue($value))->implode(' AND '),
+            }.')';
         })->implode(' AND ');
     }
 
