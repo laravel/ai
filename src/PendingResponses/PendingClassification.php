@@ -43,6 +43,18 @@ class PendingClassification
     }
 
     /**
+     * Provide the attachments that should be sent with the request.
+     *
+     * @param  array<int|string, File|UploadedFile>  $attachments
+     */
+    public function attachments(array $attachments): self
+    {
+        $this->attachments = $attachments;
+
+        return $this;
+    }
+
+    /**
      * Add a question to answer about the state.
      */
     public function question(string $key, Question $question): self

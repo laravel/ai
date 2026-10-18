@@ -111,6 +111,16 @@ test('fake records the attachments a classification was given', function (): voi
     Classification::assertClassified(fn (ClassificationPrompt $prompt): bool => $prompt->attachments === [$image]);
 });
 
+test('fake records attachments set via attachments()', function (): void {
+    Classification::fake();
+
+    $image = Image::fromBase64(base64_encode('photo'), 'image/png');
+
+    Classification::of('Inspect this.')->attachments([$image])->question('damaged', new Boolean('Damaged?'))->classify(provider: Lab::OpenAI);
+
+    Classification::assertClassified(fn (ClassificationPrompt $prompt): bool => $prompt->attachments === [$image]);
+});
+
 test('fakes reject attachments for providers that cannot classify them', function (): void {
     registerTextOnlyClassifier();
 
