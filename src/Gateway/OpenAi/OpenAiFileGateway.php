@@ -30,9 +30,9 @@ class OpenAiFileGateway implements FileGateway
                 ->get("files/{$this->resourceId($fileId)}")
         );
 
-        return new FileResponse(
+        return (new FileResponse(
             id: $response->json('id'),
-        );
+        ))->withRawResponse($response);
     }
 
     /**
@@ -58,7 +58,7 @@ class OpenAiFileGateway implements FileGateway
                 ))
         );
 
-        return new StoredFileResponse($response->json('id'));
+        return (new StoredFileResponse($response->json('id')))->withRawResponse($response);
     }
 
     /**

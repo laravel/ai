@@ -21,7 +21,8 @@ test('get file sends correct request', function (): void {
 
     $response = Files::get('abc123', provider: 'gemini');
 
-    expect($response->id)->toBe('files/abc123');
+    expect($response->id)->toBe('files/abc123')
+        ->and($response->raw)->not->toBeNull();
     expect($response->mime)->toBe('text/plain');
 
     Http::assertSent(fn ($request): bool => $request->method() === 'GET'
@@ -56,7 +57,8 @@ test('put file sends multipart upload', function (): void {
         provider: 'gemini',
     );
 
-    expect($response->id)->toBe('files/uploaded123');
+    expect($response->id)->toBe('files/uploaded123')
+        ->and($response->raw)->not->toBeNull();
 
     Http::assertSent(fn ($request): bool => $request->method() === 'POST'
         && str_contains((string) $request->url(), '/upload/v1beta/files')

@@ -31,10 +31,10 @@ class AnthropicFileGateway implements FileGateway
             fn () => $this->client($provider)->get("files/{$this->resourceId($fileId)}"),
         );
 
-        return new FileResponse(
+        return (new FileResponse(
             id: $response->json('id'),
             mimeType: $response->json('mime_type'),
-        );
+        ))->withRawResponse($response);
     }
 
     /**
@@ -57,7 +57,7 @@ class AnthropicFileGateway implements FileGateway
                 ->post('files', $providerOptions),
         );
 
-        return new StoredFileResponse($response->json('id'));
+        return (new StoredFileResponse($response->json('id')))->withRawResponse($response);
     }
 
     /**

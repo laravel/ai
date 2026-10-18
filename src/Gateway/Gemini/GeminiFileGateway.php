@@ -35,10 +35,10 @@ class GeminiFileGateway implements FileGateway
             fn () => $this->client($provider)->get($this->baseUrl($provider)."/{$fileId}")->throw(),
         );
 
-        return new FileResponse(
+        return (new FileResponse(
             id: $response->json('name'),
             mimeType: $response->json('mimeType'),
-        );
+        ))->withRawResponse($response);
     }
 
     /**
@@ -62,7 +62,7 @@ class GeminiFileGateway implements FileGateway
             'file' => ['display_name' => $name],
         ], $providerOptions))->throw());
 
-        return new StoredFileResponse($response->json('file.name'));
+        return (new StoredFileResponse($response->json('file.name')))->withRawResponse($response);
     }
 
     /**

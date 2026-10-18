@@ -21,6 +21,7 @@ test('get file sends correct request and exposes the mime type', function (): vo
     $response = Files::get('or_file_abc123', provider: 'openrouter');
 
     expect($response->id)->toBe('or_file_abc123')
+        ->and($response->raw)->not->toBeNull()
         ->and($response->mimeType())->toBe('text/csv');
 
     Http::assertSent(fn (Request $request): bool => $request->method() === 'GET'
@@ -45,7 +46,8 @@ test('put file sends the file as a multipart upload', function (): void {
         provider: 'openrouter',
     );
 
-    expect($response->id)->toBe('or_file_uploaded123');
+    expect($response->id)->toBe('or_file_uploaded123')
+        ->and($response->raw)->not->toBeNull();
 
     $request = sentRequest();
     $file = collect($request->data())->firstWhere('name', 'file');

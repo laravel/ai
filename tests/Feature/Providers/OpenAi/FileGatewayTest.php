@@ -108,3 +108,40 @@ test('delete file rejects dot segment ids', function (string $fileId): void {
 
     Http::assertNothingSent();
 })->with(['', '.', '..']);
+
+test('get file preserves raw response', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response(['id' => 'file-abc123', 'bytes' => 1024]),
+    ]);
+
+    $response = Files::get('file-abc123', provider: 'openai');
+
+    expect($response->raw)->not->toBeNull()
+        ->and($response->raw->json('bytes'))->toBe(1024);
+});
+
+test('put file preserves raw response', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response(['id' => 'file-uploaded123', 'bytes' => 2048]),
+    ]);
+
+    $response = Document::fromString('Hello, World!', 'text/plain')->as('hello.txt')->put(
+        provider: 'openai',
+    );
+
+    expect($response->raw)->not->toBeNull()
+        ->and($response->raw->json('bytes'))->toBe(2048);
+});
+
+test('raw response is excluded when serialized', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response(['id' => 'file-abc123']),
+    ]);
+
+    $response = Files::get('file-abc123', provider: 'openai');
+    $serialized = serialize($response);
+    $unserialized = unserialize($serialized);
+
+    expect($unserialized->id)->toBe('file-abc123')
+        ->and($unserialized->raw)->toBeNull();
+});
