@@ -334,6 +334,31 @@ describe('pause_turn', function (): void {
         expect([$replayed[0]['text'], $replayed[2]['text']])->toBe(['First', 'Second'])
             ->and(TextDelta::combine($events))->toBe("First\n\nSecond");
     });
+
+    test('streaming does not separate text after a server tool when the model already ended the line', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->messageStart(),
+                    $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                    $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => "First\n"]),
+                    $this->contentBlockStop(0),
+                    $this->contentBlockStart(1, ['type' => 'server_tool_use', 'id' => 'srvtoolu_1', 'name' => 'web_search']),
+                    $this->contentBlockStop(1),
+                    $this->contentBlockStart(2, ['type' => 'text', 'text' => '']),
+                    $this->contentBlockDelta(2, ['type' => 'text_delta', 'text' => 'Second']),
+                    $this->contentBlockStop(2),
+                    $this->messageDelta('end_turn', 10),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $textDeltas = array_values(array_filter($this->collectStreamEvents(), fn ($e): bool => $e instanceof TextDelta));
+
+        expect(array_map(fn (TextDelta $e): string => $e->delta, $textDeltas))->toBe(["First\n", 'Second']);
+    });
 });
 
 describe('error handling', function (): void {

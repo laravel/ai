@@ -131,12 +131,11 @@ trait ParsesTextResponses
     }
 
     /**
-     * Determine if the given block type is a client, server, or MCP tool block.
+     * Determine if the given block type is a server tool call or its result.
      */
     protected function isToolBlock(string $type): bool
     {
-        return in_array($type, ['tool_use', 'server_tool_use', 'mcp_tool_use'], true)
-            || $this->isProviderToolResultBlock($type);
+        return $type === 'server_tool_use' || $this->isProviderToolResultBlock($type);
     }
 
     /**

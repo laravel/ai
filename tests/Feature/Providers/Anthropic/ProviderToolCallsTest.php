@@ -69,7 +69,30 @@ test('text around a redacted thinking block is not separated', function (): void
         ]),
     ]);
 
-    $response = (new AssistantAgent)->prompt('Search', provider: 'anthropic');
+    $response = (new AssistantAgent)->prompt('Hello', provider: 'anthropic');
 
     expect($response->text)->toBe('FirstSecond');
+});
+
+test('text after a server tool is not separated when the model already ended the line', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'id' => 'msg_1',
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-4-6',
+            'content' => [
+                ['type' => 'text', 'text' => "Let me check.\n"],
+                ['type' => 'server_tool_use', 'id' => 'srvtoolu_1', 'name' => 'web_search', 'input' => ['query' => 'laravel ai']],
+                ['type' => 'web_search_tool_result', 'tool_use_id' => 'srvtoolu_1', 'content' => []],
+                ['type' => 'text', 'text' => 'Done'],
+            ],
+            'stop_reason' => 'end_turn',
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
+    ]);
+
+    $response = (new AssistantAgent)->prompt('Search', provider: 'anthropic');
+
+    expect($response->text)->toBe("Let me check.\nDone");
 });
