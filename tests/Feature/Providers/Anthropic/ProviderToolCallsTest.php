@@ -28,7 +28,7 @@ test('server tool use and result blocks land on the step keyed by the tool use',
         ->and($response->steps[0]->providerToolCalls[0]->data['input'])->toBe(['query' => 'laravel ai']);
 });
 
-test('text before and after server tool calls is separated by newlines', function (): void {
+test('text before and after a server tool is separated by a blank line while citation-split text stays joined', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::response([
             'id' => 'msg_1',
@@ -39,7 +39,8 @@ test('text before and after server tool calls is separated by newlines', functio
                 ['type' => 'text', 'text' => 'Let me check.'],
                 ['type' => 'server_tool_use', 'id' => 'srvtoolu_1', 'name' => 'web_search', 'input' => ['query' => 'laravel ai']],
                 ['type' => 'web_search_tool_result', 'tool_use_id' => 'srvtoolu_1', 'content' => []],
-                ['type' => 'text', 'text' => 'Found it.'],
+                ['type' => 'text', 'text' => 'The latest stable version is '],
+                ['type' => 'text', 'text' => 'Laravel 13', 'citations' => [['type' => 'web_search_result_location', 'url' => 'https://laravel.com', 'title' => 'Laravel', 'cited_text' => 'Laravel 13']]],
             ],
             'stop_reason' => 'end_turn',
             'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
@@ -48,5 +49,27 @@ test('text before and after server tool calls is separated by newlines', functio
 
     $response = (new AssistantAgent)->prompt('Search', provider: 'anthropic');
 
-    expect($response->text)->toBe("Let me check.\n\nFound it.");
+    expect($response->text)->toBe("Let me check.\n\nThe latest stable version is Laravel 13");
+});
+
+test('text around a redacted thinking block is not separated', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'id' => 'msg_1',
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-4-6',
+            'content' => [
+                ['type' => 'text', 'text' => 'First'],
+                ['type' => 'redacted_thinking', 'data' => 'encrypted'],
+                ['type' => 'text', 'text' => 'Second'],
+            ],
+            'stop_reason' => 'end_turn',
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
+    ]);
+
+    $response = (new AssistantAgent)->prompt('Search', provider: 'anthropic');
+
+    expect($response->text)->toBe('FirstSecond');
 });

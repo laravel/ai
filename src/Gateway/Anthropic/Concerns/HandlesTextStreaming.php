@@ -47,8 +47,8 @@ trait HandlesTextStreaming
         $currentServerToolInput = '';
         $pendingToolCalls = [];
         $responseContent = [];
-        $hadInterveningTool = false;
-        $accumulatedText = '';
+        $afterTool = false;
+        $lastTextDelta = '';
 
         $messageUsage = [];
         $usage = null;
@@ -118,6 +118,10 @@ trait HandlesTextStreaming
                 $currentBlockType = $blockType;
                 $currentBlockIndex = $data['index'] ?? count($responseContent);
 
+                if ($this->isToolBlock($blockType)) {
+                    $afterTool = true;
+                }
+
                 if ($blockType === 'text') {
                     $currentBlockText = '';
 
@@ -132,7 +136,6 @@ trait HandlesTextStreaming
                         yield $event;
                     }
                 } elseif ($blockType === 'tool_use') {
-                    $hadInterveningTool = true;
                     $currentToolIndex++;
 
                     $pendingToolCalls[$currentToolIndex] = [
@@ -141,7 +144,6 @@ trait HandlesTextStreaming
                         'arguments' => '',
                     ];
                 } elseif ($blockType === 'server_tool_use') {
-                    $hadInterveningTool = true;
                     $currentServerToolInput = '';
 
                     yield (new ProviderToolEvent(
@@ -154,7 +156,6 @@ trait HandlesTextStreaming
                         provider: $provider->name(),
                     ))->withInvocationId($invocationId);
                 } elseif ($this->isProviderToolResultBlock($blockType)) {
-                    $hadInterveningTool = true;
                     $fetchResult = $data['content_block']['content'] ?? [];
 
                     if ($blockType === 'web_fetch_tool_result' && ($fetchResult['type'] ?? '') === 'web_fetch_result' && filled($fetchResult['url'] ?? null)) {
@@ -192,25 +193,20 @@ trait HandlesTextStreaming
                     $textDelta = (string) ($data['delta']['text'] ?? '');
 
                     if ($textDelta !== '') {
-                        if ($hadInterveningTool && $accumulatedText !== '') {
-                            if (! str_ends_with($accumulatedText, "\n") && ! str_starts_with($textDelta, "\n")) {
-                                $textDelta = "\n\n".$textDelta;
-                            }
-
-                            $hadInterveningTool = false;
-                        }
+                        $separator = $afterTool && $lastTextDelta !== '' ? $this->textSeparator($lastTextDelta, $textDelta) : '';
+                        $afterTool = false;
+                        $lastTextDelta = $textDelta;
 
                         if (($event = $emitTextStart()) instanceof StreamEvent) {
                             yield $event;
                         }
 
-                        $accumulatedText .= $textDelta;
                         $currentBlockText .= $textDelta;
 
                         yield (new TextDelta(
                             $this->generateEventId(),
                             $messageId,
-                            $textDelta,
+                            $separator.$textDelta,
                             time(),
                         ))->withInvocationId($invocationId);
                     }
@@ -347,14 +343,6 @@ trait HandlesTextStreaming
             finishReason: $this->extractFinishReason(['stop_reason' => $stopReason]),
             structured: false,
         );
-    }
-
-    /**
-     * Determine if the given block type is a provider tool result.
-     */
-    protected function isProviderToolResultBlock(string $blockType): bool
-    {
-        return str_ends_with($blockType, '_tool_result');
     }
 
     /**
