@@ -221,6 +221,19 @@ describe('file assertions', function (): void {
         $store->assertNotAdded(fn ($f): bool => $f instanceof ProviderDocument && $f->id() === 'file_456');
     });
 
+    test('nameless storable files are distinguished by their contents', function (): void {
+        Stores::fake();
+
+        $store = Stores::create('My Store');
+
+        $store->add(Document::fromString('First document', 'text/plain'));
+        $store->add(Document::fromString('Second document', 'text/plain'));
+
+        $store->assertAdded('First document');
+        $store->assertAdded('Second document');
+        $store->assertNotAdded('Third document');
+    });
+
     test('can assert file removed from store', function (): void {
         Stores::fake();
 
