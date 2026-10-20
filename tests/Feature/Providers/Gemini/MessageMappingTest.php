@@ -6,13 +6,16 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
-use Laravel\Ai\Files;
+use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Video;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\RemoteAudio;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
+use Laravel\Ai\Files\Video;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -234,6 +237,91 @@ test('an attachment only message sends no text block', function (): void {
         ->and(geminiRequestBody()['input'][0]['content'][0]['type'])->toBe('image');
 });
 
+test('provider audio maps to an audio URI block without downloading the file', function (): void {
+    Http::preventStrayRequests();
+    Http::fake([
+        '*interactions*' => $this->fakeTextResponse('I hear audio'),
+    ]);
+
+    $uri = 'https://generativelanguage.googleapis.com/v1beta/files/audio-123';
+
+    agent('You are helpful.')->prompt(
+        'What is in this audio?',
+        attachments: [Audio::fromId($uri, 'audio/mpeg')],
+        provider: 'gemini',
+    );
+
+    expect(geminiInputBlock('audio'))->toBe([
+        'type' => 'audio',
+        'mime_type' => 'audio/mpeg',
+        'uri' => $uri,
+    ])->and(Http::recorded())->toHaveCount(1);
+});
+
+test('provider video maps to a video URI block without downloading the file', function (): void {
+    Http::preventStrayRequests();
+    Http::fake([
+        '*interactions*' => $this->fakeTextResponse('I see a video'),
+    ]);
+
+    $uri = 'https://generativelanguage.googleapis.com/v1beta/files/video-123';
+
+    agent('You are helpful.')->prompt(
+        'What is in this video?',
+        attachments: [Video::fromId($uri, 'video/mp4')],
+        provider: 'gemini',
+    );
+
+    expect(geminiInputBlock('video'))->toBe([
+        'type' => 'video',
+        'mime_type' => 'video/mp4',
+        'uri' => $uri,
+    ])->and(Http::recorded())->toHaveCount(1);
+});
+
+test('provider audio and video omit MIME when it is unknown', function (): void {
+    Http::fake([
+        '*interactions*' => $this->fakeTextResponse('I see the media'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'Describe these files.',
+        attachments: [
+            Audio::fromId('https://generativelanguage.googleapis.com/v1beta/files/audio-123'),
+            Video::fromId('https://generativelanguage.googleapis.com/v1beta/files/video-123'),
+        ],
+        provider: 'gemini',
+    );
+
+    expect(geminiInputBlock('audio'))->toBe([
+        'type' => 'audio',
+        'uri' => 'https://generativelanguage.googleapis.com/v1beta/files/audio-123',
+    ])->and(geminiInputBlock('video'))->toBe([
+        'type' => 'video',
+        'uri' => 'https://generativelanguage.googleapis.com/v1beta/files/video-123',
+    ]);
+});
+
+test('provider image and document URI mappings remain unchanged', function (): void {
+    Http::fake([
+        '*interactions*' => $this->fakeTextResponse('I see the files'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'Describe these files.',
+        attachments: [Image::fromId('files/image-123'), Document::fromId('files/document-123')],
+        provider: 'gemini',
+    );
+
+    expect(geminiInputBlock('image'))->toBe([
+        'type' => 'image',
+        'uri' => 'files/image-123',
+    ])->and(geminiInputBlock('document'))->toBe([
+        'type' => 'document',
+        'uri' => 'files/document-123',
+    ]);
+});
+
 test('base64 pdf document maps to a document block', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('I see a PDF'),
@@ -336,7 +424,7 @@ test('stored text document sends real mime type', function (): void {
 
     agent('You are helpful.')->prompt(
         'Read this.',
-        attachments: [Files\Document::fromStorage('notes.txt', 'docs')],
+        attachments: [Document::fromStorage('notes.txt', 'docs')],
         provider: 'gemini',
     );
 

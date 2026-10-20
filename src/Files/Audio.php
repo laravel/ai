@@ -13,6 +13,14 @@ abstract class Audio extends File
     }
 
     /**
+     * Create a new provider audio using the audio with the given ID and MIME type.
+     */
+    public static function fromId(string $id, ?string $mimeType = null): ProviderAudio
+    {
+        return new ProviderAudio($id, $mimeType);
+    }
+
+    /**
      * Create a new audio using the audio at the given path.
      */
     public static function fromPath(string $path, ?string $mimeType = null): LocalAudio
