@@ -367,6 +367,37 @@ test('streaming runs a tool call that finishes with stop', function (): void {
         ->and($events->filter(fn ($event): bool => $event instanceof ToolResultEvent))->toHaveCount(1);
 });
 
+test('streaming runs two whole tool calls that arrive without an index', function (): void {
+    $chunk = fn (array $delta, ?string $finish = null): string => 'data: '.json_encode([
+        'id' => 'chatcmpl-123',
+        'object' => 'chat.completion.chunk',
+        'model' => 'local-model',
+        'choices' => [['index' => 0, 'delta' => $delta, 'finish_reason' => $finish]],
+    ]);
+
+    $call = fn (string $id): array => [
+        'id' => $id,
+        'type' => 'function',
+        'function' => ['name' => 'FixedNumberGenerator', 'arguments' => '{}'],
+    ];
+
+    $body = implode("\n\n", [
+        $chunk(['role' => 'assistant', 'tool_calls' => [$call('call_1')]]),
+        $chunk(['tool_calls' => [$call('call_2')]]),
+        $chunk([], 'tool_calls'),
+        'data: [DONE]',
+    ])."\n\n";
+
+    Http::fakeSequence()
+        ->pushResponse(Http::response($body, 200, ['Content-Type' => 'text/event-stream']))
+        ->pushResponse(fakeOpenAiCompatibleStream());
+
+    $events = collect((new MultiStepToolAgent)->stream('Generate', provider: 'openai-compatible'));
+
+    expect($events->filter(fn ($event): bool => $event instanceof ToolCallEvent))->toHaveCount(2)
+        ->and($events->filter(fn ($event): bool => $event instanceof ToolResultEvent))->toHaveCount(2);
+});
+
 function fakeOpenAiCompatibleToolCallStream(?int $index, string $finish)
 {
     $chunk = fn (array $delta, ?string $finish = null): string => 'data: '.json_encode([

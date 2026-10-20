@@ -133,9 +133,14 @@ trait HandlesTextStreaming
 
             if (isset($delta['tool_calls'])) {
                 foreach ($delta['tool_calls'] as $tcDelta) {
-                    // Some servers leave the index out: a delta carrying an id opens a new call and any other continues the last one.
+                    // Some servers leave the index out: a delta starts a new call when it brings an id different from the latest call's,
+                    // or a name (without id) after the latest call already has one; any other delta continues the latest call.
+                    $last = $pendingToolCalls === [] ? null : $pendingToolCalls[array_key_last($pendingToolCalls)];
+                    $startsNewCall = $last === null
+                        || (isset($tcDelta['id']) && $tcDelta['id'] !== $last['id'])
+                        || (! isset($tcDelta['id']) && isset($tcDelta['function']['name']) && $last['name'] !== '');
                     $idx = $tcDelta['index']
-                        ?? (isset($tcDelta['id']) || $pendingToolCalls === [] ? count($pendingToolCalls) : array_key_last($pendingToolCalls));
+                        ?? ($startsNewCall ? count($pendingToolCalls) : array_key_last($pendingToolCalls));
 
                     if (! isset($pendingToolCalls[$idx])) {
                         $pendingToolCalls[$idx] = [
