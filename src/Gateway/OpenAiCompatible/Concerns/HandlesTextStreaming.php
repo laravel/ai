@@ -6,6 +6,7 @@ use Generator;
 use Illuminate\Support\Str;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -132,7 +133,9 @@ trait HandlesTextStreaming
 
             if (isset($delta['tool_calls'])) {
                 foreach ($delta['tool_calls'] as $tcDelta) {
-                    $idx = $tcDelta['index'];
+                    // Some servers leave the index out: a delta carrying an id opens a new call and any other continues the last one.
+                    $idx = $tcDelta['index']
+                        ?? (isset($tcDelta['id']) || $pendingToolCalls === [] ? count($pendingToolCalls) : array_key_last($pendingToolCalls));
 
                     if (! isset($pendingToolCalls[$idx])) {
                         $pendingToolCalls[$idx] = [
@@ -173,7 +176,8 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        if (filled($pendingToolCalls) && $finishReason === 'tool_calls') {
+        // Some servers finish a tool turn with "stop" rather than "tool_calls".
+        if (filled($pendingToolCalls) && in_array($finishReason, ['tool_calls', 'stop'], true)) {
             $toolCalls = $this->mapStreamToolCalls($pendingToolCalls);
 
             foreach ($toolCalls as $toolCall) {
@@ -188,7 +192,9 @@ trait HandlesTextStreaming
         return new StepResponse(
             text: $currentText,
             toolCalls: $toolCalls,
-            finishReason: $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
+            finishReason: $toolCalls !== []
+                ? FinishReason::ToolCalls
+                : $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
             usage: $usage ?? new TextUsage(0, 0),
             meta: new Meta($provider->name(), $responseModel),
         );
