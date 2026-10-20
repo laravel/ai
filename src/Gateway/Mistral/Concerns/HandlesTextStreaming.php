@@ -32,6 +32,8 @@ trait HandlesTextStreaming
         $currentText = '';
         $toolCalls = [];
         $pendingToolCalls = [];
+        $serverToolCallIds = [];
+        $messageRoles = [];
         $usage = null;
         $finishReason = null;
         $responseModel = $model;
@@ -60,6 +62,11 @@ trait HandlesTextStreaming
             }
 
             $delta = $choice['delta'] ?? [];
+            $messageIndex = $delta['index'] ?? 0;
+
+            if (isset($delta['role'])) {
+                $messageRoles[$messageIndex] = $delta['role'];
+            }
 
             if (! $streamStartEmitted) {
                 $streamStartEmitted = true;
@@ -71,6 +78,12 @@ trait HandlesTextStreaming
                     $responseModel,
                     time(),
                 ))->withInvocationId($invocationId);
+            }
+
+            if (($messageRoles[$messageIndex] ?? null) === 'tool') {
+                $serverToolCallIds[] = $delta['tool_call_id'] ?? null;
+
+                continue;
             }
 
             $content = $this->extractContentText($delta['content'] ?? '');
@@ -98,7 +111,7 @@ trait HandlesTextStreaming
 
             if (isset($delta['tool_calls'])) {
                 foreach ($delta['tool_calls'] as $tcDelta) {
-                    $idx = $tcDelta['index'];
+                    $idx = $messageIndex.':'.$tcDelta['index'];
 
                     if (! isset($pendingToolCalls[$idx])) {
                         $pendingToolCalls[$idx] = [
@@ -132,7 +145,12 @@ trait HandlesTextStreaming
         }
 
         if (filled($pendingToolCalls) && $finishReason === 'tool_calls') {
-            foreach (array_values($pendingToolCalls) as $pending) {
+            $clientToolCalls = array_filter(
+                $pendingToolCalls,
+                fn (array $pending): bool => ! in_array($pending['id'], $serverToolCallIds, true),
+            );
+
+            foreach ($clientToolCalls as $pending) {
                 $toolCall = new ToolCall(
                     $pending['id'] ?? '',
                     $pending['name'] ?? '',

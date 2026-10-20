@@ -119,7 +119,7 @@ describe('file search', function (): void {
         }
     });
 
-    test('can actually prompt an agent with file search data', function (string $provider, string $apiKey): void {
+    test('can actually prompt an agent with file search data', function (string $provider, string $apiKey, ?string $model = null): void {
         requiresApiKey($apiKey);
 
         $this->provider = $provider;
@@ -130,7 +130,7 @@ describe('file search', function (): void {
             tools: [
                 new FileSearch([$this->fileSearchStore->id]),
             ],
-        )->prompt('Is Valkey mentioned in the sixth month roadmap? Can you quote the section where it is mentioned?', provider: $provider);
+        )->prompt('Is Valkey mentioned in the sixth month roadmap? Can you quote the section where it is mentioned?', provider: $provider, model: $model);
 
         expect((string) $response)->toContain('Yes')->toContain('Valkey');
     })->with('file-search-providers');
