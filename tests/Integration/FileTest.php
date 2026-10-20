@@ -57,7 +57,7 @@ test('can store files from remote paths', function (string $provider, string $ap
     requiresApiKey($apiKey);
 
     $stored = Document::fromUrl(
-        'https://raw.githubusercontent.com/laravel/laravel/refs/heads/12.x/README.md'
+        'https://raw.githubusercontent.com/laravel/framework/refs/heads/12.x/LICENSE.md'
     )->put(
         provider: $provider,
     );
