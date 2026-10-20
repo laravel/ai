@@ -311,3 +311,33 @@ test('streaming ignores non-url-citation annotation types', function (): void {
 
     expect($citations)->toHaveCount(0);
 });
+
+test('streaming runs tool calls that arrive without an index and finish with stop', function (): void {
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response($this->ssePayload([
+                ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'tool_calls' => [['id' => 'call_1', 'type' => 'function', 'function' => ['name' => 'FixedNumberGenerator', 'arguments' => '{}']]]], 'finish_reason' => null]]],
+                ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => ['tool_calls' => [['id' => 'call_2', 'type' => 'function', 'function' => ['name' => 'FixedNumberGenerator', 'arguments' => '{}']]]], 'finish_reason' => null]]],
+                ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'stop']]],
+            ])),
+            Http::response($this->ssePayload([
+                ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'content' => 'The numbers are 72019'], 'finish_reason' => null]]],
+                ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'stop']]],
+            ])),
+        ]),
+    ]);
+
+    $events = [];
+    foreach (agent(tools: [new FixedNumberGenerator])->stream('Give me a number', provider: 'openrouter') as $event) {
+        $events[] = $event;
+    }
+
+    $toolCallEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof ToolCallEvent));
+    $toolResultEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof ToolResultEvent));
+    $streamEndEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd));
+
+    expect($toolCallEvents)->toHaveCount(2)
+        ->and($toolResultEvents)->toHaveCount(2)
+        ->and($streamEndEvents)->toHaveCount(1)
+        ->and($streamEndEvents[0]->reason)->toBe(FinishReason::Stop->value);
+});

@@ -6,6 +6,7 @@ use Generator;
 use Illuminate\Support\Str;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -155,7 +156,14 @@ trait HandlesTextStreaming
 
             if (isset($delta['tool_calls'])) {
                 foreach ($delta['tool_calls'] as $tcDelta) {
-                    $idx = $tcDelta['index'];
+                    // Some servers leave the index out: a delta starts a new call when it brings an id different from the latest call's,
+                    // or a name (without id) after the latest call already has one; any other delta continues the latest call.
+                    $last = $pendingToolCalls === [] ? null : $pendingToolCalls[array_key_last($pendingToolCalls)];
+                    $startsNewCall = $last === null
+                        || (isset($tcDelta['id']) && $tcDelta['id'] !== $last['id'])
+                        || (! isset($tcDelta['id']) && isset($tcDelta['function']['name']) && $last['name'] !== '');
+                    $idx = $tcDelta['index']
+                        ?? ($startsNewCall ? count($pendingToolCalls) : array_key_last($pendingToolCalls));
 
                     if (! isset($pendingToolCalls[$idx])) {
                         $pendingToolCalls[$idx] = [
@@ -216,7 +224,8 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        if (filled($pendingToolCalls) && $finishReason === 'tool_calls') {
+        // Some servers finish a tool turn with "stop" rather than "tool_calls".
+        if (filled($pendingToolCalls) && in_array($finishReason, ['tool_calls', 'stop'], true)) {
             foreach (array_values($pendingToolCalls) as $pending) {
                 $toolCall = new ToolCall(
                     $pending['id'] ?? '',
@@ -238,7 +247,9 @@ trait HandlesTextStreaming
         return new StepResponse(
             text: $currentText,
             toolCalls: $toolCalls,
-            finishReason: $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
+            finishReason: $toolCalls !== []
+                ? FinishReason::ToolCalls
+                : $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
             usage: $usage ?? new TextUsage(0, 0),
             meta: new Meta($provider->name(), $streamModel),
             replayBlocks: array_values($reasoningDetails),
