@@ -56,8 +56,10 @@ trait HandlesFailoverErrors
                     );
                 }
 
-                if ($patterns = $this->insufficientCreditPatterns()) {
-                    $message = strtolower($requestException->response->json('error.message', ''));
+                $message = $requestException->response->json('error.message');
+
+                if (is_string($message) && $patterns = $this->insufficientCreditPatterns()) {
+                    $message = strtolower($message);
 
                     foreach ($patterns as $pattern) {
                         if (str_contains($message, (string) $pattern)) {
