@@ -81,6 +81,15 @@ test('non-matching message is rethrown as the original RequestException', functi
     ))->toThrow(RequestException::class);
 });
 
+test('non-string message is rethrown as the original RequestException', function (): void {
+    expect(fn () => $this->gateway->withErrorHandling(
+        'anthropic',
+        fn () => throw failoverableException(400, [
+            'error' => ['message' => ['code' => 'invalid_prompt']],
+        ]),
+    ))->toThrow(RequestException::class);
+});
+
 test('a rate limited or overloaded request is retried once after its Retry-After delay', function (int $status): void {
     Sleep::fake();
 
