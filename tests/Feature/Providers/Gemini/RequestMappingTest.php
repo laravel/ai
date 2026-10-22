@@ -168,6 +168,25 @@ describe('structured output', function (): void {
         expect($response->structured['symbol'])->toBe('Fe');
     });
 
+    test('completed structured responses reject free-form text instead of returning an empty array', function (): void {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The symbol for iron is Fe.'),
+        ]);
+
+        expect(fn () => (new StructuredAgent)->prompt('What is the symbol for Iron?', provider: 'gemini'))
+            ->toThrow(\Laravel\Ai\Exceptions\AiException::class, 'Gemini returned invalid structured output');
+    });
+
+    test('completed structured responses still accept an empty JSON object', function (): void {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse([]),
+        ]);
+
+        $response = (new StructuredAgent)->prompt('Return an empty object', provider: 'gemini');
+
+        expect($response->structured)->toBe([]);
+    });
+
     test('nested structured output keeps the item schema closed', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse([
