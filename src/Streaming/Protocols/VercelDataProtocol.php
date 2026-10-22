@@ -4,6 +4,7 @@ namespace Laravel\Ai\Streaming\Protocols;
 
 use Generator;
 use Illuminate\Support\Arr;
+use Laravel\Ai\Approvals\ApprovalSignature;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\StreamableAgentResponse;
@@ -79,7 +80,7 @@ class VercelDataProtocol extends StreamProtocol
                     yield from $this->yieldPart([
                         'type' => 'tool-approval-request',
                         'toolCallId' => $pendingApproval->id,
-                        'approvalId' => $pendingApproval->id,
+                        'approvalId' => ApprovalSignature::sign($pendingApproval->id, $pendingApproval->tool, $pendingApproval->arguments),
                         'reason' => $pendingApproval->reason,
                     ]);
                 }
