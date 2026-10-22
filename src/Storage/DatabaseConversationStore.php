@@ -173,6 +173,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         return json_encode([
             'pending' => $response->pendingApprovals->mapWithKeys(fn ($approval) => [$approval->id => $approval->reason])->all(),
+            'schema' => $response->pendingApprovals->whereNotNull('schema')->mapWithKeys(fn ($approval) => [$approval->id => $approval->schema])->all(),
+            'data' => $response->pendingApprovals->whereNotNull('data')->mapWithKeys(fn ($approval) => [$approval->id => $approval->data])->all(),
         ]);
     }
 
@@ -319,7 +321,11 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             return [];
         }
 
-        $reasons = collect(data_get(json_decode($newest->approval_state ?? '{}', true), 'pending'));
+        $state = json_decode($newest->approval_state ?? '{}', true);
+
+        $reasons = collect(data_get($state, 'pending'));
+        $schemas = collect(data_get($state, 'schema'));
+        $data = collect(data_get($state, 'data'));
 
         if ($reasons->isEmpty()) {
             return [];
@@ -335,6 +341,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 $toolCall->name,
                 $toolCall->arguments,
                 $reasons->get($toolCall->id),
+                $schemas->get($toolCall->id),
+                $data->get($toolCall->id),
             ))
             ->values()
             ->all();
@@ -478,14 +486,15 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 collect($toolResults)->reject(fn (ToolResult $result) => $existing->contains('id', $result->id))
             );
 
-            $pending = collect(((array) json_decode($row->approval_state ?? 'null', true))['pending'] ?? [])->except($resultIds);
+            $state = collect((array) json_decode($row->approval_state ?? 'null', true))
+                ->map(fn (array $byToolCall) => collect($byToolCall)->except($resultIds)->all());
 
             // Keep the marker after resolution so the resume dedup scan stays bounded to ever-paused rows, while each call's outcome lives in the merged tool results...
             $this->table($this->messagesTable())
                 ->where('id', $row->id)
                 ->update([
                     'tool_results' => $merged->values()->toJson(),
-                    'approval_state' => json_encode(['pending' => $pending->all()]),
+                    'approval_state' => $state->toJson(),
                     'updated_at' => now(),
                 ]);
         });
