@@ -11,6 +11,7 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
 beforeEach(function (): void {
@@ -240,3 +241,46 @@ test('streaming finish reason maps correctly', function (string $apiReason, $exp
     'content_filter maps to ContentFilter' => ['content_filter', FinishReason::ContentFilter],
     'unknown maps to Unknown' => ['unknown_reason', FinishReason::Unknown],
 ]);
+
+test('streaming runs tool calls that arrive without an index and finish with stop', function (): void {
+    $call = fn (string $id): array => [
+        'id' => $id,
+        'type' => 'function',
+        'function' => ['name' => 'FixedNumberGenerator', 'arguments' => '{}'],
+    ];
+
+    Http::fake([
+        'api.groq.com/*' => Http::sequence([
+            Http::response(
+                body: $this->ssePayload([
+                    $this->chatChunk(['role' => 'assistant', 'tool_calls' => [$call('call_1')]]),
+                    $this->chatChunk(['tool_calls' => [$call('call_2')]]),
+                    $this->chatChunkFinish('stop', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+                    '[DONE]',
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+            Http::response(
+                body: $this->ssePayload([
+                    $this->chatChunk(['role' => 'assistant', 'content' => 'The numbers are 72019']),
+                    $this->chatChunkFinish('stop', ['prompt_tokens' => 20, 'completion_tokens' => 10]),
+                    '[DONE]',
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    $toolCallEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof ToolCallEvent));
+    $toolResultEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof ToolResultEvent));
+    $streamEndEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd));
+
+    expect($toolCallEvents)->toHaveCount(2)
+        ->and($toolResultEvents)->toHaveCount(2)
+        ->and($streamEndEvents)->toHaveCount(1)
+        ->and($streamEndEvents[0]->reason)->toBe(FinishReason::Stop->value);
+});
