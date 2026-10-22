@@ -69,6 +69,26 @@ test('multiple inputs return multiple embeddings', function (): void {
         ->and($response->embeddings[1])->toBe([0.4, 0.5, 0.6]);
 });
 
+test('embeddings are returned in input order even when the response is shuffled', function (): void {
+    Http::fake(['*' => Http::response([
+        'object' => 'list',
+        'data' => [
+            ['object' => 'embedding', 'index' => 2, 'embedding' => [0.7, 0.8, 0.9]],
+            ['object' => 'embedding', 'index' => 0, 'embedding' => [0.1, 0.2, 0.3]],
+            ['object' => 'embedding', 'index' => 1, 'embedding' => [0.4, 0.5, 0.6]],
+        ],
+        'usage' => ['prompt_tokens' => 30],
+    ])]);
+
+    $response = Embeddings::for(['Hello', 'World', 'Again'])->generate(provider: 'openai', model: 'text-embedding-3-small');
+
+    expect($response->embeddings)->toBe([
+        [0.1, 0.2, 0.3],
+        [0.4, 0.5, 0.6],
+        [0.7, 0.8, 0.9],
+    ]);
+});
+
 test('embeddings request sends bearer token', function (): void {
     Http::fake(['*' => fakeOpenAiEmbeddingResponse()]);
 
