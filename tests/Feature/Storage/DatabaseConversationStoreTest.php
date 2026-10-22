@@ -1732,3 +1732,56 @@ test('provider tool calls are stored per step and exposed on the stored message 
         ->and($store->paginateConversationMessages($conversationId, 1)->items()[0]->providerToolCalls())->toBe([$search->toArray(), $execution->toArray()])
         ->and(ConversationMessage::query()->where('role', 'assistant')->first()->provider_tool_calls)->toBe([$search->toArray(), $execution->toArray()]);
 });
+
+
+test('latest conversation history selects recent timestamps even when message IDs sort differently', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Ordering test');
+
+    $ids = [
+        'ffffffff-ffff-7fff-8fff-ffffffffffff',
+        '11111111-1111-7111-8111-111111111111',
+        'aaaaaaaa-aaaa-7aaa-8aaa-aaaaaaaaaaaa',
+        '22222222-2222-7222-8222-222222222222',
+    ];
+
+    foreach ($ids as $index => $id) {
+        DB::table('agent_conversation_messages')->insert([
+            ...storedConversationMessageAttributes($id, $conversationId, "Message {$index}"),
+            'created_at' => now()->subMinutes(4 - $index),
+            'updated_at' => now()->subMinutes(4 - $index),
+        ]);
+    }
+
+    $messages = $store->getLatestConversationMessages($conversationId, 2);
+
+    expect($messages->pluck('content')->all())->toBe(['Message 2', 'Message 3']);
+});
+
+test('latest conversation history uses UUIDv7 order to break timestamp ties', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Timestamp ties');
+    $sameTimestamp = now()->startOfSecond();
+
+    $ids = [
+        '019c0000-0003-7000-8000-000000000001',
+        '019c0000-0001-7000-8000-000000000001',
+        '019c0000-0004-7000-8000-000000000001',
+        '019c0000-0002-7000-8000-000000000001',
+    ];
+
+    foreach ($ids as $index => $id) {
+        DB::table('agent_conversation_messages')->insert([
+            ...storedConversationMessageAttributes($id, $conversationId, "Tied {$id}"),
+            'created_at' => $sameTimestamp,
+            'updated_at' => $sameTimestamp,
+        ]);
+    }
+
+    $messages = $store->getLatestConversationMessages($conversationId, 2);
+
+    expect($messages->pluck('content')->all())->toBe([
+        'Tied 019c0000-0003-7000-8000-000000000001',
+        'Tied 019c0000-0004-7000-8000-000000000001',
+    ]);
+});
