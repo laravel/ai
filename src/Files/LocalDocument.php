@@ -5,12 +5,14 @@ namespace Laravel\Ai\Files;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Http\UploadedFile;
 use InvalidArgumentException;
+use RuntimeException;
 use JsonSerializable;
+use Laravel\Ai\Contracts\Files\HasStream;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
 use Laravel\Ai\Files\Concerns\HasLocalContent;
 
-class LocalDocument extends Document implements Arrayable, JsonSerializable, StorableFile
+class LocalDocument extends Document implements Arrayable, JsonSerializable, HasStream, StorableFile
 {
     use CanBeUploadedToProvider;
     use HasLocalContent;
@@ -34,6 +36,22 @@ class LocalDocument extends Document implements Arrayable, JsonSerializable, Sto
             $file->getClientMimeType(),
             $file,
         ))->as($file->getClientOriginalName());
+    }
+
+    /**
+     * Open the local document without loading it into PHP memory.
+     *
+     * @return resource
+     */
+    public function stream(): mixed
+    {
+        $stream = @fopen($this->path, 'rb');
+
+        if ($stream === false) {
+            throw new RuntimeException("File does not exist at path [{$this->path}]");
+        }
+
+        return $stream;
     }
 
     /**
