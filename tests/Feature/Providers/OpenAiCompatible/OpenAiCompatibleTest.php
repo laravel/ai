@@ -7,8 +7,11 @@ use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
+use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\NestedStructuredAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\ToolChoiceAgent;
@@ -340,6 +343,84 @@ function fakeOpenAiCompatibleResponse(string $content)
         ]],
         'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1],
     ]);
+}
+
+test('streaming runs a tool call that arrives without an index', function (): void {
+    Http::fakeSequence()
+        ->pushResponse(fakeOpenAiCompatibleToolCallStream(index: null, finish: 'tool_calls'))
+        ->pushResponse(fakeOpenAiCompatibleStream());
+
+    $events = collect((new MultiStepToolAgent)->stream('Generate', provider: 'openai-compatible'));
+
+    expect($events->filter(fn ($event): bool => $event instanceof ToolCallEvent))->toHaveCount(1)
+        ->and($events->filter(fn ($event): bool => $event instanceof ToolResultEvent))->toHaveCount(1);
+});
+
+test('streaming runs a tool call that finishes with stop', function (): void {
+    Http::fakeSequence()
+        ->pushResponse(fakeOpenAiCompatibleToolCallStream(index: 0, finish: 'stop'))
+        ->pushResponse(fakeOpenAiCompatibleStream());
+
+    $events = collect((new MultiStepToolAgent)->stream('Generate', provider: 'openai-compatible'));
+
+    expect($events->filter(fn ($event): bool => $event instanceof ToolCallEvent))->toHaveCount(1)
+        ->and($events->filter(fn ($event): bool => $event instanceof ToolResultEvent))->toHaveCount(1);
+});
+
+test('streaming runs two whole tool calls that arrive without an index', function (): void {
+    $chunk = fn (array $delta, ?string $finish = null): string => 'data: '.json_encode([
+        'id' => 'chatcmpl-123',
+        'object' => 'chat.completion.chunk',
+        'model' => 'local-model',
+        'choices' => [['index' => 0, 'delta' => $delta, 'finish_reason' => $finish]],
+    ]);
+
+    $call = fn (string $id): array => [
+        'id' => $id,
+        'type' => 'function',
+        'function' => ['name' => 'FixedNumberGenerator', 'arguments' => '{}'],
+    ];
+
+    $body = implode("\n\n", [
+        $chunk(['role' => 'assistant', 'tool_calls' => [$call('call_1')]]),
+        $chunk(['tool_calls' => [$call('call_2')]]),
+        $chunk([], 'tool_calls'),
+        'data: [DONE]',
+    ])."\n\n";
+
+    Http::fakeSequence()
+        ->pushResponse(Http::response($body, 200, ['Content-Type' => 'text/event-stream']))
+        ->pushResponse(fakeOpenAiCompatibleStream());
+
+    $events = collect((new MultiStepToolAgent)->stream('Generate', provider: 'openai-compatible'));
+
+    expect($events->filter(fn ($event): bool => $event instanceof ToolCallEvent))->toHaveCount(2)
+        ->and($events->filter(fn ($event): bool => $event instanceof ToolResultEvent))->toHaveCount(2);
+});
+
+function fakeOpenAiCompatibleToolCallStream(?int $index, string $finish)
+{
+    $chunk = fn (array $delta, ?string $finish = null): string => 'data: '.json_encode([
+        'id' => 'chatcmpl-123',
+        'object' => 'chat.completion.chunk',
+        'model' => 'local-model',
+        'choices' => [['index' => 0, 'delta' => $delta, 'finish_reason' => $finish]],
+    ]);
+
+    $call = fn (array $call): array => $index === null ? $call : ['index' => $index] + $call;
+
+    $body = implode("\n\n", [
+        $chunk(['role' => 'assistant', 'tool_calls' => [$call([
+            'id' => 'call_123',
+            'type' => 'function',
+            'function' => ['name' => 'FixedNumberGenerator', 'arguments' => ''],
+        ])]]),
+        $chunk(['tool_calls' => [$call(['function' => ['arguments' => '{}']])]]),
+        $chunk([], $finish),
+        'data: [DONE]',
+    ])."\n\n";
+
+    return Http::response($body, 200, ['Content-Type' => 'text/event-stream']);
 }
 
 function fakeOpenAiCompatibleStream()
