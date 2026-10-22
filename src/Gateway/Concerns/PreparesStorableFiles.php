@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Gateway\Concerns;
 
 use Closure;
-
 use Laravel\Ai\Contracts\Files\HasStream;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\HasProviderOptions;
@@ -15,7 +14,7 @@ trait PreparesStorableFiles
     /**
      * Prepare file data for upload.
      *
-     * @return array{mixed, string, string}
+     * @return array{resource|string, string, string}
      */
     protected function prepareStorableFile(StorableFile $file): array
     {
