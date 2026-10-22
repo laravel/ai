@@ -15,8 +15,10 @@ use Laravel\Ai\Files\LocalAudio;
 use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\LocalVideo;
+use Laravel\Ai\Files\ProviderAudio;
 use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Files\ProviderImage;
+use Laravel\Ai\Files\ProviderVideo;
 use Laravel\Ai\Files\RemoteAudio;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
@@ -52,6 +54,16 @@ trait MapsAttachments
                 'type' => 'image',
                 'uri' => $attachment->id,
             ],
+            $attachment instanceof ProviderAudio => array_filter([
+                'type' => 'audio',
+                'mime_type' => $attachment->mimeType(),
+                'uri' => $attachment->id,
+            ]),
+            $attachment instanceof ProviderVideo => array_filter([
+                'type' => 'video',
+                'mime_type' => $attachment->mimeType(),
+                'uri' => $attachment->id,
+            ]),
             $attachment instanceof Base64Image => [
                 'type' => 'image',
                 'mime_type' => $attachment->mime,

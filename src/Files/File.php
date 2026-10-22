@@ -38,6 +38,8 @@ abstract class File implements HasName, HasProviderOptions
             'stored-image' => new StoredImage(self::value($data, 'path', $type), $data['disk'] ?? null),
             'remote-image' => new RemoteImage(self::value($data, 'url', $type), $data['mime'] ?? null),
             'provider-image' => new ProviderImage(self::value($data, 'id', $type)),
+            'provider-audio' => new ProviderAudio(self::value($data, 'id', $type), $data['mime'] ?? null),
+            'provider-video' => new ProviderVideo(self::value($data, 'id', $type), $data['mime'] ?? null),
             'base64-document' => new Base64Document(self::value($data, 'base64', $type), $data['mime'] ?? null),
             'local-document' => new LocalDocument(self::value($data, 'path', $type), $data['mime'] ?? null),
             'stored-document' => new StoredDocument(self::value($data, 'path', $type), $data['disk'] ?? null),

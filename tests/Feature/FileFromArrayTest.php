@@ -1,5 +1,6 @@
 <?php
 
+use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Files\Base64Audio;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
@@ -9,8 +10,10 @@ use Laravel\Ai\Files\LocalAudio;
 use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\LocalVideo;
+use Laravel\Ai\Files\ProviderAudio;
 use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Files\ProviderImage;
+use Laravel\Ai\Files\ProviderVideo;
 use Laravel\Ai\Files\RemoteAudio;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
@@ -20,6 +23,7 @@ use Laravel\Ai\Files\StoredAudio;
 use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Files\StoredVideo;
+use Laravel\Ai\Files\Video;
 
 dataset('attachment types', [
     'base64-image' => [fn (): Base64Image => (new Base64Image('aGVsbG8=', 'image/png'))->as('hi.png'), Base64Image::class, ['base64' => 'aGVsbG8=', 'mime' => 'image/png']],
@@ -27,6 +31,10 @@ dataset('attachment types', [
     'stored-image' => [fn (): StoredImage => (new StoredImage('photos/a.png', 'local'))->as('a.png'), StoredImage::class, ['path' => 'photos/a.png', 'disk' => 'local']],
     'remote-image' => [fn (): RemoteImage => (new RemoteImage('https://x/y.png', 'image/png'))->as('y.png'), RemoteImage::class, ['url' => 'https://x/y.png', 'mime' => 'image/png']],
     'provider-image' => [fn (): ProviderImage => (new ProviderImage('file_img_1'))->as('img.png'), ProviderImage::class, ['id' => 'file_img_1']],
+    'provider-audio' => [fn (): ProviderAudio => Audio::fromId('https://example.com/files/audio_1', 'audio/mpeg')->as('clip.mp3'), ProviderAudio::class, ['id' => 'https://example.com/files/audio_1', 'mime' => 'audio/mpeg']],
+    'provider-audio without MIME' => [fn (): ProviderAudio => Audio::fromId('https://example.com/files/audio_1')->as('clip.mp3'), ProviderAudio::class, ['id' => 'https://example.com/files/audio_1', 'mime' => null]],
+    'provider-video' => [fn (): ProviderVideo => Video::fromId('https://example.com/files/video_1', 'video/mp4')->as('clip.mp4'), ProviderVideo::class, ['id' => 'https://example.com/files/video_1', 'mime' => 'video/mp4']],
+    'provider-video without MIME' => [fn (): ProviderVideo => Video::fromId('https://example.com/files/video_1')->as('clip.mp4'), ProviderVideo::class, ['id' => 'https://example.com/files/video_1', 'mime' => null]],
     'base64-document' => [fn (): Base64Document => (new Base64Document('aGVsbG8=', 'application/pdf'))->as('a.pdf'), Base64Document::class, ['base64' => 'aGVsbG8=', 'mime' => 'application/pdf']],
     'local-document' => [fn (): LocalDocument => (new LocalDocument('/tmp/a.pdf', 'application/pdf'))->as('a.pdf'), LocalDocument::class, ['path' => '/tmp/a.pdf', 'mime' => 'application/pdf']],
     'stored-document' => [fn (): StoredDocument => (new StoredDocument('docs/a.pdf', 'local'))->as('a.pdf'), StoredDocument::class, ['path' => 'docs/a.pdf', 'disk' => 'local']],
@@ -49,6 +57,8 @@ dataset('malformed attachment types', [
     'stored-image' => [['type' => 'stored-image'], 'path'],
     'remote-image' => [['type' => 'remote-image'], 'url'],
     'provider-image' => [['type' => 'provider-image'], 'id'],
+    'provider-audio without ID' => [['type' => 'provider-audio', 'mime' => 'audio/mpeg'], 'id'],
+    'provider-video without ID' => [['type' => 'provider-video', 'mime' => 'video/mp4'], 'id'],
     'base64-document' => [['type' => 'base64-document'], 'base64'],
     'local-document' => [['type' => 'local-document'], 'path'],
     'stored-document' => [['type' => 'stored-document'], 'path'],

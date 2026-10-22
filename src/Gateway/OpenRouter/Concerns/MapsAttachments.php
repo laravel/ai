@@ -14,8 +14,10 @@ use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\LocalImage;
+use Laravel\Ai\Files\ProviderAudio;
 use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Files\ProviderImage;
+use Laravel\Ai\Files\ProviderVideo;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
@@ -120,7 +122,9 @@ trait MapsAttachments
                     ],
                 ],
                 $attachment instanceof ProviderDocument,
-                $attachment instanceof ProviderImage => throw new InvalidArgumentException(
+                $attachment instanceof ProviderImage,
+                $attachment instanceof ProviderAudio,
+                $attachment instanceof ProviderVideo => throw new InvalidArgumentException(
                     'Provider-stored attachments are not supported by OpenRouter; uploaded files may only be loaded into a sandbox container by the shell tool.'
                 ),
                 default => throw new InvalidArgumentException('Unsupported attachment type ['.$attachment::class.']'),

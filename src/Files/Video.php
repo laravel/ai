@@ -15,6 +15,14 @@ abstract class Video extends File
     }
 
     /**
+     * Create a new provider video using the video with the given ID and MIME type.
+     */
+    public static function fromId(string $id, ?string $mimeType = null): ProviderVideo
+    {
+        return new ProviderVideo($id, $mimeType);
+    }
+
+    /**
      * Create a new video using the video at the given path.
      */
     public static function fromPath(string $path, ?string $mimeType = null): LocalVideo

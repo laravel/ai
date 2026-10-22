@@ -13,8 +13,10 @@ use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\LocalImage;
+use Laravel\Ai\Files\ProviderAudio;
 use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Files\ProviderImage;
+use Laravel\Ai\Files\ProviderVideo;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\S3Document;
@@ -44,7 +46,9 @@ trait MapsAttachments
                 'Remote attachments are not supported by Bedrock; download the file and pass it as a Base64, Local, or Stored attachment.'
             ),
             $attachment instanceof ProviderDocument,
-            $attachment instanceof ProviderImage => throw new InvalidArgumentException(
+            $attachment instanceof ProviderImage,
+            $attachment instanceof ProviderAudio,
+            $attachment instanceof ProviderVideo => throw new InvalidArgumentException(
                 'Provider-stored attachments are not supported by Bedrock.'
             ),
             default => throw new InvalidArgumentException('Unsupported attachment type ['.$attachment::class.'].'),

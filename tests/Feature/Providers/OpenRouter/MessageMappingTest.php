@@ -6,8 +6,10 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\LocalImage;
+use Laravel\Ai\Files\ProviderAudio;
 use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Files\ProviderImage;
+use Laravel\Ai\Files\ProviderVideo;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
@@ -170,6 +172,8 @@ test('provider stored attachments are rejected', function (mixed $attachment): v
 })->with([
     'document' => fn (): ProviderDocument => new ProviderDocument('or_file_abc123'),
     'image' => fn (): ProviderImage => new ProviderImage('or_file_abc123'),
+    'audio' => fn (): ProviderAudio => new ProviderAudio('or_file_abc123', 'audio/mpeg'),
+    'video' => fn (): ProviderVideo => new ProviderVideo('or_file_abc123', 'video/mp4'),
 ])->throws(
     InvalidArgumentException::class,
     'Provider-stored attachments are not supported by OpenRouter; uploaded files may only be loaded into a sandbox container by the shell tool.'
