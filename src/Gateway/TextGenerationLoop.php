@@ -4,8 +4,10 @@ namespace Laravel\Ai\Gateway;
 
 use Closure;
 use Generator;
+use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Laravel\Ai\Approvals\Approval;
 use Laravel\Ai\Approvals\Decision;
@@ -18,6 +20,7 @@ use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
+use Laravel\Ai\Exceptions\InvalidToolInputException;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Gateway\Concerns\HandlesToolApprovals;
@@ -37,6 +40,7 @@ use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
+use Laravel\Ai\Schema\SchemaRules;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
@@ -608,23 +612,59 @@ class TextGenerationLoop
             throw new ApprovalMismatchException('There are no tool calls pending approval.', collect());
         }
 
-        $incomplete = $gated->filter(function (ToolCall $toolCall) use ($approval, $approvals) {
-            $decision = $approval[$toolCall->id] ?? $approval['*'] ?? null;
-
-            return $decision?->isRejected() === false && array_diff(
-                $approvals[$toolCall->id]->requiredKeys(),
-                array_keys($decision->arguments ?? []),
-            ) !== [];
-        });
-
-        if ($incomplete->isNotEmpty()) {
-            throw new ApprovalMismatchException(
-                'Approval decisions are missing values the tool asked for.',
-                $this->pendingApprovalsFor($incomplete, $approvals),
-            );
-        }
+        $this->validateSubmittedInput($gated, $approval, $approvals, $resolvedTools);
 
         return [$pendingToolCalls, $resolvedTools];
+    }
+
+    /**
+     * Validate the arguments each decision runs its tool with against the input schema the tool declared.
+     *
+     * @param  Collection<int, ToolCall>  $gated
+     * @param  array<string, Decision>  $approval
+     * @param  Collection<string, ?Approval>  $approvals
+     * @param  Collection<string, ?Tool>  $tools
+     *
+     * @throws InvalidToolInputException
+     */
+    protected function validateSubmittedInput(Collection $gated, array $approval, Collection $approvals, Collection $tools): void
+    {
+        $errors = $gated->flatMap(function (ToolCall $toolCall) use ($approval, $approvals, $tools) {
+            $decision = $approval[$toolCall->id] ?? $approval['*'];
+            $tool = $tools[$toolCall->id];
+
+            if ($approvals[$toolCall->id]->schema === null || $decision->isRejected()) {
+                return [];
+            }
+
+            $arguments = $this->argumentsForDecision($decision, $toolCall, $tool);
+
+            $schema = $tool instanceof NeedsInput
+                ? $this->inputSchema($tool, new Request($arguments, $toolCall->id))
+                : $approvals[$toolCall->id]->schema;
+
+            return collect($this->inputValidator($schema, $arguments)->errors()->messages())
+                ->mapWithKeys(fn (array $messages, string $key) => ["{$toolCall->id}.{$key}" => $messages]);
+        });
+
+        if ($errors->isNotEmpty()) {
+            $invalid = $gated->filter(fn (ToolCall $toolCall) => $errors->keys()->contains(
+                fn (string $key) => str_starts_with($key, "{$toolCall->id}."),
+            ));
+
+            throw InvalidToolInputException::withPendingApprovals($errors->all(), $this->pendingApprovalsFor($invalid, $approvals));
+        }
+    }
+
+    /**
+     * Build a validator for the input values a tool declared, ignoring every other argument.
+     *
+     * @param  array<string, mixed>  $schema
+     * @param  array<string, mixed>  $arguments
+     */
+    protected function inputValidator(array $schema, array $arguments): ValidatorContract
+    {
+        return Validator::make(array_intersect_key($arguments, $schema['properties'] ?? []), SchemaRules::for($schema));
     }
 
     /**
@@ -644,20 +684,25 @@ class TextGenerationLoop
     }
 
     /**
-     * Get the input schema of a tool still missing values, or null once the call carries them all.
+     * Get the input schema of a tool whose call is missing values or carries invalid ones, or null once it carries them all.
      *
      * @return array<string, mixed>|null
      */
     protected function outstandingInput(NeedsInput $tool, Request $request): ?array
     {
-        $schema = (new ObjectSchema($tool->needsInput(new JsonSchemaTypeFactory, $request)))->toSchema();
+        $schema = $this->inputSchema($tool, $request);
 
-        $outstanding = array_filter(
-            $schema['required'] ?? [],
-            fn (string $key) => ($request[$key] ?? null) === null,
-        );
+        return $this->inputValidator($schema, $request->all())->fails() ? $schema : null;
+    }
 
-        return $outstanding === [] ? null : $schema;
+    /**
+     * Get the input schema a tool declares for the given request.
+     *
+     * @return array<string, mixed>
+     */
+    protected function inputSchema(NeedsInput $tool, Request $request): array
+    {
+        return (new ObjectSchema($tool->needsInput(new JsonSchemaTypeFactory, $request)))->toSchema();
     }
 
     /**

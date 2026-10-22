@@ -1,10 +1,12 @@
 <?php
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Validation\ValidationException;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
-use Laravel\Ai\Exceptions\ApprovalMismatchException;
+use Laravel\Ai\Exceptions\InvalidToolInputException;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Tests\Fixtures\Agents\InteractiveAgent;
@@ -61,6 +63,44 @@ test('a call already carrying the values runs without a round-trip', function ()
 
     expect($response->hasPendingApprovals())->toBeFalse()
         ->and($response->toolResults->sole()->result)->toBe('at: 48.85');
+});
+
+test('a call carrying a value outside the schema pauses instead of running', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(interactiveToolCall('InteractiveChoiceTool', [
+            'question' => 'Which plan?', 'options' => ['Basic', 'Pro'], 'answer' => 'Gold',
+        ])),
+    ]);
+
+    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+
+    expect($paused->toolResults)->toBeEmpty()
+        ->and($paused->pendingApprovals->sole()->isInteractive())->toBeTrue();
+});
+
+test('an invalid submission renders the pause again for JSON clients', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(interactiveToolCall('InteractiveChoiceTool', [
+            'question' => 'Which plan?', 'options' => ['Basic', 'Pro'],
+        ])),
+    ]);
+
+    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+
+    try {
+        (new RememberingInteractiveAgent)
+            ->continue($paused->conversationId, (object) ['id' => 1])
+            ->prompt(Decisions::from(['toolu_1' => Decision::submit(['answer' => 'Gold'])]), provider: 'anthropic');
+
+        $this->fail('The submission should have been refused.');
+    } catch (InvalidToolInputException $exception) {
+        $json = $exception->render(Request::create('/', 'POST', server: ['HTTP_ACCEPT' => 'application/json']));
+
+        expect($json->getStatusCode())->toBe(422)
+            ->and($json->getData(true)['errors'])->toBe(['toolu_1.answer' => ['The selected answer is invalid.']])
+            ->and($json->getData(true)['approvals'][0]['schema']['properties']['answer']['enum'])->toBe(['Basic', 'Pro'])
+            ->and($exception->render(Request::create('/', 'POST')))->toBeNull();
+    }
 });
 
 test('a null value counts as missing', function () {
@@ -154,7 +194,7 @@ test('a pause waiting on values refuses a bare approval', function () {
     (new RememberingInteractiveAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
         ->prompt(Decisions::from(['toolu_1' => true]), provider: 'anthropic');
-})->throws(ApprovalMismatchException::class, 'Approval decisions are missing values the tool asked for.');
+})->throws(ValidationException::class, 'The answer field is required.');
 
 test('a pause waiting on values refuses a wildcard approval', function () {
     Http::fake([
@@ -168,7 +208,7 @@ test('a pause waiting on values refuses a wildcard approval', function () {
     (new RememberingInteractiveAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
         ->prompt(Decision::approveAll(), provider: 'anthropic');
-})->throws(ApprovalMismatchException::class, 'Approval decisions are missing values the tool asked for.');
+})->throws(ValidationException::class, 'The answer field is required.');
 
 test('a pause waiting on values refuses a submission that skips one', function () {
     Http::fake([
@@ -182,7 +222,79 @@ test('a pause waiting on values refuses a submission that skips one', function (
     (new RememberingInteractiveAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
         ->prompt(Decisions::from(['toolu_1' => Decision::submit(['note' => 'later'])]), provider: 'anthropic');
-})->throws(ApprovalMismatchException::class, 'Approval decisions are missing values the tool asked for.');
+})->throws(ValidationException::class, 'The answer field is required.');
+
+test('a submission outside the schema is refused before the tool runs and the pause stays open', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence()
+            ->push(interactiveToolCall('InteractiveChoiceTool', ['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]))
+            ->push(interactiveText('Good choice.')),
+    ]);
+
+    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+
+    try {
+        (new RememberingInteractiveAgent)
+            ->continue($paused->conversationId, (object) ['id' => 1])
+            ->prompt(Decisions::from(['toolu_1' => Decision::submit(['answer' => 'Gold'])]), provider: 'anthropic');
+
+        $this->fail('The submission should have been refused.');
+    } catch (ValidationException $exception) {
+        expect($exception->errors())->toBe(['toolu_1.answer' => ['The selected answer is invalid.']]);
+    }
+
+    Http::assertSentCount(1);
+
+    $resumed = (new RememberingInteractiveAgent)
+        ->continue($paused->conversationId, (object) ['id' => 1])
+        ->prompt(Decisions::from(['toolu_1' => Decision::submit(['answer' => 'Pro'])]), provider: 'anthropic');
+
+    expect($resumed->toolResults->firstWhere('id', 'toolu_1')->result)->toBe('chose: Pro');
+});
+
+test('a submitted null counts as missing', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(interactiveToolCall('InteractiveChoiceTool', [
+            'question' => 'Which plan?', 'options' => ['Basic', 'Pro'],
+        ])),
+    ]);
+
+    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+
+    (new RememberingInteractiveAgent)
+        ->continue($paused->conversationId, (object) ['id' => 1])
+        ->prompt(Decisions::from(['toolu_1' => Decision::submit(['answer' => null])]), provider: 'anthropic');
+})->throws(ValidationException::class, 'The answer field is required.');
+
+test('an edit is held to the same input schema as a submission', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(interactiveToolCall('InteractiveChoiceTool', [
+            'question' => 'Which plan?', 'options' => ['Basic', 'Pro'],
+        ])),
+    ]);
+
+    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+
+    (new RememberingInteractiveAgent)
+        ->continue($paused->conversationId, (object) ['id' => 1])
+        ->prompt(Decisions::from(['toolu_1' => Decision::edit([
+            'question' => 'Which plan?', 'options' => ['Basic', 'Pro'], 'answer' => 'Gold',
+        ])]), provider: 'anthropic');
+})->throws(ValidationException::class, 'The selected answer is invalid.');
+
+test('a streamed resume refuses an invalid submission before the stream starts', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(interactiveToolCall('InteractiveChoiceTool', [
+            'question' => 'Which plan?', 'options' => ['Basic', 'Pro'],
+        ])),
+    ]);
+
+    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+
+    (new RememberingInteractiveAgent)
+        ->continue($paused->conversationId, (object) ['id' => 1])
+        ->stream(Decisions::from(['toolu_1' => Decision::submit(['answer' => 'Gold'])]), provider: 'anthropic');
+})->throws(ValidationException::class, 'The selected answer is invalid.');
 
 test('a pause waiting on values may still be rejected', function () {
     Http::fake([

@@ -23,14 +23,4 @@ class Approval
     {
         return new self($reason, data: $data);
     }
-
-    /**
-     * Get the keys a submission must provide.
-     *
-     * @return array<int, string>
-     */
-    public function requiredKeys(): array
-    {
-        return $this->schema['required'] ?? [];
-    }
 }
