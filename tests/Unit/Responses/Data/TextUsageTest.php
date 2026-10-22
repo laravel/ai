@@ -9,7 +9,16 @@ test('usage defaults to zero tokens and unreported details', function (): void {
         ->and($usage->outputTokens)->toBe(0)
         ->and($usage->cacheReadInputTokens)->toBeNull()
         ->and($usage->cacheWriteInputTokens)->toBeNull()
-        ->and($usage->reasoningTokens)->toBeNull();
+        ->and($usage->reasoningTokens)->toBeNull()
+        ->and($usage->cost)->toBeNull();
+});
+
+test('provider reported costs survive serialization and aggregate across steps', function (): void {
+    $usage = new TextUsage(100, 50, cost: 0.000019992);
+
+    expect(TextUsage::fromArray($usage->toArray())->cost)->toBe(0.000019992)
+        ->and($usage->add(new TextUsage(40, 20, cost: 0.00001))->cost)->toBe(0.000029992)
+        ->and((new TextUsage)->add(new TextUsage)->cost)->toBeNull();
 });
 
 test('usage derives totals from the inclusive input and output counts', function (): void {
@@ -53,5 +62,6 @@ test('usage to array serializes every count', function (): void {
         'cache_read_input_tokens' => 10,
         'cache_write_input_tokens' => 25,
         'reasoning_tokens' => null,
+        'cost' => null,
     ])->and($usage->jsonSerialize())->toBe($usage->toArray());
 });
