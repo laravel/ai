@@ -1785,3 +1785,47 @@ test('latest conversation history uses UUIDv7 order to break timestamp ties', fu
         'Tied 019c0000-0004-7000-8000-000000000001',
     ]);
 });
+
+
+test('latest conversation lookup follows message chronology instead of UUID collation', function (): void {
+    $store = new DatabaseConversationStore;
+    $older = $store->storeConversation('user', 1, 'Older');
+    $newer = $store->storeConversation('user', 1, 'Newer');
+
+    DB::table('agent_conversation_messages')->insert([
+        ...storedConversationMessageAttributes('ffffffff-ffff-7fff-8fff-ffffffffffff', $older, 'Older message'),
+        'created_at' => now()->subMinutes(2),
+        'updated_at' => now()->subMinutes(2),
+    ]);
+
+    DB::table('agent_conversation_messages')->insert([
+        ...storedConversationMessageAttributes('11111111-1111-7111-8111-111111111111', $newer, 'Newer message'),
+        'created_at' => now()->subMinute(),
+        'updated_at' => now()->subMinute(),
+    ]);
+
+    expect($store->latestConversationId('user', 1, ToolUsingAgent::class))->toBe($newer);
+});
+
+test('pending approval lookup uses the newest turn instead of the greatest UUID', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Approvals');
+
+    insertPausedConversationTurn($conversationId, 'ffffffff-ffff-7fff-8fff-ffffffffffff', [
+        ['id' => 'old-call', 'name' => 'DeleteFile', 'arguments' => []],
+    ], ['old-call' => 'Previous request']);
+
+    insertPausedConversationTurn($conversationId, '11111111-1111-7111-8111-111111111111', [
+        ['id' => 'new-call', 'name' => 'DeleteFile', 'arguments' => []],
+    ], ['new-call' => 'Newest request']);
+
+    DB::table('agent_conversation_messages')
+        ->where('id', 'ffffffff-ffff-7fff-8fff-ffffffffffff')
+        ->update(['created_at' => now()->subMinutes(2)]);
+
+    DB::table('agent_conversation_messages')
+        ->where('id', '11111111-1111-7111-8111-111111111111')
+        ->update(['created_at' => now()->subMinute()]);
+
+    expect(collect($store->pendingApprovalsFor($conversationId))->pluck('id')->all())->toBe(['new-call']);
+});
