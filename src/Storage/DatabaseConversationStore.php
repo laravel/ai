@@ -49,12 +49,14 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     public function latestConversationId(string $participantType, string|int $participantId, string $agent): ?string
     {
-        return $this->table($this->messagesTable())
-            ->where('participant_type', $participantType)
-            ->where('participant_id', $participantId)
-            ->where('agent', $agent)
-            ->orderByDesc('id')
-            ->value('conversation_id');
+        return $this->latestMessageRecords(
+            $this->table($this->messagesTable())
+                ->select(['id', 'created_at', 'conversation_id'])
+                ->where('participant_type', $participantType)
+                ->where('participant_id', $participantId)
+                ->where('agent', $agent),
+            1,
+        )->first()?->conversation_id;
     }
 
     /**
@@ -187,16 +189,17 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     {
         $decided = array_keys($prompt->approvalDecisions->all());
 
-        $named = $this->assistantRows($conversationId)
-            ->where('status', MessageStatus::Paused)
-            ->get()
-            ->first(fn (object $record): bool => array_intersect($this->gatedCallIds($record), $decided) !== []);
+        $named = $this->newestFirstRecords(
+            $this->assistantRows($conversationId)
+                ->where('status', MessageStatus::Paused)
+                ->get(),
+        )->first(fn (object $record): bool => array_intersect($this->gatedCallIds($record), $decided) !== []);
 
         if ($named !== null) {
             return $named;
         }
 
-        $newest = $this->assistantRows($conversationId)->first();
+        $newest = $this->latestMessageRecords($this->assistantRows($conversationId), 1)->first();
 
         return $newest === null || MessageStatus::from($newest->status) !== MessageStatus::Paused ? null : $newest;
     }
@@ -443,17 +446,58 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     public function getLatestConversationMessages(string $conversationId, int $limit): Collection
     {
-        $records = $this->table($this->messagesTable())
-            ->where('conversation_id', $conversationId)
-            ->orderByDesc('id')
-            ->limit($limit)
-            ->get()
-            ->reverse()
-            ->values();
+        $records = $this->latestMessageRecords(
+            $this->table($this->messagesTable())->where('conversation_id', $conversationId),
+            $limit,
+        )->reverse()->values();
 
         return $records->flatMap(fn (object $record): array => $record->role === 'user'
             ? [$this->userMessageFrom($record)]
             : $this->assistantTurnFrom($record));
+    }
+
+    /**
+     * Select the latest rows without relying on the database's UUID string collation.
+     *
+     * Timestamps narrow the query to the latest window; UUIDv7 IDs sort rows
+     * within the same timestamp in PHP, so a non-binary database collation
+     * cannot exclude a newer message when applying the limit.
+     *
+     * @return Collection<int, object>
+     */
+    protected function latestMessageRecords(Builder $query, int $limit): Collection
+    {
+        if ($limit <= 0) {
+            return collect();
+        }
+
+        $records = (clone $query)->orderByDesc('created_at')->limit($limit)->get();
+
+        if ($records->isEmpty()) {
+            return $records;
+        }
+
+        $boundary = $records->last()->created_at;
+
+        // The limit can split rows sharing a timestamp. Fetch that complete
+        // timestamp group before applying the collation-independent tie break.
+        $atBoundary = (clone $query)->where('created_at', $boundary)->get();
+
+        return $this->newestFirstRecords(
+            $records->filter(fn (object $record): bool => strcmp((string) $record->created_at, (string) $boundary) > 0)
+                ->concat($atBoundary),
+        )->take($limit)->values();
+    }
+
+    /**
+     * Order already-loaded message rows by timestamp, then binary UUID value.
+     *
+     * @return Collection<int, object>
+     */
+    protected function newestFirstRecords(Collection $records): Collection
+    {
+        return $records->sort(fn (object $a, object $b): int => strcmp((string) $b->created_at, (string) $a->created_at)
+            ?: strcmp((string) $b->id, (string) $a->id))->values();
     }
 
     /**
@@ -562,10 +606,12 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     public function pendingApprovalsFor(string $conversationId): array
     {
-        $newest = $this->table($this->messagesTable())
-            ->where('conversation_id', $conversationId)
-            ->orderByDesc('id')
-            ->first(['role', 'steps', 'status']);
+        $newest = $this->latestMessageRecords(
+            $this->table($this->messagesTable())
+                ->select(['id', 'created_at', 'role', 'steps', 'status'])
+                ->where('conversation_id', $conversationId),
+            1,
+        )->first();
 
         return $newest === null || $newest->role !== 'assistant' || MessageStatus::from($newest->status) !== MessageStatus::Paused
             ? []
@@ -617,10 +663,12 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         $resultIds = array_map(fn (ToolResult $result) => $result->id, $toolResults);
 
         DB::connection($this->connection)->transaction(function () use ($conversationId, $toolResults, $resultIds) {
-            $paused = $this->assistantRows($conversationId)
-                ->where('status', MessageStatus::Paused)
-                ->lockForUpdate()
-                ->get();
+            $paused = $this->newestFirstRecords(
+                $this->assistantRows($conversationId)
+                    ->where('status', MessageStatus::Paused)
+                    ->lockForUpdate()
+                    ->get(),
+            );
 
             $row = $paused->first(fn ($record) => array_intersect($this->pausedCallIds($record), $resultIds) !== []);
 
@@ -659,8 +707,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     {
         return $this->table($this->messagesTable())
             ->where('conversation_id', $conversationId)
-            ->where('role', 'assistant')
-            ->orderByDesc('id');
+            ->where('role', 'assistant');
     }
 
     /**
