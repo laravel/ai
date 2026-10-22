@@ -108,6 +108,8 @@ test('decisions response is parsed into typed answers', function (): void {
         ->and($response['urgency']->level())->toBe(2)
         ->and($response['urgency']->label())->toBe('Blocking revenue')
         ->and($response->usage->inputTokens)->toBe(312)
+        ->and($response->usage->cost)->toBe(0.000013)
+        ->and($response->usage->toArray()['cost'])->toBe(0.000013)
         ->and($response->meta->provider)->toBe('openrouter')
         ->and($response->meta->model)->toBe('typesafe/jev-1.13');
 });
@@ -147,7 +149,8 @@ test('answers without the optional distribution fields fall back to the question
         ])
         ->classify(provider: 'openrouter');
 
-    expect($response['department']->probabilities)->toBe([])
+    expect($response->usage->cost)->toBeNull()
+        ->and($response['department']->probabilities)->toBe([])
         ->and($response['department']->probabilityOf('payments'))->toBe(0.0)
         ->and($response['department']->confidence)->toBeNull()
         ->and($response['urgency']->probabilities)->toBe([])

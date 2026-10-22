@@ -65,6 +65,7 @@ trait AnswersQuestions
             new TextUsage(
                 inputTokens: $data['usage']['input_tokens'] ?? 0,
                 outputTokens: $data['usage']['output_tokens'] ?? 0,
+                cost: isset($data['usage']['cost']) ? (float) $data['usage']['cost'] : null,
             ),
             new Meta($provider->name(), $this->answeringModel($data, $model)),
         );
