@@ -551,7 +551,7 @@ test('a resume folds its steps, text and usage into the paused row', function ()
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Approval conversation');
 
-    insertAssistantTurn($conversationId, 'paused-1', '', [
+    insertAssistantTurn($conversationId, 'paused-1', 'Let me check.', [
         assistantStep(
             [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []]],
             [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => [], 'result' => 'Deleted', 'result_id' => null]],
@@ -577,7 +577,7 @@ test('a resume folds its steps, text and usage into the paused row', function ()
     $row = DB::table('agent_conversation_messages')->where('role', 'assistant')->sole();
 
     expect($messageId)->toBe('paused-1')
-        ->and($row->content)->toBe('Done.')
+        ->and($row->content)->toBe("Let me check.\n\nDone.")
         ->and($row->steps)->json()->toHaveCount(2)->{'1'}->content->toBe('Done.')
         ->and($row->usage)->json()->toMatchArray(['input_tokens' => 30, 'output_tokens' => 12])
         ->and($row->meta)->json()->toMatchArray(['provider' => 'openai', 'model' => 'gpt-5']);
