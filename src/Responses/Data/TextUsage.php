@@ -10,6 +10,7 @@ readonly class TextUsage extends Usage
      * @param  int|null  $cacheReadInputTokens  Subset of the input tokens read from a prompt cache, or null when unreported.
      * @param  int|null  $cacheWriteInputTokens  Subset of the input tokens written to a prompt cache, or null when unreported.
      * @param  int|null  $reasoningTokens  Subset of the output tokens spent on reasoning, or null when unreported.
+     * @param  float|null  $cost  Provider-reported cost in USD, or null when unreported.
      */
     public function __construct(
         int $inputTokens = 0,
@@ -17,6 +18,7 @@ readonly class TextUsage extends Usage
         public ?int $cacheReadInputTokens = null,
         public ?int $cacheWriteInputTokens = null,
         public ?int $reasoningTokens = null,
+        public ?float $cost = null,
     ) {
         parent::__construct($inputTokens, $outputTokens);
     }
@@ -34,6 +36,7 @@ readonly class TextUsage extends Usage
             cacheReadInputTokens: $data['cache_read_input_tokens'] ?? null,
             cacheWriteInputTokens: $data['cache_write_input_tokens'] ?? null,
             reasoningTokens: $data['reasoning_tokens'] ?? null,
+            cost: $data['cost'] ?? null,
         );
     }
 
@@ -56,6 +59,9 @@ readonly class TextUsage extends Usage
             static::sum($this->cacheReadInputTokens, $usage->cacheReadInputTokens),
             static::sum($this->cacheWriteInputTokens, $usage->cacheWriteInputTokens),
             static::sum($this->reasoningTokens, $usage->reasoningTokens),
+            $this->cost === null && $usage->cost === null
+                ? null
+                : ($this->cost ?? 0.0) + ($usage->cost ?? 0.0),
         );
     }
 
@@ -77,6 +83,7 @@ readonly class TextUsage extends Usage
             'cache_read_input_tokens' => $this->cacheReadInputTokens,
             'cache_write_input_tokens' => $this->cacheWriteInputTokens,
             'reasoning_tokens' => $this->reasoningTokens,
+            'cost' => $this->cost,
         ];
     }
 }
