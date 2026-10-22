@@ -209,6 +209,28 @@ test('a stored run reports the row it wrote for the prompt', function () {
         ->and($response->userMessageId)->not->toBe($response->assistantMessageId);
 });
 
+test('a stored run also reports its message ids in the run finished metadata', function () {
+    RememberingAssistantAgent::fake(['Fake response']);
+
+    $user = new class
+    {
+        public int $id = 1;
+    };
+
+    $response = (new RememberingAssistantAgent)->forUser($user)->stream('Hello');
+
+    $events = agUiEvents($response->usingProtocol(new AgentUserInteractionProtocol)->toResponse(request()));
+    $finished = end($events);
+
+    expect($finished['metadata'])->toBe([
+        'finishReason' => 'stop',
+        'messageId' => $response->assistantMessageId,
+        'userMessageId' => $response->userMessageId,
+    ])
+        ->and($finished['messageId'])->toBe($response->assistantMessageId)
+        ->and($finished['userMessageId'])->toBe($response->userMessageId);
+});
+
 test('a stream that persists nothing omits the message id', function () {
     $events = agUiProtocolEvents([
         new TextStart('event-1', 'msg-1', time()),
