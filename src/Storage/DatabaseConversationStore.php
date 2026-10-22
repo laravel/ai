@@ -443,17 +443,50 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     public function getLatestConversationMessages(string $conversationId, int $limit): Collection
     {
-        $records = $this->table($this->messagesTable())
-            ->where('conversation_id', $conversationId)
-            ->orderByDesc('id')
-            ->limit($limit)
-            ->get()
-            ->reverse()
-            ->values();
+        $records = $this->latestMessageRecords(
+            $this->table($this->messagesTable())->where('conversation_id', $conversationId),
+            $limit,
+        )->reverse()->values();
 
         return $records->flatMap(fn (object $record): array => $record->role === 'user'
             ? [$this->userMessageFrom($record)]
             : $this->assistantTurnFrom($record));
+    }
+
+    /**
+     * Select the latest rows without relying on the database's UUID string collation.
+     *
+     * Timestamps narrow the query to the latest window; UUIDv7 IDs sort rows
+     * within the same timestamp in PHP, so a non-binary database collation
+     * cannot exclude a newer message when applying the limit.
+     *
+     * @return Collection<int, object>
+     */
+    protected function latestMessageRecords(Builder $query, int $limit): Collection
+    {
+        if ($limit <= 0) {
+            return collect();
+        }
+
+        $records = (clone $query)->orderByDesc('created_at')->limit($limit)->get();
+
+        if ($records->isEmpty()) {
+            return $records;
+        }
+
+        $boundary = $records->last()->created_at;
+
+        // The limit can split rows sharing a timestamp. Fetch that complete
+        // timestamp group before applying the collation-independent tie break.
+        $atBoundary = (clone $query)->where('created_at', $boundary)->get();
+
+        return $records
+            ->filter(fn (object $record): bool => strcmp((string) $record->created_at, (string) $boundary) > 0)
+            ->concat($atBoundary)
+            ->sort(fn (object $a, object $b): int => strcmp((string) $b->created_at, (string) $a->created_at)
+                ?: strcmp((string) $b->id, (string) $a->id))
+            ->take($limit)
+            ->values();
     }
 
     /**
