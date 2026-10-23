@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Event;
@@ -10,6 +11,9 @@ use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\AgentFailedOver;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\AgentStreamed;
+use Laravel\Ai\Events\ConversationTitleFailed;
+use Laravel\Ai\Events\ConversationTitleGenerated;
+use Laravel\Ai\Events\GeneratingConversationTitle;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\StartingStep;
@@ -39,8 +43,10 @@ use Tests\Fixtures\Agents\OrchestratorAgent;
 use Tests\Fixtures\Agents\RateLimitedToolAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
 use Tests\Fixtures\Agents\RememberingThrowingApprovableAgent;
+use Tests\Fixtures\Agents\RememberingToolUsingAgent;
 use Tests\Fixtures\Agents\ResearchAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+use Tests\Fixtures\ConversationStores\InMemoryConversationStore;
 use Tests\Fixtures\FakeConversationStore;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
@@ -231,6 +237,102 @@ test('conversation title generation does not report steps against the run that t
 
     Event::assertDispatched(StartingStep::class, fn (StartingStep $event): bool => $event->invocationId === $response->invocationId
         && $event->stepNumber === 0);
+});
+
+describe('conversation title events', function (): void {
+    beforeEach(function (): void {
+        app()->instance(ConversationStore::class, $this->store = new InMemoryConversationStore);
+
+        config(['ai.providers.groq' => [...config('ai.providers.groq'), 'key' => 'test-key']]);
+
+        Event::fake();
+
+        Http::preventStrayRequests();
+    });
+
+    test('conversation title generation dispatches its own events', function (): void {
+        Http::fakeSequence()
+            ->pushResponse(fakeGroqResponse('Hello there.'))
+            ->pushResponse(fakeGroqResponse('Greeting Conversation'));
+
+        $response = (new RememberingAssistantAgent)->forUser((object) ['id' => 1])->prompt('Hello', provider: 'groq');
+
+        Event::assertDispatchedTimes(GeneratingConversationTitle::class, 1);
+        Event::assertDispatchedTimes(ConversationTitleGenerated::class, 1);
+
+        $generating = Event::dispatched(GeneratingConversationTitle::class)->first()[0];
+        $generated = Event::dispatched(ConversationTitleGenerated::class)->first()[0];
+
+        // The title call is reported as its own invocation, linked to the run and conversation that caused it...
+        expect($generating->invocationId)->not->toBe($response->invocationId)
+            ->and($generating->parentInvocationId)->toBe($response->invocationId)
+            ->and($generating->conversationId)->toBe($response->conversationId)
+            ->and($generating->provider->name())->toBe('groq')
+            ->and($generating->model)->toBe('openai/gpt-oss-20b')
+            ->and($generating->prompt)->toBe('Hello');
+
+        expect($generated->invocationId)->toBe($generating->invocationId)
+            ->and($generated->response->text)->toBe('Greeting Conversation')
+            ->and($generated->response->usage->inputTokens)->toBe(1)
+            ->and($generated->time)->toBeGreaterThan(0);
+    });
+
+    test('a failed conversation title call dispatches a failure event and falls back to the prompt', function (): void {
+        Http::fakeSequence()
+            ->pushResponse(fakeGroqResponse('Hello there.'))
+            ->push(status: 500);
+
+        $response = (new RememberingAssistantAgent)->forUser((object) ['id' => 1])->prompt('Hello', provider: 'groq');
+
+        expect($response->text)->toBe('Hello there.')
+            ->and($this->store->conversations[$response->conversationId]['title'])->toBe('Hello');
+
+        Event::assertDispatchedTimes(ConversationTitleFailed::class, 1);
+        Event::assertNotDispatched(ConversationTitleGenerated::class);
+        Event::assertNotDispatched(AgentFailed::class);
+
+        $generating = Event::dispatched(GeneratingConversationTitle::class)->first()[0];
+        $failed = Event::dispatched(ConversationTitleFailed::class)->first()[0];
+
+        expect($failed->invocationId)->toBe($generating->invocationId)
+            ->and($failed->parentInvocationId)->toBe($response->invocationId)
+            ->and($failed->conversationId)->toBe($response->conversationId)
+            ->and($failed->provider->name())->toBe('groq')
+            ->and($failed->model)->toBe('openai/gpt-oss-20b')
+            ->and($failed->prompt)->toBe('Hello')
+            ->and($failed->exception)->toBeInstanceOf(RequestException::class)
+            ->and($failed->time)->toBeGreaterThan(0);
+    });
+
+    test('a turn that fails after a step reports its title call against the failed run', function (): void {
+        Http::fakeSequence()
+            ->pushResponse(fakeGroqToolCallResponse())
+            ->push(status: 500)
+            ->pushResponse(fakeGroqResponse('Number Report'));
+
+        expect(fn () => (new RememberingToolUsingAgent)->forUser((object) ['id' => 1])->prompt('Generate a number', provider: 'groq'))
+            ->toThrow(RequestException::class);
+
+        $failedRun = Event::dispatched(AgentFailed::class)->first()[0];
+
+        Event::assertDispatchedTimes(GeneratingConversationTitle::class, 1);
+
+        Event::assertDispatched(ConversationTitleGenerated::class, fn (ConversationTitleGenerated $event): bool => $event->parentInvocationId === $failedRun->invocationId
+            && $event->invocationId !== $failedRun->invocationId
+            && $event->response->text === 'Number Report');
+    });
+
+    test('disabled conversation title generation makes no title call and dispatches no title events', function (): void {
+        config(['ai.conversations.generate_title' => false]);
+
+        Http::fakeSequence()->pushResponse(fakeGroqResponse('Hello there.'));
+
+        (new RememberingAssistantAgent)->forUser((object) ['id' => 1])->prompt('Hello', provider: 'groq');
+
+        Http::assertSentCount(1);
+
+        Event::assertNotDispatched(GeneratingConversationTitle::class);
+    });
 });
 
 test('step events are dispatched on the streaming path', function (): void {
