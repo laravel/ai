@@ -627,6 +627,8 @@ class TextGenerationLoop
      */
     protected function earlyStepToolResults(StepResponse $result): ?array
     {
+        $this->ensureValidToolCallIds($result->toolCalls);
+
         if (filled($result->pendingApprovals)) {
             return [[], collect($result->pendingApprovals)];
         }
