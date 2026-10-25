@@ -131,6 +131,7 @@ trait ParsesTextResponses
             cacheReadInputTokens: $usage['prompt_tokens_details']['cached_tokens'] ?? null,
             cacheWriteInputTokens: $usage['prompt_tokens_details']['cache_write_tokens'] ?? null,
             reasoningTokens: $usage['completion_tokens_details']['reasoning_tokens'] ?? null,
+            cost: isset($usage['cost']) ? (float) $usage['cost'] : null,
         );
     }
 

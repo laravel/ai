@@ -28,6 +28,7 @@ function fakeOpenRouterImageResponse(string $mimeType = 'image/png', string $con
         'usage' => [
             'prompt_tokens' => 10,
             'completion_tokens' => 20,
+            'cost' => 0.0002,
         ],
     ]);
 }
@@ -115,7 +116,8 @@ test('usage tokens are parsed from response', function (): void {
     $response = Image::of('A blue circle')->generate(provider: 'openrouter', model: 'google/gemini-2.5-flash-image');
 
     expect($response->usage->inputTokens)->toBe(10)
-        ->and($response->usage->outputTokens)->toBe(20);
+        ->and($response->usage->outputTokens)->toBe(20)
+        ->and($response->usage->cost)->toBe(0.0002);
 });
 
 test('multiple images in response are all returned', function (): void {

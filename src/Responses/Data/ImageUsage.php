@@ -7,6 +7,7 @@ readonly class ImageUsage extends TextUsage
     /**
      * @param  int|null  $imageInputTokens  Subset of the input tokens billed for images, or null when unreported.
      * @param  int|null  $imageOutputTokens  Subset of the output tokens billed for generated images, or null when unreported.
+     * @param  float|null  $cost  Provider-reported cost in USD, or null when unreported.
      */
     public function __construct(
         int $inputTokens = 0,
@@ -16,8 +17,9 @@ readonly class ImageUsage extends TextUsage
         ?int $reasoningTokens = null,
         public ?int $imageInputTokens = null,
         public ?int $imageOutputTokens = null,
+        ?float $cost = null,
     ) {
-        parent::__construct($inputTokens, $outputTokens, $cacheReadInputTokens, $cacheWriteInputTokens, $reasoningTokens);
+        parent::__construct($inputTokens, $outputTokens, $cacheReadInputTokens, $cacheWriteInputTokens, $reasoningTokens, $cost);
     }
 
     /**

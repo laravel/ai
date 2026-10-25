@@ -6,6 +6,7 @@ readonly class TranscriptionUsage extends TextUsage
 {
     /**
      * @param  float|null  $audioSeconds  Duration of the transcribed audio in seconds, or null when unreported.
+     * @param  float|null  $cost  Provider-reported cost in USD, or null when unreported.
      */
     public function __construct(
         int $inputTokens = 0,
@@ -14,8 +15,9 @@ readonly class TranscriptionUsage extends TextUsage
         ?int $cacheWriteInputTokens = null,
         ?int $reasoningTokens = null,
         public ?float $audioSeconds = null,
+        ?float $cost = null,
     ) {
-        parent::__construct($inputTokens, $outputTokens, $cacheReadInputTokens, $cacheWriteInputTokens, $reasoningTokens);
+        parent::__construct($inputTokens, $outputTokens, $cacheReadInputTokens, $cacheWriteInputTokens, $reasoningTokens, $cost);
     }
 
     /**
@@ -30,6 +32,7 @@ readonly class TranscriptionUsage extends TextUsage
             $usage->cacheWriteInputTokens,
             $usage->reasoningTokens,
             $audioSeconds,
+            $usage->cost,
         );
     }
 

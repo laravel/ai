@@ -167,7 +167,7 @@ test('streaming captures usage from final chunk', function (): void {
         '*' => Http::response($this->ssePayload([
             ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'content' => 'Hi'], 'finish_reason' => null]]],
             ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'stop']]],
-            ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [], 'usage' => ['prompt_tokens' => 15, 'completion_tokens' => 3]],
+            ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [], 'usage' => ['prompt_tokens' => 15, 'completion_tokens' => 3, 'cost' => 0.0008]],
         ])),
     ]);
 
@@ -179,7 +179,8 @@ test('streaming captures usage from final chunk', function (): void {
     $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd));
     expect($streamEnd)->toHaveCount(1)
         ->and($streamEnd[0]->usage->inputTokens)->toBe(15)
-        ->and($streamEnd[0]->usage->outputTokens)->toBe(3);
+        ->and($streamEnd[0]->usage->outputTokens)->toBe(3)
+        ->and($streamEnd[0]->usage->cost)->toBe(0.0008);
 });
 
 test('streaming reports cached tokens within the input token count', function (): void {

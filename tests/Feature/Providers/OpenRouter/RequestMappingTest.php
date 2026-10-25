@@ -239,13 +239,15 @@ test('response usage is correctly parsed', function (): void {
         'usage' => [
             'prompt_tokens' => 10,
             'completion_tokens' => 5,
+            'cost' => 0.0005,
         ],
     ])]);
 
     $response = agent()->prompt('Hello', provider: 'openrouter');
 
     expect($response->usage->inputTokens)->toBe(10)
-        ->and($response->usage->outputTokens)->toBe(5);
+        ->and($response->usage->outputTokens)->toBe(5)
+        ->and($response->usage->cost)->toBe(0.0005);
 });
 
 test('response usage includes cache and reasoning tokens', function (): void {
@@ -277,7 +279,8 @@ test('response usage includes cache and reasoning tokens', function (): void {
         ->and($response->usage->outputTokens)->toBe(50)
         ->and($response->usage->cacheReadInputTokens)->toBe(20)
         ->and($response->usage->cacheWriteInputTokens)->toBe(30)
-        ->and($response->usage->reasoningTokens)->toBe(10);
+        ->and($response->usage->reasoningTokens)->toBe(10)
+        ->and($response->usage->cost)->toBeNull();
 });
 
 test('structured response is correctly parsed', function (): void {

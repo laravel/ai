@@ -167,7 +167,8 @@ test('transcription usage is correctly parsed', function (): void {
     $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openrouter');
 
     expect($response->usage->inputTokens)->toBe(100)
-        ->and($response->usage->outputTokens)->toBe(50);
+        ->and($response->usage->outputTokens)->toBe(50)
+        ->and($response->usage->cost)->toBe(0.0005);
 });
 
 test('transcription request sends bearer token', function (): void {
@@ -239,5 +240,6 @@ test('transcription leaves the audio duration null when not returned', function 
     $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'openrouter', model: 'openai/whisper-1');
 
-    expect($response->usage->audioSeconds)->toBeNull();
+    expect($response->usage->audioSeconds)->toBeNull()
+        ->and($response->usage->cost)->toBeNull();
 });
