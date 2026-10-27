@@ -103,7 +103,7 @@ test('the model asks, the user picks several options and types one of their own'
 
     $pending = $paused->pendingApprovals->sole();
 
-    expect($pending->isInteractive())->toBeTrue()
+    expect($pending->requiresInput())->toBeTrue()
         ->and($pending->arguments['options'])->toBe(['Food tours', 'Museums', 'Beaches', 'Nightlife'])
         ->and($pending->inputSchema['required'])->toBe(['answers']);
 

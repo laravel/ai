@@ -46,7 +46,7 @@ test('a call missing the values a tool needs pauses carrying its schema', functi
     $pending = $paused->pendingApprovals->sole();
 
     expect($paused->hasPendingApprovals())->toBeTrue()
-        ->and($pending->isInteractive())->toBeTrue()
+        ->and($pending->requiresInput())->toBeTrue()
         ->and($pending->inputSchema['required'])->toBe(['answer'])
         ->and($pending->inputSchema['properties']['answer']['enum'])->toBe(['Basic', 'Pro'])
         ->and($pending->arguments)->toBe(['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]);
@@ -75,7 +75,7 @@ test('a call carrying a value outside the schema pauses instead of running', fun
     $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
     expect($paused->toolResults)->toBeEmpty()
-        ->and($paused->pendingApprovals->sole()->isInteractive())->toBeTrue();
+        ->and($paused->pendingApprovals->sole()->requiresInput())->toBeTrue();
 });
 
 test('an invalid submission renders the pause again for JSON clients', function () {
@@ -323,7 +323,7 @@ test('an approvable tool may describe its approval with data without waiting on 
 
     expect($paused->pendingApprovals->sole()->reason)->toBe('Deletes the account.')
         ->and($paused->pendingApprovals->sole()->data)->toBe(['scope' => 'account:delete'])
-        ->and($paused->pendingApprovals->sole()->isInteractive())->toBeFalse();
+        ->and($paused->pendingApprovals->sole()->requiresInput())->toBeFalse();
 
     $resumed = (new RememberingInteractiveAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
@@ -342,7 +342,7 @@ test('a tool that needs both values and approval asks for approval once it has t
     $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Where am I?', provider: 'anthropic');
 
     expect($paused->hasPendingApprovals())->toBeTrue()
-        ->and($paused->pendingApprovals->sole()->isInteractive())->toBeFalse()
+        ->and($paused->pendingApprovals->sole()->requiresInput())->toBeFalse()
         ->and($paused->pendingApprovals->sole()->reason)->toBe('Uses your location.');
 
     $resumed = (new RememberingInteractiveAgent)
@@ -359,7 +359,7 @@ test('a tool that needs both values and approval asks for the values first', fun
 
     $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Where am I?', provider: 'anthropic');
 
-    expect($paused->pendingApprovals->sole()->isInteractive())->toBeTrue()
+    expect($paused->pendingApprovals->sole()->requiresInput())->toBeTrue()
         ->and($paused->pendingApprovals->sole()->reason)->toBe('Uses your location.');
 });
 

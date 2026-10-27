@@ -23,7 +23,7 @@ class PendingApproval implements Arrayable
     /**
      * Determine whether the pause is waiting on values rather than a decision.
      */
-    public function isInteractive(): bool
+    public function requiresInput(): bool
     {
         return $this->inputSchema !== null;
     }
