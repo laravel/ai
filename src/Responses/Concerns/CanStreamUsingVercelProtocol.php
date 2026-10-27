@@ -71,7 +71,7 @@ trait CanStreamUsingVercelProtocol
                                 'approvalId' => $pendingApproval->id,
                                 ...array_filter([
                                     'reason' => $pendingApproval->reason,
-                                    'approvalDescriptor' => array_filter(['schema' => $pendingApproval->schema, 'data' => $pendingApproval->data]) ?: null,
+                                    'approvalDescriptor' => array_filter(['inputSchema' => $pendingApproval->inputSchema, 'data' => $pendingApproval->data]) ?: null,
                                 ]),
                             ]);
                         }

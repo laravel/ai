@@ -9,14 +9,14 @@ use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
-use Laravel\Ai\Contracts\NeedsInput;
 use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
+use Laravel\Ai\Contracts\RequiresInput;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\Response;
 
-class AskUser implements NeedsInput, Tool
+class AskUser implements RequiresInput, Tool
 {
     public function description(): string
     {
@@ -32,7 +32,7 @@ class AskUser implements NeedsInput, Tool
         ];
     }
 
-    public function needsInput(JsonSchema $schema, Request $request): array
+    public function requiresInput(JsonSchema $schema, Request $request): array
     {
         return [
             'answers' => $schema->array()
@@ -105,7 +105,7 @@ test('the model asks, the user picks several options and types one of their own'
 
     expect($pending->isInteractive())->toBeTrue()
         ->and($pending->arguments['options'])->toBe(['Food tours', 'Museums', 'Beaches', 'Nightlife'])
-        ->and($pending->schema['required'])->toBe(['answers']);
+        ->and($pending->inputSchema['required'])->toBe(['answers']);
 
     $resumed = (new TripPlanner)->continue($paused->conversationId, (object) ['id' => 1])->prompt(
         Decisions::from([$pending->id => Decision::submit(['answers' => ['Food tours', 'Fado night']])]),

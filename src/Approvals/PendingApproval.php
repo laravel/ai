@@ -8,7 +8,7 @@ class PendingApproval implements Arrayable
 {
     /**
      * @param  array<string, mixed>  $arguments
-     * @param  array<string, mixed>|null  $schema
+     * @param  array<string, mixed>|null  $inputSchema
      * @param  array<string, mixed>|null  $data
      */
     public function __construct(
@@ -16,7 +16,7 @@ class PendingApproval implements Arrayable
         public readonly string $tool,
         public readonly array $arguments,
         public readonly ?string $reason = null,
-        public readonly ?array $schema = null,
+        public readonly ?array $inputSchema = null,
         public readonly ?array $data = null,
     ) {}
 
@@ -25,7 +25,7 @@ class PendingApproval implements Arrayable
      */
     public function isInteractive(): bool
     {
-        return $this->schema !== null;
+        return $this->inputSchema !== null;
     }
 
     /**
@@ -39,7 +39,7 @@ class PendingApproval implements Arrayable
             'arguments' => $this->arguments,
             'reason' => $this->reason,
             ...array_filter([
-                'schema' => $this->schema,
+                'input_schema' => $this->inputSchema,
                 'data' => $this->data,
             ], fn ($value) => $value !== null),
         ];

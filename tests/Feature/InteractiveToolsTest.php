@@ -47,8 +47,8 @@ test('a call missing the values a tool needs pauses carrying its schema', functi
 
     expect($paused->hasPendingApprovals())->toBeTrue()
         ->and($pending->isInteractive())->toBeTrue()
-        ->and($pending->schema['required'])->toBe(['answer'])
-        ->and($pending->schema['properties']['answer']['enum'])->toBe(['Basic', 'Pro'])
+        ->and($pending->inputSchema['required'])->toBe(['answer'])
+        ->and($pending->inputSchema['properties']['answer']['enum'])->toBe(['Basic', 'Pro'])
         ->and($pending->arguments)->toBe(['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]);
 });
 
@@ -98,7 +98,7 @@ test('an invalid submission renders the pause again for JSON clients', function 
 
         expect($json->getStatusCode())->toBe(422)
             ->and($json->getData(true)['errors'])->toBe(['toolu_1.answer' => ['The selected answer is invalid.']])
-            ->and($json->getData(true)['approvals'][0]['schema']['properties']['answer']['enum'])->toBe(['Basic', 'Pro'])
+            ->and($json->getData(true)['approvals'][0]['input_schema']['properties']['answer']['enum'])->toBe(['Basic', 'Pro'])
             ->and($exception->render(Request::create('/', 'POST')))->toBeNull();
     }
 });
@@ -111,7 +111,7 @@ test('a null value counts as missing', function () {
     $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Where am I?', provider: 'anthropic');
 
     expect($paused->hasPendingApprovals())->toBeTrue()
-        ->and($paused->pendingApprovals->sole()->schema['required'])->toBe(['latitude']);
+        ->and($paused->pendingApprovals->sole()->inputSchema['required'])->toBe(['latitude']);
 });
 
 test('a submission changes only the keys it names, leaving the rest of the call intact', function () {

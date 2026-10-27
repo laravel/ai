@@ -15,9 +15,9 @@ use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Attributes\RepairToolCalls;
 use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
-use Laravel\Ai\Contracts\NeedsInput;
 use Laravel\Ai\Contracts\Providers\SupportsToolSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\RequiresInput;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\InvalidToolInputException;
@@ -559,7 +559,7 @@ class TextGenerationLoop
             return $decision->arguments ?? $toolCall->arguments;
         }
 
-        $properties = $this->approvalForTool($tool, $toolCall)?->schema['properties'] ?? [];
+        $properties = $this->approvalForTool($tool, $toolCall)?->inputSchema['properties'] ?? [];
 
         return [...$toolCall->arguments, ...array_intersect_key($decision->arguments ?? [], $properties)];
     }
@@ -633,17 +633,17 @@ class TextGenerationLoop
             $decision = $approval[$toolCall->id] ?? $approval['*'];
             $tool = $tools[$toolCall->id];
 
-            if ($approvals[$toolCall->id]->schema === null || $decision->isRejected()) {
+            if ($approvals[$toolCall->id]->inputSchema === null || $decision->isRejected()) {
                 return [];
             }
 
             $arguments = $this->argumentsForDecision($decision, $toolCall, $tool);
 
-            $schema = $tool instanceof NeedsInput
+            $inputSchema = $tool instanceof RequiresInput
                 ? $this->inputSchema($tool, new Request($arguments, $toolCall->id))
-                : $approvals[$toolCall->id]->schema;
+                : $approvals[$toolCall->id]->inputSchema;
 
-            return collect($this->inputValidator($schema, $arguments)->errors()->messages())
+            return collect($this->inputValidator($inputSchema, $arguments)->errors()->messages())
                 ->mapWithKeys(fn (array $messages, string $key) => ["{$toolCall->id}.{$key}" => $messages]);
         });
 
@@ -659,12 +659,12 @@ class TextGenerationLoop
     /**
      * Build a validator for the input values a tool declared, ignoring every other argument.
      *
-     * @param  array<string, mixed>  $schema
+     * @param  array<string, mixed>  $inputSchema
      * @param  array<string, mixed>  $arguments
      */
-    protected function inputValidator(array $schema, array $arguments): ValidatorContract
+    protected function inputValidator(array $inputSchema, array $arguments): ValidatorContract
     {
-        return Validator::make(array_intersect_key($arguments, $schema['properties'] ?? []), SchemaRules::for($schema));
+        return Validator::make(array_intersect_key($arguments, $inputSchema['properties'] ?? []), SchemaRules::for($inputSchema));
     }
 
     /**
@@ -676,8 +676,8 @@ class TextGenerationLoop
 
         $approval = $tool instanceof Approvable ? $tool->shouldRequestApproval($request) : null;
 
-        if ($tool instanceof NeedsInput && ($schema = $this->outstandingInput($tool, $request)) !== null) {
-            return new Approval($approval?->reason, $schema, $approval?->data);
+        if ($tool instanceof RequiresInput && ($inputSchema = $this->outstandingInput($tool, $request)) !== null) {
+            return new Approval($approval?->reason, $inputSchema, $approval?->data);
         }
 
         return $approval;
@@ -688,11 +688,11 @@ class TextGenerationLoop
      *
      * @return array<string, mixed>|null
      */
-    protected function outstandingInput(NeedsInput $tool, Request $request): ?array
+    protected function outstandingInput(RequiresInput $tool, Request $request): ?array
     {
-        $schema = $this->inputSchema($tool, $request);
+        $inputSchema = $this->inputSchema($tool, $request);
 
-        return $this->inputValidator($schema, $request->all())->fails() ? $schema : null;
+        return $this->inputValidator($inputSchema, $request->all())->fails() ? $inputSchema : null;
     }
 
     /**
@@ -700,9 +700,9 @@ class TextGenerationLoop
      *
      * @return array<string, mixed>
      */
-    protected function inputSchema(NeedsInput $tool, Request $request): array
+    protected function inputSchema(RequiresInput $tool, Request $request): array
     {
-        return (new ObjectSchema($tool->needsInput(new JsonSchemaTypeFactory, $request)))->toSchema();
+        return (new ObjectSchema($tool->requiresInput(new JsonSchemaTypeFactory, $request)))->toSchema();
     }
 
     /**
@@ -715,7 +715,7 @@ class TextGenerationLoop
             $toolCall->name,
             $toolCall->arguments,
             $approval->reason,
-            $approval->schema,
+            $approval->inputSchema,
             $approval->data,
         );
     }

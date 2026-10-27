@@ -5,12 +5,12 @@ namespace Laravel\Ai\Approvals;
 class Approval
 {
     /**
-     * @param  array<string, mixed>|null  $schema
+     * @param  array<string, mixed>|null  $inputSchema
      * @param  array<string, mixed>|null  $data
      */
     public function __construct(
         public readonly ?string $reason = null,
-        public readonly ?array $schema = null,
+        public readonly ?array $inputSchema = null,
         public readonly ?array $data = null,
     ) {}
 

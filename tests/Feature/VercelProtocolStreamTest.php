@@ -223,7 +223,7 @@ test('a pause waiting on values emits its schema within the approval descriptor'
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new ToolCall('event-1', new Data\ToolCall('call-1', 'PickPlan', []), time()),
         new ToolApprovalRequest('event-2', collect([
-            new PendingApproval('call-1', 'PickPlan', [], 'Pick a plan.', schema: $schema),
+            new PendingApproval('call-1', 'PickPlan', [], 'Pick a plan.', inputSchema: $schema),
         ]), time()),
         new StreamEnd('event-3', 'tool_calls', new Usage, time()),
     ]);
@@ -233,7 +233,7 @@ test('a pause waiting on values emits its schema within the approval descriptor'
         'toolCallId' => 'call-1',
         'approvalId' => 'call-1',
         'reason' => 'Pick a plan.',
-        'approvalDescriptor' => ['schema' => $schema],
+        'approvalDescriptor' => ['inputSchema' => $schema],
     ]);
 });
 

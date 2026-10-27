@@ -279,8 +279,8 @@ test('it persists the payload of a paused interactive turn from a remembered age
     $pending = (new DatabaseConversationStore)->pendingApprovalsFor($paused->conversationId);
 
     expect($pending)->toHaveCount(1)
-        ->and($pending[0]->schema['required'])->toBe(['answer'])
-        ->and($pending[0]->schema['properties']['answer']['enum'])->toBe(['Basic', 'Pro']);
+        ->and($pending[0]->inputSchema['required'])->toBe(['answer'])
+        ->and($pending[0]->inputSchema['properties']['answer']['enum'])->toBe(['Basic', 'Pro']);
 });
 
 test('it drops a call that already has a result', function (): void {
@@ -1520,6 +1520,6 @@ function insertPausedConversationTurn(string $conversationId, string $id, array 
         ...storedConversationMessageAttributes($id, $conversationId, 'Waiting on you.'),
         'role' => 'assistant',
         'tool_calls' => json_encode($toolCalls),
-        'approval_state' => json_encode(['pending' => $pending, 'schema' => $schema, 'data' => $data]),
+        'approval_state' => json_encode(['pending' => $pending, 'input_schema' => $schema, 'data' => $data]),
     ]);
 }

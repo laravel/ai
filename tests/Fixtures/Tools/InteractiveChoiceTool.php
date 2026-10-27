@@ -3,20 +3,20 @@
 namespace Tests\Fixtures\Tools;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Laravel\Ai\Contracts\NeedsInput;
+use Laravel\Ai\Contracts\RequiresInput;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\Response;
 use Stringable;
 
-class InteractiveChoiceTool implements NeedsInput, Tool
+class InteractiveChoiceTool implements RequiresInput, Tool
 {
     public function description(): string
     {
         return 'Asks the user to choose.';
     }
 
-    public function needsInput(JsonSchema $schema, Request $request): array
+    public function requiresInput(JsonSchema $schema, Request $request): array
     {
         return ['answer' => $schema->string()->enum($request['options'] ?? [])->required()];
     }
