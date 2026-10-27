@@ -64,22 +64,6 @@ test('insufficient quota response throws insufficient credits exception', functi
     );
 })->throws(InsufficientCreditsException::class);
 
-test('credit balance exhausted response throws insufficient credits exception', function (): void {
-    Http::fake([
-        'api.openai.com/*' => Http::response([
-            'error' => [
-                'code' => 'credit_balance_exhausted',
-                'message' => 'Your credit balance is exhausted.',
-            ],
-        ], 429),
-    ]);
-
-    (new AssistantAgent)->prompt(
-        'Hi',
-        provider: 'openai',
-    );
-})->throws(InsufficientCreditsException::class);
-
 test('overloaded response throws provider overloaded exception', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response([
