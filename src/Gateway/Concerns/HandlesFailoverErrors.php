@@ -38,7 +38,7 @@ trait HandlesFailoverErrors
             if ($requestException->response !== null) {
                 $status = $requestException->response->status();
 
-                if ($this->isInsufficientQuota($requestException)) {
+                if ($this->isInsufficientCredits($requestException)) {
                     throw InsufficientCreditsException::forProvider(
                         $providerName, $requestException->getCode(), $requestException
                     );
@@ -84,7 +84,7 @@ trait HandlesFailoverErrors
 
         $status = $exception->response->status();
 
-        if ($this->isInsufficientQuota($exception)) {
+        if ($this->isInsufficientCredits($exception)) {
             return null;
         }
 
@@ -100,7 +100,7 @@ trait HandlesFailoverErrors
     /**
      * Determine if the response is a 402, or a 429 insufficient credits or quota error rather than a rate limit.
      */
-    protected function isInsufficientQuota(RequestException $exception): bool
+    protected function isInsufficientCredits(RequestException $exception): bool
     {
         $status = $exception->response?->status();
 

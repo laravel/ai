@@ -25,11 +25,6 @@ beforeEach(function (): void {
         {
             return ['credit balance', 'quota exceeded'];
         }
-
-        protected function insufficientCreditCodes(): array
-        {
-            return ['insufficient_quota', 'credit_balance_exhausted', 'organization_spend_limit_exceeded', 'project_spend_limit_exceeded', 'organization_usage_limit_exceeded'];
-        }
     };
 });
 

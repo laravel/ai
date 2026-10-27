@@ -1,5 +1,27 @@
 # Upgrade Guide
 
+## Upgrading To 1.4 From 1.3
+
+### OpenAI Billing And Quota Errors Throw `InsufficientCreditsException`
+
+**Likelihood Of Impact: Low**
+
+OpenAI returns billing, spend limit, and quota errors with a 429 status. These errors were previously thrown as `Laravel\Ai\Exceptions\RateLimitedException`. They are now thrown as `Laravel\Ai\Exceptions\InsufficientCreditsException` and are no longer retried after a `Retry-After` delay. This applies to the `insufficient_quota`, `credit_balance_exhausted`, `organization_spend_limit_exceeded`, `project_spend_limit_exceeded`, and `organization_usage_limit_exceeded` error codes.
+
+If your application catches `RateLimitedException` to handle these errors, catch `InsufficientCreditsException` instead:
+
+```php
+use Laravel\Ai\Exceptions\InsufficientCreditsException;
+
+try {
+    // ...
+} catch (InsufficientCreditsException $e) {
+    // ...
+}
+```
+
+Code that catches `FailoverableException` or `AiException` is not affected.
+
 ## Upgrading To 1.2 From 1.0
 
 ### Classification Signatures Accept Attachments
