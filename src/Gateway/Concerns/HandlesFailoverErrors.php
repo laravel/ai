@@ -82,11 +82,11 @@ trait HandlesFailoverErrors
             return null;
         }
 
-        $status = $exception->response->status();
-
         if ($this->isInsufficientCredits($exception)) {
             return null;
         }
+
+        $status = $exception->response->status();
 
         if ($status !== 429 && ! in_array($status, $this->overloadedStatusCodes())) {
             return null;
