@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\InvalidStructuredOutputException;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
@@ -106,7 +107,7 @@ describe('request structure', function (): void {
 
     test('tool choice is omitted to rely on the Gemini default', function (): void {
         Http::fake([
-            'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The number is 42'),
+            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse(['number' => 42]),
         ]);
 
         (new ToolUsingAgent(fixed: true))->prompt(
@@ -122,7 +123,7 @@ describe('request structure', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::sequence([
                 $this->fakeToolCallResponse('FixedNumberGenerator', 'call_abc123'),
-                $this->fakeTextResponse('Done'),
+                $this->fakeStructuredResponse(['number' => 42]),
             ]),
         ]);
 
@@ -168,23 +169,44 @@ describe('structured output', function (): void {
         expect($response->structured['symbol'])->toBe('Fe');
     });
 
-    test('completed structured responses reject free-form text instead of returning an empty array', function (): void {
+    test('completed structured responses throw when the text is not JSON', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The symbol for iron is Fe.'),
         ]);
 
         expect(fn () => (new StructuredAgent)->prompt('What is the symbol for Iron?', provider: 'gemini'))
-            ->toThrow(\Laravel\Ai\Exceptions\AiException::class, 'Gemini returned invalid structured output');
+            ->toThrow(fn (InvalidStructuredOutputException $e) => expect($e->text)->toBe('The symbol for iron is Fe.'));
     });
 
-    test('completed structured responses still accept an empty JSON object', function (): void {
+    test('completed structured responses throw when gemini returns only a thought', function (): void {
         Http::fake([
-            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse([]),
+            'generativelanguage.googleapis.com/*' => $this->fakeThinkingResponse([$this->thoughtStep('Thinking.')]),
         ]);
 
-        $response = (new StructuredAgent)->prompt('Return an empty object', provider: 'gemini');
+        expect(fn () => (new StructuredAgent)->prompt('What is the symbol for Iron?', provider: 'gemini'))
+            ->toThrow(InvalidStructuredOutputException::class);
+    });
 
-        expect($response->structured)->toBe([]);
+    test('truncated structured responses decode to an empty array', function (): void {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response($this->fakeInteraction(
+                [$this->modelOutput('{"symbol": "F')],
+                status: 'incomplete',
+            )),
+        ]);
+
+        $response = (new StructuredAgent)->prompt('What is the symbol for Iron?', provider: 'gemini');
+
+        expect($response->structured)->toBe([])
+            ->and($response->steps->last()->finishReason)->toBe(FinishReason::Length);
+    });
+
+    test('completed structured responses accept an empty JSON object', function (): void {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response($this->fakeInteraction([$this->modelOutput('{}')])),
+        ]);
+
+        expect((new StructuredAgent)->prompt('Return an empty object', provider: 'gemini')->structured)->toBe([]);
     });
 
     test('nested structured output keeps the item schema closed', function (): void {

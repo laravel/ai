@@ -19,7 +19,7 @@ test('tool calls trigger follow up request', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
             $this->fakeUniqueToolCallResponse(),
-            $this->fakeTextResponse('The number is 72019'),
+            $this->fakeStructuredResponse(['number' => 42]),
         ]),
     ]);
 
@@ -43,7 +43,7 @@ test('max steps limits tool call depth', function (): void {
             $this->fakeUniqueToolCallResponse(),
             $this->fakeUniqueToolCallResponse(),
             $this->fakeUniqueToolCallResponse(),
-            $this->fakeTextResponse('Done'),
+            $this->fakeStructuredResponse(['number' => 42]),
         ]),
     ]);
 
@@ -82,7 +82,7 @@ test('unregistered tool call throws', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
             $this->fakeToolCallResponse('NonExistentTool', 'call_missing'),
-            $this->fakeTextResponse('Done'),
+            $this->fakeStructuredResponse(['number' => 42]),
         ]),
     ]);
 
@@ -94,7 +94,7 @@ test('function result carries the originating call id', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
             $this->fakeToolCallResponse('FixedNumberGenerator', 'call_abc123'),
-            $this->fakeTextResponse('The number is 72019'),
+            $this->fakeStructuredResponse(['number' => 42]),
         ]),
     ]);
 
@@ -119,7 +119,7 @@ test('parallel function calls preserve unique ids', function (): void {
                 $this->functionCallStep('FixedNumberGenerator', [], 'call_1'),
                 $this->functionCallStep('FixedNumberGenerator', [], 'call_2'),
             ])),
-            $this->fakeTextResponse('Done'),
+            $this->fakeStructuredResponse(['number' => 42]),
         ]),
     ]);
 
@@ -169,7 +169,7 @@ test('thought steps are replayed verbatim across the tool call continuation', fu
                 $thought,
                 $this->functionCallStep('FixedNumberGenerator', [], 'call_1'),
             ])),
-            $this->fakeTextResponse('The number is 72019'),
+            $this->fakeStructuredResponse(['number' => 42]),
         ]),
     ]);
 
@@ -191,7 +191,7 @@ test('the user input echoed by gemini is not replayed twice', function (): void 
                 ['type' => 'user_input', 'content' => [['type' => 'text', 'text' => 'Generate']]],
                 $this->functionCallStep('FixedNumberGenerator', [], 'call_1'),
             ])),
-            $this->fakeTextResponse('Done'),
+            $this->fakeStructuredResponse(['number' => 42]),
         ]),
     ]);
 

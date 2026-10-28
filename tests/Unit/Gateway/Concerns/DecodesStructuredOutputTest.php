@@ -1,5 +1,6 @@
 <?php
 
+use Laravel\Ai\Exceptions\InvalidStructuredOutputException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 
 function decoderHost(): object
@@ -8,9 +9,9 @@ function decoderHost(): object
     {
         use DecodesStructuredOutput;
 
-        public function decode(?string $text): array
+        public function decode(?string $text, bool $strict = false): array
         {
-            return $this->decodeStructuredOutput($text);
+            return $this->decodeStructuredOutput($text, $strict);
         }
     };
 }
@@ -127,4 +128,29 @@ test('escapes unescaped key quotes inside arrays and fences without touching val
             ['plain' => ['a', 'b']],
         ],
     ]);
+});
+
+test('strict decoding throws with the raw text when the payload is not JSON', function (): void {
+    $host = decoderHost();
+
+    $payload = "* **Vehicle Make:** Toyota\n* **Registration Plate:** CA 123-456";
+
+    expect(fn () => $host->decode($payload, strict: true))
+        ->toThrow(fn (InvalidStructuredOutputException $e) => expect($e->text)->toBe($payload));
+});
+
+test('strict decoding throws for blank and scalar payloads', function (?string $payload): void {
+    expect(fn () => decoderHost()->decode($payload, strict: true))->toThrow(InvalidStructuredOutputException::class);
+})->with([
+    'null' => [null],
+    'blank' => ['   '],
+    'string' => ['"just a string"'],
+    'invalid fence' => ["```json\n{invalid}\n```"],
+]);
+
+test('strict decoding accepts empty JSON objects and arrays', function (): void {
+    $host = decoderHost();
+
+    expect($host->decode('{}', strict: true))->toBe([])
+        ->and($host->decode('[]', strict: true))->toBe([]);
 });

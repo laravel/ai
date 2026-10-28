@@ -2,18 +2,18 @@
 
 namespace Laravel\Ai\Gateway\Concerns;
 
+use Laravel\Ai\Exceptions\InvalidStructuredOutputException;
+
 trait DecodesStructuredOutput
 {
     /**
      * Decode a structured output payload, tolerating markdown code fences.
+     *
+     * @throws InvalidStructuredOutputException
      */
-    protected function decodeStructuredOutput(?string $text): array
+    protected function decodeStructuredOutput(?string $text, bool $strict = false): array
     {
         $trimmed = trim((string) $text);
-
-        if ($trimmed === '') {
-            return [];
-        }
 
         $decoded = json_decode($trimmed, true);
 
@@ -25,7 +25,15 @@ trait DecodesStructuredOutput
             $decoded = json_decode($this->escapeQuotesInObjectKeys($this->extractJsonCodeFence($trimmed) ?? $trimmed), true);
         }
 
-        return is_array($decoded) ? $decoded : [];
+        if (is_array($decoded)) {
+            return $decoded;
+        }
+
+        if ($strict) {
+            throw new InvalidStructuredOutputException((string) $text);
+        }
+
+        return [];
     }
 
     /**

@@ -67,18 +67,6 @@ trait ParsesTextResponses
         $text = $this->extractText($steps);
         $functionCallSteps = $this->extractFunctionCallSteps($steps);
         $finishReason = $this->extractFinishReason($data, $functionCallSteps);
-        $structuredOutput = $structured ? $this->decodeStructuredOutput($text) : null;
-
-        // A completed structured response containing free-form text must not look
-        // like a valid empty JSON object to its caller.
-        if ($structured && $finishReason === FinishReason::Stop && $structuredOutput === []) {
-            $candidate = trim($this->extractJsonCodeFence($text) ?? $text);
-            $decoded = json_decode($candidate, true);
-
-            if (json_last_error() !== JSON_ERROR_NONE || ! is_array($decoded)) {
-                throw new AiException("Gemini returned invalid structured output for model [{$model}].");
-            }
-        }
 
         return new StepResponse(
             text: $text,
@@ -86,7 +74,7 @@ trait ParsesTextResponses
             finishReason: $finishReason,
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model, $this->extractCitations($steps)),
-            structured: $structuredOutput,
+            structured: $structured ? $this->decodeStructuredOutput($text, strict: $finishReason === FinishReason::Stop) : null,
             replayBlocks: $this->replayableSteps($steps),
             reasoning: $this->extractReasoning($steps),
             providerToolCalls: $this->extractProviderToolCalls($steps),
