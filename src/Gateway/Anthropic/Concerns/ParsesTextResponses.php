@@ -42,6 +42,7 @@ trait ParsesTextResponses
         array $data,
         Provider $provider,
         bool $structured,
+        bool $strict = false,
     ): StepResponse {
         return $this->buildStepResponse(
             $data['content'] ?? [],
@@ -50,6 +51,7 @@ trait ParsesTextResponses
             $this->extractUsage($data),
             $this->extractFinishReason($data),
             $structured,
+            $strict,
         );
     }
 
@@ -63,6 +65,7 @@ trait ParsesTextResponses
         TextUsage $usage,
         FinishReason $finishReason,
         bool $structured,
+        bool $strict = false,
     ): StepResponse {
         $text = $this->extractText($content);
         $toolCalls = $this->extractToolCalls($content);
@@ -82,7 +85,7 @@ trait ParsesTextResponses
             $structuredData = $this->extractStructuredOutput($content);
 
             if (empty($structuredData) && filled($text)) {
-                $structuredData = $this->decodeStructuredOutput($text, $finishReason);
+                $structuredData = $this->decodeStructuredOutput($text, $finishReason, $strict);
             }
         }
 

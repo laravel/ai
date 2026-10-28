@@ -40,7 +40,7 @@ test('tool result follow up uses tool_name not tool_call_id', function (): void 
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse(),
-            $this->fakeTextResponse('{"number": 72019}'),
+            $this->fakeTextResponse('The number is 72019'),
         ]),
     ]);
 
@@ -68,7 +68,7 @@ test('assistant tool call message uses function format without type', function (
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse(),
-            $this->fakeTextResponse('{"number": 72019}'),
+            $this->fakeTextResponse('The number is 72019'),
         ]),
     ]);
 

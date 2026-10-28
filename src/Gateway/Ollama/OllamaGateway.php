@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Ollama;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
+use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -58,7 +59,7 @@ class OllamaGateway implements EmbeddingGateway, StepTextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema))->withRawResponse($response);
+        return $this->parseTextResponse($data, $provider, filled($schema), Strict::isAppliedTo($options?->agent))->withRawResponse($response);
     }
 
     /**

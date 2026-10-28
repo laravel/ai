@@ -39,7 +39,7 @@ test('tool result follow up maps assistant and tool result messages', function (
     Http::fake([
         'api.deepseek.com/*' => Http::sequence([
             fakeDeepSeekToolCallResponse(),
-            fakeDeepSeekResponse('{"number": 72019}'),
+            fakeDeepSeekResponse('The number is 72019'),
         ]),
     ]);
 

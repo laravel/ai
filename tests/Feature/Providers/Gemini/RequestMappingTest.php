@@ -107,7 +107,7 @@ describe('request structure', function (): void {
 
     test('tool choice is omitted to rely on the Gemini default', function (): void {
         Http::fake([
-            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse(['number' => 72019]),
+            'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The number is 42'),
         ]);
 
         (new ToolUsingAgent(fixed: true))->prompt(
@@ -123,7 +123,7 @@ describe('request structure', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::sequence([
                 $this->fakeToolCallResponse('FixedNumberGenerator', 'call_abc123'),
-                $this->fakeStructuredResponse(['number' => 72019]),
+                $this->fakeTextResponse('Done'),
             ]),
         ]);
 
@@ -169,7 +169,7 @@ describe('structured output', function (): void {
         expect($response->structured['symbol'])->toBe('Fe');
     });
 
-    test('completed structured responses throw when the text is not JSON', function (): void {
+    test('strict structured responses throw when the text is not JSON', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The symbol for iron is Fe.'),
         ]);
@@ -178,7 +178,17 @@ describe('structured output', function (): void {
             ->toThrow(fn (NoStructuredOutputException $e) => expect($e->text)->toBe('The symbol for iron is Fe.'));
     });
 
-    test('completed structured responses throw when gemini returns only a thought', function (): void {
+    test('structured responses without strict mode decode prose to an empty array', function (): void {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The number is 42'),
+        ]);
+
+        $response = (new ToolUsingAgent(fixed: true))->prompt('Generate a number', provider: 'gemini');
+
+        expect($response->structured)->toBe([]);
+    });
+
+    test('strict structured responses throw when gemini returns only a thought', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => $this->fakeThinkingResponse([$this->thoughtStep('Thinking.')]),
         ]);

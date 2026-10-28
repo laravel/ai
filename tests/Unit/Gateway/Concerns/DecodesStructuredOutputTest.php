@@ -10,9 +10,9 @@ function decoderHost(): object
     {
         use DecodesStructuredOutput;
 
-        public function decode(?string $text, FinishReason $finishReason = FinishReason::Length): array
+        public function decode(?string $text, FinishReason $finishReason = FinishReason::Stop, bool $strict = false): array
         {
-            return $this->decodeStructuredOutput($text, $finishReason);
+            return $this->decodeStructuredOutput($text, $finishReason, $strict);
         }
     };
 }
@@ -131,17 +131,17 @@ test('escapes unescaped key quotes inside arrays and fences without touching val
     ]);
 });
 
-test('a completed response throws with the raw text when the payload is not JSON', function (): void {
+test('a strict completed response throws with the raw text when the payload is not JSON', function (): void {
     $host = decoderHost();
 
     $payload = "* **Vehicle Make:** Toyota\n* **Registration Plate:** CA 123-456";
 
-    expect(fn () => $host->decode($payload, FinishReason::Stop))
+    expect(fn () => $host->decode($payload, FinishReason::Stop, strict: true))
         ->toThrow(fn (NoStructuredOutputException $e) => expect($e->text)->toBe($payload));
 });
 
-test('a completed response throws for blank and scalar payloads', function (?string $payload): void {
-    expect(fn () => decoderHost()->decode($payload, FinishReason::Stop))->toThrow(NoStructuredOutputException::class);
+test('a strict completed response throws for blank and scalar payloads', function (?string $payload): void {
+    expect(fn () => decoderHost()->decode($payload, FinishReason::Stop, strict: true))->toThrow(NoStructuredOutputException::class);
 })->with([
     'null' => [null],
     'blank' => ['   '],
@@ -149,13 +149,17 @@ test('a completed response throws for blank and scalar payloads', function (?str
     'invalid fence' => ["```json\n{invalid}\n```"],
 ]);
 
-test('a completed response accepts empty JSON objects and arrays', function (): void {
+test('a strict completed response accepts empty JSON objects and arrays', function (): void {
     $host = decoderHost();
 
-    expect($host->decode('{}', FinishReason::Stop))->toBe([])
-        ->and($host->decode('[]', FinishReason::Stop))->toBe([]);
+    expect($host->decode('{}', FinishReason::Stop, strict: true))->toBe([])
+        ->and($host->decode('[]', FinishReason::Stop, strict: true))->toBe([]);
 });
 
-test('an unfinished response decodes undecodable text to an empty array', function (FinishReason $finishReason): void {
-    expect(decoderHost()->decode('not json at all', $finishReason))->toBe([]);
+test('a strict unfinished response decodes undecodable text to an empty array', function (FinishReason $finishReason): void {
+    expect(decoderHost()->decode('not json at all', $finishReason, strict: true))->toBe([]);
 })->with([FinishReason::ToolCalls, FinishReason::Length, FinishReason::ContentFilter, FinishReason::Unknown]);
+
+test('a completed response without strict mode decodes undecodable text to an empty array', function (): void {
+    expect(decoderHost()->decode('not json at all'))->toBe([]);
+});

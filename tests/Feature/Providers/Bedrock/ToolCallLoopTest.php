@@ -10,6 +10,7 @@ use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
+use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Tools\ApprovableNumberGenerator;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
@@ -153,7 +154,7 @@ describe('tool call loop', function (): void {
             ->and($requests[0]['system'][1]['text'])->toContain('"symbol"');
     });
 
-    test('models that reject forced tool choice throw when the answer is prose', function (): void {
+    test('strict agents on models that reject forced tool choice throw when the answer is prose', function (): void {
         $client = $this->fakeBedrockConverseSequence([
             bedrockTextResponse('The symbol for iron is Fe.'),
         ]);
@@ -163,6 +164,7 @@ describe('tool call loop', function (): void {
             'us.anthropic.claude-sonnet-5-5',
             null,
             schema: ['symbol' => (new JsonSchemaTypeFactory)->string()],
+            options: new TextGenerationOptions(agent: new StructuredAgent),
         ))->toThrow(NoStructuredOutputException::class);
     });
 

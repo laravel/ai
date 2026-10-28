@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Anthropic;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
+use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
@@ -70,7 +71,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema))->withRawResponse($response);
+        return $this->parseTextResponse($data, $provider, filled($schema), Strict::isAppliedTo($options?->agent))->withRawResponse($response);
     }
 
     /**

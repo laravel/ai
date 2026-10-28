@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway;
 use Generator;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\RerankingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
@@ -66,7 +67,7 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway, StepTextGatew
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, $model, filled($schema))->withRawResponse($response);
+        return $this->parseTextResponse($data, $provider, $model, filled($schema), Strict::isAppliedTo($options?->agent))->withRawResponse($response);
     }
 
     /**

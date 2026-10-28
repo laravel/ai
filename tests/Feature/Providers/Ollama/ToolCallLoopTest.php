@@ -18,7 +18,7 @@ test('tool calls trigger follow up request', function (): void {
     Http::fake([
         '*' => Http::sequence([
             fakeUniqueOllamaToolCallResponse(),
-            $this->fakeTextResponse('{"number": 72019}'),
+            $this->fakeTextResponse('The number is 72019'),
         ]),
     ]);
 
@@ -41,7 +41,7 @@ test('tool result message uses tool_name field', function (): void {
     Http::fake([
         '*' => Http::sequence([
             fakeUniqueOllamaToolCallResponse(),
-            $this->fakeTextResponse('{"number": 72019}'),
+            $this->fakeTextResponse('The number is 72019'),
         ]),
     ]);
 
@@ -102,7 +102,7 @@ test('tool calls without id are executed with a generated id', function (): void
                 'prompt_eval_count' => 10,
                 'eval_count' => 5,
             ]),
-            $this->fakeTextResponse('{"number": 72019}'),
+            $this->fakeTextResponse('The number is 72019'),
         ]),
     ]);
 
@@ -146,7 +146,7 @@ test('tool calls are executed even when done_reason is stop', function (): void 
                 'prompt_eval_count' => 10,
                 'eval_count' => 5,
             ]),
-            $this->fakeTextResponse('{"number": 72019}'),
+            $this->fakeTextResponse('The number is 72019'),
         ]),
     ]);
 
@@ -158,7 +158,7 @@ test('tool calls are executed even when done_reason is stop', function (): void 
     $recorded = Http::recorded();
 
     expect($recorded)->toHaveCount(2)
-        ->and($response->text)->toBe('{"number": 72019}');
+        ->and($response->text)->toBe('The number is 72019');
 });
 
 test('multi step tool loop returns accumulated response shape', function (): void {

@@ -75,7 +75,7 @@ test('preserves reasoning content across tool-call loops', function (): void {
                 ]],
                 'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
             ]),
-            fakeDeepSeekResponse('{"number": 72019}'),
+            fakeDeepSeekResponse('The number is 72019'),
         ]),
     ]);
 

@@ -18,7 +18,7 @@ test('tool calls trigger follow up request', function (): void {
     Http::fake([
         'api.deepseek.com/*' => Http::sequence([
             fakeUniqueDeepSeekToolCallResponse(),
-            fakeDeepSeekResponse('{"number": 72019}'),
+            fakeDeepSeekResponse('The number is 72019'),
         ]),
     ]);
 

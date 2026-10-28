@@ -158,7 +158,7 @@ describe('request structure', function (): void {
         ]]);
 
         Http::fake([
-            'api.anthropic.com/*' => $this->fakeTextResponse('{"number": 72019}'),
+            'api.anthropic.com/*' => $this->fakeTextResponse('The number is 42'),
         ]);
 
         (new ToolUsingAgent(fixed: true))->prompt(
@@ -344,7 +344,7 @@ describe('structured output', function (): void {
         ]]);
 
         Http::fake([
-            'api.anthropic.com/*' => $this->fakeSyntheticStructuredResponse(['symbol' => 'Au']),
+            'api.anthropic.com/*' => $this->fakeTextResponse(),
         ]);
 
         (new StructuredWithThinkingAgent)->prompt(
@@ -398,7 +398,7 @@ describe('structured output', function (): void {
         expect($response->structured)->toMatchArray(['name' => 'Taylor', 'age' => 30]);
     });
 
-    test('structured output throws when the model replies with prose', function (): void {
+    test('strict structured output throws when the model replies with prose', function (): void {
         Http::fake(['*' => $this->fakeTextResponse('The symbol for gold is Au.')]);
 
         expect(fn () => (new StructuredAgent)->prompt('What is the symbol for gold?', provider: 'anthropic'))

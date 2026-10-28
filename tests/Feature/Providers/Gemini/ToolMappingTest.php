@@ -26,7 +26,7 @@ function geminiTool(array $body, string $name): ?array
 
 test('empty schema omits parameters key', function (): void {
     Http::fake([
-        'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse(['number' => 42]),
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The number is 42'),
     ]);
 
     (new ToolUsingAgent(fixed: true))->prompt(
@@ -41,7 +41,7 @@ test('empty schema omits parameters key', function (): void {
 
 test('function tools are declared flat with a function type', function (): void {
     Http::fake([
-        'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse(['number' => 42]),
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The number is 42'),
     ]);
 
     (new ToolUsingAgent(fixed: true))->prompt(
@@ -113,7 +113,7 @@ test('tool with a name() method emits the declared name', function (): void {
 
 test('tool without a name() method falls back to class basename', function (): void {
     Http::fake([
-        'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse(['number' => 42]),
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
     ]);
 
     (new ToolUsingAgent(fixed: true))->prompt('Generate', provider: 'gemini');

@@ -35,7 +35,7 @@ test('tool follow up omits previous response id and echoes encrypted reasoning b
     Http::fake([
         'api.openai.com/*' => Http::sequence([
             fakeOpenAiToolCallResponseWithEncryptedReasoning('rs_1', 'enc-blob-1', 'fc_1', 'call_1'),
-            fakeOpenAiResponse('{"number": 72019}'),
+            fakeOpenAiResponse('The number is 72019'),
         ]),
     ]);
 
@@ -216,7 +216,7 @@ test('default store true preserves previous response id behaviour', function ():
     Http::fake([
         'api.openai.com/*' => Http::sequence([
             fakeOpenAiToolCallResponseWithEncryptedReasoning('rs_1', 'enc-blob-1', 'fc_1', 'call_1'),
-            fakeOpenAiResponse('{"number": 72019}'),
+            fakeOpenAiResponse('Done'),
         ]),
     ]);
 
@@ -253,7 +253,7 @@ test('stateless replay preserves the original order of reasoning, hosted tool, a
                 ],
                 'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
             ]),
-            fakeOpenAiResponse('{"number": 72019}'),
+            fakeOpenAiResponse('Done'),
         ]),
     ]);
 
@@ -322,7 +322,7 @@ test('default store true still retains replay blocks with encrypted reasoning', 
     Http::fake([
         'api.openai.com/*' => Http::sequence([
             fakeOpenAiToolCallResponseWithEncryptedReasoning('rs_1', 'enc-blob-1', 'fc_1', 'call_1'),
-            fakeOpenAiResponse('{"number": 72019}'),
+            fakeOpenAiResponse('Done'),
         ]),
     ]);
 
@@ -348,7 +348,7 @@ test('stateless tool follow up drops file search calls but keeps the surrounding
                 ],
                 'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
             ]),
-            fakeOpenAiResponse('{"number": 72019}'),
+            fakeOpenAiResponse('Done'),
         ]),
     ]);
 

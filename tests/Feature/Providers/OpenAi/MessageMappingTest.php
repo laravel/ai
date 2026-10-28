@@ -49,7 +49,7 @@ test('tool result follow up uses previous response id', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::sequence([
             fakeOpenAiToolCallResponse(),
-            fakeOpenAiResponse('{"number": 72019}'),
+            fakeOpenAiResponse('The number is 72019'),
         ]),
     ]);
 

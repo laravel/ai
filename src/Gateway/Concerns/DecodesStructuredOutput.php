@@ -12,7 +12,7 @@ trait DecodesStructuredOutput
      *
      * @throws NoStructuredOutputException
      */
-    protected function decodeStructuredOutput(?string $text, FinishReason $finishReason): array
+    protected function decodeStructuredOutput(?string $text, FinishReason $finishReason = FinishReason::Unknown, bool $strict = false): array
     {
         $trimmed = trim((string) $text);
 
@@ -30,7 +30,7 @@ trait DecodesStructuredOutput
             return $decoded;
         }
 
-        if ($finishReason === FinishReason::Stop) {
+        if ($strict && $finishReason === FinishReason::Stop) {
             throw new NoStructuredOutputException((string) $text);
         }
 

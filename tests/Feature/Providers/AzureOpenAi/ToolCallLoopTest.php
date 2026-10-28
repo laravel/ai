@@ -18,7 +18,7 @@ test('tool calls trigger follow up request', function (): void {
     Http::fake([
         'my-resource.cognitiveservices.azure.com/*' => Http::sequence([
             fakeUniqueAzureToolCallResponse(),
-            fakeAzureResponse('{"number": 72019}'),
+            fakeAzureResponse('The number is 72019'),
         ]),
     ]);
 

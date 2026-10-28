@@ -38,7 +38,7 @@ test('tool result follow up maps assistant and tool result messages', function (
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
             $this->fakeToolCallResponse(),
-            $this->fakeTextResponse('{"number": 72019}'),
+            $this->fakeTextResponse('The number is 72019'),
         ]),
     ]);
 

@@ -92,7 +92,7 @@ test('reasoning is joined across every step of a tool calling turn', function ()
     Http::fake([
         'api.openai.com/*' => Http::sequence([
             fakeOpenAiReasonedToolCallResponse([openAiReasoningItem('rs_0', 'I need a number.')]),
-            fakeOpenAiReasonedResponse([openAiReasoningItem('rs_1', 'The tool answered.')], '{"number": 72019}'),
+            fakeOpenAiReasonedResponse([openAiReasoningItem('rs_1', 'The tool answered.')], 'The number is 72019'),
         ]),
     ]);
 

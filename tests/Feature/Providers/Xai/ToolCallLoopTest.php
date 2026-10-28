@@ -14,7 +14,7 @@ test('tool calls trigger follow up request', function (): void {
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse(),
-            $this->fakeTextResponse('{"number": 72019}'),
+            $this->fakeTextResponse('The number is 72019'),
         ]),
     ]);
 
@@ -66,7 +66,7 @@ test('follow up request preserves tools', function (): void {
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse(),
-            $this->fakeTextResponse('{"number": 72019}'),
+            $this->fakeTextResponse('The number is 72019'),
         ]),
     ]);
 

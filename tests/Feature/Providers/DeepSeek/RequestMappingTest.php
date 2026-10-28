@@ -163,7 +163,7 @@ test('structured output appends schema instructions to system message', function
     });
 });
 
-test('structured output throws when the model replies with prose', function (): void {
+test('strict structured output throws when the model replies with prose', function (): void {
     Http::fake(['*' => fakeDeepSeekResponse('The symbol for gold is Au.')]);
 
     expect(fn () => (new StructuredAgent)->prompt('What is the symbol for gold?', provider: 'deepseek'))

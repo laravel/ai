@@ -6,6 +6,7 @@ use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\Gateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
@@ -76,7 +77,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, $model, filled($schema))->withRawResponse($response);
+        return $this->parseTextResponse($data, $provider, $model, filled($schema), Strict::isAppliedTo($options?->agent))->withRawResponse($response);
     }
 
     /**

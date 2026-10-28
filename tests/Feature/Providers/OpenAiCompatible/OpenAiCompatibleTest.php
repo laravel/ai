@@ -125,7 +125,7 @@ test('structured response is correctly parsed', function (): void {
     expect($response->structured['symbol'])->toBe('Au');
 });
 
-test('structured output throws when the model replies with prose', function (): void {
+test('strict structured output throws when the model replies with prose', function (): void {
     Http::fake(['*' => fakeOpenAiCompatibleResponse('The symbol for gold is Au.')]);
 
     expect(fn () => (new StructuredAgent)->prompt('What is the symbol for gold?', provider: 'openai-compatible'))

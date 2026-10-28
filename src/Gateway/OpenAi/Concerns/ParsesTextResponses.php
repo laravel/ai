@@ -53,6 +53,7 @@ trait ParsesTextResponses
         array $data,
         Provider $provider,
         bool $structured,
+        bool $strict = false,
     ): StepResponse {
         $output = $data['output'] ?? [];
         $text = $this->extractText($output);
@@ -65,7 +66,7 @@ trait ParsesTextResponses
             finishReason: $finishReason,
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $data['model'] ?? '', $this->extractCitations($output)),
-            structured: $structured ? $this->decodeStructuredOutput($text, $finishReason) : null,
+            structured: $structured ? $this->decodeStructuredOutput($text, $finishReason, $strict) : null,
             continuationToken: $data['id'] ?? '',
             replayBlocks: $this->extractReplayBlocks($output),
             reasoning: $this->extractReasoning($output),

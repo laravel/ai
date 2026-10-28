@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Attributes\CacheInstructions;
 use Laravel\Ai\Attributes\CacheToolDefinitions;
+use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
@@ -104,7 +105,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             throw BedrockException::toAiException($throwable, $provider->name(), $model);
         }
 
-        return $this->parseTextResponse($result, $provider, $model, filled($schema));
+        return $this->parseTextResponse($result, $provider, $model, filled($schema), Strict::isAppliedTo($options?->agent));
     }
 
     /**
@@ -189,7 +190,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
     /**
      * Parse a single Converse response into a step response.
      */
-    protected function parseTextResponse(array $result, TextProvider $provider, string $model, bool $structured): StepResponse
+    protected function parseTextResponse(array $result, TextProvider $provider, string $model, bool $structured, bool $strict = false): StepResponse
     {
         $usage = $this->extractUsage($result);
 
@@ -240,7 +241,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             finishReason: $finishReason,
             usage: $usage,
             meta: new Meta($provider->name(), $model),
-            structured: $structured ? $this->decodeStructuredOutput($structuredOutput ?? $output, $finishReason) : null,
+            structured: $structured ? $this->decodeStructuredOutput($structuredOutput ?? $output, $finishReason, $strict) : null,
             replayBlocks: $replayBlocks,
             reasoning: $this->extractReasoning($replayBlocks),
         );
@@ -524,7 +525,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             finishReason: $finishReason,
             usage: $totalUsage,
             meta: new Meta($provider->name(), $model),
-            structured: $structuredOutput !== null ? $this->decodeStructuredOutput($structuredOutput, $finishReason) : null,
+            structured: $structuredOutput !== null ? $this->decodeStructuredOutput($structuredOutput) : null,
             replayBlocks: $replayBlocks,
         );
     }

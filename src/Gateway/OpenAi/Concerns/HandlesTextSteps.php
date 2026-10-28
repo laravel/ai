@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Generator;
+use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
@@ -35,7 +36,7 @@ trait HandlesTextSteps
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema))->withRawResponse($response);
+        return $this->parseTextResponse($data, $provider, filled($schema), Strict::isAppliedTo($options?->agent))->withRawResponse($response);
     }
 
     /**
