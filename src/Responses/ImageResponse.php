@@ -12,6 +12,8 @@ use RuntimeException;
 
 class ImageResponse implements \Stringable, Countable, Htmlable
 {
+    use Concerns\HasRawResponse;
+
     /**
      * @param  Collection<int, GeneratedImage>  $images
      */

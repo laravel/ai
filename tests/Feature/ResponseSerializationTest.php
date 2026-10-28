@@ -5,12 +5,15 @@ use Illuminate\Http\Client\Response;
 use Laravel\Ai\Responses\ClassificationResponse;
 use Laravel\Ai\Responses\Data\BooleanAnswer;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Responses\Data\GeneratedImage;
+use Laravel\Ai\Responses\Data\ImageUsage;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
 use Laravel\Ai\Responses\Data\TranscriptionUsage;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
+use Laravel\Ai\Responses\ImageResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use Tests\Fixtures\Responses\SubclassedStep;
 use Tests\Fixtures\Responses\SubclassedTextResponse;
@@ -83,5 +86,25 @@ test('serialization preserves transcription data and drops the raw response', fu
         ->and($restored->usage->audioSeconds)->toBe(3.25)
         ->and($restored->meta->provider)->toBe('openai')
         ->and($restored->meta->model)->toBe('gpt-4o-transcribe')
+        ->and($restored->raw)->toBeNull();
+});
+
+test('serialization preserves image data and drops the raw response', function (): void {
+    $response = (new ImageResponse(
+        collect([new GeneratedImage(base64_encode('image-content'), 'image/webp')]),
+        new ImageUsage(41, 1024, imageOutputTokens: 1000),
+        new Meta('openai', 'gpt-image-1'),
+    ))->withRawResponse(new Response(new Psr7Response(200, [], '{}')));
+
+    $restored = unserialize(serialize($response));
+
+    expect($restored->images)->toHaveCount(1)
+        ->and($restored->firstImage()->content())->toBe('image-content')
+        ->and($restored->firstImage()->mime())->toBe('image/webp')
+        ->and($restored->usage->inputTokens)->toBe(41)
+        ->and($restored->usage->outputTokens)->toBe(1024)
+        ->and($restored->usage->imageOutputTokens)->toBe(1000)
+        ->and($restored->meta->provider)->toBe('openai')
+        ->and($restored->meta->model)->toBe('gpt-image-1')
         ->and($restored->raw)->toBeNull();
 });

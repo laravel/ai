@@ -155,11 +155,11 @@ class GeminiGateway implements Gateway, StepTextGateway
                 $block['mime_type'] ?? 'image/png',
             ));
 
-        return new ImageResponse(
+        return (new ImageResponse(
             $images,
             $this->extractImageUsage($data),
             new Meta($provider->name(), $model),
-        );
+        ))->withRawResponse($response);
     }
 
     /**

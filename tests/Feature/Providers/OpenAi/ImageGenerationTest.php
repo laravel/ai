@@ -3,6 +3,7 @@
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
@@ -23,6 +24,15 @@ function fakeOpenAiImageResponse(): PromiseInterface
         ]],
     ]);
 }
+
+test('the raw HTTP response is exposed on the image response', function (): void {
+    Http::fake(['*' => fakeOpenAiImageResponse()]);
+
+    $response = Image::of('A red apple')->generate(provider: 'openai', model: 'gpt-image-1');
+
+    expect($response->raw)->toBeInstanceOf(Response::class)
+        ->and($response->raw->json('data.0.b64_json'))->toBe(base64_encode('fake-image'));
+});
 
 test('image request does not include quality when not specified', function (): void {
     Http::fake([

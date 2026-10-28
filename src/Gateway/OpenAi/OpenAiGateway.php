@@ -77,14 +77,14 @@ class OpenAiGateway implements Gateway, StepTextGateway
 
         $data = $response->json();
 
-        return new ImageResponse(
+        return (new ImageResponse(
             collect($data['data'] ?? [])->map(fn (array $image): GeneratedImage => new GeneratedImage(
                 $image['b64_json'] ?? '',
                 'image/png',
             )),
             $this->extractImageUsage($data),
             new Meta($provider->name(), $model),
-        );
+        ))->withRawResponse($response);
     }
 
     /**

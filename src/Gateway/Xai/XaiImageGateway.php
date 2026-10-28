@@ -45,15 +45,15 @@ class XaiImageGateway implements ImageGateway
                 ]), $options))
         );
 
-        $response = $response->json();
+        $data = $response->json();
 
-        return new ImageResponse(
-            collect($response['data'] ?? [])->map(fn (array $image): GeneratedImage => new GeneratedImage(
+        return (new ImageResponse(
+            collect($data['data'] ?? [])->map(fn (array $image): GeneratedImage => new GeneratedImage(
                 $image['b64_json'] ?? '',
                 'image/jpeg',
             )),
             new ImageUsage,
             new Meta($provider->name(), $model),
-        );
+        ))->withRawResponse($response);
     }
 }
