@@ -57,13 +57,15 @@ trait ParsesTextResponses
         $output = $data['output'] ?? [];
         $text = $this->extractText($output);
 
+        $finishReason = $this->extractFinishReason($data);
+
         return new StepResponse(
             text: $text,
             toolCalls: $this->mapToolCallsWithReasoning($output),
-            finishReason: $this->extractFinishReason($data),
+            finishReason: $finishReason,
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $data['model'] ?? '', $this->extractCitations($output)),
-            structured: $structured ? $this->decodeStructuredOutput($text) : null,
+            structured: $structured ? $this->decodeStructuredOutput($text, $finishReason) : null,
             continuationToken: $data['id'] ?? '',
             replayBlocks: $this->extractReplayBlocks($output),
             reasoning: $this->extractReasoning($output),

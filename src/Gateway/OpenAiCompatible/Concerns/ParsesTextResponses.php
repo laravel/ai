@@ -53,13 +53,15 @@ trait ParsesTextResponses
             $toolCall['id'] ?? null,
         ), $rawToolCalls);
 
+        $finishReason = $this->extractFinishReason($choice);
+
         return new StepResponse(
             text: $text,
             toolCalls: $mappedToolCalls,
-            finishReason: $this->extractFinishReason($choice),
+            finishReason: $finishReason,
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model),
-            structured: $structured ? $this->decodeStructuredOutput($text) : null,
+            structured: $structured ? $this->decodeStructuredOutput($text, $finishReason) : null,
             reasoning: (string) ($message['reasoning_content'] ?? $message['reasoning'] ?? ''),
         );
     }

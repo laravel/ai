@@ -240,7 +240,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             finishReason: $finishReason,
             usage: $usage,
             meta: new Meta($provider->name(), $model),
-            structured: $structured ? $this->decodeStructuredOutput($structuredOutput ?? $output) : null,
+            structured: $structured ? $this->decodeStructuredOutput($structuredOutput ?? $output, $finishReason) : null,
             replayBlocks: $replayBlocks,
             reasoning: $this->extractReasoning($replayBlocks),
         );
@@ -524,7 +524,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             finishReason: $finishReason,
             usage: $totalUsage,
             meta: new Meta($provider->name(), $model),
-            structured: $structuredOutput !== null ? $this->decodeStructuredOutput($structuredOutput) : null,
+            structured: $structuredOutput !== null ? $this->decodeStructuredOutput($structuredOutput, $finishReason) : null,
             replayBlocks: $replayBlocks,
         );
     }

@@ -9,7 +9,7 @@ use Tests\Fixtures\Agents\PromptCacheStructuredAgent;
 
 beforeEach(function (): void {
     Http::fake([
-        'api.anthropic.com/*' => $this->fakeTextResponse(),
+        'api.anthropic.com/*' => $this->fakeStructuredResponse(['symbol' => 'Fe']),
     ]);
 });
 

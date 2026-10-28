@@ -74,7 +74,7 @@ trait ParsesTextResponses
             finishReason: $finishReason,
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model, $this->extractCitations($steps)),
-            structured: $structured ? $this->decodeStructuredOutput($text, strict: $finishReason === FinishReason::Stop) : null,
+            structured: $structured ? $this->decodeStructuredOutput($text, $finishReason) : null,
             replayBlocks: $this->replayableSteps($steps),
             reasoning: $this->extractReasoning($steps),
             providerToolCalls: $this->extractProviderToolCalls($steps),

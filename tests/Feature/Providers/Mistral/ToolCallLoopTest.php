@@ -17,7 +17,7 @@ test('tool calls trigger follow up request', function (): void {
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
-            $this->fakeTextResponse('The number is 72019'),
+            $this->fakeTextResponse('{"number": 72019}'),
         ]),
     ]);
 
@@ -109,7 +109,7 @@ test('follow up request includes original messages', function (): void {
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
-            $this->fakeTextResponse('The number is 72019'),
+            $this->fakeTextResponse('{"number": 72019}'),
         ]),
     ]);
 
@@ -132,7 +132,7 @@ test('follow up response with block content is flattened to text', function (): 
         '*' => Http::sequence([
             $this->fakeToolCallResponse('FixedNumberGenerator', 'call_'.uniqid()),
             $this->fakeTextResponse([
-                ['type' => 'text', 'text' => 'The number is 72019'],
+                ['type' => 'text', 'text' => '{"number": 72019}'],
                 ['type' => 'reference', 'reference_ids' => ['search_documents']],
             ]),
         ]),
@@ -143,5 +143,5 @@ test('follow up response with block content is flattened to text', function (): 
         provider: 'mistral',
     );
 
-    expect($response->text)->toBe('The number is 72019');
+    expect($response->text)->toBe('{"number": 72019}');
 });

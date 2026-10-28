@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\NoStructuredOutputException;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
@@ -261,4 +262,11 @@ test('structured response is correctly parsed', function (): void {
     $response = (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'cohere');
 
     expect($response->structured['symbol'])->toBe('Au');
+});
+
+test('structured output throws when the model replies with prose', function (): void {
+    Http::fake(['*' => $this->fakeTextResponse('The symbol for gold is Au.')]);
+
+    expect(fn () => (new StructuredAgent)->prompt('What is the symbol for gold?', provider: 'cohere'))
+        ->toThrow(NoStructuredOutputException::class);
 });

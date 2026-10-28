@@ -17,7 +17,7 @@ test('tool calls trigger follow up request', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::sequence([
             fakeUniqueOpenAiToolCallResponse(),
-            fakeOpenAiResponse('The number is 72019'),
+            fakeOpenAiResponse('{"number": 72019}'),
         ]),
     ]);
 

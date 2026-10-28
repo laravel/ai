@@ -38,7 +38,7 @@ test('assistant tool calls and tool results are replayed in the follow up reques
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse('FixedNumberGenerator', 'call_1'),
-            $this->fakeTextResponse('The random number generated is 72019.'),
+            $this->fakeTextResponse('{"number": 72019}'),
         ]),
     ]);
 

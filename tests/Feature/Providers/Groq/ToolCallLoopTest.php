@@ -18,7 +18,7 @@ test('tool calls trigger follow up request', function (): void {
     Http::fake([
         'api.groq.com/*' => Http::sequence([
             fakeUniqueGroqToolCallResponse(),
-            fakeGroqResponse('The number is 72019'),
+            fakeGroqResponse('{"number": 72019}'),
         ]),
     ]);
 

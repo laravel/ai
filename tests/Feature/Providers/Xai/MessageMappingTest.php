@@ -44,7 +44,7 @@ test('tool call follow up uses previous response id', function (): void {
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse(),
-            $this->fakeTextResponse('The number is 72019'),
+            $this->fakeTextResponse('{"number": 72019}'),
         ]),
     ]);
 

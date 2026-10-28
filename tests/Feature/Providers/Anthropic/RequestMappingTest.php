@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Attributes\TopP;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Exceptions\NoStructuredOutputException;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\AssistantAgent;
@@ -157,7 +158,7 @@ describe('request structure', function (): void {
         ]]);
 
         Http::fake([
-            'api.anthropic.com/*' => $this->fakeTextResponse('The number is 42'),
+            'api.anthropic.com/*' => $this->fakeTextResponse('{"number": 72019}'),
         ]);
 
         (new ToolUsingAgent(fixed: true))->prompt(
@@ -311,7 +312,7 @@ describe('structured output', function (): void {
         ]]);
 
         Http::fake([
-            'api.anthropic.com/*' => $this->fakeTextResponse(),
+            'api.anthropic.com/*' => $this->fakeSyntheticStructuredResponse(['symbol' => 'Au']),
         ]);
 
         (new StructuredAgent)->prompt(
@@ -343,7 +344,7 @@ describe('structured output', function (): void {
         ]]);
 
         Http::fake([
-            'api.anthropic.com/*' => $this->fakeTextResponse(),
+            'api.anthropic.com/*' => $this->fakeSyntheticStructuredResponse(['symbol' => 'Au']),
         ]);
 
         (new StructuredWithThinkingAgent)->prompt(
@@ -395,6 +396,13 @@ describe('structured output', function (): void {
             provider: 'anthropic',
         );
         expect($response->structured)->toMatchArray(['name' => 'Taylor', 'age' => 30]);
+    });
+
+    test('structured output throws when the model replies with prose', function (): void {
+        Http::fake(['*' => $this->fakeTextResponse('The symbol for gold is Au.')]);
+
+        expect(fn () => (new StructuredAgent)->prompt('What is the symbol for gold?', provider: 'anthropic'))
+            ->toThrow(NoStructuredOutputException::class);
     });
 });
 

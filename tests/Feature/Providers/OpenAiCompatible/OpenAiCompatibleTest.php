@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Exceptions\NoStructuredOutputException;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\AttributeAgent;
@@ -122,6 +123,13 @@ test('structured response is correctly parsed', function (): void {
     $response = (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'openai-compatible');
 
     expect($response->structured['symbol'])->toBe('Au');
+});
+
+test('structured output throws when the model replies with prose', function (): void {
+    Http::fake(['*' => fakeOpenAiCompatibleResponse('The symbol for gold is Au.')]);
+
+    expect(fn () => (new StructuredAgent)->prompt('What is the symbol for gold?', provider: 'openai-compatible'))
+        ->toThrow(NoStructuredOutputException::class);
 });
 
 test('structured response tolerates a markdown code fence', function (): void {

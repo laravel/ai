@@ -41,7 +41,7 @@ test('tool result follow up maps assistant and tool result messages', function (
     Http::fake([
         'api.groq.com/*' => Http::sequence([
             fakeGroqToolCallResponse(),
-            fakeGroqResponse('The number is 72019'),
+            fakeGroqResponse('{"number": 72019}'),
         ]),
     ]);
 

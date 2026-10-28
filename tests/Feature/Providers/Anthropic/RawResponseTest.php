@@ -41,7 +41,7 @@ test('tool call loops expose the raw http response of the final step', function 
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
             $this->fakeUniqueToolCallResponse(),
-            $this->fakeTextResponse('The number is 72019'),
+            $this->fakeTextResponse('{"number": 72019}'),
         ]),
     ]);
 
@@ -51,14 +51,14 @@ test('tool call loops expose the raw http response of the final step', function 
     );
 
     expect($response->raw)->toBeInstanceOf(Response::class)
-        ->and($response->raw->json('content.0.text'))->toBe('The number is 72019');
+        ->and($response->raw->json('content.0.text'))->toBe('{"number": 72019}');
 });
 
 test('each step exposes the raw http response of its own request', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
             $this->fakeUniqueToolCallResponse(),
-            $this->fakeTextResponse('The number is 72019'),
+            $this->fakeTextResponse('{"number": 72019}'),
         ]),
     ]);
 
@@ -71,7 +71,7 @@ test('each step exposes the raw http response of its own request', function (): 
         ->and($response->steps[0]->raw)->toBeInstanceOf(Response::class)
         ->and($response->steps[0]->raw->json('stop_reason'))->toBe('tool_use')
         ->and($response->steps[1]->raw)->toBeInstanceOf(Response::class)
-        ->and($response->steps[1]->raw->json('content.0.text'))->toBe('The number is 72019');
+        ->and($response->steps[1]->raw->json('content.0.text'))->toBe('{"number": 72019}');
 });
 
 test('agent prompted event exposes the raw http response', function (): void {
@@ -126,7 +126,7 @@ test('responses discard the raw http response when serialized', function (): voi
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
             $this->fakeUniqueToolCallResponse(),
-            $this->fakeTextResponse('The number is 72019'),
+            $this->fakeTextResponse('{"number": 72019}'),
         ]),
     ]);
 
@@ -138,8 +138,8 @@ test('responses discard the raw http response when serialized', function (): voi
     $restored = unserialize(serialize($response));
 
     expect($restored->raw)->toBeNull()
-        ->and($restored->text)->toBe('The number is 72019')
+        ->and($restored->text)->toBe('{"number": 72019}')
         ->and($restored->steps)->toHaveCount(2)
         ->and($restored->steps[1]->raw)->toBeNull()
-        ->and($restored->steps[1]->text)->toBe('The number is 72019');
+        ->and($restored->steps[1]->text)->toBe('{"number": 72019}');
 });

@@ -7,7 +7,7 @@ test('tool calls trigger follow up request', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
             $this->fakeUniqueToolCallResponse(),
-            $this->fakeTextResponse('The number is 72019'),
+            $this->fakeTextResponse('{"number": 72019}'),
         ]),
     ]);
 
@@ -62,7 +62,7 @@ test('server_tool_use input is serialized as object on follow-up replay', functi
                 'stop_reason' => 'tool_use',
                 'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
             ]),
-            $this->fakeTextResponse('done'),
+            $this->fakeTextResponse('{"number": 72019}'),
         ]),
     ]);
 
@@ -100,7 +100,7 @@ test('pause_turn resumes when last block is text following a web_search_tool_res
                 'stop_reason' => 'pause_turn',
                 'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
             ]),
-            $this->fakeTextResponse('Done'),
+            $this->fakeTextResponse('{"number": 72019}'),
         ]),
     ]);
 
@@ -143,7 +143,7 @@ test('full compose: pause_turn + server_tool_use replay with input cast and bloc
                 'stop_reason' => 'pause_turn',
                 'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
             ]),
-            $this->fakeTextResponse('Done'),
+            $this->fakeTextResponse('{"number": 72019}'),
         ]),
     ]);
 

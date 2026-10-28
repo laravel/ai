@@ -61,7 +61,7 @@ trait ParsesTextResponses
             finishReason: $finishReason,
             usage: $usage,
             meta: new Meta($provider->name(), $model),
-            structured: $structured ? $this->decodeStructuredOutput($text) : null,
+            structured: $structured ? $this->decodeStructuredOutput($text, $finishReason) : null,
             reasoning: (string) ($message['reasoning'] ?? ''),
         );
     }

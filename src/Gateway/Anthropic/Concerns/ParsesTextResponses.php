@@ -71,19 +71,19 @@ trait ParsesTextResponses
         $realToolCalls = array_values(array_filter($toolCalls, fn (ToolCall $tc): bool => $tc->name !== 'output_structured_data'));
         $hasStructuredToolCall = count($realToolCalls) < count($toolCalls);
 
+        // If the only tool call was the synthetic structured output, this is really a stop.
+        if ($finishReason === FinishReason::ToolCalls && $realToolCalls === []) {
+            $finishReason = FinishReason::Stop;
+        }
+
         $structuredData = null;
 
         if ($structured || $hasStructuredToolCall) {
             $structuredData = $this->extractStructuredOutput($content);
 
             if (empty($structuredData) && filled($text)) {
-                $structuredData = $this->decodeStructuredOutput($text);
+                $structuredData = $this->decodeStructuredOutput($text, $finishReason);
             }
-        }
-
-        // If the only tool call was the synthetic structured output, this is really a stop.
-        if ($finishReason === FinishReason::ToolCalls && $realToolCalls === []) {
-            $finishReason = FinishReason::Stop;
         }
 
         return new StepResponse(

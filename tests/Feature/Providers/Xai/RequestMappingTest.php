@@ -3,6 +3,7 @@
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\NoStructuredOutputException;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
@@ -254,6 +255,13 @@ test('structured response is correctly parsed', function (): void {
     $response = (new StructuredAgent)->prompt('What is the symbol for Gold?', provider: 'xai');
 
     expect($response->structured['symbol'])->toBe('Au');
+});
+
+test('structured output throws when the model replies with prose', function (): void {
+    Http::fake(['*' => fakeXaiRequestMappingResponse('The symbol for gold is Au.')]);
+
+    expect(fn () => (new StructuredAgent)->prompt('What is the symbol for gold?', provider: 'xai'))
+        ->toThrow(NoStructuredOutputException::class);
 });
 
 test('citations preserve every annotation with span indices', function (): void {

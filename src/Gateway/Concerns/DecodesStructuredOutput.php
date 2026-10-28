@@ -2,16 +2,17 @@
 
 namespace Laravel\Ai\Gateway\Concerns;
 
-use Laravel\Ai\Exceptions\InvalidStructuredOutputException;
+use Laravel\Ai\Exceptions\NoStructuredOutputException;
+use Laravel\Ai\Responses\Data\FinishReason;
 
 trait DecodesStructuredOutput
 {
     /**
      * Decode a structured output payload, tolerating markdown code fences.
      *
-     * @throws InvalidStructuredOutputException
+     * @throws NoStructuredOutputException
      */
-    protected function decodeStructuredOutput(?string $text, bool $strict = false): array
+    protected function decodeStructuredOutput(?string $text, FinishReason $finishReason): array
     {
         $trimmed = trim((string) $text);
 
@@ -29,8 +30,8 @@ trait DecodesStructuredOutput
             return $decoded;
         }
 
-        if ($strict) {
-            throw new InvalidStructuredOutputException((string) $text);
+        if ($finishReason === FinishReason::Stop) {
+            throw new NoStructuredOutputException((string) $text);
         }
 
         return [];

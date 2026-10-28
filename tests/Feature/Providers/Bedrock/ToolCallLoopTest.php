@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Laravel\Ai\Exceptions\NoStructuredOutputException;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -150,6 +151,19 @@ describe('tool call loop', function (): void {
             ->and($requests[0]['system'])->toHaveCount(2)
             ->and($requests[0]['system'][0])->toBe(['text' => 'You are a helpful assistant.'])
             ->and($requests[0]['system'][1]['text'])->toContain('"symbol"');
+    });
+
+    test('models that reject forced tool choice throw when the answer is prose', function (): void {
+        $client = $this->fakeBedrockConverseSequence([
+            bedrockTextResponse('The symbol for iron is Fe.'),
+        ]);
+
+        expect(fn () => (new TextGenerationLoop($this->gatewayWithClient($client)))->generate(
+            $this->bedrockProvider(),
+            'us.anthropic.claude-sonnet-5-5',
+            null,
+            schema: ['symbol' => (new JsonSchemaTypeFactory)->string()],
+        ))->toThrow(NoStructuredOutputException::class);
     });
 
     test('models that reject forced tool choice keep real tools on auto selection before the json answer', function (): void {

@@ -44,7 +44,7 @@ test('tool result follow up uses previous response id', function (): void {
     Http::fake([
         'my-resource.cognitiveservices.azure.com/*' => Http::sequence([
             fakeOpenAiToolCallResponse('resp_azure_tool_123', 'gpt-4o'),
-            fakeAzureResponse('The number is 72019'),
+            fakeAzureResponse('{"number": 72019}'),
         ]),
     ]);
 
@@ -84,7 +84,7 @@ test('azure store false enables stateless inline conversation', function (): voi
     Http::fake([
         'my-resource.cognitiveservices.azure.com/*' => Http::sequence([
             fakeOpenAiToolCallResponse('resp_azure_tool_123', 'gpt-4o'),
-            fakeAzureResponse('The number is 72019'),
+            fakeAzureResponse('{"number": 72019}'),
         ]),
     ]);
 

@@ -2,7 +2,7 @@
 
 namespace Laravel\Ai\Exceptions;
 
-class InvalidStructuredOutputException extends AiException implements FailoverableException
+class NoStructuredOutputException extends AiException implements FailoverableException
 {
     public function __construct(public readonly string $text)
     {

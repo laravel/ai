@@ -56,13 +56,15 @@ trait ParsesTextResponses
             );
         }, $rawToolCalls);
 
+        $finishReason = filled($mappedToolCalls) ? FinishReason::ToolCalls : $this->extractFinishReason($data);
+
         return new StepResponse(
             text: $text,
             toolCalls: $mappedToolCalls,
-            finishReason: filled($mappedToolCalls) ? FinishReason::ToolCalls : $this->extractFinishReason($data),
+            finishReason: $finishReason,
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model),
-            structured: $structured ? $this->decodeStructuredOutput($text) : null,
+            structured: $structured ? $this->decodeStructuredOutput($text, $finishReason) : null,
             reasoning: (string) ($message['thinking'] ?? ''),
         );
     }

@@ -1,7 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
-use Laravel\Ai\Exceptions\InvalidStructuredOutputException;
+use Laravel\Ai\Exceptions\NoStructuredOutputException;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
@@ -107,7 +107,7 @@ describe('request structure', function (): void {
 
     test('tool choice is omitted to rely on the Gemini default', function (): void {
         Http::fake([
-            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse(['number' => 42]),
+            'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse(['number' => 72019]),
         ]);
 
         (new ToolUsingAgent(fixed: true))->prompt(
@@ -123,7 +123,7 @@ describe('request structure', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::sequence([
                 $this->fakeToolCallResponse('FixedNumberGenerator', 'call_abc123'),
-                $this->fakeStructuredResponse(['number' => 42]),
+                $this->fakeStructuredResponse(['number' => 72019]),
             ]),
         ]);
 
@@ -175,7 +175,7 @@ describe('structured output', function (): void {
         ]);
 
         expect(fn () => (new StructuredAgent)->prompt('What is the symbol for Iron?', provider: 'gemini'))
-            ->toThrow(fn (InvalidStructuredOutputException $e) => expect($e->text)->toBe('The symbol for iron is Fe.'));
+            ->toThrow(fn (NoStructuredOutputException $e) => expect($e->text)->toBe('The symbol for iron is Fe.'));
     });
 
     test('completed structured responses throw when gemini returns only a thought', function (): void {
@@ -184,7 +184,7 @@ describe('structured output', function (): void {
         ]);
 
         expect(fn () => (new StructuredAgent)->prompt('What is the symbol for Iron?', provider: 'gemini'))
-            ->toThrow(InvalidStructuredOutputException::class);
+            ->toThrow(NoStructuredOutputException::class);
     });
 
     test('truncated structured responses decode to an empty array', function (): void {

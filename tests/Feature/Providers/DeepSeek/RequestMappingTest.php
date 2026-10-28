@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\NoStructuredOutputException;
 use Laravel\Ai\Files\LocalImage;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
@@ -160,6 +161,13 @@ test('structured output appends schema instructions to system message', function
             && str_contains((string) $systemMsg['content'], 'JSON object that strictly adheres')
             && str_contains((string) $systemMsg['content'], '"symbol"');
     });
+});
+
+test('structured output throws when the model replies with prose', function (): void {
+    Http::fake(['*' => fakeDeepSeekResponse('The symbol for gold is Au.')]);
+
+    expect(fn () => (new StructuredAgent)->prompt('What is the symbol for gold?', provider: 'deepseek'))
+        ->toThrow(NoStructuredOutputException::class);
 });
 
 test('request without schema excludes response format', function (): void {

@@ -1,7 +1,8 @@
 <?php
 
-use Laravel\Ai\Exceptions\InvalidStructuredOutputException;
+use Laravel\Ai\Exceptions\NoStructuredOutputException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
+use Laravel\Ai\Responses\Data\FinishReason;
 
 function decoderHost(): object
 {
@@ -9,9 +10,9 @@ function decoderHost(): object
     {
         use DecodesStructuredOutput;
 
-        public function decode(?string $text, bool $strict = false): array
+        public function decode(?string $text, FinishReason $finishReason = FinishReason::Length): array
         {
-            return $this->decodeStructuredOutput($text, $strict);
+            return $this->decodeStructuredOutput($text, $finishReason);
         }
     };
 }
@@ -130,17 +131,17 @@ test('escapes unescaped key quotes inside arrays and fences without touching val
     ]);
 });
 
-test('strict decoding throws with the raw text when the payload is not JSON', function (): void {
+test('a completed response throws with the raw text when the payload is not JSON', function (): void {
     $host = decoderHost();
 
     $payload = "* **Vehicle Make:** Toyota\n* **Registration Plate:** CA 123-456";
 
-    expect(fn () => $host->decode($payload, strict: true))
-        ->toThrow(fn (InvalidStructuredOutputException $e) => expect($e->text)->toBe($payload));
+    expect(fn () => $host->decode($payload, FinishReason::Stop))
+        ->toThrow(fn (NoStructuredOutputException $e) => expect($e->text)->toBe($payload));
 });
 
-test('strict decoding throws for blank and scalar payloads', function (?string $payload): void {
-    expect(fn () => decoderHost()->decode($payload, strict: true))->toThrow(InvalidStructuredOutputException::class);
+test('a completed response throws for blank and scalar payloads', function (?string $payload): void {
+    expect(fn () => decoderHost()->decode($payload, FinishReason::Stop))->toThrow(NoStructuredOutputException::class);
 })->with([
     'null' => [null],
     'blank' => ['   '],
@@ -148,9 +149,13 @@ test('strict decoding throws for blank and scalar payloads', function (?string $
     'invalid fence' => ["```json\n{invalid}\n```"],
 ]);
 
-test('strict decoding accepts empty JSON objects and arrays', function (): void {
+test('a completed response accepts empty JSON objects and arrays', function (): void {
     $host = decoderHost();
 
-    expect($host->decode('{}', strict: true))->toBe([])
-        ->and($host->decode('[]', strict: true))->toBe([]);
+    expect($host->decode('{}', FinishReason::Stop))->toBe([])
+        ->and($host->decode('[]', FinishReason::Stop))->toBe([]);
 });
+
+test('an unfinished response decodes undecodable text to an empty array', function (FinishReason $finishReason): void {
+    expect(decoderHost()->decode('not json at all', $finishReason))->toBe([]);
+})->with([FinishReason::ToolCalls, FinishReason::Length, FinishReason::ContentFilter, FinishReason::Unknown]);

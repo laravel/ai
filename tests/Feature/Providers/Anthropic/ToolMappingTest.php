@@ -11,7 +11,7 @@ use function Laravel\Ai\agent;
 
 test('tool parameters are not wrapped in schema definition', function (): void {
     Http::fake([
-        'api.anthropic.com/*' => $this->fakeTextResponse('The number is 42'),
+        'api.anthropic.com/*' => $this->fakeTextResponse('{"number": 72019}'),
     ]);
 
     (new ToolUsingAgent(fixed: true))->prompt(
@@ -247,7 +247,7 @@ test('web fetch tool forwards a custom max_uses', function () {
 
 test('empty schema still includes input schema with type object', function (): void {
     Http::fake([
-        'api.anthropic.com/*' => $this->fakeTextResponse('The number is 42'),
+        'api.anthropic.com/*' => $this->fakeTextResponse('{"number": 72019}'),
     ]);
 
     (new ToolUsingAgent(fixed: true))->prompt(

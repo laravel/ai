@@ -69,7 +69,7 @@ trait ParsesTextResponses
             finishReason: $finishReason,
             usage: $usage,
             meta: new Meta($provider->name(), $model, $citations),
-            structured: $structured ? $this->decodeStructuredOutput($text) : null,
+            structured: $structured ? $this->decodeStructuredOutput($text, $finishReason) : null,
             continuationToken: $data['id'] ?? null,
             reasoning: $this->extractReasoning($output),
             providerToolCalls: $this->extractProviderToolCalls($output),

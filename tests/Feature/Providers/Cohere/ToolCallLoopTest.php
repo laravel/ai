@@ -17,14 +17,14 @@ test('tool calls trigger follow up request', function (): void {
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse('FixedNumberGenerator', 'call_1'),
-            $this->fakeTextResponse('The random number generated is 72019.'),
+            $this->fakeTextResponse('{"number": 72019}'),
         ]),
     ]);
 
     $response = (new ToolUsingAgent(fixed: true))->prompt('Generate a random number', provider: 'cohere');
 
     expect(Http::recorded())->toHaveCount(2)
-        ->and($response->text)->toBe('The random number generated is 72019.')
+        ->and($response->text)->toBe('{"number": 72019}')
         ->and($response->toolCalls)->toHaveCount(1)
         ->and($response->toolCalls->first()->name)->toBe('FixedNumberGenerator')
         ->and($response->toolResults->first()->result)->toBe('72019')
@@ -35,7 +35,7 @@ test('tool call arguments are decoded', function (): void {
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse('RandomNumberGenerator', 'call_1', '{"min":1,"max":10}'),
-            $this->fakeTextResponse('Done'),
+            $this->fakeTextResponse('{"number": 72019}'),
         ]),
     ]);
 
@@ -48,7 +48,7 @@ test('empty tool call arguments decode to an empty array', function (): void {
     Http::fake([
         '*' => Http::sequence([
             $this->fakeToolCallResponse('FixedNumberGenerator', 'call_1', ''),
-            $this->fakeTextResponse('Done'),
+            $this->fakeTextResponse('{"number": 72019}'),
         ]),
     ]);
 
