@@ -17,6 +17,8 @@ use Traversable;
 
 class ClassificationResponse implements Arrayable, ArrayAccess, Countable, IteratorAggregate, JsonSerializable
 {
+    use Concerns\HasRawResponse;
+
     /**
      * Create a new classification response instance.
      *

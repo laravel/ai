@@ -68,14 +68,14 @@ class OpenAiClassificationGateway implements ClassificationGateway
             }
         }
 
-        return new ClassificationResponse(
+        return (new ClassificationResponse(
             $answers,
             new TextUsage(
                 inputTokens: $data['usage']['input_tokens'] ?? 0,
                 outputTokens: $data['usage']['output_tokens'] ?? 0,
             ),
             new Meta($provider->name(), $data['model'] ?? $model),
-        );
+        ))->withRawResponse($response);
     }
 
     /**

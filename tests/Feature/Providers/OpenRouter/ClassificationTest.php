@@ -112,6 +112,14 @@ test('decisions response is parsed into typed answers', function (): void {
         ->and($response->meta->model)->toBe('typesafe/jev-1.13');
 });
 
+test('the raw decisions response is exposed on the classification response', function (): void {
+    Http::fake(['*' => Http::response(fakeDecisionsResponse())]);
+
+    $response = Classification::of('text')->question('is_urgent', new Boolean('Urgent?'))->classify(provider: 'openrouter');
+
+    expect($response->raw->json('usage.cost'))->toBe(0.000013);
+});
+
 test('classification uses the default decisions model when none is specified', function (): void {
     Http::fake(['*' => Http::response(fakeDecisionsResponse())]);
 

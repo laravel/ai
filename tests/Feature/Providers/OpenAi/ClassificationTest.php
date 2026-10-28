@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\Response;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -104,6 +105,15 @@ test('classification posts questions to the decisions endpoint in the openai wir
                 ],
             ];
     });
+});
+
+test('the raw decisions response is exposed on the classification response', function (): void {
+    Http::fake(['*' => Http::response(fakeOpenAiDecisionsResponse())]);
+
+    $response = Classification::of('text')->question('is_urgent', new Boolean('Is this urgent?'))->classify(provider: 'openai');
+
+    expect($response->raw)->toBeInstanceOf(Response::class)
+        ->and($response->raw->json('model'))->toBe('gpt-6-luna');
 });
 
 test('structured state is sent as json text', function (): void {
