@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Exceptions\EmbeddingsCountMismatchException;
@@ -31,6 +32,17 @@ test('cache is used when enabled explicitly', function (): void {
 
     expect(Http::recorded())->toHaveCount(1);
 });
+
+test('only freshly generated embeddings expose a raw response', function (bool $individually): void {
+    $fresh = Embeddings::for(['a'])->cache(3600, individually: $individually)->generate(provider: 'cohere', model: 'embed-v4.0');
+    $partial = Embeddings::for(['b', 'a'])->cache(3600, individually: $individually)->generate(provider: 'cohere', model: 'embed-v4.0');
+    $cached = Embeddings::for(['b', 'a'])->cache(3600, individually: $individually)->generate(provider: 'cohere', model: 'embed-v4.0');
+
+    expect($fresh->raw)->toBeInstanceOf(Response::class)
+        ->and($partial->raw)->toBeInstanceOf(Response::class)
+        ->and($partial->raw->json('meta.billed_units.input_tokens'))->toBe($individually ? 1 : 2)
+        ->and($cached->raw)->toBeNull();
+})->with([true, false]);
 
 test('cache is used when enabled globally via config', function (): void {
     config(['ai.caching.embeddings.cache' => true]);

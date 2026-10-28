@@ -202,11 +202,11 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         $data = $response->json();
 
-        return new EmbeddingsResponse(
+        return (new EmbeddingsResponse(
             (new Collection($data['embeddings'] ?? []))->pluck('values')->all(),
             new Usage($data['usageMetadata']['promptTokenCount'] ?? 0),
             new Meta($provider->name(), $model),
-        );
+        ))->withRawResponse($response);
     }
 
     /**

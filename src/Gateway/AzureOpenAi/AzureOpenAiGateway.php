@@ -64,11 +64,11 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
 
         $data = $response->json();
 
-        return new EmbeddingsResponse(
+        return (new EmbeddingsResponse(
             collect($data['data'] ?? [])->sortBy('index')->pluck('embedding')->all(),
             new Usage($data['usage']['prompt_tokens'] ?? 0),
             new Meta($provider->name(), $model),
-        );
+        ))->withRawResponse($response);
     }
 
     /**

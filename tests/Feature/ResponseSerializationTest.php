@@ -7,6 +7,8 @@ use Laravel\Ai\Responses\Data\BooleanAnswer;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TextUsage;
+use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\EmbeddingsResponse;
 use Tests\Fixtures\Responses\SubclassedStep;
 use Tests\Fixtures\Responses\SubclassedTextResponse;
 
@@ -43,5 +45,18 @@ test('serialization preserves classification answers and drops the raw response'
     expect($restored->answer('is_urgent')->probability)->toBe(0.9)
         ->and($restored->usage->outputTokens)->toBe(2)
         ->and($restored->meta->model)->toBe('gpt-6-luna')
+        ->and($restored->raw)->toBeNull();
+});
+
+test('serialization preserves embeddings and drops the raw response', function (): void {
+    $response = (new EmbeddingsResponse([[0.1, 0.2], [0.3, 0.4]], new Usage(10), new Meta('openai', 'text-embedding-3-small')))
+        ->withRawResponse(new Response(new Psr7Response(200, [], '{}')));
+
+    $restored = unserialize(serialize($response));
+
+    expect($restored->embeddings)->toBe([[0.1, 0.2], [0.3, 0.4]])
+        ->and($restored->usage->inputTokens)->toBe(10)
+        ->and($restored->meta->provider)->toBe('openai')
+        ->and($restored->meta->model)->toBe('text-embedding-3-small')
         ->and($restored->raw)->toBeNull();
 });

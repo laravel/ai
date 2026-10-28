@@ -47,7 +47,7 @@ trait MapsEmbeddingInputs
 
         $this->validateMultimodalEmbeddingInputSources($inputs);
 
-        $data = $this->withErrorHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('/multimodalembeddings', array_merge($providerOptions, [
                 'model' => $model,
@@ -55,13 +55,15 @@ trait MapsEmbeddingInputs
                     'content' => [$this->mapMultimodalEmbeddingInput($input)],
                 ], $inputs),
             ], $model === 'voyage-multimodal-3' ? [] : ['output_dimension' => $dimensions])),
-        )->json();
+        );
 
-        return new EmbeddingsResponse(
+        $data = $response->json();
+
+        return (new EmbeddingsResponse(
             (new Collection($data['data'] ?? []))->pluck('embedding')->all(),
             new Usage($data['usage']['total_tokens'] ?? $data['total_tokens'] ?? 0),
             new Meta($provider->name(), $model),
-        );
+        ))->withRawResponse($response);
     }
 
     /**

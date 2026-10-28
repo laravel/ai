@@ -129,11 +129,11 @@ class CohereGateway implements EmbeddingGateway, RerankingGateway, StepTextGatew
 
         $data = $response->json();
 
-        return new EmbeddingsResponse(
+        return (new EmbeddingsResponse(
             $this->parseCohereEmbeddings($data['embeddings'] ?? []),
             new Usage($data['meta']['billed_units']['input_tokens'] ?? 0),
             new Meta($provider->name(), $model),
-        );
+        ))->withRawResponse($response);
     }
 
     /**

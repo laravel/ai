@@ -120,10 +120,10 @@ class OllamaGateway implements EmbeddingGateway, StepTextGateway
             ));
         }
 
-        return new EmbeddingsResponse(
+        return (new EmbeddingsResponse(
             $data['embeddings'] ?? [],
             new Usage($data['prompt_eval_count'] ?? 0),
             new Meta($provider->name(), $model),
-        );
+        ))->withRawResponse($response);
     }
 }

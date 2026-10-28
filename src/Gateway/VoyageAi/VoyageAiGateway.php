@@ -36,20 +36,22 @@ class VoyageAiGateway implements EmbeddingGateway, RerankingGateway
             return $this->generateMultimodalEmbeddings($provider, $model, $inputs, $dimensions, $timeout, $providerOptions);
         }
 
-        $data = $this->withErrorHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('/embeddings', array_merge($providerOptions, [
                 'model' => $model,
                 'input' => $inputs,
                 'output_dimension' => $dimensions,
             ])),
-        )->json();
+        );
 
-        return new EmbeddingsResponse(
+        $data = $response->json();
+
+        return (new EmbeddingsResponse(
             (new Collection($data['data']))->pluck('embedding')->all(),
             new Usage($data['usage']['total_tokens'] ?? 0),
             new Meta($provider->name(), $model),
-        );
+        ))->withRawResponse($response);
     }
 
     /**

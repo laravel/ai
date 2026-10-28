@@ -3,6 +3,7 @@
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
@@ -51,6 +52,15 @@ test('embeddings response is correctly parsed', function (): void {
         ->and($response->usage->inputTokens)->toBe(10)
         ->and($response->meta->provider)->toBe('openai')
         ->and($response->meta->model)->toBe('text-embedding-3-small');
+});
+
+test('embeddings expose the raw http response', function (): void {
+    Http::fake(['*' => fakeOpenAiEmbeddingResponse()]);
+
+    $response = Embeddings::for(['Hello world'])->generate(provider: 'openai', model: 'text-embedding-3-small');
+
+    expect($response->raw)->toBeInstanceOf(Response::class)
+        ->and($response->raw->json('usage.prompt_tokens'))->toBe(10);
 });
 
 test('multiple inputs return multiple embeddings', function (): void {

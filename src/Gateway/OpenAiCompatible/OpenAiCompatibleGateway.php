@@ -73,11 +73,11 @@ class OpenAiCompatibleGateway implements EmbeddingGateway, StepTextGateway, Tran
 
         $this->validateTextResponse($data);
 
-        return new EmbeddingsResponse(
+        return (new EmbeddingsResponse(
             $this->parseEmbeddings($data, count($inputs)),
             new Usage($data['usage']['prompt_tokens'] ?? 0),
             new Meta($provider->name(), $model),
-        );
+        ))->withRawResponse($response);
     }
 
     /**

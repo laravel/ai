@@ -12,6 +12,8 @@ use Traversable;
 
 class EmbeddingsResponse implements Arrayable, Countable, IteratorAggregate, JsonSerializable
 {
+    use Concerns\HasRawResponse;
+
     /**
      * Create a new embeddings response instance.
      *

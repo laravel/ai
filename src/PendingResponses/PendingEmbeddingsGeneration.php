@@ -212,7 +212,8 @@ class PendingEmbeddingsGeneration
 
         ksort($embeddings);
 
-        return new EmbeddingsResponse(array_values($embeddings), $response->usage, $response->meta);
+        return (new EmbeddingsResponse(array_values($embeddings), $response->usage, $response->meta))
+            ->withRawResponse($response->raw);
     }
 
     /**
