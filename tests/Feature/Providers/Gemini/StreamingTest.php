@@ -466,6 +466,6 @@ describe('stored interactions', function (): void {
         $followUp = Http::recorded()[1][0]->data();
 
         expect($followUp)->not->toHaveKey('previous_interaction_id')
-            ->and(array_column($followUp['input'], 'type'))->toContain('user_input', 'function_call', 'function_result');
+            ->and(array_column($followUp['input'], 'type'))->toBe(['user_input', 'function_call', 'function_result']);
     });
 });

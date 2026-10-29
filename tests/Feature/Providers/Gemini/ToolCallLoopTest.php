@@ -226,8 +226,7 @@ test('a stored interaction is continued with previous_interaction_id', function 
     expect($recorded[0][0]->data())->not->toHaveKey('previous_interaction_id')
         ->and($followUp['previous_interaction_id'])->toBe('int_123')
         ->and($followUp['input'])->toHaveCount(1)
-        ->and($followUp['input'][0]['type'])->toBe('function_result')
-        ->and($followUp['input'][0]['name'])->toBe('FixedNumberGenerator')
+        ->and($followUp['input'][0])->toMatchArray(['type' => 'function_result', 'name' => 'FixedNumberGenerator'])
         ->and($followUp['system_instruction'])->not->toBeEmpty()
         ->and($followUp['tools'])->not->toBeEmpty();
 });

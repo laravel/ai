@@ -42,7 +42,6 @@ trait BuildsTextRequests
             return $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
         }
 
-        // Tools, instructions and generation config are scoped to an interaction, so they are sent again...
         return [
             ...$this->assembleRequestBody($model, $this->extractToolResultsInput($messages), $instructions, $tools, $schema, $options, $provider),
             'previous_interaction_id' => $previousInteractionId,

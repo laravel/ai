@@ -87,7 +87,7 @@ trait ParsesTextResponses
      */
     protected function continuationToken(array $data, bool $stored): ?string
     {
-        return $stored && filled($data['id'] ?? null) ? (string) $data['id'] : null;
+        return $stored ? ($data['id'] ?? null) : null;
     }
 
     /**
