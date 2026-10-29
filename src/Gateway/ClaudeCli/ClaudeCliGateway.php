@@ -380,6 +380,12 @@ class ClaudeCliGateway implements StepTextGateway
         /** @var ClaudeCliProvider $provider */
         $binary = $provider->cliBinary();
 
+        // Reject paths with directory traversal components — the binary value comes from application
+        // config, but a misconfigured or multi-tenant environment could expose it to untrusted input.
+        if (str_contains($binary, '..')) {
+            throw new InvalidArgumentException('The Claude CLI binary path must not contain directory traversal components.');
+        }
+
         $command = [
             $binary,
             '--output-format', 'stream-json',
