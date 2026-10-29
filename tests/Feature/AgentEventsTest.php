@@ -37,8 +37,8 @@ use Tests\Fixtures\Agents\MiddleManagerAgent;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\OrchestratorAgent;
 use Tests\Fixtures\Agents\RateLimitedToolAgent;
+use Tests\Fixtures\Agents\RecoveringThrowingApprovableAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
-use Tests\Fixtures\Agents\RememberingThrowingApprovableAgent;
 use Tests\Fixtures\Agents\ResearchAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 use Tests\Fixtures\FakeConversationStore;
@@ -340,7 +340,7 @@ test('a throwing tool dispatches tool failed and still propagates the exception'
         ->and($failed->invocationId)->toBe($invoking->invocationId);
 });
 
-test('a tool that fails while resuming an approval reports the failure once and continues the run', function (): void {
+test('a tool that fails while resuming an approval reports the failure once and continues the run for agents that recover from tool failures', function (): void {
     Event::fake();
 
     Config::set('ai.conversations.generate_title', false);
@@ -375,11 +375,11 @@ test('a tool that fails while resuming an approval reports the failure once and 
 
     $user = (object) ['id' => 1];
 
-    $paused = (new RememberingThrowingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+    $paused = (new RecoveringThrowingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
 
     expect($paused->hasPendingApprovals())->toBeTrue();
 
-    $resumed = (new RememberingThrowingApprovableAgent)
+    $resumed = (new RecoveringThrowingApprovableAgent)
         ->continue($paused->conversationId, $user)
         ->prompt(Decisions::from(['toolu_1' => true]), provider: 'anthropic');
 
