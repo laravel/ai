@@ -48,6 +48,9 @@ test('tool calls trigger follow up request', function (): void {
 });
 
 test('max steps limits tool call depth', function (): void {
+    // MaxSteps(3) = 3 tool-calling steps. When all 3 exhaust while the model is still
+    // calling tools, the framework makes one final tool-free cleanup step so the model
+    // can produce a text acknowledgement — 4 requests total at most.
     Http::fake([
         '*' => Http::sequence([
             fakeOpenRouterToolCallResponse(),
@@ -76,7 +79,7 @@ test('max steps limits tool call depth', function (): void {
 
     $requests = Http::recorded(fn (Request $r): true => true);
 
-    expect(count($requests))->toBeLessThanOrEqual(3);
+    expect(count($requests))->toBeLessThanOrEqual(4);
 });
 
 test('multi step tool loop returns accumulated response shape', function (): void {

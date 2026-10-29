@@ -61,11 +61,13 @@ describe('tool call loop', function (): void {
     });
 
     test('max steps limits tool call depth', function (): void {
+        // The loop runs 2 tool-calling steps (maxSteps: 2). When both steps exhaust
+        // the budget while still calling tools, the framework makes one final tool-free
+        // cleanup step to give the model a chance to produce a text acknowledgement.
         $client = $this->fakeBedrockConverseSequence([
             bedrockToolCallResponse('t1'),
             bedrockToolCallResponse('t2'),
-            bedrockToolCallResponse('t3'),
-            bedrockTextResponse('Done'),
+            bedrockTextResponse('I cannot call more tools.'),
         ]);
 
         $gateway = $this->gatewayWithClient($client);
@@ -79,7 +81,7 @@ describe('tool call loop', function (): void {
             options: new TextGenerationOptions(maxSteps: 2),
         );
 
-        expect($response->steps)->toHaveCount(2);
+        expect($response->steps)->toHaveCount(3);
     });
 
     test('unknown tool call throws NoSuchToolException', function (): void {

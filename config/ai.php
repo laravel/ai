@@ -58,6 +58,11 @@ return [
             'url' => env('ANTHROPIC_URL', 'https://api.anthropic.com/v1'),
         ],
 
+        'claude-cli' => [
+            'driver' => 'claude-cli',
+            'cli_binary' => env('CLAUDE_CLI_BINARY', 'claude'),
+        ],
+
         'azure' => [
             'driver' => 'azure',
             'key' => env('AZURE_OPENAI_API_KEY'),

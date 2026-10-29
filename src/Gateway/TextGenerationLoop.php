@@ -215,6 +215,18 @@ class TextGenerationLoop
             $previous = $prepared;
         }
 
+        // When the loop exhausted its step budget (not stopped/cancelled early) while the model
+        // was still requesting tools, "max steps reached" tool results were appended to the message
+        // history but the model never got to respond.  Do one final tool-free step so the model
+        // can acknowledge the situation and produce a non-empty text response.
+        if ($step >= $maxSteps && $lastResult !== null && end($allMessages) instanceof ToolResultMessage) {
+            $lastResult = $this->gateway->generateTextStep(
+                $provider, $model, $instructions, $allMessages, [],
+                $schema, $options, $timeout, new StepContext(continuationToken: $continuationToken),
+            );
+            $steps->push($this->buildStep($lastResult));
+        }
+
         return $lastResult === null
             ? $this->emptyResponse($provider, $model, $newMessages)
             : $this->buildFinalResponse($steps, $newMessages, $lastResult);
@@ -427,6 +439,20 @@ class TextGenerationLoop
 
             $continuationToken = $result->continuationToken;
             $previous = $prepared;
+        }
+
+        // When the loop exhausted its step budget (not stopped/cancelled early) while the model
+        // was still requesting tools, do one final tool-free step so the model can acknowledge
+        // the situation and produce a non-empty text response.
+        if ($step >= $maxSteps && end($allMessages) instanceof ToolResultMessage) {
+            $cleanupResult = $this->gateway->generateTextStep(
+                $provider, $model, $instructions, $allMessages, [],
+                $schema, $options, $timeout, new StepContext(continuationToken: $continuationToken),
+            );
+            $steps->push($this->buildStep($cleanupResult));
+            $accumulatedUsage = $accumulatedUsage->add($cleanupResult->usage);
+            $finalReason = $cleanupResult->finishReason;
+            yield from $this->eventsFor($invocationId, $provider, $model, $cleanupResult);
         }
 
         // A step that never produced a response has already thrown, so the loop only reaches here having set a reason...

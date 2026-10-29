@@ -20,6 +20,7 @@ use Laravel\Ai\Gateway\Anthropic\AnthropicGateway;
 use Laravel\Ai\Gateway\Gemini\GeminiGateway;
 use Laravel\Ai\Gateway\OpenAi\OpenAiGateway;
 use Laravel\Ai\Providers\AnthropicProvider;
+use Laravel\Ai\Providers\ClaudeCliProvider;
 use Laravel\Ai\Providers\AzureOpenAiProvider;
 use Laravel\Ai\Providers\BedrockProvider;
 use Laravel\Ai\Providers\CohereProvider;
@@ -299,6 +300,17 @@ class AiManager extends MultipleInstanceManager
     {
         return new AnthropicProvider(
             new AnthropicGateway($this->app['events']),
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create a Claude CLI powered instance.
+     */
+    public function createClaudeCliDriver(array $config): ClaudeCliProvider
+    {
+        return new ClaudeCliProvider(
             $config,
             $this->app->make(Dispatcher::class)
         );
