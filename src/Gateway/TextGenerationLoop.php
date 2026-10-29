@@ -783,7 +783,6 @@ class TextGenerationLoop
         try {
             return $this->toolResult($toolCall, $this->executeTool($tool, $toolCall->arguments, $toolCall->id, $context));
         } catch (ToolExecutionException $exception) {
-            // The model only sees the message, so the exception is still reported for the application to see the whole failure...
             report($exception->exception);
 
             return $this->toolResult($toolCall, 'The tool call failed: '.$exception->exception->getMessage(), failed: true);
