@@ -75,6 +75,27 @@ test('tool calls run when the message ends with end_turn', function (): void {
         ->and($response->text)->toBe('The number is 72019');
 });
 
+test('tool calls do not run when the message ends with max_tokens', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'id' => 'msg_tool_123',
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-4-6',
+            'content' => [
+                ['type' => 'text', 'text' => 'Let me generate a number.'],
+                ['type' => 'tool_use', 'id' => 'toolu_123', 'name' => 'FixedNumberGenerator', 'input' => (object) []],
+            ],
+            'stop_reason' => 'max_tokens',
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
+    ]);
+
+    (new ToolUsingAgent(fixed: true))->prompt('Generate a random number', provider: 'anthropic');
+
+    expect(Http::recorded())->toHaveCount(1);
+});
+
 test('server_tool_use input is serialized as object on follow-up replay', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
