@@ -4,6 +4,8 @@ namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
+use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -23,6 +25,22 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 
 trait HandlesTextStreaming
 {
+    /**
+     * Get the content of the paused steps the turn being continued is made of.
+     *
+     * @param  array<int, Message>  $messages
+     * @return array<int, array<string, mixed>>
+     */
+    protected function pausedContent(array $messages): array
+    {
+        return collect($messages)
+            ->reverse()
+            ->takeWhile(fn (Message $message) => $message instanceof AssistantMessage)
+            ->reverse()
+            ->flatMap(fn (AssistantMessage $message) => $message->replayBlocks)
+            ->all();
+    }
+
     /**
      * Process a single Anthropic streaming turn and yield Laravel stream events.
      *

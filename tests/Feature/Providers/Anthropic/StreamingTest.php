@@ -360,7 +360,7 @@ describe('pause_turn', function (): void {
         expect(array_map(fn (TextDelta $e): string => $e->delta, $textDeltas))->toBe(["First\n", 'Second']);
     });
 
-    test('streaming continues text paused mid-sentence without a separator', function (): void {
+    test('streaming continues a paused step that ran no tools without a separator', function (): void {
         Http::fake([
             'api.anthropic.com/*' => Http::sequence([
                 Http::response(
@@ -418,6 +418,58 @@ describe('pause_turn', function (): void {
                         $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
                         $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'Revenue grew.']),
                         $this->contentBlockStop(0),
+                        $this->messageDelta('end_turn', 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+            ]),
+        ]);
+
+        $events = $this->collectStreamEvents();
+
+        $textDeltas = array_values(array_filter($events, fn ($e): bool => $e instanceof TextDelta));
+
+        expect(implode('', array_map(fn (TextDelta $e): string => $e->delta, $textDeltas)))->toBe("Let me check.\n\nRevenue grew.")
+            ->and(TextDelta::combine($events))->toBe("Let me check.\n\nRevenue grew.");
+    });
+
+    test('streaming separates text resumed after a turn paused twice', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->messageStart(),
+                        $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                        $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'Let me check.']),
+                        $this->contentBlockStop(0),
+                        $this->contentBlockStart(1, ['type' => 'server_tool_use', 'id' => 'srvtoolu_1', 'name' => 'web_search']),
+                        $this->contentBlockStop(1),
+                        $this->messageDelta('pause_turn', 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->messageStart(),
+                        $this->contentBlockStart(0, ['type' => 'web_search_tool_result', 'tool_use_id' => 'srvtoolu_1', 'content' => []]),
+                        $this->contentBlockStop(0),
+                        $this->contentBlockStart(1, ['type' => 'server_tool_use', 'id' => 'srvtoolu_2', 'name' => 'web_search']),
+                        $this->contentBlockStop(1),
+                        $this->messageDelta('pause_turn', 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->messageStart(),
+                        $this->contentBlockStart(0, ['type' => 'web_search_tool_result', 'tool_use_id' => 'srvtoolu_2', 'content' => []]),
+                        $this->contentBlockStop(0),
+                        $this->contentBlockStart(1, ['type' => 'text', 'text' => '']),
+                        $this->contentBlockDelta(1, ['type' => 'text_delta', 'text' => 'Revenue grew.']),
+                        $this->contentBlockStop(1),
                         $this->messageDelta('end_turn', 5),
                     ]),
                     status: 200,

@@ -21,6 +21,11 @@ function stepStart(): StreamStart
     return new StreamStart(uniqid(), 'fake', 'fake-model', time());
 }
 
+function toolResult(string $callId): ToolResult
+{
+    return new ToolResult(uniqid(), new Data\ToolResult($callId, 'get_weather', [], '12°C'), true, null, time());
+}
+
 test('combine joins the deltas of a single step without separators', function () {
     $events = [
         stepStart(),
@@ -62,10 +67,10 @@ test('combine drops a step that produced only whitespace', function () {
     $events = [
         stepStart(),
         textDelta('message-1', 'First.'),
-        new ToolResult(uniqid(), new Data\ToolResult('call-1', 'get_weather', [], '12°C'), true, null, time()),
+        toolResult('call-1'),
         stepStart(),
         textDelta('message-2', "\n"),
-        new ToolResult(uniqid(), new Data\ToolResult('call-2', 'get_weather', [], '12°C'), true, null, time()),
+        toolResult('call-2'),
         stepStart(),
         textDelta('message-3', 'Second.'),
     ];

@@ -16,14 +16,7 @@ class TextDelta extends StreamEvent
     }
 
     /**
-     * Combine the text deltas in the given collection of events into a single string.
-     *
-     * Each step of a multi-step generation is a self-contained utterance
-     * (typically narration around a tool call), so steps are joined with a blank
-     * line instead of being run together mid-sentence. The boundary is the step's
-     * own `StreamStart` rather than a change of message ID, which Anthropic rotates
-     * per content block — web search splits one answer across several, mid-sentence.
-     * A step without tool results was paused, so the step after it carries on from it.
+     * Combine the text deltas, starting a new paragraph only after a step that ran tools.
      */
     public static function combine(Collection|array $events): string
     {
