@@ -947,6 +947,23 @@ class TextGenerationLoop
     }
 
     /**
+     * Determine whether the approval's decisions answer a tool call paused in the history for a tool that is still available, since a pause faked for a tool the agent does not have has nothing to resume.
+     *
+     * @param  array<string, Decision>  $approval
+     * @param  Message[]  $messages
+     * @param  array<Tool|ProviderTool>  $tools
+     */
+    public function answersPendingToolCalls(array $approval, array $messages, array $tools): bool
+    {
+        [$pendingToolCalls] = $this->pendingToolCalls($messages);
+
+        return $pendingToolCalls->contains(
+            fn (ToolCall $toolCall): bool => (array_key_exists($toolCall->id, $approval) || array_key_exists('*', $approval))
+                && $this->findTool($toolCall->name, $tools) instanceof Tool,
+        );
+    }
+
+    /**
      * Validate the approval's decisions against the pending tool calls, throwing on any mismatch.
      *
      * @param  array<string, Decision>  $approval
