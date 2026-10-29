@@ -117,19 +117,13 @@ class TextGenerationLoop
         $lastResult = null;
 
         if ($approval !== null) {
-            $resumption = $this->withToolCallSettings(
-                $options, fn (): ApprovalResumption => $this->resumeFromApproval($approval, $messages, $tools, context: $context),
-            );
+            $resumption = $this->resumeFromApproval($approval, $messages, $tools, context: $context);
 
             $allMessages = $resumption->messages;
             $newMessages = $resumption->newMessages;
 
             if ($recordApprovalResults !== null) {
                 $recordApprovalResults($resumption->results);
-            }
-
-            if ($resumption->failure !== null) {
-                throw $resumption->failure;
             }
 
             if (! $resumption->shouldContinue) {
@@ -263,9 +257,7 @@ class TextGenerationLoop
         $finalReason = null;
 
         if ($approval !== null) {
-            $resumption = $this->withToolCallSettings(
-                $options, fn (): ApprovalResumption => $this->resumeFromApproval($approval, $messages, $tools, $validatedApproval, $context),
-            );
+            $resumption = $this->resumeFromApproval($approval, $messages, $tools, $validatedApproval, $context);
 
             $allMessages = $resumption->messages;
 
@@ -282,10 +274,6 @@ class TextGenerationLoop
                     time(),
                     denied: $toolResult->denied,
                 ))->withInvocationId($invocationId);
-            }
-
-            if ($resumption->failure !== null) {
-                throw $resumption->failure;
             }
 
             if (! $resumption->shouldContinue) {
@@ -609,7 +597,7 @@ class TextGenerationLoop
     }
 
     /**
-     * Run the given callback with the tool call repair and failure recovery settings the agent asks for.
+     * Run the given callback with the tool call repair and failure recovery settings the step's agent asks for.
      */
     private function withToolCallSettings(?TextGenerationOptions $options, Closure $callback): mixed
     {
@@ -789,39 +777,35 @@ class TextGenerationLoop
         return $this->recordedToolResult(match (true) {
             ! $tool instanceof Tool && $this->repairsToolCalls => $this->toolResult($toolCall, "Tool '{$toolCall->name}' does not exist. Available tools: {$this->availableToolNames($tools)}.", failed: true),
             $isFinalStep => $this->toolResult($toolCall, 'The agent reached its maximum number of steps without running this tool call.', failed: true),
-            default => $this->executedToolResult($toolCall, $tool, $toolCall->arguments, $context),
+            default => $this->executedToolResult($toolCall, $tool, $context),
         }, $context);
     }
 
     /**
-     * Execute the tool for the given call, which both a step and an approval resume go through, so a failing tool is handled the same way on either path.
-     *
-     * @param  array<string, mixed>  $arguments
+     * Execute the tool for the given call, returning its failure to the model instead of ending the run when the agent recovers from tool failures.
      */
-    protected function executedToolResult(ToolCall $toolCall, Tool $tool, array $arguments, ?RunContext $context = null): ToolResult
+    protected function executedToolResult(ToolCall $toolCall, Tool $tool, ?RunContext $context = null): ToolResult
     {
         try {
-            return $this->toolResult($toolCall, $this->executeTool($tool, $arguments, $toolCall->id, $context), arguments: $arguments);
+            return $this->toolResult($toolCall, $this->executeTool($tool, $toolCall->arguments, $toolCall->id, $context));
         } catch (ToolHandlerException $exception) {
             if (! $this->recoversFromToolFailures) {
                 throw $exception->exception;
             }
 
-            return $this->recoveredToolResult($toolCall, $exception->exception, $arguments);
+            return $this->recoveredToolResult($toolCall, $exception->exception);
         }
     }
 
     /**
      * Turn a tool's exception into a failed result the model can respond to.
-     *
-     * @param  array<string, mixed>  $arguments
      */
-    protected function recoveredToolResult(ToolCall $toolCall, Throwable $exception, array $arguments): ToolResult
+    protected function recoveredToolResult(ToolCall $toolCall, Throwable $exception): ToolResult
     {
         // The model only sees the message, so the exception is still reported for the application to see the whole failure...
         report($exception);
 
-        return $this->toolResult($toolCall, 'The tool call failed: '.$exception->getMessage(), failed: true, arguments: $arguments);
+        return $this->toolResult($toolCall, 'The tool call failed: '.$exception->getMessage(), failed: true);
     }
 
     /**
@@ -836,15 +820,13 @@ class TextGenerationLoop
 
     /**
      * Create a tool result for the given tool call.
-     *
-     * @param  array<string, mixed>|null  $arguments
      */
-    protected function toolResult(ToolCall $toolCall, mixed $result, bool $failed = false, ?array $arguments = null): ToolResult
+    protected function toolResult(ToolCall $toolCall, mixed $result, bool $failed = false): ToolResult
     {
         return new ToolResult(
             $toolCall->id,
             $toolCall->name,
-            $arguments ?? $toolCall->arguments,
+            $toolCall->arguments,
             $result,
             $toolCall->resultId,
             failed: $failed,
@@ -914,7 +896,7 @@ class TextGenerationLoop
     {
         $messages = $this->settleAbandonedToolCalls($messages, exceptLatestAssistantTurn: true);
 
-        [$approvalResults, $shouldContinue, $failure] = $this->resolveApprovalResults($approval, $messages, $tools, $validatedApproval, $context);
+        [$approvalResults, $shouldContinue] = $this->resolveApprovalResults($approval, $messages, $tools, $validatedApproval, $context);
 
         $newMessages = [];
 
@@ -927,7 +909,6 @@ class TextGenerationLoop
             newMessages: $newMessages,
             results: $approvalResults,
             shouldContinue: $shouldContinue,
-            failure: $failure,
         );
     }
 
@@ -936,7 +917,7 @@ class TextGenerationLoop
      * @param  Message[]  $messages
      * @param  array<Tool|ProviderTool>  $tools
      * @param  array{Collection<int, ToolCall>, Collection<string, ?Tool>}|null  $validatedApproval  a caller's own eager validateApproval() result, reused instead of re-validating
-     * @return array{array<int, ToolResult>, bool, ?Throwable}
+     * @return array{array<int, ToolResult>, bool}
      */
     protected function resolveApprovalResults(array $approval, array $messages, array $tools, ?array $validatedApproval = null, ?RunContext $context = null): array
     {
@@ -944,7 +925,6 @@ class TextGenerationLoop
 
         $toolResults = [];
         $hasBareRejection = false;
-        $failure = null;
 
         foreach ($pendingToolCalls as $toolCall) {
             $tool = $resolvedTools[$toolCall->id];
@@ -970,28 +950,30 @@ class TextGenerationLoop
 
             $arguments = $decision->arguments ?? $toolCall->arguments;
 
-            // A step stops at its first failing tool, so once an approved tool fails the run the rest are settled without running...
-            if ($failure !== null) {
-                $toolResults[] = $this->toolResult($toolCall, 'This tool call was not executed because an earlier tool call failed.', failed: true, arguments: $arguments);
-
-                continue;
-            }
-
             if (! $tool instanceof Tool) {
                 throw new NoSuchToolException($toolCall->name);
             }
 
-            try {
-                $toolResults[] = $this->executedToolResult($toolCall, $tool, $arguments, $context);
-            } catch (Throwable $exception) {
-                // The failure is still recorded before it is rethrown, so the paused turn is settled and a retry cannot run the approved tool a second time...
-                $failure = $exception;
+            $failed = false;
 
-                $toolResults[] = $this->toolResult($toolCall, 'The tool call failed.', failed: true, arguments: $arguments);
+            try {
+                $result = $this->executeTool($tool, $arguments, $toolCall->id, $context);
+            } catch (Throwable $exception) {
+                $failed = true;
+                $result = 'The tool call failed: '.$exception->getMessage();
             }
+
+            $toolResults[] = new ToolResult(
+                $toolCall->id,
+                $toolCall->name,
+                $arguments,
+                $result,
+                $toolCall->resultId,
+                failed: $failed,
+            );
         }
 
-        return [$toolResults, ! $hasBareRejection, $failure];
+        return [$toolResults, ! $hasBareRejection];
     }
 
     /**

@@ -3,7 +3,6 @@
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Event;
-use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Contracts\ConversationStore;
@@ -38,8 +37,8 @@ use Tests\Fixtures\Agents\MiddleManagerAgent;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\OrchestratorAgent;
 use Tests\Fixtures\Agents\RateLimitedToolAgent;
-use Tests\Fixtures\Agents\RecoveringThrowingApprovableAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
+use Tests\Fixtures\Agents\RememberingThrowingApprovableAgent;
 use Tests\Fixtures\Agents\ResearchAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 use Tests\Fixtures\FakeConversationStore;
@@ -341,9 +340,8 @@ test('a throwing tool dispatches tool failed and still propagates the exception'
         ->and($failed->invocationId)->toBe($invoking->invocationId);
 });
 
-test('a tool that fails while resuming an approval reports the failure once and continues the run for agents with the recovery attribute', function (): void {
+test('a tool that fails while resuming an approval reports the failure once and continues the run', function (): void {
     Event::fake();
-    Exceptions::fake();
 
     Config::set('ai.conversations.generate_title', false);
 
@@ -377,11 +375,11 @@ test('a tool that fails while resuming an approval reports the failure once and 
 
     $user = (object) ['id' => 1];
 
-    $paused = (new RecoveringThrowingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
+    $paused = (new RememberingThrowingApprovableAgent)->forUser($user)->prompt('Generate a number', provider: 'anthropic');
 
     expect($paused->hasPendingApprovals())->toBeTrue();
 
-    $resumed = (new RecoveringThrowingApprovableAgent)
+    $resumed = (new RememberingThrowingApprovableAgent)
         ->continue($paused->conversationId, $user)
         ->prompt(Decisions::from(['toolu_1' => true]), provider: 'anthropic');
 
@@ -389,7 +387,6 @@ test('a tool that fails while resuming an approval reports the failure once and 
     Event::assertDispatchedTimes(ToolFailed::class, 1);
     Event::assertNotDispatched(ToolInvoked::class);
     Event::assertNotDispatched(AgentFailed::class);
-    Exceptions::assertReportedCount(1);
 
     expect($resumed->text)->toBe('The tool could not run.');
 
