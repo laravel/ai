@@ -29,7 +29,7 @@ class TextDelta extends StreamEvent
     {
         return Collection::wrap($events)
             ->chunkWhile(fn (StreamEvent $event, $key, Collection $step) => ! $event instanceof StreamStart
-                || $step->doesntContain(fn (StreamEvent $event) => $event instanceof ToolResult))
+                || $step->doesntContain(fn (StreamEvent $previous) => $previous instanceof ToolResult))
             ->map(fn (Collection $step) => $step->whereInstanceOf(TextDelta::class)
                 ->map(fn (TextDelta $event) => $event->delta)
                 ->join(''))

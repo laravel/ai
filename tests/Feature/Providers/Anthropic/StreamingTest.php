@@ -390,10 +390,10 @@ describe('pause_turn', function (): void {
 
         $events = $this->collectStreamEvents();
 
-        $streamed = implode('', array_map(fn (TextDelta $e): string => $e->delta, array_filter($events, fn ($e): bool => $e instanceof TextDelta)));
+        $textDeltas = array_values(array_filter($events, fn ($e): bool => $e instanceof TextDelta));
 
-        expect($streamed)->toBe('The latest figures show that revenue grew.')
-            ->and(TextDelta::combine($events))->toBe($streamed);
+        expect(implode('', array_map(fn (TextDelta $e): string => $e->delta, $textDeltas)))->toBe('The latest figures show that revenue grew.')
+            ->and(TextDelta::combine($events))->toBe('The latest figures show that revenue grew.');
     });
 
     test('streaming separates text resumed after a paused server tool', function (): void {
@@ -428,10 +428,10 @@ describe('pause_turn', function (): void {
 
         $events = $this->collectStreamEvents();
 
-        $streamed = implode('', array_map(fn (TextDelta $e): string => $e->delta, array_filter($events, fn ($e): bool => $e instanceof TextDelta)));
+        $textDeltas = array_values(array_filter($events, fn ($e): bool => $e instanceof TextDelta));
 
-        expect($streamed)->toBe("Let me check.\n\nRevenue grew.")
-            ->and(TextDelta::combine($events))->toBe($streamed);
+        expect(implode('', array_map(fn (TextDelta $e): string => $e->delta, $textDeltas)))->toBe("Let me check.\n\nRevenue grew.")
+            ->and(TextDelta::combine($events))->toBe("Let me check.\n\nRevenue grew.");
     });
 });
 
