@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\Concerns;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Approvals\Approval;
 use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -13,6 +14,24 @@ use Laravel\Ai\Responses\Data\ToolResult;
 
 trait HandlesToolApprovals
 {
+    /**
+     * Ensure tool calls can be unambiguously matched to individual approval decisions.
+     *
+     * @param  ToolCall[]  $toolCalls
+     */
+    protected function ensureValidToolCallIds(array $toolCalls): void
+    {
+        $seen = [];
+
+        foreach ($toolCalls as $toolCall) {
+            if (trim($toolCall->id) === '' || $toolCall->id === '*' || isset($seen[$toolCall->id])) {
+                throw new AiException('Tool call IDs must be non-empty, unique within a turn, and may not be "*".');
+            }
+
+            $seen[$toolCall->id] = true;
+        }
+    }
+
     /**
      * Get the unresolved tool calls in the latest assistant turn, plus the ids already answered.
      *
@@ -33,6 +52,8 @@ trait HandlesToolApprovals
             if (! $message instanceof AssistantMessage) {
                 continue;
             }
+
+            $this->ensureValidToolCallIds($message->toolCalls->all());
 
             return [
                 $message->toolCalls
