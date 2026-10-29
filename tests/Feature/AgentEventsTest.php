@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Contracts\ConversationStore;
@@ -340,8 +341,9 @@ test('a throwing tool dispatches tool failed and still propagates the exception'
         ->and($failed->invocationId)->toBe($invoking->invocationId);
 });
 
-test('a tool that fails while resuming an approval reports the failure once and continues the run for agents that recover from tool failures', function (): void {
+test('a tool that fails while resuming an approval reports the failure once and continues the run for agents with the recovery attribute', function (): void {
     Event::fake();
+    Exceptions::fake();
 
     Config::set('ai.conversations.generate_title', false);
 
@@ -387,6 +389,7 @@ test('a tool that fails while resuming an approval reports the failure once and 
     Event::assertDispatchedTimes(ToolFailed::class, 1);
     Event::assertNotDispatched(ToolInvoked::class);
     Event::assertNotDispatched(AgentFailed::class);
+    Exceptions::assertReportedCount(1);
 
     expect($resumed->text)->toBe('The tool could not run.');
 

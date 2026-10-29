@@ -10,6 +10,7 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
+use Laravel\Ai\Exceptions\ToolHandlerException;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Tools\Request;
@@ -173,7 +174,7 @@ test('a listener that throws is not reported as a tool failure', function (): vo
     expect($failed)->toBe(0);
 });
 
-test('a failing tool handler is reported as a tool failure and rethrown', function (): void {
+test('a failing tool handler is reported as a tool failure and rethrown wrapped so the loop can recognize it', function (): void {
     $failure = null;
 
     $events = new Dispatcher;
@@ -186,7 +187,8 @@ test('a failing tool handler is reported as a tool failure and rethrown', functi
     });
 
     expect(fn (): string => toolInvokingGateway()->invoke($tool, ['a' => 1], stubRunContext($events)))
-        ->toThrow(RuntimeException::class, 'Handler exploded.');
+        ->toThrow(fn (ToolHandlerException $exception) => expect($exception->exception)->toBeInstanceOf(RuntimeException::class)
+            ->and($exception->exception->getMessage())->toBe('Handler exploded.'));
 
     expect($failure)->toBeInstanceOf(ToolFailed::class)
         ->and($failure->invocationId)->toBe('inv_1')

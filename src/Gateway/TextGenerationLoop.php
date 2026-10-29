@@ -25,6 +25,7 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Exceptions\StreamErrorException;
+use Laravel\Ai\Exceptions\ToolHandlerException;
 use Laravel\Ai\Gateway\Concerns\HandlesToolApprovals;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -608,7 +609,7 @@ class TextGenerationLoop
     }
 
     /**
-     * Run the given callback with the tool call repair and failure recovery settings the step's agent asks for.
+     * Run the given callback with the tool call repair and failure recovery settings the agent asks for.
      */
     private function withToolCallSettings(?TextGenerationOptions $options, Closure $callback): mixed
     {
@@ -793,7 +794,7 @@ class TextGenerationLoop
     }
 
     /**
-     * Execute the tool for the given call, which is the one place a step and an approval resume both run tools, so a failure is handled the same way on either path.
+     * Execute the tool for the given call, which both a step and an approval resume go through, so a failing tool is handled the same way on either path.
      *
      * @param  array<string, mixed>  $arguments
      */
@@ -801,22 +802,22 @@ class TextGenerationLoop
     {
         try {
             return $this->toolResult($toolCall, $this->executeTool($tool, $arguments, $toolCall->id, $context), arguments: $arguments);
-        } catch (Throwable $exception) {
-            return $this->recoveredToolResult($toolCall, $exception, $arguments);
+        } catch (ToolHandlerException $exception) {
+            if (! $this->recoversFromToolFailures) {
+                throw $exception->exception;
+            }
+
+            return $this->recoveredToolResult($toolCall, $exception->exception, $arguments);
         }
     }
 
     /**
-     * Turn a tool's exception into a failed result the model can respond to when the agent recovers from tool failures, otherwise rethrow it.
+     * Turn a tool's exception into a failed result the model can respond to.
      *
-     * @param  array<string, mixed>|null  $arguments
+     * @param  array<string, mixed>  $arguments
      */
-    protected function recoveredToolResult(ToolCall $toolCall, Throwable $exception, ?array $arguments = null): ToolResult
+    protected function recoveredToolResult(ToolCall $toolCall, Throwable $exception, array $arguments): ToolResult
     {
-        if (! $this->recoversFromToolFailures) {
-            throw $exception;
-        }
-
         // The model only sees the message, so the exception is still reported for the application to see the whole failure...
         report($exception);
 
@@ -969,6 +970,13 @@ class TextGenerationLoop
 
             $arguments = $decision->arguments ?? $toolCall->arguments;
 
+            // A step stops at its first failing tool, so once an approved tool fails the run the rest are settled without running...
+            if ($failure !== null) {
+                $toolResults[] = $this->toolResult($toolCall, 'This tool call was not executed because an earlier tool call failed.', failed: true, arguments: $arguments);
+
+                continue;
+            }
+
             if (! $tool instanceof Tool) {
                 throw new NoSuchToolException($toolCall->name);
             }
@@ -977,7 +985,7 @@ class TextGenerationLoop
                 $toolResults[] = $this->executedToolResult($toolCall, $tool, $arguments, $context);
             } catch (Throwable $exception) {
                 // The failure is still recorded before it is rethrown, so the paused turn is settled and a retry cannot run the approved tool a second time...
-                $failure ??= $exception;
+                $failure = $exception;
 
                 $toolResults[] = $this->toolResult($toolCall, 'The tool call failed.', failed: true, arguments: $arguments);
             }

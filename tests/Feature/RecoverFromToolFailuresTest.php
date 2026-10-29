@@ -10,6 +10,7 @@ use Laravel\Ai\Events\AgentFailed;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
+use Laravel\Ai\Exceptions\ToolHandlerException;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolResult;
@@ -29,8 +30,10 @@ test('a throwing tool fails the run without the recovery attribute', function ()
         'Never reached.',
     ]);
 
+    // The tool's own exception reaches the caller, never the wrapper the loop uses to recognize it...
     expect(fn (): mixed => (new ThrowingToolAgent)->prompt('Generate'))
-        ->toThrow(Exception::class, 'Forced to throw exception.');
+        ->toThrow(fn (Exception $exception) => expect($exception)->not->toBeInstanceOf(ToolHandlerException::class)
+            ->and($exception->getMessage())->toBe('Forced to throw exception.'));
 });
 
 test('a throwing tool fails a streamed run without the recovery attribute', function (): void {
@@ -55,8 +58,8 @@ test('a throwing tool returns a failed result to the model for agents with the r
 
     expect($response->text)->toBe('The tool could not run.')
         ->and($response->toolResults)->toHaveCount(1)
-        ->and($response->toolResults[0]->failed)->toBeTrue()
-        ->and($response->toolResults[0]->result)->toBe('The tool call failed: Forced to throw exception.');
+        ->and($response->toolResults[0]->successful())->toBeFalse()
+        ->and($response->toolResults[0]->error())->toBe('The tool call failed: Forced to throw exception.');
 
     Exceptions::assertReported(fn (Exception $exception): bool => $exception->getMessage() === 'Forced to throw exception.');
 });
@@ -105,9 +108,9 @@ test('a tool that fails while resuming an approval records the failure and then 
     Event::assertDispatched(AgentFailed::class);
 
     // The failure is recorded without its message, which only reaches the model for agents that opt in...
-    $steps = json_decode((string) DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps'), true);
+    $row = DB::table('agent_conversation_messages')->where('role', 'assistant')->sole();
 
-    expect($steps[0]['tool_calls'][0])->toMatchArray([
+    expect($row->steps)->json()->{'0'}->tool_calls->{'0'}->toMatchArray([
         'id' => 'call_1',
         'result' => 'The tool call failed.',
         'failed' => true,
@@ -154,7 +157,7 @@ test('a tool that fails while resuming a streamed approval streams the failure b
     Http::assertSentCount(1);
 });
 
-test('a tool that fails while resuming an approval returns a failed result to the model for agents with the recovery attribute', function (): void {
+test('a tool that fails while resuming a streamed approval streams a failed result for agents with the recovery attribute', function (): void {
     Exceptions::fake();
 
     Http::fake([
@@ -179,13 +182,76 @@ test('a tool that fails while resuming an approval returns a failed result to th
         ->and($toolResults[0]->error)->toBe('The tool call failed: Forced to throw exception.')
         ->and(TextDelta::combine(array_filter($events, fn ($event): bool => $event instanceof TextDelta)))->toBe('The tool could not run.');
 
-    $steps = json_decode((string) DB::table('agent_conversation_messages')->where('role', 'assistant')->oldest('id')->value('steps'), true);
+    $row = DB::table('agent_conversation_messages')->where('role', 'assistant')->sole();
 
-    expect($steps[0]['tool_calls'][0])->toMatchArray([
+    expect($row->steps)->json()->{'0'}->tool_calls->{'0'}->toMatchArray([
         'id' => 'call_1',
         'result' => 'The tool call failed: Forced to throw exception.',
         'failed' => true,
     ]);
 
     Exceptions::assertReported(fn (Exception $exception): bool => $exception->getMessage() === 'Forced to throw exception.');
+});
+
+test('an exception from a tool event listener still fails the run for agents with the recovery attribute', function (): void {
+    Exceptions::fake();
+
+    Event::listen(InvokingTool::class, fn () => throw new RuntimeException('Listener failed.'));
+
+    RecoveringThrowingToolAgent::fake([
+        new ToolCall('call_1', 'FixedNumberGenerator', []),
+        'Never reached.',
+    ]);
+
+    expect(fn (): mixed => (new RecoveringThrowingToolAgent)->prompt('Generate'))
+        ->toThrow(RuntimeException::class, 'Listener failed.');
+
+    Exceptions::assertNothingReported();
+});
+
+test('a tool that fails while resuming an approval skips the remaining approved tools without the recovery attribute', function (): void {
+    Event::fake();
+
+    Http::fake([
+        'api.groq.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'chatcmpl-tool-123',
+                'object' => 'chat.completion',
+                'model' => 'openai/gpt-oss-20b',
+                'choices' => [[
+                    'index' => 0,
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => null,
+                        'tool_calls' => [
+                            ['id' => 'call_1', 'type' => 'function', 'function' => ['name' => 'ThrowingApprovableGenerator', 'arguments' => '{}']],
+                            ['id' => 'call_2', 'type' => 'function', 'function' => ['name' => 'ThrowingApprovableGenerator', 'arguments' => '{}']],
+                        ],
+                    ],
+                    'finish_reason' => 'tool_calls',
+                ]],
+                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+            ]),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingThrowingApprovableAgent)->forUser($user)->prompt('Generate two numbers', provider: 'groq');
+
+    expect($paused->pendingApprovals)->toHaveCount(2);
+
+    expect(fn (): mixed => (new RememberingThrowingApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(Decisions::from(['*' => true]), provider: 'groq'))
+        ->toThrow(Exception::class, 'Forced to throw exception.');
+
+    Event::assertDispatchedTimes(InvokingTool::class, 1);
+
+    $row = DB::table('agent_conversation_messages')->where('role', 'assistant')->sole();
+
+    expect($row->steps)->json()->{'0'}->tool_calls->sequence(
+        fn ($toolCall) => $toolCall->toMatchArray(['id' => 'call_1', 'result' => 'The tool call failed.', 'failed' => true]),
+        fn ($toolCall) => $toolCall->toMatchArray(['id' => 'call_2', 'result' => 'This tool call was not executed because an earlier tool call failed.', 'failed' => true]),
+    );
 });
