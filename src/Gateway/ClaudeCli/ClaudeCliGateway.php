@@ -279,7 +279,15 @@ class ClaudeCliGateway implements StepTextGateway
         }
 
         if ($errorEvent !== null) {
-            throw new StreamErrorException($errorEvent);
+            $sanitizedEvent = new ErrorEvent(
+                $errorEvent->id,
+                $errorEvent->type,
+                'Claude CLI returned an error result.',
+                $errorEvent->recoverable,
+                $errorEvent->timestamp,
+            );
+
+            throw new StreamErrorException($sanitizedEvent);
         }
 
         return new StepResponse(
@@ -435,6 +443,12 @@ class ClaudeCliGateway implements StepTextGateway
         // Multiple static servers from config
         if ($provider instanceof ClaudeCliProvider) {
             foreach (array_values($provider->staticMcpServers()) as $i => $server) {
+                $url = $server['url'] ?? '';
+
+                if (! is_string($url) || $url === '' || (! str_starts_with($url, 'http://') && ! str_starts_with($url, 'https://'))) {
+                    throw new InvalidArgumentException('Per-call MCP server URL must be a valid http:// or https:// URL.');
+                }
+
                 $n = $i + 1;
                 $servers["{$name}-static-{$n}"] = $server;
             }
@@ -444,6 +458,12 @@ class ClaudeCliGateway implements StepTextGateway
         $perCallServers = $options?->providerOptions('claude-cli')['mcp_servers'] ?? [];
 
         foreach (array_values($perCallServers) as $i => $server) {
+            $url = $server['url'] ?? '';
+
+            if (! is_string($url) || $url === '' || (! str_starts_with($url, 'http://') && ! str_starts_with($url, 'https://'))) {
+                throw new InvalidArgumentException('Per-call MCP server URL must be a valid http:// or https:// URL.');
+            }
+
             $n = $i + 1;
             $servers["{$name}-call-{$n}"] = $server;
         }

@@ -452,7 +452,7 @@ class TextGenerationLoop
         // When the loop exhausted its step budget (not stopped/cancelled early) while the model
         // was still requesting tools, do one final tool-free step so the model can acknowledge
         // the situation and produce a non-empty text response.
-        if ($step >= $maxSteps && $lastResult !== null && end($allMessages) instanceof ToolResultMessage) {
+        if ($step >= $maxSteps && $result !== null && end($allMessages) instanceof ToolResultMessage) {
             $cleanupResult = $this->gateway->generateTextStep(
                 $provider, $model, $instructions, $allMessages, [],
                 null, $options, $timeout, new StepContext(continuationToken: $continuationToken),
