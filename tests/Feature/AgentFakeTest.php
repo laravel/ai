@@ -10,6 +10,7 @@ use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Jobs\InvokeAgent;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\QueuedAgentPrompt;
@@ -362,21 +363,19 @@ describe('approval resumes', function (): void {
             ->stream(Decisions::from(['call-1' => Decision::approve()]));
         $resumed->each(fn (): true => true);
 
-        $results = collect($resumed->events)->filter(fn ($event): bool => $event instanceof ToolResultEvent)->values();
+        $result = $resumed->events->whereInstanceOf(ToolResultEvent::class)->sole();
 
-        expect($results)->toHaveCount(1)
-            ->and($results[0]->toolResult->id)->toBe('call-1')
-            ->and($results[0]->toolResult->result)->toBe('72019')
-            ->and($results[0]->successful)->toBeTrue()
-            ->and($results[0]->denied)->toBeFalse()
+        expect($result->toolResult->id)->toBe('call-1')
+            ->and($result->toolResult->result)->toBe('72019')
+            ->and($result->successful)->toBeTrue()
+            ->and($result->denied)->toBeFalse()
             ->and(ApprovableNumberGenerator::$invocations)->toBe(1)
             ->and($resumed->text)->toBe('Done.');
 
         $assistantRow = DB::table('agent_conversation_messages')
             ->where('conversation_id', $paused->conversationId)
             ->where('role', 'assistant')
-            ->oldest('id')
-            ->first();
+            ->sole();
 
         expect($assistantRow->steps)->json()->{'0'}->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-1', 'result' => '72019']);
     });
@@ -397,20 +396,18 @@ describe('approval resumes', function (): void {
             ->stream(Decisions::from(['call-1' => Decision::reject('Not right now.')]));
         $resumed->each(fn (): true => true);
 
-        $results = collect($resumed->events)->filter(fn ($event): bool => $event instanceof ToolResultEvent)->values();
+        $result = $resumed->events->whereInstanceOf(ToolResultEvent::class)->sole();
 
-        expect($results)->toHaveCount(1)
-            ->and($results[0]->toolResult->id)->toBe('call-1')
-            ->and($results[0]->toolResult->result)->toBe('Not right now.')
-            ->and($results[0]->denied)->toBeTrue()
+        expect($result->toolResult->id)->toBe('call-1')
+            ->and($result->toolResult->result)->toBe('Not right now.')
+            ->and($result->denied)->toBeTrue()
             ->and(ApprovableNumberGenerator::$invocations)->toBe(0)
             ->and($resumed->text)->toBe('Done.');
 
         $assistantRow = DB::table('agent_conversation_messages')
             ->where('conversation_id', $paused->conversationId)
             ->where('role', 'assistant')
-            ->oldest('id')
-            ->first();
+            ->sole();
 
         expect($assistantRow->steps)->json()->{'0'}->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-1', 'result' => 'Not right now.', 'denied' => true]);
     });
@@ -431,11 +428,10 @@ describe('approval resumes', function (): void {
             ->stream(Decisions::from(['call-1' => Decision::reject()]));
         $resumed->each(fn (): true => true);
 
-        $results = collect($resumed->events)->filter(fn ($event): bool => $event instanceof ToolResultEvent)->values();
+        $result = $resumed->events->whereInstanceOf(ToolResultEvent::class)->sole();
 
-        expect($results)->toHaveCount(1)
-            ->and($results[0]->toolResult->result)->toBe('The user rejected this tool call.')
-            ->and($results[0]->denied)->toBeTrue()
+        expect($result->toolResult->result)->toBe('The user rejected this tool call.')
+            ->and($result->denied)->toBeTrue()
             ->and(ApprovableNumberGenerator::$invocations)->toBe(0)
             ->and($resumed->text)->toBe('');
 
@@ -466,10 +462,9 @@ describe('approval resumes', function (): void {
             ->stream(Decisions::from(['call-1' => Decision::approve()]));
         $resumed->each(fn (): true => true);
 
-        $results = collect($resumed->events)->filter(fn ($event): bool => $event instanceof ToolResultEvent)->values();
+        $result = $resumed->events->whereInstanceOf(ToolResultEvent::class)->sole();
 
-        expect($results)->toHaveCount(1)
-            ->and($results[0]->toolResult->result)->toBe('72019')
+        expect($result->toolResult->result)->toBe('72019')
             ->and(ApprovableNumberGenerator::$invocations)->toBe(1)
             ->and($resumed->text)->toBe('Done.');
     });
@@ -495,6 +490,31 @@ describe('approval resumes', function (): void {
             ->and($resumed->toolResults[0]->result)->toBe('72019')
             ->and(ApprovableNumberGenerator::$invocations)->toBe(1)
             ->and($resumed->text)->toBe('Done.');
+
+        $assistantRow = DB::table('agent_conversation_messages')
+            ->where('conversation_id', $paused->conversationId)
+            ->where('role', 'assistant')
+            ->sole();
+
+        expect($assistantRow->steps)->json()->{'0'}->tool_calls->toHaveCount(1)->each->toMatchArray(['id' => 'call-1', 'result' => '72019']);
+    });
+
+    test('a faked agent rejects decisions that do not match its paused tool call like the real gateway', function (): void {
+        RememberingApprovableAgent::fake([
+            new ToolCall('call-1', 'ApprovableNumberGenerator', []),
+            'Done.',
+        ]);
+
+        $user = (object) ['id' => 1];
+
+        $paused = (new RememberingApprovableAgent)->forUser($user)->prompt('Generate a number');
+
+        expect(fn (): mixed => (new RememberingApprovableAgent)
+            ->continue($paused->conversationId, as: $user)
+            ->prompt(Decisions::from(['call-9' => Decision::approve()])))
+            ->toThrow(ApprovalMismatchException::class);
+
+        expect(ApprovableNumberGenerator::$invocations)->toBe(0);
     });
 
     test('a faked agent keeps answering a pause for a tool it does not have without running anything', function (): void {

@@ -19,7 +19,7 @@ use Laravel\Ai\Providers\Tools\ProviderTool;
 trait ResumesToolApprovals
 {
     /**
-     * Get the tool approval to resume with, unless a faked agent has no paused tool call for its decisions to answer.
+     * Get the tool approval to resume with, unless a faked agent has no paused approval to resume.
      *
      * @param  array<int, Message>  $messages
      * @param  array<Tool|ProviderTool>  $tools
@@ -62,9 +62,12 @@ trait ResumesToolApprovals
             return false;
         }
 
-        // A faked agent resumes like the real gateway once it actually paused on a tool call, but bare decisions sent to a fake with nothing paused still just take its next response...
-        return ! Ai::hasFakeGatewayFor($prompt->agent::class)
-            || $this->textGenerationLoop()->answersPendingToolCalls($prompt->approvalDecisions->all(), $messages, $tools);
+        if (! Ai::hasFakeGatewayFor($prompt->agent::class)) {
+            return true;
+        }
+
+        // A faked agent resumes like the real gateway once it actually paused for approval, but decisions sent to a fake with nothing paused still just take its next response...
+        return $this->textGenerationLoop()->pausedForApproval($messages, $tools);
     }
 
     /**

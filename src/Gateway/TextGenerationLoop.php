@@ -947,29 +947,38 @@ class TextGenerationLoop
     }
 
     /**
-     * Determine whether the approval's decisions answer a pause a real run could have left in the history: every pending call is for a tool the agent still has, and at least one answered call is for a tool that asks for approval.
+     * Determine whether the history ends in a pause a real run could have left: every pending call is for a tool the agent still has, and at least one of them asks for approval.
      *
-     * @param  array<string, Decision>  $approval
      * @param  Message[]  $messages
      * @param  array<Tool|ProviderTool>  $tools
      */
-    public function answersPendingToolCalls(array $approval, array $messages, array $tools): bool
+    public function pausedForApproval(array $messages, array $tools): bool
     {
         [$pendingToolCalls] = $this->pendingToolCalls($messages);
 
-        $pendingTools = $pendingToolCalls->mapWithKeys(fn (ToolCall $toolCall) => [
-            $toolCall->id => $this->findTool($toolCall->name, $tools),
-        ]);
+        $pendingTools = $this->toolsForPendingCalls($pendingToolCalls, $tools);
 
-        // A pause faked for a tool the agent does not have, or for one that never asks for approval, has nothing a real resume could run, so it is left to the fake's next response...
-        if ($pendingTools->contains(fn (?Tool $tool): bool => ! $tool instanceof Tool)) {
+        // A pause faked for a tool the agent does not have has nothing a real resume could run...
+        if ($pendingTools->contains(fn (?Tool $tool): bool => $tool === null)) {
             return false;
         }
 
-        return $pendingToolCalls->contains(
-            fn (ToolCall $toolCall): bool => $pendingTools[$toolCall->id] instanceof Approvable
-                && (array_key_exists($toolCall->id, $approval) || array_key_exists('*', $approval)),
-        );
+        // Neither does a pause for tools that never ask for approval, since a real run executes those in the step that called them...
+        return $pendingTools->contains(fn (Tool $tool): bool => $tool instanceof Approvable);
+    }
+
+    /**
+     * Find the tool each pending call is for, keyed by the call's id.
+     *
+     * @param  Collection<int, ToolCall>  $pendingToolCalls
+     * @param  array<Tool|ProviderTool>  $tools
+     * @return Collection<string, ?Tool>
+     */
+    protected function toolsForPendingCalls(Collection $pendingToolCalls, array $tools): Collection
+    {
+        return $pendingToolCalls->mapWithKeys(fn (ToolCall $toolCall): array => [
+            $toolCall->id => $this->findTool($toolCall->name, $tools),
+        ]);
     }
 
     /**
@@ -990,9 +999,7 @@ class TextGenerationLoop
             fn ($id) => $id === '*',
         );
 
-        $resolvedTools = $pendingToolCalls->mapWithKeys(fn (ToolCall $toolCall) => [
-            $toolCall->id => $this->findTool($toolCall->name, $tools),
-        ]);
+        $resolvedTools = $this->toolsForPendingCalls($pendingToolCalls, $tools);
 
         $approvals = $pendingToolCalls->mapWithKeys(fn (ToolCall $toolCall) => [
             $toolCall->id => $this->approvalForTool($resolvedTools[$toolCall->id], $toolCall),
