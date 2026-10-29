@@ -3,6 +3,7 @@
 use Laravel\Ai\Gateway\ClaudeCli\ClaudeCliGateway;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Messages\UserMessage;
 use Tests\Feature\Providers\ClaudeCli\ClaudeCliHelpers;
 
 uses(ClaudeCliHelpers::class);
@@ -22,7 +23,7 @@ describe('MCP config assembly', function (): void {
         $gateway = new ClaudeCliGateway(app(\Illuminate\Contracts\Events\Dispatcher::class));
         $provider = app(\Laravel\Ai\AiManager::class)->textProvider('claude-cli');
 
-        $gen = $gateway->generateStreamStep('inv', $provider, 'claude-sonnet-5-5', null, [], [], null, null, null, new StepContext);
+        $gen = $gateway->generateStreamStep('inv', $provider, 'claude-sonnet-5-5', null, [new UserMessage('Hello')], [], null, null, null, new StepContext);
         foreach ($gen as $e) {}
 
         $args = trim(file_get_contents($argsFile));
@@ -41,7 +42,7 @@ describe('MCP config assembly', function (): void {
         $gateway = new ClaudeCliGateway(app(\Illuminate\Contracts\Events\Dispatcher::class));
         $provider = app(\Laravel\Ai\AiManager::class)->textProvider('claude-cli');
 
-        $gen = $gateway->generateStreamStep('inv', $provider, 'claude-sonnet-5-5', null, [], [], null, null, null, new StepContext);
+        $gen = $gateway->generateStreamStep('inv', $provider, 'claude-sonnet-5-5', null, [new UserMessage('Hello')], [], null, null, null, new StepContext);
         foreach ($gen as $e) {}
 
         $args = trim(file_get_contents($argsFile));
@@ -71,7 +72,7 @@ describe('MCP config assembly', function (): void {
             ],
         ]);
 
-        $gen = $gateway->generateStreamStep('inv', $provider, 'claude-sonnet-5-5', null, [], [], null, $options, null, new StepContext);
+        $gen = $gateway->generateStreamStep('inv', $provider, 'claude-sonnet-5-5', null, [new UserMessage('Hello')], [], null, $options, null, new StepContext);
         foreach ($gen as $e) {}
 
         $args = trim(file_get_contents($argsFile));

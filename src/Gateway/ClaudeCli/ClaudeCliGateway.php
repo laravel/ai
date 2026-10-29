@@ -151,9 +151,6 @@ class ClaudeCliGateway implements StepTextGateway
                 $meta = stream_get_meta_data($pipes[1]);
 
                 if ($meta['timed_out'] ?? false) {
-                    proc_terminate($process);
-                    proc_terminate($process, 9);
-
                     throw new RuntimeException('Claude CLI process timed out after '.$timeoutSeconds.' seconds.');
                 }
 
@@ -162,9 +159,6 @@ class ClaudeCliGateway implements StepTextGateway
 
             // Wall-clock deadline check: catches slow-drip processes that never hit the per-read timeout
             if (time() >= $deadline) {
-                proc_terminate($process);
-                proc_terminate($process, 9);
-
                 throw new RuntimeException('Claude CLI process exceeded the '.$timeoutSeconds.' second wall-clock deadline.');
             }
 
@@ -331,6 +325,10 @@ class ClaudeCliGateway implements StepTextGateway
             } elseif ($message instanceof AssistantMessage) {
                 $parts[] = 'Assistant: '.$this->contentToText($message->content);
             }
+        }
+
+        if ($parts === []) {
+            throw new InvalidArgumentException('Cannot generate text with no messages.');
         }
 
         return implode("\n\n", $parts);

@@ -458,6 +458,7 @@ class TextGenerationLoop
             $steps->push($this->buildStep($cleanupResult));
             $accumulatedUsage = $accumulatedUsage->add($cleanupResult->usage);
             $finalReason = $cleanupResult->finishReason;
+            $continuationToken = $cleanupResult->continuationToken ?? $continuationToken;
             yield from $this->eventsFor($invocationId, $provider, $model, $cleanupResult);
 
             // Append the cleanup assistant message so the history does not end on ToolResultMessage
