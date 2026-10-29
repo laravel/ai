@@ -3,8 +3,10 @@
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Enums\MessageStatus;
+use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Storage\DatabaseConversationStore;
@@ -216,6 +218,8 @@ test('a step that dies on its second call keeps the result of the first', functi
         'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
     ])]);
 
+    Event::listen(ToolFailed::class, fn (ToolFailed $event) => throw $event->exception);
+
     $agent = (new RememberingFailingToolAgent)->forUser((object) ['id' => 1]);
 
     expect(fn () => $agent->prompt('Go', provider: 'anthropic'))->toThrow(Exception::class, 'Forced to throw exception.');
@@ -283,6 +287,8 @@ test('a replayed interrupted call keeps the call id the Responses API pairs its 
             'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
         ]),
     ]);
+
+    Event::listen(ToolFailed::class, fn (ToolFailed $event) => throw $event->exception);
 
     $agent = (new RememberingFailingToolAgent)->forUser((object) ['id' => 1]);
 

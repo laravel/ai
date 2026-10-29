@@ -9,7 +9,6 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Approvals\Approval;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\PendingApproval;
-use Laravel\Ai\Attributes\RecoverFromToolFailures;
 use Laravel\Ai\Attributes\RepairToolCalls;
 use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Contracts\Approvable;
@@ -73,8 +72,6 @@ class TextGenerationLoop
     private const PRELIMINARY_OUTPUT_BYTES = 240;
 
     private bool $repairsToolCalls = false;
-
-    private bool $recoversFromToolFailures = false;
 
     /**
      * The default ceiling for the derived step budget when it is not set explicitly.
@@ -591,27 +588,24 @@ class TextGenerationLoop
      */
     private function stepToolResultsWithOptions(StepResponse $result, bool $isFinalStep, array $tools, ?TextGenerationOptions $options, ?RunContext $context = null): array
     {
-        return $this->withToolCallSettings(
+        return $this->withRepairSetting(
             $options, fn (): array => $this->stepToolResults($result, $isFinalStep, $tools, $context),
         );
     }
 
     /**
-     * Run the given callback with the tool call repair and failure recovery settings the step's agent asks for.
+     * Run the given callback with the tool call repair setting the step's agent asks for.
      */
-    private function withToolCallSettings(?TextGenerationOptions $options, Closure $callback): mixed
+    private function withRepairSetting(?TextGenerationOptions $options, Closure $callback): mixed
     {
         $repairsToolCalls = $this->repairsToolCalls;
-        $recoversFromToolFailures = $this->recoversFromToolFailures;
 
         $this->repairsToolCalls = RepairToolCalls::isAppliedTo($options?->agent);
-        $this->recoversFromToolFailures = RecoverFromToolFailures::isAppliedTo($options?->agent);
 
         try {
             return $callback();
         } finally {
             $this->repairsToolCalls = $repairsToolCalls;
-            $this->recoversFromToolFailures = $recoversFromToolFailures;
         }
     }
 
@@ -657,7 +651,7 @@ class TextGenerationLoop
             return $earlyOutcome;
         }
 
-        [$resolved, $pendingApprovals] = $this->withToolCallSettings(
+        [$resolved, $pendingApprovals] = $this->withRepairSetting(
             $options, fn (): array => $this->resolveToolCalls($result->toolCalls, $tools, $isFinalStep),
         );
 
@@ -665,7 +659,7 @@ class TextGenerationLoop
 
         foreach ($resolved as [$toolCall, $tool]) {
             if (! $tool instanceof AgentTool || $isFinalStep) {
-                $toolResults[] = $this->withToolCallSettings(
+                $toolResults[] = $this->withRepairSetting(
                     $options, fn (): ToolResult => $this->resolvedToolResult($toolCall, $tool, $isFinalStep, $tools, $context),
                 );
 
@@ -782,30 +776,18 @@ class TextGenerationLoop
     }
 
     /**
-     * Execute the tool for the given call, returning its failure to the model instead of ending the run when the agent recovers from tool failures.
+     * Execute the tool for the given call, returning a failure to the model instead of ending the run.
      */
     protected function executedToolResult(ToolCall $toolCall, Tool $tool, ?RunContext $context = null): ToolResult
     {
         try {
             return $this->toolResult($toolCall, $this->executeTool($tool, $toolCall->arguments, $toolCall->id, $context));
         } catch (ToolHandlerException $exception) {
-            if (! $this->recoversFromToolFailures) {
-                throw $exception->exception;
-            }
+            // The model only sees the message, so the exception is still reported for the application to see the whole failure...
+            report($exception->exception);
 
-            return $this->recoveredToolResult($toolCall, $exception->exception);
+            return $this->toolResult($toolCall, 'The tool call failed: '.$exception->exception->getMessage(), failed: true);
         }
-    }
-
-    /**
-     * Turn a tool's exception into a failed result the model can respond to.
-     */
-    protected function recoveredToolResult(ToolCall $toolCall, Throwable $exception): ToolResult
-    {
-        // The model only sees the message, so the exception is still reported for the application to see the whole failure...
-        report($exception);
-
-        return $this->toolResult($toolCall, 'The tool call failed: '.$exception->getMessage(), failed: true);
     }
 
     /**

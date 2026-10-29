@@ -15,6 +15,7 @@ use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\StreamingAgent;
+use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\LocalImage;
@@ -398,31 +399,22 @@ test('agents can analyze local image attachments with a detected mime type', fun
     'jpeg' => ['blue.jpg', 'blue'],
 ]);
 
-test('agent tool exception handling is not magical', function (string $provider, string $apiKey, string $model): void {
+test('a throwing tool returns its failure to the model', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
 
     Event::fake();
 
-    $agent = new ToolUsingAgent(toolThrowsException: true);
+    $response = (new ToolUsingAgent(toolThrowsException: true))->prompt(
+        'Can I have a random number between 1 and 1000?',
+        provider: $provider,
+        model: $model,
+    );
 
-    $caught = false;
+    expect($response->toolResults)->not->toBeEmpty()
+        ->and($response->toolResults[0]->error())->toBe('The tool call failed: Forced to throw exception.')
+        ->and($response->text)->not->toBeEmpty();
 
-    try {
-        $response = $agent->prompt(
-            'Can I have a random number between 1 and 1000?',
-            provider: $provider,
-            model: $model,
-        );
-
-        $text = $response->text;
-    } catch (Exception $exception) {
-        $caught = true;
-
-        expect($exception)->toBeInstanceOf(Exception::class)
-            ->and($exception->getMessage())->toEqual('Forced to throw exception.');
-    }
-
-    expect($caught)->toBeTrue();
+    Event::assertDispatched(ToolFailed::class);
 })->with('agent-providers');
 
 test('openai replays echoed output blocks on a store=false tool-call continuation', function () {
