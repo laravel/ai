@@ -86,6 +86,11 @@ trait ParsesTextResponses
             $finishReason = FinishReason::Stop;
         }
 
+        // Claude can end a message holding tool_use blocks with end_turn, so the tool calls still need to run.
+        if ($finishReason === FinishReason::Stop && $realToolCalls !== []) {
+            $finishReason = FinishReason::ToolCalls;
+        }
+
         return new StepResponse(
             text: $hasStructuredToolCall && ! empty($structuredData) ? (json_encode($structuredData) ?: '') : $text,
             toolCalls: $realToolCalls,

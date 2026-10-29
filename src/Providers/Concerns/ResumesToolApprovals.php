@@ -10,20 +10,24 @@ use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
+use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Providers\Tools\ProviderTool;
 
 trait ResumesToolApprovals
 {
     /**
-     * Get the tool approval to resume with, unless the agent's gateway is faked.
+     * Get the tool approval to resume with, unless a faked agent has no paused approval to resume.
      *
+     * @param  array<int, Message>  $messages
+     * @param  array<Tool|ProviderTool>  $tools
      * @return array<string, Decision>|null
      */
-    protected function resumableApprovalFor(AgentPrompt $prompt): ?array
+    protected function resumableApprovalFor(AgentPrompt $prompt, array $messages, array $tools): ?array
     {
-        return $this->resumesAgainstRealGateway($prompt) ? $prompt->approvalDecisions->all() : null;
+        return $this->resumesApproval($prompt, $messages, $tools) ? $prompt->approvalDecisions->all() : null;
     }
 
     /**
@@ -47,19 +51,33 @@ trait ResumesToolApprovals
     }
 
     /**
-     * Determine whether the prompt is a resume that runs tools against the real (non-faked) gateway.
+     * Determine whether the prompt is a resume that runs the approved tools.
+     *
+     * @param  array<int, Message>  $messages
+     * @param  array<Tool|ProviderTool>  $tools
      */
-    protected function resumesAgainstRealGateway(AgentPrompt $prompt): bool
+    protected function resumesApproval(AgentPrompt $prompt, array $messages, array $tools): bool
     {
-        return $prompt->hasApprovalDecisions() && ! Ai::hasFakeGatewayFor($prompt->agent::class);
+        if (! $prompt->hasApprovalDecisions()) {
+            return false;
+        }
+
+        if (! Ai::hasFakeGatewayFor($prompt->agent::class)) {
+            return true;
+        }
+
+        // A faked agent resumes like the real gateway once it actually paused for approval, but decisions sent to a fake with nothing paused still just take its next response...
+        return $this->textGenerationLoop()->pausedForApproval($messages, $tools);
     }
 
     /**
      * Get a callback that captures a resume's resolved approval results, also durably recording them when the store supports it.
+     *
+     * @param  array<string, Decision>|null  $approval
      */
-    protected function approvalResultRecorderFor(AgentPrompt $prompt, ?Collection &$resolvedApprovalResults): ?Closure
+    protected function approvalResultRecorderFor(AgentPrompt $prompt, ?array $approval, ?Collection &$resolvedApprovalResults): ?Closure
     {
-        if (! $this->resumesAgainstRealGateway($prompt)) {
+        if ($approval === null) {
             return null;
         }
 

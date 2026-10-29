@@ -30,6 +30,8 @@ use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
+use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Streaming\Events\TextDelta;
 use Throwable;
 
 class DatabaseConversationStore implements ConversationStore, PaginatesConversations, ResolvesPendingApprovals, VerifiesConversationOwnership
@@ -220,10 +222,18 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             $steps = $this->withoutReplayBlocks($steps);
         }
 
+        $content = $response instanceof StreamedAgentResponse
+            ? TextDelta::join($steps->pluck('content'))
+            : $response->text;
+
+        if (blank($content)) {
+            $content = $paused->content;
+        }
+
         $now = now();
 
         $this->table($this->messagesTable())->where('id', $paused->id)->update([
-            'content' => blank($response->text) ? $paused->content : $response->text,
+            'content' => $content,
             'steps' => $steps->toJson(),
             'usage' => json_encode(TextUsage::fromArray($this->decoded($paused->usage))->add($response->usage)),
             'meta' => json_encode($this->mergedMeta($paused, $response, $exception)),

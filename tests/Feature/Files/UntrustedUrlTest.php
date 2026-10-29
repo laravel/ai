@@ -40,7 +40,7 @@ test('a hostname resolving to a private address is blocked', function (): void {
     Http::assertNothingSent();
 });
 
-test('the connection is pinned to the validated addresses', function (): void {
+test('the connection is pinned to the validated addresses', function (string $url, string $pin): void {
     $pinned = null;
 
     Http::fake(function (Request $request, array $options) use (&$pinned) {
@@ -49,10 +49,13 @@ test('the connection is pinned to the validated addresses', function (): void {
         return Http::response('bytes');
     });
 
-    (new RemoteImage('https://example.com/photo.png'))->content();
+    (new RemoteImage($url))->content();
 
-    expect($pinned)->toBe(['example.com:443:93.184.216.34']);
-});
+    expect($pinned)->toBe([$pin]);
+})->with([
+    'hostname' => ['https://example.com/photo.png', 'example.com:443:93.184.216.34'],
+    'trailing dot' => ['https://example.com./photo.png', 'example.com.:443:93.184.216.34'],
+]);
 
 test('a public ip literal is fetched without pinning', function (string $url): void {
     $pinned = null;

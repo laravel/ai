@@ -20,14 +20,23 @@ class TextDelta extends StreamEvent
      */
     public static function combine(Collection|array $events): string
     {
-        return Collection::wrap($events)
+        return static::join(Collection::wrap($events)
             ->chunkWhile(fn (StreamEvent $event, $key, Collection $step) => ! $event instanceof StreamStart
                 || $step->doesntContain(fn (StreamEvent $previous) => $previous instanceof ToolResult))
             ->map(fn (Collection $step) => $step->whereInstanceOf(TextDelta::class)
                 ->map(fn (TextDelta $event) => $event->delta)
-                ->join(''))
+                ->join('')));
+    }
+
+    /**
+     * Join the text of each step, separating the steps with a blank line.
+     *
+     * @param  Collection<array-key, string>|array<array-key, string>  $texts
+     */
+    public static function join(Collection|array $texts): string
+    {
+        return Collection::wrap($texts)
             ->filter(fn (string $text) => trim($text) !== '')
-            ->values()
             ->join("\n\n");
     }
 

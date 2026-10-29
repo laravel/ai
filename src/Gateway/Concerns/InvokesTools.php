@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\Concerns;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Exceptions\ToolExecutionException;
 use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Providers\Tools\ToolSearch;
@@ -40,7 +41,7 @@ trait InvokesTools
             } catch (Throwable $exception) {
                 $context?->toolFailed($tool, $arguments, $exception, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
 
-                throw $exception;
+                throw new ToolExecutionException($exception);
             }
 
             $context?->toolInvoked($tool, $arguments, $result, $toolInvocationId, $this->elapsedMilliseconds($startedAt));

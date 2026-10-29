@@ -134,7 +134,7 @@ class UntrustedUrl
 
         $port = $uri->getPort() ?? ($uri->getScheme() === 'https' ? 443 : 80);
 
-        return [$host.':'.$port.':'.implode(',', $addresses)];
+        return [$uri->getHost().':'.$port.':'.implode(',', $addresses)];
     }
 
     /**

@@ -315,7 +315,7 @@ test('every step event names the provider and model the step ran against', funct
         ->and($completed->agent)->toBe($starting->agent);
 });
 
-test('a throwing tool dispatches tool failed and still propagates the exception', function (): void {
+test('a throwing tool dispatches tool failed and the run continues', function (): void {
     Event::fake();
 
     ToolUsingAgent::fake([
@@ -323,15 +323,14 @@ test('a throwing tool dispatches tool failed and still propagates the exception'
         ['number' => 5],
     ]);
 
-    expect(fn (): mixed => (new ToolUsingAgent(fixed: true, toolThrowsException: true))->prompt('Generate'))
-        ->toThrow(Exception::class, 'Forced to throw exception.');
+    (new ToolUsingAgent(fixed: true, toolThrowsException: true))->prompt('Generate');
 
     Event::assertDispatched(ToolFailed::class, fn (ToolFailed $event): bool => $event->tool instanceof FixedNumberGenerator
         && $event->exception->getMessage() === 'Forced to throw exception.');
 
     Event::assertNotDispatched(ToolInvoked::class);
 
-    Event::assertDispatched(AgentFailed::class);
+    Event::assertNotDispatched(AgentFailed::class);
 
     $invoking = Event::dispatched(InvokingTool::class)->first()[0];
     $failed = Event::dispatched(ToolFailed::class)->first()[0];
@@ -702,7 +701,9 @@ test('a provider error inside the stream closes the step it opened', function ()
 });
 
 test('a streamed failure after the stream started reports the run as failed', function (): void {
-    Event::fake();
+    Event::fakeExcept([ToolFailed::class]);
+
+    Event::listen(ToolFailed::class, fn (ToolFailed $event) => throw $event->exception);
 
     config([
         'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
