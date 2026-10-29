@@ -22,6 +22,14 @@ try {
 
 Code that catches `FailoverableException` or `AiException` is not affected.
 
+### Transient Provider Failures Are Retried Before Failing Over
+
+**Likelihood Of Impact: Low**
+
+A request that fails with one of the gateway's overloaded statuses (such as 503 or Anthropic's 529), or whose connection is refused, reset, or dropped, is now retried up to twice with a short backoff (half a second, then one second) before it fails over to the next provider or throws. A short whole-second `Retry-After` of up to 10 seconds still sets the delay, and a 429 with such a header is now retried up to twice instead of once, so a provider that stays rate limited waits at most two of those delays before failing over. Timeouts, a 429 without `Retry-After`, a longer `Retry-After`, other 4xx responses, and insufficient credit errors are not retried, and a stream is never retried once an event has been yielded.
+
+The exceptions thrown once the retries are exhausted are unchanged. If your application wraps prompts in its own retry logic for these failures, you may remove it or lower its attempts.
+
 ## Upgrading To 1.2 From 1.0
 
 ### Classification Signatures Accept Attachments

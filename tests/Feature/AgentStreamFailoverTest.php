@@ -1,5 +1,8 @@
 <?php
 
+use GuzzleHttp\Promise\Create;
+use GuzzleHttp\Psr7\PumpStream;
+use GuzzleHttp\Psr7\Response as Psr7Response;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
@@ -52,7 +55,7 @@ test('stream fails over to next provider when primary is rate limited', function
     Event::assertDispatched(AgentStreamed::class, fn (AgentStreamed $event): bool => $event->invocationId === $response->invocationId);
 });
 
-test('stream retries a rate limited provider after its Retry-After delay before failing over', function (): void {
+test('stream retries a rate limited or overloaded provider before failing over', function (int $status, array $headers, int $delay): void {
     Event::fake();
     Sleep::fake();
 
@@ -64,7 +67,7 @@ test('stream retries a rate limited provider after its Retry-After delay before 
     Http::preventStrayRequests();
 
     Http::fakeSequence()
-        ->push(status: 429, headers: ['Retry-After' => '1'])
+        ->push(status: $status, headers: $headers)
         ->push(fakeGroqStreamBodyForStreamFailover(), 200);
 
     $response = (new AssistantAgent)->stream(
@@ -77,8 +80,53 @@ test('stream retries a rate limited provider after its Retry-After delay before 
 
     expect($response->text)->toBe('Hello');
 
-    Sleep::assertSequence([Sleep::for(1)->seconds()]);
+    Sleep::assertSequence([Sleep::for($delay)->milliseconds()]);
     Event::assertNotDispatched(AgentFailedOver::class);
+    Http::assertSentCount(2);
+})->with([
+    'rate limited with Retry-After' => [429, ['Retry-After' => '1'], 1000],
+    'overloaded' => [503, [], 500],
+]);
+
+test('stream is not retried once an event has reached the consumer', function (): void {
+    Event::fake();
+    Sleep::fake();
+
+    config([
+        'ai.providers.primary' => ['driver' => 'groq', 'key' => 'test-key'],
+        'ai.providers.backup' => ['driver' => 'groq', 'key' => 'test-key'],
+    ]);
+
+    Http::preventStrayRequests();
+
+    $chunks = [
+        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"test","choices":[{"index":0,"delta":{"role":"assistant","content":"Hel"},"finish_reason":null}]}'."\n\n",
+    ];
+
+    Http::fake(fn () => Create::promiseFor(new Psr7Response(200, ['Content-Type' => 'text/event-stream'], new PumpStream(
+        function () use (&$chunks): string {
+            return array_shift($chunks) ?? throw new RuntimeException('Connection reset by peer');
+        },
+    ))));
+
+    $response = (new AssistantAgent)->stream(
+        'Hello',
+        provider: ['primary', 'backup'],
+    );
+
+    $events = [];
+
+    expect(function () use ($response, &$events): void {
+        foreach ($response as $event) {
+            $events[] = $event;
+        }
+    })->toThrow(RuntimeException::class, 'Connection reset by peer');
+
+    expect(collect($events)->whereInstanceOf(TextDelta::class)->isNotEmpty())->toBeTrue();
+
+    Sleep::assertNeverSlept();
+    Event::assertNotDispatched(AgentFailedOver::class);
+    Http::assertSentCount(1);
 });
 
 test('stream throws last exception when all providers fail', function (): void {

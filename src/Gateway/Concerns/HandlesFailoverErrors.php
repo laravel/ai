@@ -25,10 +25,10 @@ trait HandlesFailoverErrors
     {
         try {
             return retry(
-                2,
+                3,
                 $callback,
-                fn (int $attempt, Throwable $exception): int => $this->retryAfterSeconds($exception) * 1000,
-                fn (Throwable $exception): bool => $this->retryAfterSeconds($exception) !== null,
+                fn (int $attempt, Throwable $exception): int => $this->retryDelay($attempt, $exception),
+                fn (Throwable $exception): bool => $this->shouldRetry($exception),
             );
         } catch (ConnectionException $connectionException) {
             throw ProviderConnectionException::forProvider(
@@ -73,6 +73,56 @@ trait HandlesFailoverErrors
 
             throw $requestException;
         }
+    }
+
+    /**
+     * Determine if a failed request should be retried: after a short Retry-After, on an overloaded status, or on a dropped connection.
+     */
+    protected function shouldRetry(Throwable $exception): bool
+    {
+        if ($exception instanceof ConnectionException) {
+            return $this->isDroppedConnection($exception);
+        }
+
+        if (! $exception instanceof RequestException || $exception->response === null) {
+            return false;
+        }
+
+        if ($exception->response->hasHeader('Retry-After')) {
+            return $this->retryAfterSeconds($exception) !== null;
+        }
+
+        return in_array($exception->response->status(), $this->overloadedStatusCodes());
+    }
+
+    /**
+     * Get the milliseconds to wait before the given retry: the short Retry-After, else 0.5s doubling per attempt.
+     */
+    protected function retryDelay(int $attempt, Throwable $exception): int
+    {
+        $retryAfter = $this->retryAfterSeconds($exception);
+
+        return $retryAfter !== null ? $retryAfter * 1000 : 500 * 2 ** ($attempt - 1);
+    }
+
+    /**
+     * Determine if the connection was refused, reset or dropped, rather than timed out or never resolved.
+     */
+    protected function isDroppedConnection(ConnectionException $exception): bool
+    {
+        $previous = $exception->getPrevious();
+
+        // Guzzle 7 keeps cURL's error number in the handler context, Guzzle 8 only in the message...
+        $errno = $previous !== null && method_exists($previous, 'getHandlerContext')
+            ? ($previous->getHandlerContext()['errno'] ?? null)
+            : (preg_match('/^cURL error (\d+):/', $exception->getMessage(), $matches) ? (int) $matches[1] : null);
+
+        if ($errno !== null) {
+            return in_array($errno, [7, 52, 55, 56], true);
+        }
+
+        // Streamed requests go through PHP's stream wrapper, where a refused connection is the only failure told apart from a timeout...
+        return str_contains($exception->getMessage(), 'Connection refused');
     }
 
     /**

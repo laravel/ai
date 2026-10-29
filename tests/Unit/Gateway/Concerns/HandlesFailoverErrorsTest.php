@@ -1,10 +1,12 @@
 <?php
 
 use GuzzleHttp\Psr7\Response as Psr7Response;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Sleep;
 use Laravel\Ai\Exceptions\InsufficientCreditsException;
+use Laravel\Ai\Exceptions\ProviderConnectionException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
@@ -191,7 +193,7 @@ test('a rate limited or overloaded request is retried once after its Retry-After
     Sleep::assertSequence([Sleep::for(2)->seconds()]);
 })->with([429, 529]);
 
-test('a request that is still rate limited after the retry fails over', function (): void {
+test('a request that is still rate limited after two retries fails over', function (): void {
     Sleep::fake();
 
     $attempts = 0;
@@ -204,20 +206,20 @@ test('a request that is still rate limited after the retry fails over', function
 
     expect(fn () => $this->gateway->withErrorHandling('anthropic', $request))->toThrow(RateLimitedException::class);
 
-    expect($attempts)->toBe(2);
+    expect($attempts)->toBe(3);
 
-    Sleep::assertSleptTimes(1);
+    Sleep::assertSequence([Sleep::for(1)->second(), Sleep::for(1)->second()]);
 });
 
-test('a request is not retried without a short Retry-After on a failoverable status', function (int $status, array $headers): void {
+test('a request is not retried without a short Retry-After or on a timed out or unreachable connection', function (Exception $exception): void {
     Sleep::fake();
 
     $attempts = 0;
 
-    $request = function () use ($status, $headers, &$attempts): never {
+    $request = function () use ($exception, &$attempts): never {
         $attempts++;
 
-        throw failoverableException($status, headers: $headers);
+        throw $exception;
     };
 
     expect(fn () => $this->gateway->withErrorHandling('anthropic', $request))->toThrow(Exception::class);
@@ -226,9 +228,71 @@ test('a request is not retried without a short Retry-After on a failoverable sta
 
     Sleep::assertNeverSlept();
 })->with([
-    'no header' => [429, []],
-    'long delay' => [429, ['Retry-After' => '60']],
-    'http date' => [429, ['Retry-After' => 'Wed, 21 Oct 2026 07:28:00 GMT']],
-    'fractional delay' => [429, ['Retry-After' => '1.5']],
-    'client error' => [400, ['Retry-After' => '1']],
+    'no header' => failoverableException(429),
+    'long delay' => failoverableException(429, headers: ['Retry-After' => '60']),
+    'http date' => failoverableException(429, headers: ['Retry-After' => 'Wed, 21 Oct 2026 07:28:00 GMT']),
+    'fractional delay' => failoverableException(429, headers: ['Retry-After' => '1.5']),
+    'client error' => failoverableException(400, headers: ['Retry-After' => '1']),
+    'unauthorized' => failoverableException(401),
+    'insufficient credits' => failoverableException(402),
+    'overloaded with a long delay' => failoverableException(529, headers: ['Retry-After' => '60']),
+    'timeout' => new ConnectionException('cURL error 28: Operation timed out after 30001 milliseconds with 0 bytes received'),
+    'unresolved host' => new ConnectionException('cURL error 6: Could not resolve host: api.anthropic.com'),
+    'certificate' => new ConnectionException('cURL error 60: SSL certificate problem: unable to get local issuer certificate'),
+    'stream failure' => new ConnectionException('fopen(https://api.anthropic.com/v1/messages): Failed to open stream: HTTP request failed!'),
+]);
+
+test('an overloaded status or a refused, reset or dropped connection is retried with a backoff', function (Exception $exception): void {
+    Sleep::fake();
+
+    $attempts = 0;
+
+    $result = $this->gateway->withErrorHandling('anthropic', function () use ($exception, &$attempts): string {
+        if (++$attempts < 3) {
+            throw $exception;
+        }
+
+        return 'ok';
+    });
+
+    expect($result)->toBe('ok')
+        ->and($attempts)->toBe(3);
+
+    Sleep::assertSequence([Sleep::for(500)->milliseconds(), Sleep::for(1)->second()]);
+})->with([
+    'overloaded' => failoverableException(529),
+    'refused' => new ConnectionException('cURL error 7: Failed to connect to api.anthropic.com port 443 after 3 ms: Couldn\'t connect to server'),
+    'empty reply' => new ConnectionException('cURL error 52: Empty reply from server'),
+    'send failure' => new ConnectionException('cURL error 55: Send failure: Broken pipe'),
+    'reset' => new ConnectionException('cURL error 56: Recv failure: Connection reset by peer'),
+    'refused while streaming' => new ConnectionException('fopen(https://api.anthropic.com/v1/messages): Failed to open stream: Connection refused'),
+    // Guzzle 7 exceptions carry the cURL error number in their handler context...
+    'reset in the handler context' => new ConnectionException('Connection failed', 0, new class extends RuntimeException
+    {
+        public function getHandlerContext(): array
+        {
+            return ['errno' => 56];
+        }
+    }),
+]);
+
+test('a request still failing after two retries throws the mapped exception', function (Exception $exception, string $expected): void {
+    Sleep::fake();
+
+    $attempts = 0;
+
+    $request = function () use ($exception, &$attempts): never {
+        $attempts++;
+
+        throw $exception;
+    };
+
+    expect(fn () => $this->gateway->withErrorHandling('anthropic', $request))->toThrow($expected);
+
+    expect($attempts)->toBe(3);
+
+    Sleep::assertSequence([Sleep::for(500)->milliseconds(), Sleep::for(1)->second()]);
+})->with([
+    'overloaded' => [failoverableException(529), ProviderOverloadedException::class],
+    'reset connection' => [new ConnectionException('cURL error 56: Recv failure: Connection reset by peer'), ProviderConnectionException::class],
 ]);

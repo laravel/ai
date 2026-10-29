@@ -241,5 +241,5 @@ test('attachments fail loudly instead of failing over to a provider that cannot 
         ->question('damaged', new Boolean('Damaged?'))
         ->classify(provider: ['openai', 'text-only']))->toThrow(LogicException::class, 'Provider [text-only] does not support classification attachments.');
 
-    Http::assertSentCount(1);
+    Http::assertSentCount(3);
 });

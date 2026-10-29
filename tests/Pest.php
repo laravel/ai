@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Sleep;
 use JMac\Testing\Integrations\PHPUnit\VerifiesDoubles;
 use Tests\Feature\Providers\Anthropic\AnthropicHelpers;
 use Tests\Feature\Providers\AzureOpenAi\AzureOpenAiHelpers;
@@ -34,5 +35,8 @@ pest()->use(XaiHelpers::class)->group('provider-xai')->in('Feature/Providers/Xai
 
 pest()->use(OpenRouterHelpers::class)->group('provider-openrouter')->in('Feature/Providers/OpenRouter');
 uses()->group('providers')->in('Feature/Providers');
+
+// Faked provider failures are retried with a backoff, which would otherwise sleep for real...
+uses()->beforeEach(fn () => Sleep::fake())->in('Feature');
 
 uses()->group('integration')->in('Integration');
