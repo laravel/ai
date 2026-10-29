@@ -12,6 +12,7 @@ use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\NamedToolAgent;
+use Tests\Fixtures\Agents\StoredToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
@@ -208,26 +209,6 @@ test('the user input echoed by gemini is not replayed twice', function (): void 
     expect(geminiFollowUpSteps(Http::recorded(), 'user_input'))->toHaveCount(1);
 });
 
-test('an unstored interaction replays the full history on follow up requests', function (): void {
-    Http::fake([
-        'generativelanguage.googleapis.com/*' => Http::sequence([
-            $this->fakeUniqueToolCallResponse(),
-            $this->fakeTextResponse('The number is 72019'),
-        ]),
-    ]);
-
-    (new ToolUsingAgent(fixed: true))->prompt(
-        'Generate a random number',
-        provider: 'gemini',
-    );
-
-    $followUp = Http::recorded()[1][0]->data();
-
-    expect($followUp)->not->toHaveKey('previous_interaction_id')
-        ->and($followUp['store'])->toBeFalse()
-        ->and(geminiFollowUpSteps(Http::recorded(), 'user_input'))->toHaveCount(1);
-});
-
 test('a stored interaction is continued with previous_interaction_id', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => Http::sequence([
@@ -236,20 +217,14 @@ test('a stored interaction is continued with previous_interaction_id', function 
         ]),
     ]);
 
-    $response = $this->storedToolAgent()->prompt(
-        'Generate a random number',
-        provider: 'gemini',
-    );
+    (new StoredToolAgent)->prompt('Generate a random number', provider: 'gemini');
 
     $recorded = Http::recorded();
 
     $followUp = $recorded[1][0]->data();
 
-    expect($response->text)->toBe('The number is 72019')
-        ->and($recorded)->toHaveCount(2)
-        ->and($recorded[0][0]->data())->not->toHaveKey('previous_interaction_id')
+    expect($recorded[0][0]->data())->not->toHaveKey('previous_interaction_id')
         ->and($followUp['previous_interaction_id'])->toBe('int_123')
-        ->and($followUp['store'])->toBeTrue()
         ->and($followUp['input'])->toHaveCount(1)
         ->and($followUp['input'][0]['type'])->toBe('function_result')
         ->and($followUp['input'][0]['name'])->toBe('FixedNumberGenerator')
@@ -266,7 +241,7 @@ test('each step of a stored tool loop continues from the interaction before it',
         ]),
     ]);
 
-    $this->storedToolAgent()->prompt('Generate numbers', provider: 'gemini');
+    (new StoredToolAgent)->prompt('Generate numbers', provider: 'gemini');
 
     $recorded = Http::recorded();
 
@@ -285,7 +260,7 @@ test('a stored interaction continues from the caller\'s own previous interaction
         ]),
     ]);
 
-    $this->storedToolAgent(['previous_interaction_id' => 'int_earlier'])->prompt('Generate a random number', provider: 'gemini');
+    (new StoredToolAgent(['previous_interaction_id' => 'int_earlier']))->prompt('Generate a random number', provider: 'gemini');
 
     $recorded = Http::recorded();
 

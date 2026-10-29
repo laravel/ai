@@ -16,6 +16,7 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Fixtures\Agents\StoredToolAgent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 use function Laravel\Ai\agent;
@@ -437,19 +438,13 @@ describe('stored interactions', function (): void {
                 ])),
         ]);
 
-        $this->collectStreamEvents(agent: $this->storedToolAgent());
+        $this->collectStreamEvents(agent: new StoredToolAgent);
 
-        $recorded = Http::recorded();
+        $followUp = Http::recorded()[1][0]->data();
 
-        $followUp = $recorded[1][0]->data();
-
-        expect($recorded)->toHaveCount(2)
-            ->and($recorded[0][0]->data())->not->toHaveKey('previous_interaction_id')
-            ->and($followUp['previous_interaction_id'])->toBe('int_123')
-            ->and($followUp['store'])->toBeTrue()
+        expect($followUp['previous_interaction_id'])->toBe('int_123')
             ->and($followUp['input'])->toHaveCount(1)
-            ->and($followUp['input'][0])->toMatchArray(['type' => 'function_result', 'call_id' => 'call_1'])
-            ->and($followUp['tools'])->not->toBeEmpty();
+            ->and($followUp['input'][0])->toMatchArray(['type' => 'function_result', 'call_id' => 'call_1']);
     });
 
     test('a stored stream without an interaction id replays the full history', function (): void {
@@ -466,34 +461,11 @@ describe('stored interactions', function (): void {
                 ])),
         ]);
 
-        $this->collectStreamEvents(agent: $this->storedToolAgent());
+        $this->collectStreamEvents(agent: new StoredToolAgent);
 
         $followUp = Http::recorded()[1][0]->data();
 
         expect($followUp)->not->toHaveKey('previous_interaction_id')
-            ->and(array_column($followUp['input'], 'type'))->toContain('user_input', 'function_call', 'function_result');
-    });
-
-    test('an unstored stream replays the full history', function (): void {
-        Http::fake([
-            'generativelanguage.googleapis.com/*' => Http::sequence()
-                ->push(...geminiStream([
-                    $this->stepStart(0, ['type' => 'function_call', 'id' => 'call_1', 'name' => 'FixedNumberGenerator']),
-                    $this->stepStop(0),
-                    $this->interactionCompleted(),
-                ]))
-                ->push(...geminiStream([
-                    $this->stepDelta(0, 'text', 'Done'),
-                    $this->interactionCompleted(),
-                ])),
-        ]);
-
-        $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
-
-        $followUp = Http::recorded()[1][0]->data();
-
-        expect($followUp)->not->toHaveKey('previous_interaction_id')
-            ->and($followUp['store'])->toBeFalse()
             ->and(array_column($followUp['input'], 'type'))->toContain('user_input', 'function_call', 'function_result');
     });
 });

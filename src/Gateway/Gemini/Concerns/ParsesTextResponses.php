@@ -61,7 +61,7 @@ trait ParsesTextResponses
         Provider $provider,
         string $model,
         bool $structured,
-        bool $stored = false,
+        bool $stored,
     ): StepResponse {
         $steps = $data['steps'] ?? [];
 

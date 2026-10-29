@@ -34,7 +34,7 @@ trait HandlesTextStreaming
         Provider $provider,
         string $model,
         $streamBody,
-        bool $stored = false,
+        bool $stored,
     ): Generator {
         $messageId = $this->generateEventId();
         $reasoningId = '';
