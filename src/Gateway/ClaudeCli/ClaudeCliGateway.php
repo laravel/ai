@@ -118,7 +118,7 @@ class ClaudeCliGateway implements StepTextGateway
         $descriptors = [
             0 => ['pipe', 'r'],  // stdin
             1 => ['pipe', 'w'],  // stdout
-            2 => ['pipe', 'w'],  // stderr
+            2 => ['file', '/dev/null', 'w'],  // stderr: discarded to prevent pipe-buffer deadlock with --verbose
         ];
 
         $process = proc_open($command, $descriptors, $pipes);
@@ -129,10 +129,11 @@ class ClaudeCliGateway implements StepTextGateway
 
         fclose($pipes[0]);
 
-        // Timeout implemented via stream_set_timeout on blocking stdout.
-        // Each fgets call blocks for at most $timeoutSeconds before returning false.
+        // Per-read timeout: each fgets call blocks for at most $timeoutSeconds before returning false.
+        // Wall-clock deadline: also enforced below so a slow-drip process cannot run indefinitely.
         $timeoutSeconds = $timeout ?? 300;
         stream_set_timeout($pipes[1], $timeoutSeconds);
+        $deadline = time() + $timeoutSeconds;
 
         $messageId = strtolower((string) Str::uuid7());
         $streamStartEmitted = false;
@@ -141,23 +142,28 @@ class ClaudeCliGateway implements StepTextGateway
         $finalSessionId = null;
         $errorEvent = null;
 
+        try {
         while (! feof($pipes[1])) {
             $line = fgets($pipes[1]);
 
-            // fgets returns false on timeout or error
+            // fgets returns false on per-read timeout or stream error
             if ($line === false) {
                 $meta = stream_get_meta_data($pipes[1]);
 
                 if ($meta['timed_out'] ?? false) {
                     proc_terminate($process);
-                    fclose($pipes[1]);
-                    fclose($pipes[2]);
-                    proc_close($process);
 
                     throw new RuntimeException('Claude CLI process timed out after '.$timeoutSeconds.' seconds.');
                 }
 
                 break;
+            }
+
+            // Wall-clock deadline check: catches slow-drip processes that never hit the per-read timeout
+            if (time() >= $deadline) {
+                proc_terminate($process);
+
+                throw new RuntimeException('Claude CLI process exceeded the '.$timeoutSeconds.' second wall-clock deadline.');
             }
 
             $line = trim($line);
@@ -261,10 +267,11 @@ class ClaudeCliGateway implements StepTextGateway
                 continue;
             }
         }
-
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-        proc_close($process);
+        } finally {
+            // Always release resources — runs even if the generator is abandoned mid-iteration
+            fclose($pipes[1]);
+            proc_close($process);
+        }
 
         if ($textStartEmitted) {
             yield (new TextEnd(
@@ -303,25 +310,49 @@ class ClaudeCliGateway implements StepTextGateway
             // Walk backwards to find the last user message
             foreach (array_reverse($messages) as $message) {
                 if ($message instanceof UserMessage) {
-                    return (string) $message->content;
+                    return $this->contentToText($message->content);
                 }
             }
 
             return '';
         }
 
-        // Format the full history as a single text prompt
+        // Format the full history as a single text prompt.
+        // ToolCallMessage and ToolResultMessage are intentionally omitted — multi-step tool histories
+        // should use session resumption via a continuation token rather than inline history replay.
         $parts = [];
 
         foreach ($messages as $message) {
             if ($message instanceof UserMessage) {
-                $parts[] = 'Human: '.(string) $message->content;
+                $parts[] = 'Human: '.$this->contentToText($message->content);
             } elseif ($message instanceof AssistantMessage) {
-                $parts[] = 'Assistant: '.(string) $message->content;
+                $parts[] = 'Assistant: '.$this->contentToText($message->content);
             }
         }
 
         return implode("\n\n", $parts);
+    }
+
+    /**
+     * Convert a message's content (string or multi-part block array) to a plain text string.
+     *
+     * @param  string|array<int, mixed>  $content
+     */
+    protected function contentToText(mixed $content): string
+    {
+        if (is_array($content)) {
+            $texts = [];
+
+            foreach ($content as $block) {
+                if (($block['type'] ?? '') === 'text') {
+                    $texts[] = (string) ($block['text'] ?? '');
+                }
+            }
+
+            return implode(' ', $texts);
+        }
+
+        return (string) $content;
     }
 
     /**
@@ -365,6 +396,8 @@ class ClaudeCliGateway implements StepTextGateway
         }
 
         $command[] = '--print';
+        // Array-based proc_open passes $prompt as a literal argument value, not through a shell,
+        // so a prompt starting with "--" is safe and is never misinterpreted as a flag.
         $command[] = $prompt;
 
         return $command;

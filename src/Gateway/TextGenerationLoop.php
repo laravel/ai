@@ -226,6 +226,11 @@ class TextGenerationLoop
             );
             $steps->push($this->buildStep($lastResult));
             $accumulatedUsage = $accumulatedUsage->add($lastResult->usage);
+
+            // Append the cleanup assistant message so callers get a complete message history
+            $cleanupMessage = $this->buildAssistantMessage($lastResult);
+            $allMessages[] = $cleanupMessage;
+            $newMessages[] = $cleanupMessage;
         }
 
         return $lastResult === null
@@ -454,6 +459,9 @@ class TextGenerationLoop
             $accumulatedUsage = $accumulatedUsage->add($cleanupResult->usage);
             $finalReason = $cleanupResult->finishReason;
             yield from $this->eventsFor($invocationId, $provider, $model, $cleanupResult);
+
+            // Append the cleanup assistant message so the history does not end on ToolResultMessage
+            $allMessages[] = $this->buildAssistantMessage($cleanupResult);
         }
 
         // A step that never produced a response has already thrown, so the loop only reaches here having set a reason...
