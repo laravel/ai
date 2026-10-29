@@ -12,6 +12,11 @@ final class TitleAgent implements Agent
     use Promptable;
 
     /**
+     * Create a new agent instance.
+     */
+    public function __construct() {}
+
+    /**
      * Get the instructions that the agent should follow.
      */
     public function instructions(): string

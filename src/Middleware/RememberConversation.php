@@ -220,7 +220,6 @@ class RememberConversation
 
         $titleAgent = resolve(config('ai.conversations.title_agent', TitleAgent::class));
 
-        // A faked agent must not reach a real provider to title its conversation...
         if (Ai::hasFakeGatewayFor($agent) && ! Ai::hasFakeGatewayFor($titleAgent)) {
             return Str::limit($prompt, 100, preserveWords: true);
         }
