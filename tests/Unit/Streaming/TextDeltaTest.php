@@ -62,13 +62,26 @@ test('combine drops a step that produced only whitespace', function () {
     $events = [
         stepStart(),
         textDelta('message-1', 'First.'),
+        new ToolResult(uniqid(), new Data\ToolResult('call-1', 'get_weather', [], '12°C'), true, null, time()),
         stepStart(),
         textDelta('message-2', "\n"),
+        new ToolResult(uniqid(), new Data\ToolResult('call-2', 'get_weather', [], '12°C'), true, null, time()),
         stepStart(),
         textDelta('message-3', 'Second.'),
     ];
 
     expect(TextDelta::combine($events))->toBe("First.\n\nSecond.");
+});
+
+test('combine continues a step that ran no tools without a separator', function () {
+    $events = [
+        stepStart(),
+        textDelta('message-1', 'The latest figures show that'),
+        stepStart(),
+        textDelta('message-2', ' revenue grew.'),
+    ];
+
+    expect(TextDelta::combine($events))->toBe('The latest figures show that revenue grew.');
 });
 
 test('combine ignores events that are not text deltas', function () {

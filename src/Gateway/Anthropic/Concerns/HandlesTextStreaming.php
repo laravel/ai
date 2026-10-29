@@ -25,12 +25,15 @@ trait HandlesTextStreaming
 {
     /**
      * Process a single Anthropic streaming turn and yield Laravel stream events.
+     *
+     * @param  array<int, array<string, mixed>>  $pausedContent
      */
     protected function processTextStream(
         string $invocationId,
         Provider $provider,
         string $model,
         $streamBody,
+        array $pausedContent = [],
     ): Generator {
         $messageId = $this->generateEventId();
         $reasoningId = '';
@@ -49,6 +52,18 @@ trait HandlesTextStreaming
         $responseContent = [];
         $afterTool = false;
         $lastTextDelta = '';
+
+        // A turn resumed after pause_turn picks up where the paused content ended...
+        foreach ($pausedContent as $block) {
+            $blockType = $block['type'] ?? '';
+
+            if ($blockType === 'text' && ($block['text'] ?? '') !== '') {
+                $lastTextDelta = (string) $block['text'];
+                $afterTool = false;
+            } elseif ($this->isToolBlock($blockType)) {
+                $afterTool = true;
+            }
+        }
 
         $messageUsage = [];
         $usage = null;

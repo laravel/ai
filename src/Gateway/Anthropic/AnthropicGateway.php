@@ -17,6 +17,7 @@ use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\ImageResponse;
@@ -107,11 +108,14 @@ class AnthropicGateway implements Gateway, StepTextGateway
                 ->post('messages', $body),
         );
 
+        $lastMessage = end($messages);
+
         return yield from $this->processTextStream(
             $invocationId,
             $provider,
             $model,
             $response->getBody(),
+            $lastMessage instanceof AssistantMessage ? $lastMessage->replayBlocks : [],
         );
     }
 

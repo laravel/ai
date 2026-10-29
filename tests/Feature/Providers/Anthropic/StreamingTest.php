@@ -359,6 +359,80 @@ describe('pause_turn', function (): void {
 
         expect(array_map(fn (TextDelta $e): string => $e->delta, $textDeltas))->toBe(["First\n", 'Second']);
     });
+
+    test('streaming continues text paused mid-sentence without a separator', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->messageStart(),
+                        $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                        $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'The latest figures show that']),
+                        $this->contentBlockStop(0),
+                        $this->messageDelta('pause_turn', 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->messageStart(),
+                        $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                        $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => ' revenue grew.']),
+                        $this->contentBlockStop(0),
+                        $this->messageDelta('end_turn', 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+            ]),
+        ]);
+
+        $events = $this->collectStreamEvents();
+
+        $streamed = implode('', array_map(fn (TextDelta $e): string => $e->delta, array_filter($events, fn ($e): bool => $e instanceof TextDelta)));
+
+        expect($streamed)->toBe('The latest figures show that revenue grew.')
+            ->and(TextDelta::combine($events))->toBe($streamed);
+    });
+
+    test('streaming separates text resumed after a paused server tool', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->messageStart(),
+                        $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                        $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'Let me check.']),
+                        $this->contentBlockStop(0),
+                        $this->contentBlockStart(1, ['type' => 'server_tool_use', 'id' => 'srvtoolu_1', 'name' => 'web_search']),
+                        $this->contentBlockStop(1),
+                        $this->messageDelta('pause_turn', 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->messageStart(),
+                        $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                        $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'Revenue grew.']),
+                        $this->contentBlockStop(0),
+                        $this->messageDelta('end_turn', 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+            ]),
+        ]);
+
+        $events = $this->collectStreamEvents();
+
+        $streamed = implode('', array_map(fn (TextDelta $e): string => $e->delta, array_filter($events, fn ($e): bool => $e instanceof TextDelta)));
+
+        expect($streamed)->toBe("Let me check.\n\nRevenue grew.")
+            ->and(TextDelta::combine($events))->toBe($streamed);
+    });
 });
 
 describe('error handling', function (): void {
