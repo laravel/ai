@@ -118,6 +118,23 @@ test('add file sends correct request', function (): void {
         && ($request->data()['fileName'] ?? null) === 'files/file789');
 });
 
+test('add file accepts a file URI', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'name' => 'fileSearchStores/store123/operations/import456',
+            'done' => true,
+            'response' => [
+                'documentName' => 'fileSearchStores/store123/documents/doc456',
+            ],
+        ]),
+    ]);
+
+    $provider = geminiProvider();
+    $provider->storeGateway()->addFile($provider, 'store123', 'https://generativelanguage.googleapis.com/v1beta/files/file789');
+
+    Http::assertSent(fn ($request): bool => ($request->data()['fileName'] ?? null) === 'files/file789');
+});
+
 test('add file waits for the import operation and returns the document id', function (): void {
     Sleep::fake();
 

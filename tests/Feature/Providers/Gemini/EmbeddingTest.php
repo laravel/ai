@@ -225,16 +225,23 @@ test('local file embeddings are sent as inline data', function (): void {
 
 test('provider file embeddings are sent as file data', function (): void {
     Http::fake([
-        'generativelanguage.googleapis.com/*' => fakeGeminiBatchEmbeddingsResponse(),
+        'generativelanguage.googleapis.com/*' => fakeGeminiBatchEmbeddingsResponse([[0.1, 0.2], [0.3, 0.4]]),
     ]);
 
     Embeddings::for([
         Image::fromId('files/file_123'),
+        Video::fromId('files/video_123', 'video/mp4'),
     ])->generate(provider: 'gemini', model: 'gemini-embedding-2');
 
     Http::assertSentCount(1);
     Http::assertSent(fn (Request $request) => str_contains($request->url(), 'models/gemini-embedding-2:batchEmbedContents')
-        && data_get($request->data(), 'requests.0.content.parts.0.fileData.fileUri') === 'files/file_123');
+        && data_get($request->data(), 'requests.0.content.parts.0.fileData') === [
+            'fileUri' => 'https://generativelanguage.googleapis.com/v1beta/files/file_123',
+        ]
+        && data_get($request->data(), 'requests.1.content.parts.0.fileData') === [
+            'mimeType' => 'video/mp4',
+            'fileUri' => 'https://generativelanguage.googleapis.com/v1beta/files/video_123',
+        ]);
 });
 
 test('multimodal embeddings accept canonical model names', function (): void {

@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Files;
+use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Files\Document;
 
 beforeEach(function (): void {
@@ -125,6 +126,23 @@ test('delete file normalizes id with prefix', function (): void {
 
     Http::assertSent(fn ($request): bool => str_contains((string) $request->url(), 'v1beta/files/abc123')
         && ! str_contains((string) $request->url(), 'files/files/'));
+});
+
+test('get and delete accept a file URI', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response(['name' => 'files/abc123']),
+    ]);
+
+    $audio = Audio::fromId('https://generativelanguage.googleapis.com/v1beta/files/abc123');
+
+    $audio->get(provider: 'gemini');
+    $audio->delete(provider: 'gemini');
+
+    Http::assertSentCount(2);
+    Http::assertSent(fn ($request): bool => $request->method() === 'GET'
+        && $request->url() === 'https://generativelanguage.googleapis.com/v1beta/files/abc123');
+    Http::assertSent(fn ($request): bool => $request->method() === 'DELETE'
+        && $request->url() === 'https://generativelanguage.googleapis.com/v1beta/files/abc123');
 });
 
 test('file gateway uses custom base url', function (): void {

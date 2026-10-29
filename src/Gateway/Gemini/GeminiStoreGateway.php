@@ -14,6 +14,7 @@ use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Gateway\Concerns\EncodesResourceIds;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
+use Laravel\Ai\Gateway\Gemini\Concerns\ResolvesFileUris;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
 use Laravel\Ai\Store;
@@ -23,6 +24,7 @@ class GeminiStoreGateway implements StoreGateway
     use CreatesClient;
     use EncodesResourceIds;
     use HandlesFailoverErrors;
+    use ResolvesFileUris;
 
     /**
      * Get a vector store by its ID.
@@ -201,11 +203,11 @@ class GeminiStoreGateway implements StoreGateway
     }
 
     /**
-     * Normalize the file ID to include the resource prefix.
+     * Normalize the file ID, name, or URI to the Files API resource name.
      */
     protected function normalizeFileId(string $fileId): string
     {
-        return 'files/'.$this->resourceId(Str::chopStart($fileId, 'files/'));
+        return 'files/'.$this->resourceId($this->fileId($fileId));
     }
 
     /**

@@ -3,7 +3,6 @@
 namespace Laravel\Ai\Gateway\Gemini;
 
 use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
@@ -12,6 +11,7 @@ use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Gateway\Concerns\EncodesResourceIds;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\PreparesStorableFiles;
+use Laravel\Ai\Gateway\Gemini\Concerns\ResolvesFileUris;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\FileResponse;
 use Laravel\Ai\Responses\StoredFileResponse;
@@ -22,6 +22,7 @@ class GeminiFileGateway implements FileGateway
     use EncodesResourceIds;
     use HandlesFailoverErrors;
     use PreparesStorableFiles;
+    use ResolvesFileUris;
 
     /**
      * Get a file by its ID.
@@ -79,11 +80,11 @@ class GeminiFileGateway implements FileGateway
     }
 
     /**
-     * Normalize the file ID to include the resource prefix.
+     * Normalize the file ID, name, or URI to the Files API resource name.
      */
     protected function normalizeFileId(string $fileId): string
     {
-        return 'files/'.$this->resourceId(Str::chopStart($fileId, 'files/'));
+        return 'files/'.$this->resourceId($this->fileId($fileId));
     }
 
     protected function client(Provider $provider): PendingRequest

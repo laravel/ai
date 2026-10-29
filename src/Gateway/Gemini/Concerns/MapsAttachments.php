@@ -30,6 +30,8 @@ use Laravel\Ai\Files\StoredVideo;
 
 trait MapsAttachments
 {
+    use ResolvesFileUris;
+
     /**
      * Map the given Laravel attachments to Gemini content blocks.
      */
@@ -52,17 +54,17 @@ trait MapsAttachments
         return match (true) {
             $attachment instanceof ProviderImage => [
                 'type' => 'image',
-                'uri' => $attachment->id,
+                'uri' => $this->fileUri($attachment->id),
             ],
             $attachment instanceof ProviderAudio => array_filter([
                 'type' => 'audio',
                 'mime_type' => $attachment->mimeType(),
-                'uri' => $attachment->id,
+                'uri' => $this->fileUri($attachment->id),
             ]),
             $attachment instanceof ProviderVideo => array_filter([
                 'type' => 'video',
                 'mime_type' => $attachment->mimeType(),
-                'uri' => $attachment->id,
+                'uri' => $this->fileUri($attachment->id),
             ]),
             $attachment instanceof Base64Image => [
                 'type' => 'image',
@@ -88,7 +90,7 @@ trait MapsAttachments
             ],
             $attachment instanceof ProviderDocument => [
                 'type' => 'document',
-                'uri' => $attachment->id,
+                'uri' => $this->fileUri($attachment->id),
             ],
             $attachment instanceof Base64Document => [
                 'type' => 'document',

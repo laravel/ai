@@ -7,9 +7,12 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\LocalImage;
+use Laravel\Ai\Files\ProviderAudio;
 use Laravel\Ai\Files\ProviderImage;
+use Laravel\Ai\Files\ProviderVideo;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\S3Document;
 use Laravel\Ai\Gateway\Bedrock\BedrockTextGateway;
@@ -365,11 +368,14 @@ test('remote image attachment is rejected', function (): void {
     ])))->toThrow(InvalidArgumentException::class, 'Remote attachments are not supported by Bedrock');
 });
 
-test('provider image attachment is rejected', function (): void {
-    expect(fn () => textGateway()->callMapAttachments(new Collection([
-        new ProviderImage('img_123'),
-    ])))->toThrow(InvalidArgumentException::class, 'Provider-stored attachments are not supported by Bedrock');
-});
+test('provider attachments are rejected', function (File $attachment): void {
+    expect(fn () => textGateway()->callMapAttachments(new Collection([$attachment])))
+        ->toThrow(InvalidArgumentException::class, 'Provider-stored attachments are not supported by Bedrock');
+})->with([
+    'image' => fn (): ProviderImage => new ProviderImage('img_123'),
+    'audio' => fn (): ProviderAudio => new ProviderAudio('audio_123', 'audio/mpeg'),
+    'video' => fn (): ProviderVideo => new ProviderVideo('video_123', 'video/mp4'),
+]);
 
 test('uploaded file attachment is rejected as unsupported', function (): void {
     expect(fn () => textGateway()->callMapAttachments(new Collection([
