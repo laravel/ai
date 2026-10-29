@@ -47,6 +47,34 @@ test('tool calls trigger follow up request', function (): void {
         ->and($hasToolResult)->toBeTrue('Follow-up request should include user message with tool_result block');
 });
 
+test('tool calls run when the message ends with end_turn', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_123',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [
+                    ['type' => 'text', 'text' => 'Let me generate a number.'],
+                    ['type' => 'tool_use', 'id' => 'toolu_123', 'name' => 'FixedNumberGenerator', 'input' => (object) []],
+                ],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
+
+    $response = (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a random number',
+        provider: 'anthropic',
+    );
+
+    expect(Http::recorded())->toHaveCount(2)
+        ->and($response->text)->toBe('The number is 72019');
+});
+
 test('server_tool_use input is serialized as object on follow-up replay', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
