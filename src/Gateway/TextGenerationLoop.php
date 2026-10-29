@@ -222,9 +222,10 @@ class TextGenerationLoop
         if ($step >= $maxSteps && $lastResult !== null && end($allMessages) instanceof ToolResultMessage) {
             $lastResult = $this->gateway->generateTextStep(
                 $provider, $model, $instructions, $allMessages, [],
-                $schema, $options, $timeout, new StepContext(continuationToken: $continuationToken),
+                null, $options, $timeout, new StepContext(continuationToken: $continuationToken),
             );
             $steps->push($this->buildStep($lastResult));
+            $accumulatedUsage = $accumulatedUsage->add($lastResult->usage);
         }
 
         return $lastResult === null
@@ -447,7 +448,7 @@ class TextGenerationLoop
         if ($step >= $maxSteps && end($allMessages) instanceof ToolResultMessage) {
             $cleanupResult = $this->gateway->generateTextStep(
                 $provider, $model, $instructions, $allMessages, [],
-                $schema, $options, $timeout, new StepContext(continuationToken: $continuationToken),
+                null, $options, $timeout, new StepContext(continuationToken: $continuationToken),
             );
             $steps->push($this->buildStep($cleanupResult));
             $accumulatedUsage = $accumulatedUsage->add($cleanupResult->usage);

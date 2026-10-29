@@ -70,6 +70,9 @@ class ClaudeCliGateway implements StepTextGateway
             // consume — we only need the return value
         }
 
+        // $generator->getReturn() is always non-null here: if the generator threw,
+        // the exception propagated out of the foreach above before reaching this line.
+        // The ?? branch is intentionally unreachable and exists only to satisfy static analysis.
         return $generator->getReturn() ?? new StepResponse(
             text: '',
             toolCalls: [],
@@ -86,7 +89,8 @@ class ClaudeCliGateway implements StepTextGateway
      * StreamEvents as JSONL lines arrive on stdout.
      *
      * @param  Message[]  $messages
-     * @param  array  $tools
+     * @param  array  $tools  Ignored — the Claude CLI exposes its own built-in tools (Bash, WebSearch, etc.)
+     *                        internally; PHP-defined tools are not forwarded to the subprocess.
      * @param  array<string, mixed>|null  $schema
      * @return Generator<int, \Laravel\Ai\Streaming\Events\StreamEvent, mixed, StepResponse|null>
      */
@@ -262,16 +266,16 @@ class ClaudeCliGateway implements StepTextGateway
         fclose($pipes[2]);
         proc_close($process);
 
-        if ($errorEvent !== null) {
-            throw new StreamErrorException($errorEvent);
-        }
-
         if ($textStartEmitted) {
             yield (new TextEnd(
                 strtolower((string) Str::uuid7()),
                 $messageId,
                 time(),
             ))->withInvocationId($invocationId);
+        }
+
+        if ($errorEvent !== null) {
+            throw new StreamErrorException($errorEvent);
         }
 
         return new StepResponse(
