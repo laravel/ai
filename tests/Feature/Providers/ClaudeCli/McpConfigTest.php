@@ -49,7 +49,7 @@ describe('MCP config assembly', function (): void {
         expect($args)->toContain('--mcp-config');
 
         // The MCP JSON is passed as a single argument — extract it
-        preg_match('/--mcp-config (\{[^)]+\})/', $args, $m);
+        preg_match('/--mcp-config (\{[^ ]+)/', $args, $m);
         $json = json_decode($m[1] ?? '{}', true);
 
         expect($json)->toHaveKey('mcpServers')
@@ -78,7 +78,7 @@ describe('MCP config assembly', function (): void {
 
         expect($args)->toContain('--mcp-config');
 
-        preg_match('/--mcp-config (\{[^)]+\})/', $args, $m);
+        preg_match('/--mcp-config (\{[^ ]+)/', $args, $m);
         $json = json_decode($m[1] ?? '{}', true);
 
         expect($json['mcpServers'])->toHaveKey('claude-cli-call-1')

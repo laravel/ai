@@ -152,6 +152,7 @@ class ClaudeCliGateway implements StepTextGateway
 
                 if ($meta['timed_out'] ?? false) {
                     proc_terminate($process);
+                    proc_terminate($process, 9);
 
                     throw new RuntimeException('Claude CLI process timed out after '.$timeoutSeconds.' seconds.');
                 }
@@ -162,6 +163,7 @@ class ClaudeCliGateway implements StepTextGateway
             // Wall-clock deadline check: catches slow-drip processes that never hit the per-read timeout
             if (time() >= $deadline) {
                 proc_terminate($process);
+                proc_terminate($process, 9);
 
                 throw new RuntimeException('Claude CLI process exceeded the '.$timeoutSeconds.' second wall-clock deadline.');
             }
@@ -270,6 +272,7 @@ class ClaudeCliGateway implements StepTextGateway
         } finally {
             // Always release resources — runs even if the generator is abandoned mid-iteration
             fclose($pipes[1]);
+            proc_terminate($process, 9);
             proc_close($process);
         }
 
@@ -314,7 +317,7 @@ class ClaudeCliGateway implements StepTextGateway
                 }
             }
 
-            return '';
+            throw new InvalidArgumentException('Cannot resume a session: no UserMessage found in the message history.');
         }
 
         // Format the full history as a single text prompt.
@@ -369,7 +372,7 @@ class ClaudeCliGateway implements StepTextGateway
         ?string $sessionId,
     ): array {
         /** @var ClaudeCliProvider $provider */
-        $binary = $provider instanceof ClaudeCliProvider ? $provider->cliBinary() : 'claude';
+        $binary = $provider->cliBinary();
 
         $command = [
             $binary,
