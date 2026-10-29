@@ -10,9 +10,11 @@ use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
+use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Prompts\AgentPrompt;
+use Laravel\Ai\Providers\Tools\ProviderTool;
 
 trait ResumesToolApprovals
 {
@@ -20,6 +22,7 @@ trait ResumesToolApprovals
      * Get the tool approval to resume with, unless a faked agent has no paused tool call for its decisions to answer.
      *
      * @param  array<int, Message>  $messages
+     * @param  array<Tool|ProviderTool>  $tools
      * @return array<string, Decision>|null
      */
     protected function resumableApprovalFor(AgentPrompt $prompt, array $messages, array $tools): ?array
@@ -51,6 +54,7 @@ trait ResumesToolApprovals
      * Determine whether the prompt is a resume that runs the approved tools.
      *
      * @param  array<int, Message>  $messages
+     * @param  array<Tool|ProviderTool>  $tools
      */
     protected function resumesApproval(AgentPrompt $prompt, array $messages, array $tools): bool
     {
