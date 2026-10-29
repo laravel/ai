@@ -6,6 +6,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolResult;
@@ -37,7 +38,55 @@ trait BuildsTextRequests
         ?TextGenerationOptions $options,
         StepContext $stepContext,
     ): array {
-        return $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
+        return $stepContext->continuationToken
+            ? $this->buildContinuationBody($stepContext->continuationToken, $provider, $model, $instructions, $messages, $tools, $schema, $options)
+            : $this->buildTextRequestBody($provider, $model, $instructions, $messages, $tools, $schema, $options);
+    }
+
+    /**
+     * Build a lightweight continuation body using previous_interaction_id.
+     *
+     * Only the new function results are sent, since Gemini replays the stored interaction itself.
+     */
+    protected function buildContinuationBody(
+        string $previousInteractionId,
+        Provider $provider,
+        string $model,
+        ?string $instructions,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+    ): array {
+        $input = $this->extractToolResultsInput($messages);
+
+        // Tools, instructions and generation config are scoped to an interaction, so they are sent again...
+        $body = $this->assembleRequestBody($model, $input, $instructions, $tools, $schema, $options, $provider);
+
+        // The stored turn supersedes any interaction the caller pointed at through provider options...
+        $body['previous_interaction_id'] = $previousInteractionId;
+
+        return $body;
+    }
+
+    /**
+     * Extract function result steps from the trailing tool result message for a continuation request.
+     */
+    protected function extractToolResultsInput(array $messages): array
+    {
+        $lastMessage = end($messages);
+
+        return $lastMessage instanceof ToolResultMessage
+            ? $this->buildFunctionResultSteps($lastMessage->toolResults->all())
+            : [];
+    }
+
+    /**
+     * Determine if Gemini will retain the interaction described by the given request body.
+     */
+    protected function storesInteraction(array $body): bool
+    {
+        return ($body['store'] ?? false) === true;
     }
 
     /**

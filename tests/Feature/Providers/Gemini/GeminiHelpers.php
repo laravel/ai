@@ -5,10 +5,49 @@ namespace Tests\Feature\Providers\Gemini;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasProviderOptions;
+use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Promptable;
 use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 trait GeminiHelpers
 {
+    /**
+     * An agent with a tool whose interactions Gemini is asked to store.
+     */
+    protected function storedToolAgent(array $options = []): Agent
+    {
+        return new class(array_merge(['store' => true], $options)) implements Agent, HasProviderOptions, HasTools
+        {
+            use Promptable;
+
+            public function __construct(private array $options) {}
+
+            public function instructions(): string
+            {
+                return 'You are a helpful assistant that generates numbers.';
+            }
+
+            public function tools(): iterable
+            {
+                return [new FixedNumberGenerator];
+            }
+
+            public function maxSteps(): int
+            {
+                return 5;
+            }
+
+            public function providerOptions(Lab|string $provider): array
+            {
+                return $this->options;
+            }
+        };
+    }
+
     protected function fakeInteraction(array $steps, array $usage = [], string $status = 'completed'): array
     {
         return [

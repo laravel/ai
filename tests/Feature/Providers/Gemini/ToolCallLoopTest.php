@@ -1,11 +1,19 @@
 <?php
 
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasProviderOptions;
+use Laravel\Ai\Contracts\HasStructuredOutput;
+use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Exceptions\NoSuchToolException;
+use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\NamedToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 function geminiFollowUpSteps(iterable $recorded, string $type): array
 {
@@ -198,4 +206,133 @@ test('the user input echoed by gemini is not replayed twice', function (): void 
     (new ToolUsingAgent(fixed: true))->prompt('Generate', provider: 'gemini');
 
     expect(geminiFollowUpSteps(Http::recorded(), 'user_input'))->toHaveCount(1);
+});
+
+test('an unstored interaction replays the full history on follow up requests', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::sequence([
+            $this->fakeUniqueToolCallResponse(),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
+
+    (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a random number',
+        provider: 'gemini',
+    );
+
+    $followUp = Http::recorded()[1][0]->data();
+
+    expect($followUp)->not->toHaveKey('previous_interaction_id')
+        ->and($followUp['store'])->toBeFalse()
+        ->and(geminiFollowUpSteps(Http::recorded(), 'user_input'))->toHaveCount(1);
+});
+
+test('a stored interaction is continued with previous_interaction_id', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::sequence([
+            $this->fakeUniqueToolCallResponse(),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
+
+    $response = $this->storedToolAgent()->prompt(
+        'Generate a random number',
+        provider: 'gemini',
+    );
+
+    $recorded = Http::recorded();
+
+    $followUp = $recorded[1][0]->data();
+
+    expect($response->text)->toBe('The number is 72019')
+        ->and($recorded)->toHaveCount(2)
+        ->and($recorded[0][0]->data())->not->toHaveKey('previous_interaction_id')
+        ->and($followUp['previous_interaction_id'])->toBe('int_123')
+        ->and($followUp['store'])->toBeTrue()
+        ->and($followUp['input'])->toHaveCount(1)
+        ->and($followUp['input'][0]['type'])->toBe('function_result')
+        ->and($followUp['input'][0]['name'])->toBe('FixedNumberGenerator')
+        ->and($followUp['system_instruction'])->not->toBeEmpty()
+        ->and($followUp['tools'])->not->toBeEmpty();
+});
+
+test('each step of a stored tool loop continues from the interaction before it', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::sequence([
+            Http::response(array_merge($this->fakeInteraction([$this->functionCallStep('FixedNumberGenerator', [], 'call_1')]), ['id' => 'int_1'])),
+            Http::response(array_merge($this->fakeInteraction([$this->functionCallStep('FixedNumberGenerator', [], 'call_2')]), ['id' => 'int_2'])),
+            $this->fakeTextResponse('Done'),
+        ]),
+    ]);
+
+    $this->storedToolAgent()->prompt('Generate numbers', provider: 'gemini');
+
+    $recorded = Http::recorded();
+
+    expect($recorded)->toHaveCount(3)
+        ->and($recorded[1][0]->data()['previous_interaction_id'])->toBe('int_1')
+        ->and($recorded[1][0]->data()['input'][0]['call_id'])->toBe('call_1')
+        ->and($recorded[2][0]->data()['previous_interaction_id'])->toBe('int_2')
+        ->and($recorded[2][0]->data()['input'][0]['call_id'])->toBe('call_2');
+});
+
+test('a stored interaction continues from the caller\'s own previous interaction only on the first step', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::sequence([
+            $this->fakeUniqueToolCallResponse(),
+            $this->fakeTextResponse('Done'),
+        ]),
+    ]);
+
+    $this->storedToolAgent(['previous_interaction_id' => 'int_earlier'])->prompt('Generate a random number', provider: 'gemini');
+
+    $recorded = Http::recorded();
+
+    expect($recorded[0][0]->data()['previous_interaction_id'])->toBe('int_earlier')
+        ->and($recorded[1][0]->data()['previous_interaction_id'])->toBe('int_123');
+});
+
+test('a continuation carries the same schema and generation config as the first request', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::sequence([
+            $this->fakeUniqueToolCallResponse(),
+            $this->fakeStructuredResponse(['number' => 72019]),
+        ]),
+    ]);
+
+    $agent = new class implements Agent, HasProviderOptions, HasStructuredOutput, HasTools
+    {
+        use Promptable;
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant that generates numbers.';
+        }
+
+        public function tools(): iterable
+        {
+            return [new FixedNumberGenerator];
+        }
+
+        public function schema(JsonSchema $schema): array
+        {
+            return ['number' => $schema->integer()->required()];
+        }
+
+        public function providerOptions(Lab|string $provider): array
+        {
+            return ['store' => true, 'thinking_level' => 'high'];
+        }
+    };
+
+    $agent->prompt('Generate a random number', provider: 'gemini');
+
+    [$first, $followUp] = Http::recorded()->map(fn (array $pair): array => $pair[0]->data())->all();
+
+    expect($followUp['previous_interaction_id'])->toBe('int_123')
+        ->and($followUp['response_format'])->toBe($first['response_format'])
+        ->and($followUp['response_format']['mime_type'])->toBe('application/json')
+        ->and($followUp['generation_config'])->toBe($first['generation_config'])
+        ->and($followUp['generation_config']['thinking_level'])->toBe('high');
 });

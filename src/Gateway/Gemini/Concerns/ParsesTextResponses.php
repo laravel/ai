@@ -61,6 +61,7 @@ trait ParsesTextResponses
         Provider $provider,
         string $model,
         bool $structured,
+        bool $stored = false,
     ): StepResponse {
         $steps = $data['steps'] ?? [];
 
@@ -74,10 +75,19 @@ trait ParsesTextResponses
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model, $this->extractCitations($steps)),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
+            continuationToken: $this->continuationToken($data, $stored),
             replayBlocks: $this->replayableSteps($steps),
             reasoning: $this->extractReasoning($steps),
             providerToolCalls: $this->extractProviderToolCalls($steps),
         );
+    }
+
+    /**
+     * Get the interaction id the next step may continue from, which only a stored interaction offers.
+     */
+    protected function continuationToken(array $data, bool $stored): ?string
+    {
+        return $stored && filled($data['id'] ?? null) ? (string) $data['id'] : null;
     }
 
     /**
