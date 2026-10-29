@@ -958,13 +958,8 @@ class TextGenerationLoop
 
         $pendingTools = $this->toolsForPendingCalls($pendingToolCalls, $tools);
 
-        // A pause faked for a tool the agent does not have has nothing a real resume could run...
-        if ($pendingTools->contains(fn (?Tool $tool): bool => $tool === null)) {
-            return false;
-        }
-
-        // Neither does a pause for tools that never ask for approval, since a real run executes those in the step that called them...
-        return $pendingTools->contains(fn (Tool $tool): bool => $tool instanceof Approvable);
+        return ! $pendingTools->containsStrict(null)
+            && $pendingToolCalls->contains(fn (ToolCall $toolCall): bool => $this->approvalForTool($pendingTools[$toolCall->id], $toolCall) instanceof Approval);
     }
 
     /**
