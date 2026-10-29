@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\ToolFailed;
-use Laravel\Ai\Exceptions\ToolHandlerException;
+use Laravel\Ai\Exceptions\ToolExecutionException;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolResult;
@@ -75,7 +75,7 @@ test('a tool failed listener that rethrows fails the run with the tool exception
     ]);
 
     expect(fn (): mixed => (new ThrowingToolAgent)->prompt('Generate'))
-        ->toThrow(fn (Exception $exception) => expect($exception)->not->toBeInstanceOf(ToolHandlerException::class)
+        ->toThrow(fn (Exception $exception) => expect($exception)->not->toBeInstanceOf(ToolExecutionException::class)
             ->and($exception->getMessage())->toBe('Forced to throw exception.'));
 
     Exceptions::assertNothingReported();

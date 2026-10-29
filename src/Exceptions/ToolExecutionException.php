@@ -7,7 +7,7 @@ use Throwable;
 /**
  * @internal
  */
-class ToolHandlerException extends AiException
+class ToolExecutionException extends AiException
 {
     public function __construct(public readonly Throwable $exception)
     {

@@ -24,7 +24,7 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Exceptions\StreamErrorException;
-use Laravel\Ai\Exceptions\ToolHandlerException;
+use Laravel\Ai\Exceptions\ToolExecutionException;
 use Laravel\Ai\Gateway\Concerns\HandlesToolApprovals;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -782,7 +782,7 @@ class TextGenerationLoop
     {
         try {
             return $this->toolResult($toolCall, $this->executeTool($tool, $toolCall->arguments, $toolCall->id, $context));
-        } catch (ToolHandlerException $exception) {
+        } catch (ToolExecutionException $exception) {
             // The model only sees the message, so the exception is still reported for the application to see the whole failure...
             report($exception->exception);
 
