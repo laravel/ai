@@ -48,19 +48,17 @@ class GeminiFileGateway implements FileGateway
         FileProvider $provider,
         StorableFile $file,
     ): StoredFileResponse {
-        [$content, $mime, $name] = $this->prepareStorableFile($file);
-
         $uploadUrl = str_replace('/v1beta', '/upload/v1beta', $this->baseUrl($provider));
 
         [$providerOptions, $headers] = $this->resolveProviderOptionsAndHeaders($file, Lab::Gemini);
 
         $provider = $provider->withHeaders($headers);
 
-        $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider)->attach(
+        $response = $this->withErrorHandling($provider->name(), fn () => $this->withPreparedStorableFile($file, fn ($content, $mime, $name) => $this->client($provider)->attach(
             'file', $content, $name, ['Content-Type' => $mime]
         )->post("{$uploadUrl}/files", array_replace_recursive([
             'file' => ['display_name' => $name],
-        ], $providerOptions))->throw());
+        ], $providerOptions))->throw()));
 
         return (new StoredFileResponse($response->json('file.name')))->withRawResponse($response);
     }

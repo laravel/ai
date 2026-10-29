@@ -5,6 +5,9 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\LocalDocument;
+use Laravel\Ai\Files\StoredDocument;
+use Illuminate\Support\Facades\Storage;
 
 beforeEach(function (): void {
     config(['ai.providers.openai' => [
@@ -144,4 +147,56 @@ test('raw response is excluded when serialized', function (): void {
 
     expect($unserialized->id)->toBe('file-abc123')
         ->and($unserialized->raw)->toBeNull();
+});
+
+
+test('local document uploads use a stream rather than buffering the content', function (): void {
+    Http::fake(['api.openai.com/*' => Http::response(['id' => 'file-streamed'])]);
+
+    $path = tempnam(sys_get_temp_dir(), 'ai-upload-');
+    file_put_contents($path, 'streamed-content');
+
+    try {
+        $response = (new LocalDocument($path, 'text/plain'))->as('test.txt')->put(provider: 'openai');
+
+        expect($response->id)->toBe('file-streamed');
+
+        $file = collect(sentRequest()->data())->firstWhere('name', 'file');
+
+        expect($file['filename'])->toBe('test.txt');
+    } finally {
+        unlink($path);
+    }
+});
+
+test('stored document uploads use the filesystem read stream', function (): void {
+    Storage::fake('upload-test');
+    Storage::disk('upload-test')->put('reports/test.txt', 'stored-stream-content');
+
+    Http::fake(['api.openai.com/*' => Http::response(['id' => 'file-stored'])]);
+
+    $response = (new StoredDocument('reports/test.txt', 'upload-test'))->as('report.txt')->put(provider: 'openai');
+
+    expect($response->id)->toBe('file-stored');
+});
+
+test('upload retries reopen a fresh stream after a rate-limited response', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::sequence()
+            ->push(['error' => ['message' => 'Retry']], 429, ['Retry-After' => '0'])
+            ->push(['id' => 'file-retried']),
+    ]);
+
+    $path = tempnam(sys_get_temp_dir(), 'ai-upload-');
+    file_put_contents($path, 'retry-data');
+
+    try {
+        $response = (new LocalDocument($path, 'text/plain'))->put(provider: 'openai');
+
+        expect($response->id)->toBe('file-retried');
+
+        Http::assertSentCount(2);
+    } finally {
+        unlink($path);
+    }
 });
