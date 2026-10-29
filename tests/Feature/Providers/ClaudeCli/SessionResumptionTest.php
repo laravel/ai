@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Contracts\Events\Dispatcher;
+use Laravel\Ai\AiManager;
 use Laravel\Ai\Gateway\ClaudeCli\ClaudeCliGateway;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -19,10 +20,11 @@ describe('session resumption', function (): void {
         $this->useCliBinary($binary);
 
         $gateway = new ClaudeCliGateway(app(Dispatcher::class));
-        $provider = app(\Laravel\Ai\AiManager::class)->textProvider('claude-cli');
+        $provider = app(AiManager::class)->textProvider('claude-cli');
 
         $gen = $gateway->generateStreamStep('inv', $provider, 'claude-sonnet-5-5', null, [new UserMessage('Hello')], [], null, null, null, new StepContext);
-        foreach ($gen as $e) {}
+        foreach ($gen as $e) {
+        }
         $result = $gen->getReturn();
 
         expect($result->continuationToken)->toBe('sess-abc123');
@@ -32,8 +34,8 @@ describe('session resumption', function (): void {
         [$path, $argsFile] = $this->fakeCliCapturingArgs($this->cliSuccessLines('Resumed'));
         $this->useCliBinary($path);
 
-        $gateway = new ClaudeCliGateway(app(\Illuminate\Contracts\Events\Dispatcher::class));
-        $provider = app(\Laravel\Ai\AiManager::class)->textProvider('claude-cli');
+        $gateway = new ClaudeCliGateway(app(Dispatcher::class));
+        $provider = app(AiManager::class)->textProvider('claude-cli');
 
         $generator = $gateway->generateStreamStep(
             invocationId: 'test-inv-id',
@@ -62,8 +64,8 @@ describe('session resumption', function (): void {
         [$path, $argsFile] = $this->fakeCliCapturingArgs($this->cliSuccessLines('Response'));
         $this->useCliBinary($path);
 
-        $gateway = new ClaudeCliGateway(app(\Illuminate\Contracts\Events\Dispatcher::class));
-        $provider = app(\Laravel\Ai\AiManager::class)->textProvider('claude-cli');
+        $gateway = new ClaudeCliGateway(app(Dispatcher::class));
+        $provider = app(AiManager::class)->textProvider('claude-cli');
 
         $generator = $gateway->generateStreamStep(
             invocationId: 'test-inv-id',

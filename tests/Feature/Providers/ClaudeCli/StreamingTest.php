@@ -6,7 +6,6 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Tests\Feature\Providers\ClaudeCli\ClaudeCliHelpers;
-use Tests\Fixtures\Agents\AssistantAgent;
 
 uses(ClaudeCliHelpers::class);
 

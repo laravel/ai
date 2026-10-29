@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Contracts\Events\Dispatcher;
+use Laravel\Ai\AiManager;
 use Laravel\Ai\Gateway\ClaudeCli\ClaudeCliGateway;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -12,7 +14,7 @@ afterEach(function (): void {
     $this->cleanUpFakeCliScripts();
     // Restore default config
     config(['ai.providers.claude-cli.mcp_url' => null, 'ai.providers.claude-cli.mcp_servers' => []]);
-    app(\Laravel\Ai\AiManager::class)->forgetInstance('claude-cli');
+    app(AiManager::class)->forgetInstance('claude-cli');
 });
 
 describe('MCP config assembly', function (): void {
@@ -20,11 +22,12 @@ describe('MCP config assembly', function (): void {
         [$path, $argsFile] = $this->fakeCliCapturingArgs($this->cliSuccessLines());
         $this->useCliBinary($path);
 
-        $gateway = new ClaudeCliGateway(app(\Illuminate\Contracts\Events\Dispatcher::class));
-        $provider = app(\Laravel\Ai\AiManager::class)->textProvider('claude-cli');
+        $gateway = new ClaudeCliGateway(app(Dispatcher::class));
+        $provider = app(AiManager::class)->textProvider('claude-cli');
 
         $gen = $gateway->generateStreamStep('inv', $provider, 'claude-sonnet-5-5', null, [new UserMessage('Hello')], [], null, null, null, new StepContext);
-        foreach ($gen as $e) {}
+        foreach ($gen as $e) {
+        }
 
         $args = trim(file_get_contents($argsFile));
 
@@ -37,13 +40,14 @@ describe('MCP config assembly', function (): void {
             'ai.providers.claude-cli.cli_binary' => $path,
             'ai.providers.claude-cli.mcp_url' => 'http://localhost:9000/sse',
         ]);
-        app(\Laravel\Ai\AiManager::class)->forgetInstance('claude-cli');
+        app(AiManager::class)->forgetInstance('claude-cli');
 
-        $gateway = new ClaudeCliGateway(app(\Illuminate\Contracts\Events\Dispatcher::class));
-        $provider = app(\Laravel\Ai\AiManager::class)->textProvider('claude-cli');
+        $gateway = new ClaudeCliGateway(app(Dispatcher::class));
+        $provider = app(AiManager::class)->textProvider('claude-cli');
 
         $gen = $gateway->generateStreamStep('inv', $provider, 'claude-sonnet-5-5', null, [new UserMessage('Hello')], [], null, null, null, new StepContext);
-        foreach ($gen as $e) {}
+        foreach ($gen as $e) {
+        }
 
         $args = trim(file_get_contents($argsFile));
 
@@ -62,8 +66,8 @@ describe('MCP config assembly', function (): void {
         [$path, $argsFile] = $this->fakeCliCapturingArgs($this->cliSuccessLines());
         $this->useCliBinary($path);
 
-        $gateway = new ClaudeCliGateway(app(\Illuminate\Contracts\Events\Dispatcher::class));
-        $provider = app(\Laravel\Ai\AiManager::class)->textProvider('claude-cli');
+        $gateway = new ClaudeCliGateway(app(Dispatcher::class));
+        $provider = app(AiManager::class)->textProvider('claude-cli');
 
         $options = new TextGenerationOptions(providerOptions: [
             'mcp_servers' => [
@@ -73,7 +77,8 @@ describe('MCP config assembly', function (): void {
         ]);
 
         $gen = $gateway->generateStreamStep('inv', $provider, 'claude-sonnet-5-5', null, [new UserMessage('Hello')], [], null, $options, null, new StepContext);
-        foreach ($gen as $e) {}
+        foreach ($gen as $e) {
+        }
 
         $args = trim(file_get_contents($argsFile));
 

@@ -1,7 +1,7 @@
 <?php
 
-use Laravel\Ai\Promptable;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Promptable;
 
 /**
  * Skip if the `claude` CLI binary is not on $PATH or not at the configured location.
@@ -12,7 +12,7 @@ function requiresClaudeCli(): void
 
     $found = is_executable($binary)
         ? $binary
-        : trim((string) shell_exec('command -v ' . escapeshellarg($binary) . ' 2>/dev/null'));
+        : trim((string) shell_exec('command -v '.escapeshellarg($binary).' 2>/dev/null'));
 
     if (empty($found)) {
         test()->markTestSkipped('Claude CLI binary not found — skipping end-to-end test.');
@@ -25,9 +25,9 @@ test('claude cli executes bash tool and returns output in final text', function 
     // Embed a sentinel value the CLI must discover via a bash tool call.
     // The CLI handles Bash execution internally across multiple turns; the
     // framework only sees the final text response.
-    $sentinel = 'laravel_ai_cli_test_' . substr(md5((string) time()), 0, 8);
+    $sentinel = 'laravel_ai_cli_test_'.substr(md5((string) time()), 0, 8);
 
-    $agent = new class ($sentinel) implements Agent
+    $agent = new class($sentinel) implements Agent
     {
         use Promptable;
 

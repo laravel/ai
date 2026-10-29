@@ -20,6 +20,7 @@ use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Streaming\Events\Error as ErrorEvent;
+use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
@@ -37,7 +38,6 @@ class ClaudeCliGateway implements StepTextGateway
      * Generate text for a single Claude CLI step by consuming the streaming generator.
      *
      * @param  Message[]  $messages
-     * @param  array  $tools
      * @param  array<string, mixed>|null  $schema
      */
     public function generateTextStep(
@@ -92,7 +92,7 @@ class ClaudeCliGateway implements StepTextGateway
      * @param  array  $tools  Ignored — the Claude CLI exposes its own built-in tools (Bash, WebSearch, etc.)
      *                        internally; PHP-defined tools are not forwarded to the subprocess.
      * @param  array<string, mixed>|null  $schema
-     * @return Generator<int, \Laravel\Ai\Streaming\Events\StreamEvent, mixed, StepResponse|null>
+     * @return Generator<int, StreamEvent, mixed, StepResponse|null>
      */
     public function generateStreamStep(
         string $invocationId,
@@ -143,72 +143,43 @@ class ClaudeCliGateway implements StepTextGateway
         $errorEvent = null;
 
         try {
-        while (! feof($pipes[1])) {
-            $line = fgets($pipes[1]);
+            while (! feof($pipes[1])) {
+                $line = fgets($pipes[1]);
 
-            // fgets returns false on per-read timeout or stream error
-            if ($line === false) {
-                $meta = stream_get_meta_data($pipes[1]);
+                // fgets returns false on per-read timeout or stream error
+                if ($line === false) {
+                    $meta = stream_get_meta_data($pipes[1]);
 
-                if ($meta['timed_out'] ?? false) {
-                    throw new RuntimeException('Claude CLI process timed out after '.$timeoutSeconds.' seconds.');
-                }
-
-                break;
-            }
-
-            // Wall-clock deadline check: catches slow-drip processes that never hit the per-read timeout
-            if (time() >= $deadline) {
-                throw new RuntimeException('Claude CLI process exceeded the '.$timeoutSeconds.' second wall-clock deadline.');
-            }
-
-            $line = trim($line);
-
-            if ($line === '') {
-                continue;
-            }
-
-            $data = json_decode($line, true);
-
-            if (! is_array($data)) {
-                continue;
-            }
-
-            $type = $data['type'] ?? '';
-            $subtype = $data['subtype'] ?? '';
-
-            // system/init — session established
-            if ($type === 'system' && $subtype === 'init') {
-                $finalSessionId = $data['session_id'] ?? null;
-
-                if (! $streamStartEmitted) {
-                    $streamStartEmitted = true;
-
-                    yield (new StreamStart(
-                        strtolower((string) Str::uuid7()),
-                        $provider->name(),
-                        $model,
-                        time(),
-                    ))->withInvocationId($invocationId);
-                }
-
-                continue;
-            }
-
-            // assistant message with text content
-            if ($type === 'assistant') {
-                $content = $data['message']['content'] ?? [];
-
-                foreach ($content as $block) {
-                    if (($block['type'] ?? '') !== 'text') {
-                        continue;
+                    if ($meta['timed_out'] ?? false) {
+                        throw new RuntimeException('Claude CLI process timed out after '.$timeoutSeconds.' seconds.');
                     }
 
-                    $text = (string) ($block['text'] ?? '');
+                    break;
+                }
 
-                    if ($text === '') {
-                        continue;
-                    }
+                // Wall-clock deadline check: catches slow-drip processes that never hit the per-read timeout
+                if (time() >= $deadline) {
+                    throw new RuntimeException('Claude CLI process exceeded the '.$timeoutSeconds.' second wall-clock deadline.');
+                }
+
+                $line = trim($line);
+
+                if ($line === '') {
+                    continue;
+                }
+
+                $data = json_decode($line, true);
+
+                if (! is_array($data)) {
+                    continue;
+                }
+
+                $type = $data['type'] ?? '';
+                $subtype = $data['subtype'] ?? '';
+
+                // system/init — session established
+                if ($type === 'system' && $subtype === 'init') {
+                    $finalSessionId = $data['session_id'] ?? null;
 
                     if (! $streamStartEmitted) {
                         $streamStartEmitted = true;
@@ -221,48 +192,77 @@ class ClaudeCliGateway implements StepTextGateway
                         ))->withInvocationId($invocationId);
                     }
 
-                    if (! $textStartEmitted) {
-                        $textStartEmitted = true;
+                    continue;
+                }
 
-                        yield (new TextStart(
+                // assistant message with text content
+                if ($type === 'assistant') {
+                    $content = $data['message']['content'] ?? [];
+
+                    foreach ($content as $block) {
+                        if (($block['type'] ?? '') !== 'text') {
+                            continue;
+                        }
+
+                        $text = (string) ($block['text'] ?? '');
+
+                        if ($text === '') {
+                            continue;
+                        }
+
+                        if (! $streamStartEmitted) {
+                            $streamStartEmitted = true;
+
+                            yield (new StreamStart(
+                                strtolower((string) Str::uuid7()),
+                                $provider->name(),
+                                $model,
+                                time(),
+                            ))->withInvocationId($invocationId);
+                        }
+
+                        if (! $textStartEmitted) {
+                            $textStartEmitted = true;
+
+                            yield (new TextStart(
+                                strtolower((string) Str::uuid7()),
+                                $messageId,
+                                time(),
+                            ))->withInvocationId($invocationId);
+                        }
+
+                        $accumulatedText .= $text;
+
+                        yield (new TextDelta(
                             strtolower((string) Str::uuid7()),
                             $messageId,
+                            $text,
                             time(),
                         ))->withInvocationId($invocationId);
                     }
 
-                    $accumulatedText .= $text;
-
-                    yield (new TextDelta(
-                        strtolower((string) Str::uuid7()),
-                        $messageId,
-                        $text,
-                        time(),
-                    ))->withInvocationId($invocationId);
+                    continue;
                 }
 
-                continue;
-            }
+                // result — terminal event
+                if ($type === 'result') {
+                    $finalSessionId ??= $data['session_id'] ?? null;
 
-            // result — terminal event
-            if ($type === 'result') {
-                $finalSessionId ??= $data['session_id'] ?? null;
+                    if ($subtype === 'error') {
+                        $errorEvent = new ErrorEvent(
+                            strtolower((string) Str::uuid7()),
+                            'cli_error',
+                            $data['error'] ?? 'An unknown error occurred.',
+                            false,
+                            time(),
+                        );
 
-                if ($subtype === 'error') {
-                    $errorEvent = new ErrorEvent(
-                        strtolower((string) Str::uuid7()),
-                        'cli_error',
-                        $data['error'] ?? 'An unknown error occurred.',
-                        false,
-                        time(),
-                    );
+                        yield $errorEvent->withInvocationId($invocationId);
+                    }
 
-                    yield $errorEvent->withInvocationId($invocationId);
+                    continue;
                 }
-
-                continue;
             }
-        }
         } finally {
             // Always release resources — runs even if the generator is abandoned mid-iteration
             fclose($pipes[1]);
@@ -408,7 +408,7 @@ class ClaudeCliGateway implements StepTextGateway
         if ($mcpConfig !== null) {
             $encoded = json_encode($mcpConfig);
             if ($encoded === false) {
-                throw new \RuntimeException('Failed to encode MCP configuration as JSON: ' . json_last_error_msg());
+                throw new RuntimeException('Failed to encode MCP configuration as JSON: '.json_last_error_msg());
             }
             $command[] = '--mcp-config';
             $command[] = $encoded;

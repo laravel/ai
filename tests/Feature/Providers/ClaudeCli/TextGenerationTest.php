@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Contracts\Events\Dispatcher;
+use Laravel\Ai\AiManager;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Gateway\ClaudeCli\ClaudeCliGateway;
 use Laravel\Ai\Gateway\StepContext;
@@ -51,7 +52,7 @@ describe('text generation', function (): void {
 
     test('throws InvalidArgumentException when structured output is requested', function (): void {
         $gateway = new ClaudeCliGateway(app(Dispatcher::class));
-        $provider = app(\Laravel\Ai\AiManager::class)->textProvider('claude-cli');
+        $provider = app(AiManager::class)->textProvider('claude-cli');
 
         expect(fn () => $gateway->generateTextStep(
             provider: $provider,

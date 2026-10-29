@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Providers\ClaudeCli;
 
+use Laravel\Ai\AiManager;
+use Laravel\Ai\Streaming\Events\StreamEvent;
 use Tests\Fixtures\Agents\AssistantAgent;
 
 trait ClaudeCliHelpers
@@ -54,7 +56,7 @@ trait ClaudeCliHelpers
     /**
      * Collect all streaming events from an agent using the Claude CLI provider.
      *
-     * @return \Laravel\Ai\Streaming\Events\StreamEvent[]
+     * @return StreamEvent[]
      */
     protected function collectStreamEvents(?object $agent = null, string $provider = 'claude-cli'): array
     {
@@ -136,7 +138,7 @@ trait ClaudeCliHelpers
     protected function useCliBinary(string $path): void
     {
         config(['ai.providers.claude-cli.cli_binary' => $path]);
-        app(\Laravel\Ai\AiManager::class)->forgetInstance('claude-cli');
+        app(AiManager::class)->forgetInstance('claude-cli');
     }
 
     /**

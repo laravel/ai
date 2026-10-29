@@ -2,6 +2,16 @@
 
 ## Upgrading To 1.4 From 1.3
 
+### `TextGenerationLoop` Fires One Extra Step When Tool Calls Exhaust The Step Limit
+
+**Likelihood Of Impact: Low**
+
+When a text generation request exhausts its step limit while a tool call is still in progress, the loop now fires one additional tool-free step to give the model a chance to produce a final response. Previously, the loop stopped immediately and returned whatever had accumulated.
+
+This only affects multi-step tool-call workflows that set an explicit `maxSteps` limit and regularly hit that limit during tool use. If your application counts steps or asserts on the exact number of requests made to a provider, add one to your count when the final step ends with outstanding tool results.
+
+Custom gateway or loop implementations that override `generate()` or `stream()` do not need to change — the cleanup step is injected by `TextGenerationLoop` above the gateway layer.
+
 ### OpenAI Billing And Quota Errors Throw `InsufficientCreditsException`
 
 **Likelihood Of Impact: Low**
