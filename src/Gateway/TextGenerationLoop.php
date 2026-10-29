@@ -305,6 +305,8 @@ class TextGenerationLoop
             $allMessages = $this->settleAbandonedToolCalls($messages);
         }
 
+        $newMessages = [];
+
         for ($step = 0; $step < $maxSteps; $step++) {
             $pending = new PendingStep(
                 number: $step,
@@ -462,7 +464,9 @@ class TextGenerationLoop
             yield from $this->eventsFor($invocationId, $provider, $model, $cleanupResult);
 
             // Append the cleanup assistant message so the history does not end on ToolResultMessage
-            $allMessages[] = $this->buildAssistantMessage($cleanupResult);
+            $cleanupMessage = $this->buildAssistantMessage($cleanupResult);
+            $allMessages[] = $cleanupMessage;
+            $newMessages[] = $cleanupMessage;
         }
 
         // A step that never produced a response has already thrown, so the loop only reaches here having set a reason...

@@ -392,8 +392,12 @@ class ClaudeCliGateway implements StepTextGateway
         $mcpConfig = $this->buildMcpConfig($provider, $options);
 
         if ($mcpConfig !== null) {
+            $encoded = json_encode($mcpConfig);
+            if ($encoded === false) {
+                throw new \RuntimeException('Failed to encode MCP configuration as JSON: ' . json_last_error_msg());
+            }
             $command[] = '--mcp-config';
-            $command[] = json_encode($mcpConfig);
+            $command[] = $encoded;
         }
 
         $command[] = '--print';
