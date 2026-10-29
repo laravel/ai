@@ -13,9 +13,10 @@ trait MapsMessages
     /**
      * Map the given Laravel messages to Anthropic Messages API format.
      */
-    protected function mapMessages(array $messages): array
+    protected function mapMessages(array $messages, array $containerUploads = []): array
     {
         $mapped = [];
+        $prompt = null;
 
         foreach ($messages as $message) {
             $message = Message::tryFrom($message);
@@ -25,6 +26,14 @@ trait MapsMessages
                 MessageRole::Assistant => $this->mapAssistantMessage($message, $mapped),
                 MessageRole::ToolResult => $this->mapToolResultMessage($message, $mapped),
             };
+
+            if ($message->role === MessageRole::User) {
+                $prompt = array_key_last($mapped);
+            }
+        }
+
+        if ($prompt !== null && filled($containerUploads)) {
+            array_unshift($mapped[$prompt]['content'], ...$containerUploads);
         }
 
         return $mapped;

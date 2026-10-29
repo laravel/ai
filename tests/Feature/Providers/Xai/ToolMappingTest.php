@@ -242,3 +242,12 @@ test('code execution tool sends type code_interpreter', function (): void {
         return collect(data_get($body, 'tools'))->firstWhere('type', 'code_interpreter') !== null;
     });
 });
+
+test('code execution files are rejected before sending', function (): void {
+    Http::fake();
+
+    expect(fn () => agent(tools: [new CodeExecution(files: ['file_123'])])->prompt('Run some code', provider: 'xai'))
+        ->toThrow(RuntimeException::class, 'does not support code execution files.');
+
+    Http::assertNothingSent();
+});

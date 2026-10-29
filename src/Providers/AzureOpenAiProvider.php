@@ -163,7 +163,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
     public function codeExecutionToolOptions(CodeExecution $codeExecution): array
     {
         return $codeExecution->providerOptions(Lab::Azure) + [
-            'container' => ['type' => 'auto'],
+            'container' => array_filter(['type' => 'auto', 'file_ids' => $codeExecution->files]),
         ];
     }
 

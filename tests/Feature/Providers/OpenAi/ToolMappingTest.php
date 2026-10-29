@@ -313,3 +313,15 @@ test('code execution tool provider options may override the container', function
         return data_get($tool, 'container.file_ids') === ['file_123'];
     });
 });
+
+test('code execution files are sent as container file ids', function (): void {
+    Http::fake([
+        '*' => fakeOpenAiResponse('result'),
+    ]);
+
+    agent(tools: [new CodeExecution(files: ['file_123', 'file_456'])])->prompt('Run some code', provider: 'openai');
+
+    $tool = collect(sentRequest()->data()['tools'])->firstWhere('type', 'code_interpreter');
+
+    expect($tool['container'])->toBe(['type' => 'auto', 'file_ids' => ['file_123', 'file_456']]);
+});

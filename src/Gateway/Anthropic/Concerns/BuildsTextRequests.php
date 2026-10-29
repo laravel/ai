@@ -28,7 +28,7 @@ trait BuildsTextRequests
     ): array {
         $body = [
             'model' => $model,
-            'messages' => $this->mapMessages($messages),
+            'messages' => $this->mapMessages($messages, $this->mapContainerUploads($tools)),
             'max_tokens' => $options?->maxTokens ?? 64_000,
         ];
 

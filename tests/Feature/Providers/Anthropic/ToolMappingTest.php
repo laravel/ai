@@ -1,9 +1,11 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
+use Laravel\Ai\Responses\StoredFileResponse;
 use Tests\Fixtures\Agents\NamedToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
@@ -282,4 +284,30 @@ test('code execution tool sends dated type and name', function (): void {
 
         return data_get($tool, 'type') === 'code_execution_20260120';
     });
+});
+
+test('code execution files are uploaded to the container from the latest user message', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(messages: [
+        new Message(role: 'user', content: 'Hello.'),
+        new Message(role: 'assistant', content: 'Hi.'),
+    ], tools: [
+        new CodeExecution(files: ['file_abc123', new StoredFileResponse('file_def456')]),
+    ])->prompt('Summarize the spreadsheet.', provider: 'anthropic');
+
+    $body = sentRequest()->data();
+
+    expect($body['messages'][0]['content'])->toBe([['type' => 'text', 'text' => 'Hello.']])
+        ->and($body['messages'][2]['content'])->toBe([
+            ['type' => 'container_upload', 'file_id' => 'file_abc123'],
+            ['type' => 'container_upload', 'file_id' => 'file_def456'],
+            ['type' => 'text', 'text' => 'Summarize the spreadsheet.'],
+        ])
+        ->and(collect($body['tools'])->firstWhere('name', 'code_execution'))->toBe([
+            'type' => 'code_execution_20260120',
+            'name' => 'code_execution',
+        ]);
 });
