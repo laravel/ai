@@ -42,6 +42,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Conversation Titles
+    |--------------------------------------------------------------------------
+    |
+    | When an agent remembers a new conversation, a title is generated for it by
+    | the title agent below. You may provide your own agent class to set the
+    | provider and model, or disable generation to use the prompt instead.
+    |
+    */
+
+    'conversations' => [
+        'generate_title' => true,
+        'title_agent' => \Laravel\Ai\Agents\TitleAgent::class,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | AI Providers
     |--------------------------------------------------------------------------
     |

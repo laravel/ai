@@ -4,15 +4,14 @@ namespace Laravel\Ai\Middleware;
 
 use Closure;
 use Illuminate\Support\Str;
+use Laravel\Ai\Agents\TitleAgent;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Concerns\RemembersConversations as RemembersConversationsTrait;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\RemembersConversations;
-use Laravel\Ai\Events\ConversationTitleFailed;
-use Laravel\Ai\Events\ConversationTitleGenerated;
-use Laravel\Ai\Events\GeneratingConversationTitle;
-use Laravel\Ai\Gateway\Concerns\MeasuresDuration;
+use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Models\Conversation;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -22,8 +21,6 @@ use Throwable;
 
 class RememberConversation
 {
-    use MeasuresDuration;
-
     /**
      * Create a new middleware instance.
      */
@@ -162,7 +159,7 @@ class RememberConversation
             $agent->continue($this->store->storeConversation(
                 $participantType,
                 $participantId,
-                $this->generateTitle($prompt->prompt, $parentInvocationId, $pendingConversationId),
+                $this->generateTitle($agent, $prompt->prompt, $parentInvocationId),
                 $pendingConversationId,
             ), $participant);
         }
@@ -215,51 +212,28 @@ class RememberConversation
     /**
      * Generate a title for the conversation.
      */
-    protected function generateTitle(string $prompt, ?string $parentInvocationId = null, ?string $conversationId = null): string
+    protected function generateTitle(Agent $agent, string $prompt, ?string $parentInvocationId = null): string
     {
         if (! (bool) config('ai.conversations.generate_title', true)) {
             return Str::limit($prompt, 50, preserveWords: true);
         }
 
-        $message = Str::limit($prompt, 500);
+        $titleAgent = resolve(config('ai.conversations.title_agent', TitleAgent::class));
 
-        $fallback = Str::limit($prompt, 100, preserveWords: true);
-
-        try {
-            $model = $this->provider->cheapestTextModel();
-        } catch (Throwable) {
-            return $fallback;
+        // A faked agent must not reach a real provider to title its conversation...
+        if (Ai::hasFakeGatewayFor($agent) && ! Ai::hasFakeGatewayFor($titleAgent)) {
+            return Str::limit($prompt, 100, preserveWords: true);
         }
 
-        $invocationId = (string) Str::uuid7();
-
-        event(new GeneratingConversationTitle(
-            $invocationId, $parentInvocationId, $conversationId, $this->provider, $model, $message,
-        ));
-
-        $startedAt = hrtime(true);
-
         try {
-            $response = $this->provider->textGenerationLoop()->generate(
-                $this->provider,
-                $model,
-                'Generate a concise 3-5 word title for a conversation that starts with the following message. Use the same language as the message. Respond with only the title, no quotes or punctuation.',
-                [new UserMessage($message)],
-            );
-        } catch (Throwable $exception) {
-            event(new ConversationTitleFailed(
-                $invocationId, $parentInvocationId, $conversationId, $this->provider, $model, $message,
-                $exception, $this->elapsedMilliseconds($startedAt),
+            $response = ParentInvocation::within($parentInvocationId, null, fn (): AgentResponse => $titleAgent->prompt(
+                Str::limit($prompt, 500),
+                provider: $titleAgent instanceof TitleAgent ? $this->provider->name() : null,
             ));
 
-            return $fallback;
+            return Str::limit($response->text, 100);
+        } catch (Throwable) {
+            return Str::limit($prompt, 100, preserveWords: true);
         }
-
-        event(new ConversationTitleGenerated(
-            $invocationId, $parentInvocationId, $conversationId, $this->provider, $model, $message,
-            $response, $this->elapsedMilliseconds($startedAt),
-        ));
-
-        return Str::limit($response->text, 100);
     }
 }
