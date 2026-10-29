@@ -77,7 +77,7 @@ class MistralProvider extends Provider implements AudioProvider, EmbeddingProvid
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'mistral-large-2512';
+        return $this->config['models']['text']['default'] ?? 'mistral-large-4-0';
     }
 
     /**
@@ -93,7 +93,7 @@ class MistralProvider extends Provider implements AudioProvider, EmbeddingProvid
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'mistral-medium-3-5';
+        return $this->config['models']['text']['smartest'] ?? 'mistral-large-4-0';
     }
 
     /**
@@ -101,7 +101,7 @@ class MistralProvider extends Provider implements AudioProvider, EmbeddingProvid
      */
     public function defaultAudioModel(): string
     {
-        return $this->config['models']['audio']['default'] ?? 'voxtral-mini-tts-2603';
+        return $this->config['models']['audio']['default'] ?? 'voxtral-mini-tts-3-0';
     }
 
     /**
@@ -109,7 +109,7 @@ class MistralProvider extends Provider implements AudioProvider, EmbeddingProvid
      */
     public function defaultTranscriptionModel(): string
     {
-        return $this->config['models']['transcription']['default'] ?? 'voxtral-mini-2602';
+        return $this->config['models']['transcription']['default'] ?? 'voxtral-mini-transcribe-3-0';
     }
 
     /**
