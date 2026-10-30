@@ -2,8 +2,8 @@
 
 namespace Laravel\Ai\Providers\Concerns;
 
+use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Str;
-use InvalidArgumentException;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasStructuredOutput;
@@ -44,10 +44,6 @@ trait StreamsText
                 ->then(function (AgentPrompt $prompt) use ($invocationId, &$resolvedApprovalResults): StreamableAgentResponse {
                     $agent = $prompt->agent;
 
-                    if ($agent instanceof HasStructuredOutput) {
-                        throw new InvalidArgumentException('Streaming structured output is not currently supported.');
-                    }
-
                     $meta = new Meta($this->name(), $prompt->model);
 
                     $messages = $this->withoutForeignReplayBlocks([
@@ -58,6 +54,8 @@ trait StreamsText
                     if (! $prompt->hasApprovalDecisions()) {
                         $messages[] = new UserMessage($prompt->prompt, $prompt->attachments->all());
                     }
+
+                    $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
 
                     $tools = $this->resolveTools($prompt);
                     $approval = $this->resumableApprovalFor($prompt, $messages, $tools);
@@ -73,7 +71,7 @@ trait StreamsText
                     // The response owns the "has anything reached the consumer" flag so this failure check and the caller's failover decision can never drift apart...
                     $streamable = new StreamableAgentResponse(
                         $invocationId,
-                        function () use ($invocationId, $prompt, $agent, $messages, $tools, $approval, $recordApprovalResults, $validatedApproval, &$streamable) {
+                        function () use ($invocationId, $prompt, $agent, $messages, $tools, $schema, $approval, $recordApprovalResults, $validatedApproval, &$streamable) {
                             $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
 
                             try {
@@ -84,7 +82,7 @@ trait StreamsText
                                     (string) $agent->instructions(),
                                     $messages,
                                     $tools,
-                                    null,
+                                    $schema,
                                     TextGenerationOptions::forAgent($agent),
                                     $prompt->timeout,
                                     $approval,

@@ -25,6 +25,7 @@ use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Exceptions\ToolExecutionException;
+use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\Concerns\HandlesToolApprovals;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -64,7 +65,7 @@ use Throwable;
 
 class TextGenerationLoop
 {
-    use HandlesToolApprovals, InvokesTools, JoinsReasoning;
+    use DecodesStructuredOutput, HandlesToolApprovals, InvokesTools, JoinsReasoning;
 
     /**
      * The characters a tool must add before its unfinished output is reported again.
@@ -252,6 +253,7 @@ class TextGenerationLoop
         $previous = null;
         $accumulatedUsage = new TextUsage;
         $finalReason = null;
+        $lastResult = null;
 
         if ($approval !== null) {
             $resumption = $this->resumeFromApproval($approval, $messages, $tools, $validatedApproval, $context);
@@ -279,6 +281,7 @@ class TextGenerationLoop
                     FinishReason::Stop->value,
                     $accumulatedUsage,
                     time(),
+                    structured: filled($schema) ? [] : null,
                 ))->withInvocationId($invocationId);
 
                 return;
@@ -380,6 +383,7 @@ class TextGenerationLoop
 
             $accumulatedUsage = $accumulatedUsage->add($result->usage);
             $finalReason = $result->finishReason;
+            $lastResult = $result;
 
             $toolStream = $this->streamedStepToolResults(
                 $result, $prepared->isFinalStep, $prepared->tools, $invocationId, $prepared->options, $context,
@@ -436,6 +440,8 @@ class TextGenerationLoop
             $accumulatedUsage,
             time(),
             $steps,
+            // Most gateways stream the JSON as plain text, so the final step alone is decoded, as their sync parsers would...
+            structured: filled($schema) ? ($lastResult?->structured ?? $this->decodeStructuredOutput($lastResult?->text)) : null,
         ))->withInvocationId($invocationId);
     }
 

@@ -27,6 +27,8 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 {
     public ?string $text = null;
 
+    public ?array $structured = null;
+
     public ?TextUsage $usage = null;
 
     /** @var Collection<int, StreamEvent> */
@@ -247,11 +249,11 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
             $this->meta->model = $start->model;
         }
 
-        $this->streamedResponse = new StreamedAgentResponse(
-            $this->invocationId,
-            $this->events,
-            $this->meta,
-        );
+        $this->structured = $this->events->whereInstanceOf(StreamEnd::class)->last()?->structured;
+
+        $this->streamedResponse = $this->structured !== null
+            ? new StructuredStreamedAgentResponse($this->invocationId, $this->events, $this->meta)
+            : new StreamedAgentResponse($this->invocationId, $this->events, $this->meta);
 
         if ($this->conversationId !== null) {
             $this->streamedResponse->withinConversation(

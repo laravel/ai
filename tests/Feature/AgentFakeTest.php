@@ -22,6 +22,7 @@ use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\StructuredAgentResponse;
+use Laravel\Ai\Responses\StructuredStreamedAgentResponse;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Storage\DatabaseConversationStore;
@@ -228,6 +229,23 @@ describe('stream responses', function (): void {
         $response->each(fn (): true => true);
         expect($response->text)->toEqual('Third response')
             ->and($response->events)->toHaveCount(6);
+    });
+
+    test('structured agents can be streamed when faked', function (): void {
+        StructuredAgent::fake([['symbol' => 'Au']]);
+
+        $finished = null;
+
+        $response = (new StructuredAgent)->stream('Gold prompt')
+            ->then(function ($response) use (&$finished): void {
+                $finished = $response;
+            });
+
+        $response->each(fn (): true => true);
+
+        expect($response->structured)->toBe(['symbol' => 'Au'])
+            ->and($finished)->toBeInstanceOf(StructuredStreamedAgentResponse::class)
+            ->and($finished->structured)->toBe(['symbol' => 'Au']);
     });
 
     test('faked agents can stream the reasoning that preceded an answer', function (): void {

@@ -2,12 +2,14 @@
 
 namespace Laravel\Ai\Gateway\Groq;
 
+use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
 use Laravel\Ai\Contracts\Providers\SupportsCodeExecution;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
+use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
@@ -15,6 +17,8 @@ use Laravel\Ai\Gateway\Concerns\ResolvesAudioFilenames;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionMessages;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\PerformsChatCompletionSteps;
+use Laravel\Ai\Gateway\StepContext;
+use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\ProviderTool;
@@ -37,10 +41,32 @@ class GroqGateway implements StepTextGateway, TranscriptionGateway
     use MapsChatCompletionMessages;
     use MapsChatCompletionTools;
     use ParsesServerSentEvents;
-    use PerformsChatCompletionSteps;
+    use PerformsChatCompletionSteps {
+        generateStreamStep as streamChatCompletionStep;
+    }
     use ResolvesAudioFilenames;
 
     public function __construct(protected Dispatcher $events) {}
+
+    /**
+     * Stream text for a single step, moving any schema into the instructions since Groq does not stream structured outputs.
+     */
+    public function generateStreamStep(
+        string $invocationId,
+        TextProvider $provider,
+        string $model,
+        ?string $instructions,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        ?int $timeout,
+        StepContext $stepContext,
+    ): Generator {
+        return yield from $this->streamChatCompletionStep(
+            $invocationId, $provider, $model, $this->composeInstructions($instructions, $schema), $messages, $tools, null, $options, $timeout, $stepContext,
+        );
+    }
 
     /**
      * Map a provider tool to a Groq built-in tool definition.

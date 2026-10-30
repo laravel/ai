@@ -10,6 +10,7 @@ class StreamEnd extends StreamEvent
 {
     /**
      * @param  Collection<int, Step>  $steps  replay state for the completed turn; never serialized to clients
+     * @param  array<string, mixed>|null  $structured  the final step's structured output when the agent has a schema; never serialized to clients
      */
     public function __construct(
         public string $id,
@@ -17,6 +18,7 @@ class StreamEnd extends StreamEvent
         public TextUsage $usage,
         public int $timestamp,
         public Collection $steps = new Collection,
+        public ?array $structured = null,
     ) {
         //
     }

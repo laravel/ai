@@ -12,6 +12,7 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Fixtures\Agents\StructuredAgent;
 
 beforeEach(function (): void {
     config(['ai.providers.groq' => [
@@ -240,3 +241,33 @@ test('streaming finish reason maps correctly', function (string $apiReason, $exp
     'content_filter maps to ContentFilter' => ['content_filter', FinishReason::ContentFilter],
     'unknown maps to Unknown' => ['unknown_reason', FinishReason::Unknown],
 ]);
+
+test('streaming a structured agent puts the schema in the instructions instead of the response format', function (): void {
+    Http::fake([
+        'api.groq.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->chatChunk(['role' => 'assistant', 'content' => '{"symbol":']),
+                $this->chatChunk(['content' => '"Au"}']),
+                $this->chatChunkFinish('stop', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+                '[DONE]',
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $stream = (new StructuredAgent)->stream('What is the symbol for Gold?', provider: 'groq');
+
+    $stream->each(fn (): true => true);
+
+    expect($stream->structured)->toBe(['symbol' => 'Au']);
+
+    Http::assertSent(function ($request): bool {
+        $body = $request->data();
+        $system = collect($body['messages'])->firstWhere('role', 'system');
+
+        return $body['stream'] === true
+            && ! array_key_exists('response_format', $body)
+            && str_contains((string) $system['content'], 'JSON object that strictly adheres');
+    });
+});

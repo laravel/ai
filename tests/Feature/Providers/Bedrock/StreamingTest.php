@@ -2,7 +2,9 @@
 
 use Aws\MockHandler;
 use Aws\Result;
+use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Gateway\TextGenerationLoop;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
@@ -11,6 +13,7 @@ use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
+use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 describe('text streaming', function (): void {
@@ -333,5 +336,34 @@ describe('text streaming', function (): void {
         expect($assistantTurn['content'][0])->toBe([
             'reasoningContent' => ['redactedContent' => 'redacted-bytes'],
         ]);
+    });
+});
+
+describe('structured output streaming', function (): void {
+    test('streaming a structured agent emits the synthetic tool input as text', function (): void {
+        $client = $this->fakeBedrockStream([
+            $this->contentBlockStart(0, ['toolUse' => ['toolUseId' => 's1', 'name' => 'structured_output']]),
+            $this->contentBlockDelta(0, ['toolUse' => ['input' => '{"symbol":']]),
+            $this->contentBlockDelta(0, ['toolUse' => ['input' => '"Fe"}']]),
+            $this->contentBlockStop(0),
+            $this->messageStop('tool_use'),
+        ]);
+
+        $events = collect(iterator_to_array(
+            (new TextGenerationLoop($this->gatewayWithClient($client)))->stream(
+                'inv-1',
+                $this->bedrockProvider(),
+                'anthropic.claude-opus-4-7-v1:0',
+                null,
+                schema: ['symbol' => (new JsonSchemaTypeFactory)->string()],
+            ),
+            preserve_keys: false,
+        ));
+
+        expect($events->whereInstanceOf(ToolCallEvent::class))->toBeEmpty()
+            ->and($events->whereInstanceOf(TextDelta::class)->map->delta->values()->all())->toBe(['{"symbol":"Fe"}'])
+            ->and($events->last())->toBeInstanceOf(StreamEnd::class)
+            ->and($events->last()->reason)->toBe(FinishReason::Stop->value)
+            ->and($events->last()->structured)->toBe(['symbol' => 'Fe']);
     });
 });

@@ -17,6 +17,7 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Fixtures\Agents\StructuredAgent;
 
 describe('text streaming', function (): void {
     test('streaming emits text events', function (): void {
@@ -805,5 +806,47 @@ describe('provider tool citations', function (): void {
         $citations = array_filter($this->collectStreamEvents(), fn ($e): bool => $e instanceof CitationEvent);
 
         expect($citations)->toBeEmpty();
+    });
+});
+
+describe('structured output streaming', function (): void {
+    test('streaming the structured output tool fallback emits its input as text, separated from the text around it', function (): void {
+        config(['ai.providers.anthropic' => [
+            ...config('ai.providers.anthropic'),
+            'use_native_structured_output' => false,
+        ]]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->messageStart(),
+                    $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                    $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'Here is the data.']),
+                    $this->contentBlockStop(0),
+                    $this->contentBlockStart(1, ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'output_structured_data', 'input' => (object) []]),
+                    $this->contentBlockDelta(1, ['type' => 'input_json_delta', 'partial_json' => '{"symbol":']),
+                    $this->contentBlockDelta(1, ['type' => 'input_json_delta', 'partial_json' => '"Au"}']),
+                    $this->contentBlockStop(1),
+                    $this->contentBlockStart(2, ['type' => 'text', 'text' => '']),
+                    $this->contentBlockDelta(2, ['type' => 'text_delta', 'text' => 'Done.']),
+                    $this->contentBlockStop(2),
+                    $this->messageDelta('tool_use', 10),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $stream = (new StructuredAgent)->stream('What is the symbol for Gold?', provider: 'anthropic');
+
+        $events = collect(iterator_to_array($stream, false));
+
+        expect($events->whereInstanceOf(ToolCallEvent::class))->toBeEmpty()
+            ->and($events->whereInstanceOf(TextDelta::class)->map->delta->values()->all())->toBe(['Here is the data.', "\n\n{\"symbol\":", '"Au"}', "\n\nDone."])
+            ->and($events->last())->toBeInstanceOf(StreamEnd::class)->reason->toBe(FinishReason::Stop->value)
+            ->and($stream->text)->toBe("Here is the data.\n\n{\"symbol\":\"Au\"}\n\nDone.")
+            ->and($stream->structured)->toBe(['symbol' => 'Au']);
+
+        Http::assertSentCount(1);
     });
 });

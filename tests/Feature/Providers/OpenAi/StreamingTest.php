@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Responses\StructuredStreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
@@ -15,7 +16,12 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Tests\Fixtures\Agents\NestedStructuredAgent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Fixtures\Agents\StructuredAgent;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
+
+use function Laravel\Ai\agent;
 
 beforeEach(function (): void {
     config(['ai.providers.openai' => [
@@ -366,4 +372,83 @@ test('streaming emits provider tool events for code interpreter code deltas', fu
         ->toBe(['in_progress', 'code_delta', 'code_done', 'completed'])
         ->and($providerEvents[1])->type->toBe('code_interpreter_call')->itemId->toBe('ci_1')
         ->and($providerEvents[1]->data['delta'])->toBe('print(1)');
+});
+
+test('streaming a structured agent decodes the streamed text', function (string $agent, array $deltas, array $structured, bool $strict): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->responseCreated(),
+                ...array_map(fn (string $delta): array => $this->outputTextDelta($delta), $deltas),
+                $this->outputTextDone(implode('', $deltas)),
+                $this->responseCompleted(10, 5),
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $completed = null;
+
+    $stream = (new $agent)
+        ->stream('Hello', provider: 'openai')
+        ->then(function (StructuredStreamedAgentResponse $response) use (&$completed): void {
+            $completed = $response;
+        });
+
+    $stream->each(fn (): true => true);
+
+    expect($stream->structured)->toBe($structured)
+        ->and($completed->structured)->toBe($structured)
+        ->and($completed->toArray())->toBe($structured)
+        ->and($completed->text)->toBe(implode('', $deltas));
+
+    Http::assertSent(fn ($request): bool => data_get($request->data(), 'text.format.strict') === $strict);
+})->with([
+    'json' => [StructuredAgent::class, ['{"symbol":', '"Au"}'], ['symbol' => 'Au'], true],
+    'invalid json' => [StructuredAgent::class, ['I cannot answer that.'], [], true],
+    'invalid json without strict' => [NestedStructuredAgent::class, ['I cannot answer that.'], [], false],
+]);
+
+test('streaming a structured agent decodes only the final step of a tool loop', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::sequence([
+            Http::response(
+                body: $this->ssePayload([
+                    $this->responseCreated(),
+                    $this->outputTextDelta('Let me generate one.'),
+                    $this->outputTextDone('Let me generate one.'),
+                    $this->outputItemAdded('fc_1', 'call_1', 'FixedNumberGenerator'),
+                    $this->functionCallArgumentsDelta('fc_1', '{}'),
+                    $this->functionCallArgumentsDone('fc_1', '{}'),
+                    $this->responseCompleted(10, 5, output: [
+                        ['type' => 'function_call', 'status' => 'completed', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'FixedNumberGenerator', 'arguments' => '{}'],
+                    ]),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+            Http::response(
+                body: $this->ssePayload([
+                    $this->responseCreated(),
+                    $this->outputTextDelta('{"number":72019}'),
+                    $this->outputTextDone('{"number":72019}'),
+                    $this->responseCompleted(20, 10),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]),
+    ]);
+
+    $stream = agent(
+        tools: [new FixedNumberGenerator],
+        schema: fn ($schema): array => ['number' => $schema->integer()->required()],
+    )->stream('Generate a number', provider: 'openai');
+
+    $events = iterator_to_array($stream, false);
+
+    expect(collect($events)->whereInstanceOf(ToolCallEvent::class))->toHaveCount(1)
+        ->and($stream->structured)->toBe(['number' => 72019])
+        ->and($stream->text)->toContain('Let me generate one.');
 });

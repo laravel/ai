@@ -176,6 +176,10 @@ trait HandlesTextStreaming
                         'name' => $data['content_block']['name'] ?? '',
                         'arguments' => '',
                     ];
+
+                    if ($pendingToolCalls[$currentToolIndex]['name'] === 'output_structured_data') {
+                        $afterTool = true;
+                    }
                 } elseif ($blockType === 'server_tool_use') {
                     $currentServerToolInput = '';
 
@@ -278,6 +282,25 @@ trait HandlesTextStreaming
 
                     if ($currentBlockType === 'tool_use' && isset($pendingToolCalls[$currentToolIndex])) {
                         $pendingToolCalls[$currentToolIndex]['arguments'] .= $partial;
+
+                        // The structured output tool's input is the answer, so it streams as text like a native JSON response,
+                        // kept apart from any text the model wrote around the tool call...
+                        if ($pendingToolCalls[$currentToolIndex]['name'] === 'output_structured_data' && $partial !== '') {
+                            $separator = $afterTool && $lastTextDelta !== '' ? $this->textSeparator($lastTextDelta, $partial) : '';
+                            $afterTool = false;
+                            $lastTextDelta = $partial;
+
+                            if (($event = $emitTextStart()) instanceof StreamEvent) {
+                                yield $event;
+                            }
+
+                            yield (new TextDelta(
+                                $this->generateEventId(),
+                                $messageId,
+                                $separator.$partial,
+                                time(),
+                            ))->withInvocationId($invocationId);
+                        }
                     } elseif ($currentBlockType === 'server_tool_use') {
                         $currentServerToolInput .= $partial;
                     }
@@ -318,16 +341,20 @@ trait HandlesTextStreaming
                         $responseContent[$index]['input'] = $parsedArguments;
                     }
 
-                    yield (new ToolCallEvent(
-                        $this->generateEventId(),
-                        new ToolCall(
-                            $call['id'],
-                            $call['name'],
-                            $parsedArguments,
-                            $call['id'],
-                        ),
-                        time(),
-                    ))->withInvocationId($invocationId);
+                    if ($call['name'] !== 'output_structured_data') {
+                        yield (new ToolCallEvent(
+                            $this->generateEventId(),
+                            new ToolCall(
+                                $call['id'],
+                                $call['name'],
+                                $parsedArguments,
+                                $call['id'],
+                            ),
+                            time(),
+                        ))->withInvocationId($invocationId);
+                    } else {
+                        $afterTool = true;
+                    }
                 } elseif ($currentBlockType === 'server_tool_use') {
                     $index = $data['index'] ?? count($responseContent) - 1;
 
