@@ -3,10 +3,12 @@
 namespace Laravel\Ai\Responses;
 
 use Closure;
+use Generator;
 use Illuminate\Contracts\Support\Responsable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use IteratorAggregate;
+use Laravel\Ai\Attributes\WithoutStreaming;
 use Laravel\Ai\Responses\Data\Citation as CitationData;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TextUsage;
@@ -16,6 +18,8 @@ use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
+use Laravel\Ai\Streaming\Events\ToolCall;
 use Laravel\Ai\Streaming\Protocols\AgentUserInteractionProtocol;
 use Laravel\Ai\Streaming\Protocols\StreamProtocol;
 use Laravel\Ai\Streaming\Protocols\VercelDataProtocol;
@@ -57,14 +61,56 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
 
     /**
      * Create a new streamable agent response instance.
+     *
+     * @param  array<int, string>  $hiddenTools
+     * @param  array<int, class-string<StreamEvent>>  $hiddenEvents
      */
     public function __construct(
         public string $invocationId,
         protected Closure $generator,
         protected ?Meta $meta = null,
+        protected array $hiddenTools = [],
+        protected array $hiddenEvents = [],
     ) {
         $this->events = new Collection;
         $this->citations = new Collection;
+    }
+
+    /**
+     * Get the events that may be streamed to the client, leaving out hidden tools and event classes.
+     *
+     * @return Generator<int, StreamEvent>
+     */
+    public function clientEvents(): Generator
+    {
+        $held = [];
+
+        foreach ($this as $event) {
+            if (in_array($event::class, $this->hiddenEvents, true)) {
+                continue;
+            }
+
+            // Held rather than dropped because a call that ends up awaiting approval must still show the user what they approve...
+            if ($event instanceof ToolCall && WithoutStreaming::excludes($this->hiddenTools, $event)) {
+                $held[$event->toolCall->id] = $event;
+
+                continue;
+            }
+
+            if (WithoutStreaming::excludes($this->hiddenTools, $event)) {
+                continue;
+            }
+
+            if ($event instanceof ToolApprovalRequest) {
+                foreach ($event->pendingApprovals as $pendingApproval) {
+                    if (isset($held[$pendingApproval->id])) {
+                        yield $held[$pendingApproval->id];
+                    }
+                }
+            }
+
+            yield $event;
+        }
     }
 
     /**
@@ -182,7 +228,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         }
 
         return response()->stream(function () {
-            foreach ($this as $event) {
+            foreach ($this->clientEvents() as $event) {
                 yield 'data: '.($event)."\n\n";
             }
 

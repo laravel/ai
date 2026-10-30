@@ -7,6 +7,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Attributes\WithoutStreaming;
+use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Base64Audio;
 use Laravel\Ai\Files\Base64Document;
@@ -24,6 +26,7 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Models\ConversationMessage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
 
 class Vercel
 {
@@ -42,12 +45,17 @@ class Vercel
     /**
      * Convert messages or conversation message models into UI message arrays for hydrating useChat.
      *
+     * Given the agent, the tool calls and reasoning it keeps off the wire are left out as well.
+     *
      * @param  iterable<int, Message|ConversationMessage>  $messages
      * @return list<array<string, mixed>>
      */
-    public static function toUiMessages(iterable $messages): array
+    public static function toUiMessages(iterable $messages, ?Agent $agent = null): array
     {
         $result = [];
+
+        $hiddenTools = WithoutStreaming::toolsFor($agent);
+        $hidesReasoning = in_array(ReasoningDelta::class, WithoutStreaming::eventsFor($agent), true);
 
         $partRefs = [];
 
@@ -66,7 +74,12 @@ class Vercel
                 continue;
             }
 
-            $parts = static::uiPartsFrom($message);
+            $parts = static::uiPartsFrom($message, $hiddenTools, $hidesReasoning);
+
+            // A message holding nothing but hidden tool calls would otherwise render as an empty bubble...
+            if ($parts === [] && $role === 'assistant' && $hiddenTools !== []) {
+                continue;
+            }
 
             foreach ($parts as $index => $part) {
                 if (isset($part['toolCallId'])) {
@@ -93,15 +106,16 @@ class Vercel
     /**
      * Create the UI message parts for a single message.
      *
+     * @param  array<int, string>  $hiddenTools
      * @return list<array<string, mixed>>
      */
-    protected static function uiPartsFrom(Message|ConversationMessage $message): array
+    protected static function uiPartsFrom(Message|ConversationMessage $message, array $hiddenTools = [], bool $hidesReasoning = false): array
     {
         $parts = [];
         $provider = $message instanceof ConversationMessage ? (string) (($message->meta ?? [])['provider'] ?? '') : '';
 
         foreach ($message instanceof ConversationMessage ? $message->steps ?? [] : [] as $step) {
-            if (filled($step['reasoning'] ?? null)) {
+            if (! $hidesReasoning && filled($step['reasoning'] ?? null)) {
                 $parts[] = ['type' => 'reasoning', 'text' => $step['reasoning']];
             }
 
@@ -126,6 +140,11 @@ class Vercel
 
         foreach (static::toolCallArraysFrom($message) as $toolCall) {
             $isPending = PendingApproval::isPending($toolCall);
+
+            // A hidden call that awaits approval stays, since the user has to see what they approve...
+            if (! $isPending && in_array($toolCall['name'], $hiddenTools, true)) {
+                continue;
+            }
 
             $parts[] = [
                 'type' => 'tool-'.$toolCall['name'],

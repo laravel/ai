@@ -9,6 +9,8 @@ use InvalidArgumentException;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Attributes\WithoutStreaming;
+use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Files\Base64Audio;
@@ -146,31 +148,36 @@ class AgentUserInteraction
     /**
      * Convert messages or conversation message models into state for hydrating an AG-UI client.
      *
+     * Given the agent, the tool calls and results it keeps off the wire are left out as well.
+     *
      * @param  iterable<int, Message|ConversationMessage>  $messages
      * @return array{messages: list<array<string, mixed>>, interrupts: list<array<string, mixed>>}
      */
-    public static function toClientState(iterable $messages): array
+    public static function toClientState(iterable $messages, ?Agent $agent = null): array
     {
         $messages = [...$messages];
 
         return [
-            'messages' => static::uiMessagesFrom($messages),
+            'messages' => static::uiMessagesFrom($messages, WithoutStreaming::toolsFor($agent)),
             'interrupts' => static::toInterrupts($messages),
         ];
     }
 
     /**
      * @param  iterable<int, Message|ConversationMessage>  $messages
+     * @param  array<int, string>  $hiddenTools
      * @return list<array<string, mixed>>
      */
-    protected static function uiMessagesFrom(iterable $messages): array
+    protected static function uiMessagesFrom(iterable $messages, array $hiddenTools = []): array
     {
         $result = [];
 
         foreach ($messages as $message) {
             if ($message instanceof ToolResultMessage) {
                 foreach ($message->toolResults as $toolResult) {
-                    $result[] = static::toolMessageFrom($toolResult->toArray());
+                    if (! in_array($toolResult->name, $hiddenTools, true)) {
+                        $result[] = static::toolMessageFrom($toolResult->toArray());
+                    }
                 }
 
                 continue;
@@ -190,7 +197,7 @@ class AgentUserInteraction
                 continue;
             }
 
-            $toolCalls = static::hydratedToolCalls($message);
+            $toolCalls = static::hydratedToolCalls($message, $hiddenTools);
             $ownResults = $message instanceof ConversationMessage ? $message->tool_results : [];
 
             if (filled($message->content) || $toolCalls !== []) {
@@ -203,7 +210,9 @@ class AgentUserInteraction
             }
 
             foreach ($ownResults as $toolResult) {
-                $result[] = static::toolMessageFrom($toolResult, $id);
+                if (! in_array($toolResult['name'] ?? null, $hiddenTools, true)) {
+                    $result[] = static::toolMessageFrom($toolResult, $id);
+                }
             }
         }
 
@@ -373,15 +382,19 @@ class AgentUserInteraction
     /**
      * Get the AG-UI tool calls that represent a stored message's tool calls.
      *
+     * @param  array<int, string>  $hiddenTools
      * @return list<array<string, mixed>>
      */
-    protected static function hydratedToolCalls(Message|ConversationMessage $message): array
+    protected static function hydratedToolCalls(Message|ConversationMessage $message, array $hiddenTools = []): array
     {
         $calls = match (true) {
             $message instanceof AssistantMessage => $message->toolCalls->map(fn (ToolCall $call) => $call->toArray())->all(),
             $message instanceof ConversationMessage => $message->tool_calls ?? [],
             default => [],
         };
+
+        // A hidden call that awaits approval stays, since the interrupt it belongs to is still shown...
+        $calls = array_filter($calls, fn (array $call): bool => ! in_array($call['name'], $hiddenTools, true) || PendingApproval::isPending($call));
 
         return array_values(array_map(fn (array $call) => [
             'id' => $call['id'],

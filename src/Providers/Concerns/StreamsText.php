@@ -4,6 +4,7 @@ namespace Laravel\Ai\Providers\Concerns;
 
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Laravel\Ai\Attributes\WithoutStreaming;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasStructuredOutput;
@@ -105,6 +106,8 @@ trait StreamsText
                             }
                         },
                         $meta,
+                        WithoutStreaming::toolsFor($agent, $tools),
+                        WithoutStreaming::eventsFor($agent),
                     );
 
                     // Surfaced before iteration because the remembering middleware only records it once the stream has drained...

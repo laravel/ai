@@ -50,7 +50,7 @@ class VercelDataProtocol extends StreamProtocol
         $reason = null;
         $usage = new TextUsage;
 
-        foreach ($response as $event) {
+        foreach ($response->clientEvents() as $event) {
             // Send one stream start event, wrapping each subsequent provider step in step parts...
             if ($event instanceof StreamStart && $this->started) {
                 yield ['type' => 'finish-step'];
