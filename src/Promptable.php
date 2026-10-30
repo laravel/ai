@@ -11,13 +11,13 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Approvals\Decisions;
+use Laravel\Ai\Attributes\HiddenFromClient;
 use Laravel\Ai\Attributes\Model as ModelAttribute;
 use Laravel\Ai\Attributes\Provider as ProviderAttribute;
 use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
 use Laravel\Ai\Attributes\UseCheapestModel;
 use Laravel\Ai\Attributes\UseSmartestModel;
 use Laravel\Ai\Attributes\WithoutBroadcasting;
-use Laravel\Ai\Attributes\WithoutStreaming;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\AgentInput;
 use Laravel\Ai\Contracts\Conversational;
@@ -238,8 +238,7 @@ trait Promptable
                 throw $lastException;
             },
             $meta,
-            WithoutStreaming::toolsFor($this, $tools),
-            WithoutStreaming::eventsFor($this),
+            HiddenFromClient::toolsFor($this, $tools),
         );
 
         return $outer;
@@ -301,11 +300,11 @@ trait Promptable
     public function broadcast(AgentInput|UserMessage|Decisions|string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
         $without = WithoutBroadcasting::eventsFor($this);
-        $hiddenTools = WithoutStreaming::toolsFor($this, $this->resolveAgentTools());
+        $hiddenTools = HiddenFromClient::toolsFor($this, $this->resolveAgentTools());
 
         return $this->stream($prompt, $attachments, $provider, $model)
             ->each(function (StreamEvent $event) use ($channels, $now, $without, $hiddenTools): void {
-                if (WithoutBroadcasting::excludes($without, $event) || WithoutStreaming::excludes($hiddenTools, $event)) {
+                if (WithoutBroadcasting::excludes($without, $event) || HiddenFromClient::excludes($hiddenTools, $event)) {
                     return;
                 }
 

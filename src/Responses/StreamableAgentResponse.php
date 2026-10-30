@@ -8,7 +8,7 @@ use Illuminate\Contracts\Support\Responsable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use IteratorAggregate;
-use Laravel\Ai\Attributes\WithoutStreaming;
+use Laravel\Ai\Attributes\HiddenFromClient;
 use Laravel\Ai\Responses\Data\Citation as CitationData;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TextUsage;
@@ -63,21 +63,19 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
      * Create a new streamable agent response instance.
      *
      * @param  array<int, string>  $hiddenTools
-     * @param  array<int, class-string<StreamEvent>>  $hiddenEvents
      */
     public function __construct(
         public string $invocationId,
         protected Closure $generator,
         protected ?Meta $meta = null,
         protected array $hiddenTools = [],
-        protected array $hiddenEvents = [],
     ) {
         $this->events = new Collection;
         $this->citations = new Collection;
     }
 
     /**
-     * Get the events that may be streamed to the client, leaving out hidden tools and event classes.
+     * Get the events that may be streamed to the client, leaving out the calls and results of hidden tools.
      *
      * @return Generator<int, StreamEvent>
      */
@@ -86,18 +84,14 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         $held = [];
 
         foreach ($this as $event) {
-            if (in_array($event::class, $this->hiddenEvents, true)) {
-                continue;
-            }
-
             // Held rather than dropped because a call that ends up awaiting approval must still show the user what they approve...
-            if ($event instanceof ToolCall && WithoutStreaming::excludes($this->hiddenTools, $event)) {
+            if ($event instanceof ToolCall && HiddenFromClient::excludes($this->hiddenTools, $event)) {
                 $held[$event->toolCall->id] = $event;
 
                 continue;
             }
 
-            if (WithoutStreaming::excludes($this->hiddenTools, $event)) {
+            if (HiddenFromClient::excludes($this->hiddenTools, $event)) {
                 continue;
             }
 
@@ -293,11 +287,11 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
             $this->meta->model = $start->model;
         }
 
-        $this->streamedResponse = new StreamedAgentResponse(
+        $this->streamedResponse = (new StreamedAgentResponse(
             $this->invocationId,
             $this->events,
             $this->meta,
-        );
+        ))->withHiddenTools($this->hiddenTools);
 
         if ($this->conversationId !== null) {
             $this->streamedResponse->withinConversation(

@@ -7,8 +7,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Str;
 use Laravel\Ai\Approvals\Decisions;
+use Laravel\Ai\Attributes\HiddenFromClient;
 use Laravel\Ai\Attributes\WithoutBroadcasting;
-use Laravel\Ai\Attributes\WithoutStreaming;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Streaming\Events\Error;
@@ -48,11 +48,11 @@ class BroadcastAgent implements ShouldQueue
         $streamedResponse = null;
 
         $without = WithoutBroadcasting::eventsFor($this->agent);
-        $hiddenTools = WithoutStreaming::toolsFor($this->agent);
+        $hiddenTools = HiddenFromClient::toolsFor($this->agent);
 
         $this->agent->stream($this->prompt, $this->attachments, $this->provider, $this->model)
             ->each(function (StreamEvent $event) use ($without, $hiddenTools): void {
-                if (WithoutBroadcasting::excludes($without, $event) || WithoutStreaming::excludes($hiddenTools, $event)) {
+                if (WithoutBroadcasting::excludes($without, $event) || HiddenFromClient::excludes($hiddenTools, $event)) {
                     return;
                 }
 

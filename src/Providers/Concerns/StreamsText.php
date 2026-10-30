@@ -4,7 +4,7 @@ namespace Laravel\Ai\Providers\Concerns;
 
 use Illuminate\Support\Str;
 use InvalidArgumentException;
-use Laravel\Ai\Attributes\WithoutStreaming;
+use Laravel\Ai\Attributes\HiddenFromClient;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasStructuredOutput;
@@ -61,6 +61,7 @@ trait StreamsText
                     }
 
                     $tools = $this->resolveTools($prompt);
+                    $hiddenTools = HiddenFromClient::toolsFor($agent, $tools);
                     $approval = $this->resumableApprovalFor($prompt, $messages, $tools);
                     $recordApprovalResults = $this->approvalResultRecorderFor($prompt, $approval, $resolvedApprovalResults);
 
@@ -74,7 +75,7 @@ trait StreamsText
                     // The response owns the "has anything reached the consumer" flag so this failure check and the caller's failover decision can never drift apart...
                     $streamable = new StreamableAgentResponse(
                         $invocationId,
-                        function () use ($invocationId, $prompt, $agent, $messages, $tools, $approval, $recordApprovalResults, $validatedApproval, &$streamable) {
+                        function () use ($invocationId, $prompt, $agent, $messages, $tools, $hiddenTools, $approval, $recordApprovalResults, $validatedApproval, &$streamable) {
                             $this->events->dispatch(new StreamingAgent($invocationId, $prompt));
 
                             try {
@@ -91,7 +92,7 @@ trait StreamsText
                                     $approval,
                                     $recordApprovalResults,
                                     $validatedApproval,
-                                    $this->runContextFor($invocationId, $prompt),
+                                    $this->runContextFor($invocationId, $prompt, $hiddenTools),
                                 ) as $event) {
                                     if ($event instanceof ToolApprovalRequest) {
                                         $this->throwIfNotResumable($prompt);
@@ -106,8 +107,7 @@ trait StreamsText
                             }
                         },
                         $meta,
-                        WithoutStreaming::toolsFor($agent, $tools),
-                        WithoutStreaming::eventsFor($agent),
+                        $hiddenTools,
                     );
 
                     // Surfaced before iteration because the remembering middleware only records it once the stream has drained...

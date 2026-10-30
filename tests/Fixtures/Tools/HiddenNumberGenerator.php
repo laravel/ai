@@ -2,10 +2,10 @@
 
 namespace Tests\Fixtures\Tools;
 
-use Laravel\Ai\Attributes\WithoutStreaming;
+use Laravel\Ai\Attributes\HiddenFromClient;
 use Laravel\Ai\Tools\Request;
 
-#[WithoutStreaming]
+#[HiddenFromClient]
 class HiddenNumberGenerator extends FixedNumberGenerator
 {
     /**

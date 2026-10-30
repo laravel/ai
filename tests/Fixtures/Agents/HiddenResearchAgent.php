@@ -2,11 +2,11 @@
 
 namespace Tests\Fixtures\Agents;
 
-use Laravel\Ai\Attributes\WithoutStreaming;
+use Laravel\Ai\Attributes\HiddenFromClient;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Promptable;
 
-#[WithoutStreaming]
+#[HiddenFromClient]
 class HiddenResearchAgent implements Agent
 {
     use Promptable;

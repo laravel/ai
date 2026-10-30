@@ -6,18 +6,13 @@ use Illuminate\Support\Facades\Event;
 use Laravel\Ai\AgentUserInteraction\AgentUserInteraction;
 use Laravel\Ai\AnonymousAgent;
 use Laravel\Ai\Approvals\PendingApproval;
-use Laravel\Ai\Attributes\WithoutStreaming;
 use Laravel\Ai\Jobs\BroadcastAgent;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Models\ConversationMessage;
-use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\StreamableAgentResponse;
-use Laravel\Ai\Streaming\Events\ReasoningDelta;
-use Laravel\Ai\Streaming\Events\ReasoningEnd;
-use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -26,12 +21,13 @@ use Laravel\Ai\Streaming\Events\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolResult;
 use Laravel\Ai\Vercel\Vercel;
 use Tests\Fixtures\Agents\HiddenResearchAgent;
+use Tests\Fixtures\Agents\RememberingHiddenToolAgent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\HiddenNumberGenerator;
 
-function withoutStreamingAgent(): AnonymousAgent
+function hiddenToolAgent(): AnonymousAgent
 {
-    return new #[WithoutStreaming(ReasoningStart::class, ReasoningDelta::class, ReasoningEnd::class)] class('You are a helpful assistant.', [], [new HiddenNumberGenerator, new FixedNumberGenerator, new HiddenResearchAgent]) extends AnonymousAgent {};
+    return new AnonymousAgent('You are a helpful assistant.', [], [new HiddenNumberGenerator, new FixedNumberGenerator, new HiddenResearchAgent]);
 }
 
 function streamedFrames(StreamableAgentResponse $response): array
@@ -60,28 +56,35 @@ function hiddenToolStream(array $events): StreamableAgentResponse
     return new StreamableAgentResponse('invocation-1', fn () => yield from $events, new Data\Meta('anthropic', 'claude-sonnet-4-6'), ['HiddenNumberGenerator']);
 }
 
-function hiddenToolHistory(): array
+function hiddenToolHistory(bool $flagged): array
 {
+    $hidden = $flagged ? ['hidden' => true] : [];
+
     return [
         new ConversationMessage([
             'id' => 'msg-1',
             'role' => 'assistant',
             'content' => 'Done.',
-            'steps' => [[
-                'reasoning' => 'Deliberating',
-                'tool_calls' => [
-                    ['id' => 'call-1', 'name' => 'HiddenNumberGenerator', 'arguments' => [], 'result' => '48151'],
-                    ['id' => 'call-2', 'name' => 'FixedNumberGenerator', 'arguments' => [], 'result' => 72019],
-                ],
-            ]],
+            'steps' => [['tool_calls' => [
+                ['id' => 'call-1', 'name' => 'HiddenNumberGenerator', 'arguments' => [], 'result' => '48151', ...$hidden],
+                ['id' => 'call-2', 'name' => 'FixedNumberGenerator', 'arguments' => [], 'result' => 72019],
+            ]]],
         ]),
-        new AssistantMessage('', collect([new Data\ToolCall('call-3', 'HiddenNumberGenerator', [])])),
-        new ToolResultMessage(collect([new Data\ToolResult('call-3', 'HiddenNumberGenerator', [], '48151')])),
+        new ConversationMessage([
+            'id' => 'msg-2',
+            'role' => 'assistant',
+            'content' => null,
+            'steps' => [['tool_calls' => [['id' => 'call-3', 'name' => 'HiddenNumberGenerator', 'arguments' => [], 'result' => '48151', ...$hidden]]]],
+        ]),
+        ...($flagged ? [] : [
+            new AssistantMessage('', collect([new Data\ToolCall('call-5', 'HiddenNumberGenerator', [])])),
+            new ToolResultMessage(collect([new Data\ToolResult('call-5', 'HiddenNumberGenerator', [], '48151')])),
+        ]),
         new ConversationMessage([
             'id' => 'msg-4',
             'role' => 'assistant',
             'content' => null,
-            'steps' => [['tool_calls' => [['id' => 'call-4', 'name' => 'HiddenNumberGenerator', 'arguments' => [], 'approval_reason' => 'Reads every account.']]]],
+            'steps' => [['tool_calls' => [['id' => 'call-4', 'name' => 'HiddenNumberGenerator', 'arguments' => [], 'approval_reason' => 'Reads every account.', ...$hidden]]]],
         ]),
     ];
 }
@@ -92,14 +95,19 @@ dataset('client streams', [
     'server-sent events' => [fn (StreamableAgentResponse $response): StreamableAgentResponse => $response],
 ]);
 
-test('the client stream leaves out hidden tools, hidden sub-agents and the listed events', function (Closure $using): void {
-    $agent = withoutStreamingAgent();
+dataset('history renderers', [
+    'ui messages' => [fn (array $messages, ?AnonymousAgent $agent = null): array => Vercel::toUiMessages($messages, $agent)],
+    'client state' => [fn (array $messages, ?AnonymousAgent $agent = null): array => AgentUserInteraction::toClientState($messages, $agent)],
+]);
+
+test('the client stream leaves out hidden tools and hidden sub-agents', function (Closure $using): void {
+    $agent = hiddenToolAgent();
 
     $agent::fake([
         new Data\ToolCall('call-hidden', 'HiddenNumberGenerator', []),
         new Data\ToolCall('call-visible', 'FixedNumberGenerator', []),
         new Data\ToolCall('call-research', 'HiddenResearchAgent', ['task' => 'Dig']),
-        AgentResponse::fakeWithReasoning('Deliberating', 'Done.'),
+        'Done.',
     ]);
 
     HiddenResearchAgent::fake(['Classified findings']);
@@ -107,10 +115,9 @@ test('the client stream leaves out hidden tools, hidden sub-agents and the liste
     $response = $using($agent->stream('Find the reference'));
 
     expect(json_encode(streamedFrames($response)))->toContain('call-visible')->toContain('72019')->toContain('Done.')
-        ->not->toContain('call-hidden')->not->toContain('48151')->not->toContain('call-research')->not->toContain('Classified')->not->toContain('Deliberating')
+        ->not->toContain('call-hidden')->not->toContain('48151')->not->toContain('call-research')->not->toContain('Classified')
         ->and($response->events->whereInstanceOf(ToolResult::class)->where('preliminary', false)->pluck('toolResult.result')->values()->all())->toBe(['48151', '72019', 'Classified findings'])
-        ->and($response->events->where('preliminary', true))->not->toBeEmpty()
-        ->and($response->reasoning)->toBe('Deliberating');
+        ->and($response->events->where('preliminary', true))->not->toBeEmpty();
 })->with('client streams');
 
 test('a hidden tool awaiting approval streams its call with the approval request but not its result', function (Closure $using, array $types): void {
@@ -144,31 +151,64 @@ test('a hidden tool awaiting approval streams its call with the approval request
     ],
 ]);
 
-test('broadcasting leaves out a hidden tool', function (Closure $broadcast): void {
+test('broadcasting leaves out hidden tools and hidden sub-agents', function (Closure $broadcast): void {
     Event::fake();
 
-    $agent = withoutStreamingAgent();
+    $agent = hiddenToolAgent();
 
     $agent::fake([
         new Data\ToolCall('call-hidden', 'HiddenNumberGenerator', []),
         new Data\ToolCall('call-visible', 'FixedNumberGenerator', []),
+        new Data\ToolCall('call-research', 'HiddenResearchAgent', ['task' => 'Dig']),
         'Done.',
     ]);
 
+    HiddenResearchAgent::fake(['Classified findings']);
+
     $broadcast($agent);
 
-    Event::assertNotDispatched(AnonymousEvent::class, fn (AnonymousEvent $event): bool => str_contains(json_encode($event->broadcastWith()), 'call-hidden'));
+    Event::assertNotDispatched(AnonymousEvent::class, fn (AnonymousEvent $event): bool => str_contains(json_encode($event->broadcastWith()), 'call-hidden') || str_contains(json_encode($event->broadcastWith()), 'call-research'));
     Event::assertDispatched(AnonymousEvent::class, fn (AnonymousEvent $event): bool => $event->broadcastAs() === 'tool_call' && str_contains(json_encode($event->broadcastWith()), 'call-visible'));
 })->with([
     'now' => [fn (AnonymousAgent $agent): StreamableAgentResponse => $agent->broadcastNow('Find the reference', new Channel('test-channel'))],
     'queued' => [fn (AnonymousAgent $agent) => (new BroadcastAgent($agent, 'Find the reference', new Channel('test-channel')))->handle()],
 ]);
 
-test('the history renderers leave out the agent hidden tools and reasoning unless a call awaits approval', function (Closure $render): void {
-    expect(json_encode($render(withoutStreamingAgent())))->toContain('Done.')->toContain('call-2')->toContain('72019')->toContain('call-4')
-        ->not->toContain('call-1')->not->toContain('call-3')->not->toContain('48151')->not->toContain('Deliberating')
-        ->and(json_encode($render(null)))->toContain('call-1')->toContain('call-3')->toContain('48151');
+test('a stored turn flags the calls of hidden tools and hidden sub-agents', function (Closure $run): void {
+    RememberingHiddenToolAgent::fake([
+        new Data\ToolCall('call-hidden', 'HiddenNumberGenerator', []),
+        new Data\ToolCall('call-visible', 'FixedNumberGenerator', []),
+        new Data\ToolCall('call-research', 'HiddenResearchAgent', ['task' => 'Dig']),
+        'Done.',
+    ]);
+
+    HiddenResearchAgent::fake(['Classified findings']);
+
+    $run((new RememberingHiddenToolAgent)->forUser((object) ['id' => 1]));
+
+    $message = ConversationMessage::query()->where('role', 'assistant')->sole();
+
+    expect(collect($message->tool_calls)->pluck('hidden', 'id')->all())->toBe(['call-hidden' => true, 'call-visible' => null, 'call-research' => true])
+        ->and(collect($message->tool_results)->pluck('hidden', 'id')->all())->toBe(['call-hidden' => true, 'call-visible' => null, 'call-research' => true]);
 })->with([
-    'ui messages' => [fn (?AnonymousAgent $agent): array => Vercel::toUiMessages(hiddenToolHistory(), $agent)],
-    'client state' => [fn (?AnonymousAgent $agent): array => AgentUserInteraction::toClientState(hiddenToolHistory(), $agent)],
+    'prompt' => [fn (RememberingHiddenToolAgent $agent) => $agent->prompt('Find the reference')],
+    'stream' => [fn (RememberingHiddenToolAgent $agent) => $agent->stream('Find the reference')->each(fn (): true => true)],
+]);
+
+test('the history renderers leave out flagged calls without the agent unless a call awaits approval', function (Closure $render): void {
+    expect(json_encode($render(hiddenToolHistory(flagged: true))))->toContain('Done.')->toContain('call-2')->toContain('72019')->toContain('call-4')
+        ->not->toContain('call-1')->not->toContain('call-3')->not->toContain('48151');
+})->with('history renderers');
+
+test('given the agent, the history renderers leave out its hidden tools in rows stored without the flag', function (Closure $render): void {
+    expect(json_encode($render(hiddenToolHistory(flagged: false), hiddenToolAgent())))->toContain('Done.')->toContain('call-2')->toContain('72019')->toContain('call-4')
+        ->not->toContain('call-1')->not->toContain('call-3')->not->toContain('call-5')->not->toContain('48151')
+        ->and(json_encode($render(hiddenToolHistory(flagged: false))))->toContain('call-1')->toContain('call-3')->toContain('call-5')->toContain('48151');
+})->with('history renderers');
+
+test('the ui messages leave out an assistant message whose tool calls are all hidden', function (bool $flagged): void {
+    expect(array_column(Vercel::toUiMessages(hiddenToolHistory($flagged), $flagged ? null : hiddenToolAgent()), 'id'))->toBe(['msg-1', 'msg-4']);
+})->with([
+    'flagged' => [true],
+    'by name' => [false],
 ]);

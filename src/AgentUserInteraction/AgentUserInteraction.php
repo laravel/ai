@@ -9,7 +9,7 @@ use InvalidArgumentException;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
-use Laravel\Ai\Attributes\WithoutStreaming;
+use Laravel\Ai\Attributes\HiddenFromClient;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Audio;
@@ -148,7 +148,7 @@ class AgentUserInteraction
     /**
      * Convert messages or conversation message models into state for hydrating an AG-UI client.
      *
-     * Given the agent, the tool calls and results it keeps off the wire are left out as well.
+     * Tool calls and results stored as hidden from the client are left out. Given the agent, those of its hidden tools are too.
      *
      * @param  iterable<int, Message|ConversationMessage>  $messages
      * @return array{messages: list<array<string, mixed>>, interrupts: list<array<string, mixed>>}
@@ -158,7 +158,7 @@ class AgentUserInteraction
         $messages = [...$messages];
 
         return [
-            'messages' => static::uiMessagesFrom($messages, WithoutStreaming::toolsFor($agent)),
+            'messages' => static::uiMessagesFrom($messages, HiddenFromClient::toolsFor($agent)),
             'interrupts' => static::toInterrupts($messages),
         ];
     }
@@ -210,7 +210,7 @@ class AgentUserInteraction
             }
 
             foreach ($ownResults as $toolResult) {
-                if (! in_array($toolResult['name'] ?? null, $hiddenTools, true)) {
+                if (! HiddenFromClient::hides($toolResult, $hiddenTools)) {
                     $result[] = static::toolMessageFrom($toolResult, $id);
                 }
             }
@@ -394,7 +394,7 @@ class AgentUserInteraction
         };
 
         // A hidden call that awaits approval stays, since the interrupt it belongs to is still shown...
-        $calls = array_filter($calls, fn (array $call): bool => ! in_array($call['name'], $hiddenTools, true) || PendingApproval::isPending($call));
+        $calls = array_filter($calls, fn (array $call): bool => ! HiddenFromClient::hides($call, $hiddenTools) || PendingApproval::isPending($call));
 
         return array_values(array_map(fn (array $call) => [
             'id' => $call['id'],

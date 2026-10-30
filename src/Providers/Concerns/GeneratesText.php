@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Attributes\HiddenFromClient;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\ConversationStore;
@@ -71,6 +72,7 @@ trait GeneratesText
                     $schema = $agent instanceof HasStructuredOutput ? $agent->schema(new JsonSchemaTypeFactory) : null;
 
                     $tools = $this->resolveTools($prompt);
+                    $hiddenTools = HiddenFromClient::toolsFor($agent, $tools);
                     $approval = $this->resumableApprovalFor($prompt, $messages, $tools);
 
                     $response = $this->textGenerationLoop()->generate(
@@ -84,7 +86,7 @@ trait GeneratesText
                         $prompt->timeout,
                         $approval,
                         $this->approvalResultRecorderFor($prompt, $approval, $resolvedApprovalResults),
-                        $this->runContextFor($invocationId, $prompt),
+                        $this->runContextFor($invocationId, $prompt, $hiddenTools),
                     );
 
                     if ($response->hasPendingApprovals()) {
@@ -99,12 +101,14 @@ trait GeneratesText
                             $response->usage,
                             $response->meta,
                         ))
+                            ->withHiddenTools($hiddenTools)
                             ->withMessages($response->messages)
                             ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
                             ->withSteps($response->steps)
                             ->withReasoning($response->reasoning)
                             ->withRawResponse($response->raw)
                         : (new AgentResponse($invocationId, $response->text, $response->usage, $response->meta))
+                            ->withHiddenTools($hiddenTools)
                             ->withMessages($response->messages)
                             ->withToolCallsAndResults($response->toolCalls, $response->toolResults)
                             ->withSteps($response->steps)
@@ -206,11 +210,13 @@ trait GeneratesText
 
     /**
      * Build the context that identifies this run and reports its step and tool events.
+     *
+     * @param  array<int, string>  $hiddenTools
      */
-    protected function runContextFor(string $invocationId, AgentPrompt $prompt): RunContext
+    protected function runContextFor(string $invocationId, AgentPrompt $prompt, array $hiddenTools = []): RunContext
     {
         return tap(
-            new RunContext($invocationId, $prompt->agent, $this, $prompt->model, $this->events),
+            new RunContext($invocationId, $prompt->agent, $this, $prompt->model, $this->events, $hiddenTools),
             fn (RunContext $context) => $prompt->setRunContext($context),
         );
     }

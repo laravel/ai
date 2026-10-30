@@ -25,12 +25,16 @@ class RunContext
     /** @var array<int, Step> */
     protected array $steps = [];
 
+    /**
+     * @param  array<int, string>  $hiddenTools
+     */
     public function __construct(
         public readonly string $invocationId,
         public readonly Agent $agent,
         public readonly TextProvider $provider,
         public readonly string $model,
         protected readonly Dispatcher $events,
+        public readonly array $hiddenTools = [],
     ) {}
 
     /**
@@ -65,7 +69,7 @@ class RunContext
             $last?->text ?? '',
             collect($this->steps)->reduce(fn (TextUsage $total, Step $step): TextUsage => $total->add($step->usage), new TextUsage),
             $last?->meta ?? new Meta($this->provider->name(), $this->model),
-        ), fn (AgentResponse $response) => $response->withSteps(collect($this->steps)));
+        ), fn (AgentResponse $response) => $response->withHiddenTools($this->hiddenTools)->withSteps(collect($this->steps)));
     }
 
     /**
