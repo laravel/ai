@@ -21,6 +21,7 @@ use Laravel\Ai\Enums\MessageStatus;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
+use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -493,6 +494,60 @@ test('it stores a tool result id on the call that made it', function (): void {
     expect($result->arguments)->toBe(['path' => 'a.txt', 'contents' => 'alpha'])
         ->and($result->result)->toBe('Wrote 5 bytes.')
         ->and($result->resultId)->toBe('result-1');
+});
+
+test('it stores the file a tool returned with its result and replays it on the next turn', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+    $prompt = new AgentPrompt(new ToolUsingAgent, 'Show me the chart', [], Double::for(TextProvider::class), 'test-model');
+
+    $response = (new AgentResponse('invocation-1', 'It is a chart.', new TextUsage, new Meta('anthropic', 'claude-opus-5-5')))
+        ->withSteps(collect([new Step(
+            'It is a chart.',
+            [new ToolCall('call-1', 'RenderChart', [])],
+            [new ToolResult('call-1', 'RenderChart', [], 'chart.png', attachments: [new StoredImage('charts/chart.png', 's3')])],
+            FinishReason::Stop,
+            new TextUsage,
+            new Meta('anthropic', 'claude-opus-5-5'),
+            '',
+            [],
+        )]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    $stored = DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps');
+
+    $result = $store->getLatestConversationMessages($conversationId, 10)
+        ->first(fn (Message $message): bool => $message instanceof ToolResultMessage)
+        ?->toolResults
+        ->first();
+
+    expect(json_decode($stored, true)[0]['tool_calls'][0]['attachments'])->toBe([
+        ['type' => 'stored-image', 'name' => 'chart.png', 'path' => 'charts/chart.png', 'disk' => 's3'],
+    ])
+        ->and($result->result)->toBe('chart.png')
+        ->and($result->attachments)->toHaveCount(1)
+        ->and($result->attachments[0])->toBeInstanceOf(StoredImage::class)
+        ->and($result->attachments[0]->path)->toBe('charts/chart.png');
+});
+
+test('resolving an approval stores the file the approved tool returned', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    insertAssistantTurn($conversationId, 'message-1', '', [
+        assistantStep([['id' => 'call-1', 'name' => 'RenderChart', 'arguments' => []]]),
+    ], ['call-1' => 'Renders a chart']);
+
+    $store->storeApprovalResults($conversationId, [
+        new ToolResult('call-1', 'RenderChart', [], 'chart.png', attachments: [new StoredImage('charts/chart.png', 's3')]),
+    ]);
+
+    $steps = DB::table('agent_conversation_messages')->where('id', 'message-1')->value('steps');
+
+    expect($steps)->json()->{'0'}->tool_calls->{'0'}->attachments->toBe([
+        ['type' => 'stored-image', 'name' => 'chart.png', 'path' => 'charts/chart.png', 'disk' => 's3'],
+    ]);
 });
 
 test('it treats tool results stored before the failed flag as successful', function (): void {

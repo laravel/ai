@@ -1,7 +1,18 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
+use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\ToolResult;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+use Tests\Fixtures\Tools\FileReturningTool;
+
+use function Laravel\Ai\agent;
 
 test('tool calls trigger follow up request', function (): void {
     Http::fake([
@@ -238,4 +249,73 @@ test('max steps limits tool call depth', function (): void {
     $recorded = Http::recorded();
 
     expect(count($recorded))->toBeLessThanOrEqual(3);
+});
+
+test('a file a tool returns is sent to the model as a block of its tool result', function (Image|Document $file, array $block): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            $this->fakeToolCallResponse('FileReturningTool'),
+            $this->fakeTextResponse('It is a chart.'),
+        ]),
+    ]);
+
+    agent(tools: [new FileReturningTool($file)])->prompt('What does the tool return?', provider: 'anthropic');
+
+    expect(collect(Http::recorded()[1][0]->data()['messages'])->last()['content'])->toBe([[
+        'type' => 'tool_result',
+        'tool_use_id' => 'toolu_123',
+        'content' => [['type' => 'text', 'text' => $file->name()], $block],
+    ]]);
+})->with([
+    'image' => [
+        fn () => Image::fromBase64(base64_encode('png-bytes'), 'image/png')->as('chart.png'),
+        ['type' => 'image', 'source' => ['type' => 'base64', 'media_type' => 'image/png', 'data' => base64_encode('png-bytes')]],
+    ],
+    'stored pdf' => [
+        function () {
+            Storage::fake('docs')->put('invoice.pdf', '%PDF-1.4 invoice');
+
+            return Document::fromStorage('invoice.pdf', 'docs');
+        },
+        ['type' => 'document', 'source' => ['type' => 'base64', 'media_type' => 'application/pdf', 'data' => base64_encode('%PDF-1.4 invoice')], 'title' => 'invoice.pdf'],
+    ],
+]);
+
+test('a file a tool returns that anthropic cannot take is noted in its tool result', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            $this->fakeToolCallResponse('FileReturningTool'),
+            $this->fakeTextResponse('It is a report.'),
+        ]),
+    ]);
+
+    $file = Document::fromBase64(base64_encode("PK\x03\x04\x00report"), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')->as('report.docx');
+
+    agent(tools: [new FileReturningTool($file)])->prompt('What does the tool return?', provider: 'anthropic');
+
+    expect(collect(Http::recorded()[1][0]->data()['messages'])->last()['content'])->toBe([[
+        'type' => 'tool_result',
+        'tool_use_id' => 'toolu_123',
+        'content' => [['type' => 'text', 'text' => "report.docx\n[The document report.docx was left out because it could not be sent to this provider.]"]],
+    ]]);
+});
+
+test('only the files of a tool result that anthropic cannot take are noted', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('Done'),
+    ]);
+
+    agent(messages: [
+        new UserMessage('Show me the files.'),
+        new AssistantMessage('', collect([new ToolCall('toolu_123', 'FileReturningTool', [], 'toolu_123')])),
+        new ToolResultMessage(collect([new ToolResult('toolu_123', 'FileReturningTool', [], 'files', 'toolu_123', attachments: [
+            Image::fromBase64(base64_encode('png-bytes'), 'image/png')->as('chart.png'),
+            Document::fromBase64(base64_encode("PK\x03\x04\x00report"), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')->as('report.docx'),
+        ])])),
+    ])->prompt('What are they?', provider: 'anthropic');
+
+    expect(Http::recorded()[0][0]->data()['messages'][2]['content'][0]['content'])->toBe([
+        ['type' => 'text', 'text' => "files\n[The document report.docx was left out because it could not be sent to this provider.]"],
+        ['type' => 'image', 'source' => ['type' => 'base64', 'media_type' => 'image/png', 'data' => base64_encode('png-bytes')]],
+    ]);
 });

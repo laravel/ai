@@ -6,6 +6,8 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\ToolExecutionException;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Providers\Tools\ToolSearch;
@@ -22,12 +24,12 @@ trait InvokesTools
      *
      * @param  array<string, mixed>  $arguments
      */
-    protected function executeTool(Tool $tool, array $arguments, ?string $toolCallId = null, ?RunContext $context = null): string
+    protected function executeTool(Tool $tool, array $arguments, ?string $toolCallId = null, ?RunContext $context = null): string|Image|Document
     {
         $toolInvocationId = (string) Str::uuid7();
 
         // Any agent prompted while this tool runs, however it was reached, is a child of this tool call...
-        return ParentInvocation::within($context?->invocationId, $toolInvocationId, function () use ($tool, $arguments, $toolCallId, $toolInvocationId, $context): string {
+        return ParentInvocation::within($context?->invocationId, $toolInvocationId, function () use ($tool, $arguments, $toolCallId, $toolInvocationId, $context): string|Image|Document {
             $context?->invokingTool($tool, $arguments, $toolInvocationId);
 
             $startedAt = hrtime(true);
@@ -46,7 +48,8 @@ trait InvokesTools
 
             $context?->toolInvoked($tool, $arguments, $result, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
 
-            return (string) $result;
+            // A file is kept whole so it can be attached to the result, since its string form is its raw bytes...
+            return $result instanceof Image || $result instanceof Document ? $result : (string) $result;
         });
     }
 

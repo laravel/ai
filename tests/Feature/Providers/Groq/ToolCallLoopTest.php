@@ -3,9 +3,13 @@
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\NoSuchToolException;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+use Tests\Fixtures\Tools\FileReturningTool;
+
+use function Laravel\Ai\agent;
 
 beforeEach(function (): void {
     config(['ai.providers.groq' => [
@@ -48,6 +52,30 @@ test('tool calls trigger follow up request', function (): void {
 
     expect($hasAssistantWithToolCalls)->toBeTrue()
         ->and($hasToolResult)->toBeTrue();
+});
+
+test('a file a tool returns is named in its tool result instead of sent as bytes', function (): void {
+    Http::fake([
+        'api.groq.com/*' => Http::sequence([
+            fakeGroqToolCallResponse('FileReturningTool'),
+            fakeGroqResponse('It is a chart.'),
+        ]),
+    ]);
+
+    $png = "\x89PNG\r\n\x1a\n";
+
+    agent(tools: [new FileReturningTool(Image::fromBase64(base64_encode($png), 'image/png')->as('chart.png'))])
+        ->prompt('What does the tool return?', provider: 'groq');
+
+    $body = (string) Http::recorded()[1][0]->body();
+
+    expect(collect(json_decode($body, true)['messages'])->last())->toBe([
+        'role' => 'tool',
+        'tool_call_id' => 'call_123',
+        'content' => "chart.png\n[The image chart.png was left out because it could not be sent to this provider.]",
+    ])
+        ->and($body)->not->toContain(base64_encode($png))
+        ->and($body)->not->toContain($png);
 });
 
 test('max steps limits tool call depth', function (): void {

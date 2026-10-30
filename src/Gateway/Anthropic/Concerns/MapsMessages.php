@@ -2,11 +2,13 @@
 
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
+use InvalidArgumentException;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\MessageRole;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\Responses\Data\ToolResult;
 
 trait MapsMessages
 {
@@ -108,7 +110,7 @@ trait MapsMessages
             $content[] = [
                 'type' => 'tool_result',
                 'tool_use_id' => $toolResult->id,
-                'content' => $toolResult->text(),
+                'content' => $toolResult->attachments === [] ? $toolResult->text() : $this->mapToolResultContent($toolResult),
             ];
         }
 
@@ -116,6 +118,26 @@ trait MapsMessages
             'role' => 'user',
             'content' => $content,
         ];
+    }
+
+    /**
+     * Map a tool result and its attached files to Anthropic content blocks.
+     */
+    protected function mapToolResultContent(ToolResult $toolResult): array
+    {
+        $text = [$toolResult->resultText()];
+        $blocks = [];
+
+        foreach ($toolResult->attachments as $attachment) {
+            // The tool already ran and a stored conversation replays its files, so a file Anthropic can't take is noted instead...
+            try {
+                $blocks = [...$blocks, ...$this->mapAttachments(collect([$attachment]))];
+            } catch (InvalidArgumentException) {
+                $text[] = $toolResult->attachmentNote($attachment);
+            }
+        }
+
+        return [['type' => 'text', 'text' => implode("\n", $text)], ...$blocks];
     }
 
     /**

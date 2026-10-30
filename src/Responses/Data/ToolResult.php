@@ -3,10 +3,16 @@
 namespace Laravel\Ai\Responses\Data;
 
 use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Support\Str;
 use JsonSerializable;
+use Laravel\Ai\Files\File;
+use Laravel\Ai\Files\Image;
 
 class ToolResult implements Arrayable, JsonSerializable
 {
+    /**
+     * @param  array<int, File>  $attachments
+     */
     public function __construct(
         public string $id,
         public string $name,
@@ -15,6 +21,7 @@ class ToolResult implements Arrayable, JsonSerializable
         public ?string $resultId = null,
         public bool $denied = false,
         public bool $failed = false,
+        public array $attachments = [],
     ) {}
 
     /**
@@ -30,6 +37,7 @@ class ToolResult implements Arrayable, JsonSerializable
             resultId: $data['result_id'] ?? null,
             denied: $data['denied'] ?? false,
             failed: $data['failed'] ?? false,
+            attachments: collect($data['attachments'] ?? [])->map(File::fromArray(...))->filter()->values()->all(),
         );
     }
 
@@ -50,9 +58,28 @@ class ToolResult implements Arrayable, JsonSerializable
     }
 
     /**
-     * Get the result as a string suitable for sending back to a provider.
+     * Get the result as a string suitable for sending back to a provider, noting each attached file it cannot receive.
      */
     public function text(): string
+    {
+        return collect($this->attachments)
+            ->map($this->attachmentNote(...))
+            ->prepend($this->resultText())
+            ->implode("\n");
+    }
+
+    /**
+     * Get the note sent in place of the given attached file to a provider that cannot receive it.
+     */
+    public function attachmentNote(File $attachment): string
+    {
+        return Str::squish('[The '.($attachment instanceof Image ? 'image' : 'document').' '.$attachment->name().' was left out because it could not be sent to this provider.]');
+    }
+
+    /**
+     * Get the result as a string, for a provider that receives the attached files alongside it.
+     */
+    public function resultText(): string
     {
         return match (true) {
             is_string($this->result) => $this->result,
@@ -62,7 +89,7 @@ class ToolResult implements Arrayable, JsonSerializable
     }
 
     /**
-     * Get the instance as an array, only including the denied and failed keys when they apply.
+     * Get the instance as an array, only including the denied, failed and attachments keys when they apply.
      */
     public function toArray(): array
     {
@@ -74,6 +101,7 @@ class ToolResult implements Arrayable, JsonSerializable
             'result_id' => $this->resultId,
             ...($this->denied ? ['denied' => true] : []),
             ...($this->failed ? ['failed' => true] : []),
+            ...($this->attachments === [] ? [] : ['attachments' => collect($this->attachments)->toArray()]),
         ];
     }
 

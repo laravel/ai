@@ -1,5 +1,9 @@
 <?php
 
+use Laravel\Ai\Files\Base64Image;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Responses\Data\ToolResult;
 
 test('tool result stores all properties', function (): void {
@@ -76,4 +80,40 @@ test('tool result text serializes array results without escaping slashes or unic
 test('tool result text passes through strings and casts everything else', function (): void {
     expect((new ToolResult('id', 'name', [], 'https://example.com/report'))->text())->toBe('https://example.com/report')
         ->and((new ToolResult('id', 'name', [], 72))->text())->toBe('72');
+});
+
+test('tool result to array includes the attachments key only when a file is attached', function (): void {
+    $result = new ToolResult('id', 'name', [], 'chart.png', attachments: [Image::fromStorage('charts/chart.png', 's3')]);
+
+    expect((new ToolResult('id', 'name', [], 'val'))->toArray())->not->toHaveKey('attachments')
+        ->and($result->toArray()['attachments'])->toBe([
+            ['type' => 'stored-image', 'name' => 'chart.png', 'path' => 'charts/chart.png', 'disk' => 's3'],
+        ]);
+});
+
+test('tool result from array rehydrates its attachments', function (): void {
+    $result = ToolResult::fromArray((new ToolResult('id', 'name', [], 'chart.png', attachments: [
+        Image::fromBase64('cG5n', 'image/png')->as('chart.png'),
+        Document::fromStorage('invoice.pdf', 's3'),
+    ]))->toArray());
+
+    expect($result->attachments)->toHaveCount(2)
+        ->and($result->attachments[0])->toBeInstanceOf(Base64Image::class)
+        ->and($result->attachments[0]->name())->toBe('chart.png')
+        ->and($result->attachments[1])->toBeInstanceOf(StoredDocument::class)
+        ->and($result->attachments[1]->disk)->toBe('s3')
+        ->and(ToolResult::fromArray(['id' => 'id', 'name' => 'name', 'result' => 'val'])->attachments)->toBe([]);
+});
+
+test('tool result text notes each attached file a text only provider cannot receive', function (): void {
+    $result = new ToolResult('id', 'name', [], 'chart.png', attachments: [
+        Image::fromBase64('cG5n', 'image/png')->as('chart.png'),
+        Document::fromBase64('cGRm', 'application/pdf'),
+    ]);
+
+    expect($result->text())->toBe(implode("\n", [
+        'chart.png',
+        '[The image chart.png was left out because it could not be sent to this provider.]',
+        '[The document was left out because it could not be sent to this provider.]',
+    ]))->and($result->resultText())->toBe('chart.png');
 });

@@ -25,6 +25,8 @@ use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Exceptions\ToolExecutionException;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\Concerns\HandlesToolApprovals;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -802,15 +804,18 @@ class TextGenerationLoop
     /**
      * Create a tool result for the given tool call.
      */
-    protected function toolResult(ToolCall $toolCall, mixed $result, bool $failed = false): ToolResult
+    protected function toolResult(ToolCall $toolCall, mixed $result, bool $failed = false, ?array $arguments = null): ToolResult
     {
+        $file = $result instanceof Image || $result instanceof Document ? $result : null;
+
         return new ToolResult(
             $toolCall->id,
             $toolCall->name,
-            $toolCall->arguments,
-            $result,
+            $arguments ?? $toolCall->arguments,
+            $file === null ? $result : ($file->name() ?: ($file instanceof Image ? 'image' : 'document')),
             $toolCall->resultId,
             failed: $failed,
+            attachments: $file === null ? [] : [$file],
         );
     }
 
@@ -944,14 +949,7 @@ class TextGenerationLoop
                 $result = 'The tool call failed: '.$exception->getMessage();
             }
 
-            $toolResults[] = new ToolResult(
-                $toolCall->id,
-                $toolCall->name,
-                $arguments,
-                $result,
-                $toolCall->resultId,
-                failed: $failed,
-            );
+            $toolResults[] = $this->toolResult($toolCall, $result, $failed, $arguments);
         }
 
         return [$toolResults, ! $hasBareRejection];
