@@ -68,7 +68,7 @@ class StreamableAgentResponse implements IteratorAggregate, Responsable
         public string $invocationId,
         protected Closure $generator,
         protected ?Meta $meta = null,
-        protected array $hiddenTools = [],
+        public readonly array $hiddenTools = [],
     ) {
         $this->events = new Collection;
         $this->citations = new Collection;

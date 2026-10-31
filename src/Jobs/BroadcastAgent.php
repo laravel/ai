@@ -48,11 +48,12 @@ class BroadcastAgent implements ShouldQueue
         $streamedResponse = null;
 
         $without = WithoutBroadcasting::eventsFor($this->agent);
-        $hiddenTools = HiddenFromClient::toolsFor($this->agent);
 
-        $this->agent->stream($this->prompt, $this->attachments, $this->provider, $this->model)
-            ->each(function (StreamEvent $event) use ($without, $hiddenTools): void {
-                if (WithoutBroadcasting::excludes($without, $event) || HiddenFromClient::excludes($hiddenTools, $event)) {
+        $response = $this->agent->stream($this->prompt, $this->attachments, $this->provider, $this->model);
+
+        $response
+            ->each(function (StreamEvent $event) use ($without, $response): void {
+                if (WithoutBroadcasting::excludes($without, $event) || HiddenFromClient::excludes($response->hiddenTools, $event)) {
                     return;
                 }
 

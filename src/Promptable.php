@@ -300,11 +300,12 @@ trait Promptable
     public function broadcast(AgentInput|UserMessage|Decisions|string $prompt, Channel|array $channels, array $attachments = [], bool $now = false, Lab|array|string|null $provider = null, ?string $model = null): StreamableAgentResponse
     {
         $without = WithoutBroadcasting::eventsFor($this);
-        $hiddenTools = HiddenFromClient::toolsFor($this, $this->resolveAgentTools());
 
-        return $this->stream($prompt, $attachments, $provider, $model)
-            ->each(function (StreamEvent $event) use ($channels, $now, $without, $hiddenTools): void {
-                if (WithoutBroadcasting::excludes($without, $event) || HiddenFromClient::excludes($hiddenTools, $event)) {
+        $response = $this->stream($prompt, $attachments, $provider, $model);
+
+        return $response
+            ->each(function (StreamEvent $event) use ($channels, $now, $without, $response): void {
+                if (WithoutBroadcasting::excludes($without, $event) || HiddenFromClient::excludes($response->hiddenTools, $event)) {
                     return;
                 }
 

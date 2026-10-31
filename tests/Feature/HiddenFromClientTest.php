@@ -2,7 +2,10 @@
 
 use Illuminate\Broadcasting\AnonymousEvent;
 use Illuminate\Broadcasting\Channel;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Http;
 use Laravel\Ai\AgentUserInteraction\AgentUserInteraction;
 use Laravel\Ai\AnonymousAgent;
 use Laravel\Ai\Approvals\PendingApproval;
@@ -151,10 +154,10 @@ test('a hidden tool awaiting approval streams its call with the approval request
     ],
 ]);
 
-test('broadcasting leaves out hidden tools and hidden sub-agents', function (Closure $broadcast): void {
+test('broadcasting leaves out hidden tools and hidden sub-agents', function (Closure $broadcast, Closure $agent): void {
     Event::fake();
 
-    $agent = hiddenToolAgent();
+    $agent = $agent();
 
     $agent::fake([
         new Data\ToolCall('call-hidden', 'HiddenNumberGenerator', []),
@@ -172,6 +175,9 @@ test('broadcasting leaves out hidden tools and hidden sub-agents', function (Clo
 })->with([
     'now' => [fn (AnonymousAgent $agent): StreamableAgentResponse => $agent->broadcastNow('Find the reference', new Channel('test-channel'))],
     'queued' => [fn (AnonymousAgent $agent) => (new BroadcastAgent($agent, 'Find the reference', new Channel('test-channel')))->handle()],
+])->with([
+    'declared tools' => [fn (): AnonymousAgent => hiddenToolAgent()],
+    'runtime tools' => [fn (): AnonymousAgent => (new AnonymousAgent('You are a helpful assistant.', [], []))->withTools([new HiddenNumberGenerator, new FixedNumberGenerator, new HiddenResearchAgent])],
 ]);
 
 test('a stored turn flags the calls of hidden tools and hidden sub-agents', function (Closure $run): void {
@@ -194,6 +200,34 @@ test('a stored turn flags the calls of hidden tools and hidden sub-agents', func
     'prompt' => [fn (RememberingHiddenToolAgent $agent) => $agent->prompt('Find the reference')],
     'stream' => [fn (RememberingHiddenToolAgent $agent) => $agent->stream('Find the reference')->each(fn (): true => true)],
 ]);
+
+test('a turn that dies after a hidden tool ran flags its call', function (): void {
+    Config::set('ai.conversations.generate_title', false);
+    Config::set('ai.providers.anthropic.key', 'test-key');
+
+    Http::fake(['api.anthropic.com/*' => Http::sequence()
+        ->push([
+            'id' => 'msg_1',
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-4-6',
+            'content' => [['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'HiddenNumberGenerator', 'input' => (object) []]],
+            'stop_reason' => 'tool_use',
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ])
+        ->pushStatus(500)
+        ->pushStatus(500)
+        ->pushStatus(500),
+    ]);
+
+    expect(fn () => (new RememberingHiddenToolAgent)->forUser((object) ['id' => 1])->prompt('Go', provider: 'anthropic'))
+        ->toThrow(RequestException::class);
+
+    $message = ConversationMessage::query()->where('role', 'assistant')->sole();
+
+    expect(collect($message->tool_calls)->pluck('result', 'id')->all())->toBe(['toolu_1' => '48151'])
+        ->and(collect($message->tool_calls)->pluck('hidden', 'id')->all())->toBe(['toolu_1' => true]);
+});
 
 test('the history renderers leave out flagged calls without the agent unless a call awaits approval', function (Closure $render): void {
     expect(json_encode($render(hiddenToolHistory(flagged: true))))->toContain('Done.')->toContain('call-2')->toContain('72019')->toContain('call-4')
