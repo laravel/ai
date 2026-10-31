@@ -11,6 +11,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Approvals\Decisions;
+use Laravel\Ai\Attributes\HiddenFromClient;
 use Laravel\Ai\Attributes\Model as ModelAttribute;
 use Laravel\Ai\Attributes\Provider as ProviderAttribute;
 use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
@@ -237,6 +238,7 @@ trait Promptable
                 throw $lastException;
             },
             $meta,
+            HiddenFromClient::toolsFor($this, $tools),
         );
 
         return $outer;
@@ -299,9 +301,11 @@ trait Promptable
     {
         $without = WithoutBroadcasting::eventsFor($this);
 
-        return $this->stream($prompt, $attachments, $provider, $model)
-            ->each(function (StreamEvent $event) use ($channels, $now, $without): void {
-                if (WithoutBroadcasting::excludes($without, $event)) {
+        $response = $this->stream($prompt, $attachments, $provider, $model);
+
+        return $response
+            ->each(function (StreamEvent $event) use ($channels, $now, $without, $response): void {
+                if (WithoutBroadcasting::excludes($without, $event) || HiddenFromClient::excludes($response->hiddenTools, $event)) {
                     return;
                 }
 

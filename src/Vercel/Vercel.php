@@ -7,6 +7,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Attributes\HiddenFromClient;
+use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Base64Audio;
 use Laravel\Ai\Files\Base64Document;
@@ -42,12 +44,16 @@ class Vercel
     /**
      * Convert messages or conversation message models into UI message arrays for hydrating useChat.
      *
+     * Tool calls stored as hidden from the client are left out. Given the agent, those of its hidden tools are too.
+     *
      * @param  iterable<int, Message|ConversationMessage>  $messages
      * @return list<array<string, mixed>>
      */
-    public static function toUiMessages(iterable $messages): array
+    public static function toUiMessages(iterable $messages, ?Agent $agent = null): array
     {
         $result = [];
+
+        $hiddenTools = HiddenFromClient::toolsFor($agent);
 
         $partRefs = [];
 
@@ -66,7 +72,12 @@ class Vercel
                 continue;
             }
 
-            $parts = static::uiPartsFrom($message);
+            $parts = static::uiPartsFrom($message, $hiddenTools);
+
+            // A message holding nothing but hidden tool calls would otherwise render as an empty bubble...
+            if ($parts === [] && $role === 'assistant' && filled(static::toolCallArraysFrom($message))) {
+                continue;
+            }
 
             foreach ($parts as $index => $part) {
                 if (isset($part['toolCallId'])) {
@@ -93,9 +104,10 @@ class Vercel
     /**
      * Create the UI message parts for a single message.
      *
+     * @param  array<int, string>  $hiddenTools
      * @return list<array<string, mixed>>
      */
-    protected static function uiPartsFrom(Message|ConversationMessage $message): array
+    protected static function uiPartsFrom(Message|ConversationMessage $message, array $hiddenTools = []): array
     {
         $parts = [];
         $provider = $message instanceof ConversationMessage ? (string) (($message->meta ?? [])['provider'] ?? '') : '';
@@ -126,6 +138,11 @@ class Vercel
 
         foreach (static::toolCallArraysFrom($message) as $toolCall) {
             $isPending = PendingApproval::isPending($toolCall);
+
+            // A hidden call that awaits approval stays, since the user has to see what they approve...
+            if (! $isPending && HiddenFromClient::hides($toolCall, $hiddenTools)) {
+                continue;
+            }
 
             $parts[] = [
                 'type' => 'tool-'.$toolCall['name'],

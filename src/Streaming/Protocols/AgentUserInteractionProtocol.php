@@ -67,7 +67,7 @@ class AgentUserInteractionProtocol extends StreamProtocol
         $provider = null;
         $model = null;
 
-        foreach ($response as $event) {
+        foreach ($response->clientEvents() as $event) {
             if ($this->finished) {
                 continue;
             }

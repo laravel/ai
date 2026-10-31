@@ -275,7 +275,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         if ($response->steps->isNotEmpty()) {
             return $response->steps->values()->map(fn (Step $step): array => [
                 'content' => $step->text,
-                'tool_calls' => $this->toolCallsFor($step->toolCalls, $step->toolResults, $reasons),
+                'tool_calls' => $this->toolCallsFor($step->toolCalls, $step->toolResults, $reasons, $response->hiddenTools),
                 'reasoning' => $step->reasoning,
                 'replay_blocks' => $response->hasPendingApprovals() ? $step->replayBlocks : [],
                 'provider_tool_calls' => array_map(fn (ProviderToolCall $call): array => $call->toArray(), $step->providerToolCalls),
@@ -289,6 +289,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 $response->toolCalls->all(),
                 $prompt->hasApprovalDecisions() ? [] : $response->toolResults->all(),
                 $reasons,
+                $response->hiddenTools,
             ),
             'reasoning' => $response->reasoning,
             'replay_blocks' => [],
@@ -297,18 +298,19 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Pair a step's tool calls with the results they were answered by, marking those awaiting approval with their reason.
+     * Pair a step's tool calls with the results they were answered by, marking those awaiting approval with their reason and those hidden from the client.
      *
      * @param  iterable<int, ToolCall>  $toolCalls
      * @param  iterable<int, ToolResult>  $toolResults
      * @param  Collection<string, string|null>  $reasons
+     * @param  array<int, string>  $hiddenTools
      * @return list<array<string, mixed>>
      */
-    protected function toolCallsFor(iterable $toolCalls, iterable $toolResults, Collection $reasons): array
+    protected function toolCallsFor(iterable $toolCalls, iterable $toolResults, Collection $reasons, array $hiddenTools = []): array
     {
         $results = collect($toolResults)->keyBy(fn (ToolResult $result): string => $result->id);
 
-        return collect($toolCalls)->map(function (ToolCall $toolCall) use ($results, $reasons): array {
+        return collect($toolCalls)->map(function (ToolCall $toolCall) use ($results, $reasons, $hiddenTools): array {
             $result = $results->get($toolCall->id);
 
             $stored = Arr::except($toolCall->toArray(), ['reasoning_id', 'reasoning_summary', 'reasoning_encrypted_content']);
@@ -320,6 +322,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             return [
                 ...$stored,
                 ...$reasons->has($toolCall->id) ? ['approval_reason' => $reasons[$toolCall->id]] : [],
+                ...in_array($toolCall->name, $hiddenTools, true) ? ['hidden' => true] : [],
                 ...$result === null ? [] : Arr::only($result->toArray(), ['result', 'denied', 'failed']),
             ];
         })->values()->all();

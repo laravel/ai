@@ -19,6 +19,9 @@ class AgentResponse extends TextResponse
 
     public ?string $assistantMessageId = null;
 
+    /** @var array<int, string> */
+    public array $hiddenTools = [];
+
     public function __construct(string $invocationId, string $text, TextUsage $usage, Meta $meta)
     {
         $this->invocationId = $invocationId;
@@ -65,6 +68,18 @@ class AgentResponse extends TextResponse
     {
         $this->userMessageId = $userMessageId;
         $this->assistantMessageId = $assistantMessageId;
+
+        return $this;
+    }
+
+    /**
+     * Provide the names of the tools whose calls and results are hidden from the client.
+     *
+     * @param  array<int, string>  $names
+     */
+    public function withHiddenTools(array $names): static
+    {
+        $this->hiddenTools = $names;
 
         return $this;
     }
