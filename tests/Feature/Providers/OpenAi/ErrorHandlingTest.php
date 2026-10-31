@@ -96,6 +96,22 @@ test('error in 200 response throws ai exception', function (): void {
     );
 })->throws(AiException::class, 'OpenAI Error');
 
+test('error in 200 response without a type uses the error code', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response([
+            'error' => [
+                'code' => 'invalid_api_key',
+                'message' => 'Incorrect API key provided',
+            ],
+        ], 200),
+    ]);
+
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'openai',
+    );
+})->throws(AiException::class, 'OpenAI Error: [invalid_api_key] Incorrect API key provided');
+
 test('failed status response throws ai exception', function (): void {
     Http::fake([
         'api.openai.com/*' => Http::response([
