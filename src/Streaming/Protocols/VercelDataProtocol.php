@@ -229,11 +229,12 @@ class VercelDataProtocol extends StreamProtocol
             ];
         }
 
+        // A failed call's error can carry the tool's exception message, so the client only learns that it failed...
         if (! $event->successful) {
             return [
                 'type' => 'tool-output-error',
                 'toolCallId' => $event->toolResult->id,
-                'errorText' => $event->error ?? 'The tool call failed.',
+                'errorText' => 'The tool call failed.',
             ];
         }
 

@@ -393,7 +393,7 @@ test('a non string tool result is encoded as json content', function () {
     ]);
 });
 
-test('a failed tool call streams its error as the result content', function () {
+test('a failed tool call streams a masked result content instead of its error', function () {
     $events = agUiProtocolEvents([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new ToolCall('event-1', new Data\ToolCall('call-1', 'GetWeather', ['city' => 'Lisbon']), time()),
@@ -401,7 +401,7 @@ test('a failed tool call streams its error as the result content', function () {
         new StreamEnd('event-3', 'stop', new TextUsage, time()),
     ]);
 
-    expect($events[5]['content'])->toBe('The city is unknown.');
+    expect($events[5]['content'])->toBe('The tool call failed.');
 });
 
 test('a failed tool call without an error message streams a default result content', function () {
@@ -604,9 +604,9 @@ test('a failed tool call reports an error without marking it denied', function (
         'type' => 'TOOL_CALL_RESULT',
         'messageId' => 'event-1',
         'toolCallId' => 'call-1',
-        'content' => 'The tool call failed: disk unavailable.',
+        'content' => 'The tool call failed.',
         'role' => 'tool',
-        'metadata' => ['error' => 'The tool call failed: disk unavailable.'],
+        'metadata' => ['error' => 'The tool call failed.'],
     ]);
 });
 

@@ -424,7 +424,7 @@ describe('hydrating AG-UI from stored messages', function () {
             ]),
         ])['messages'];
 
-        expect($messages[1]['error'])->toBe('The tool call failed: boom.')
+        expect($messages[1]['error'])->toBe('The tool call failed.')
             ->and($messages[1])->not->toHaveKey('metadata');
     });
 

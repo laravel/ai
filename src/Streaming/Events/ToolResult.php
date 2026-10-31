@@ -23,15 +23,18 @@ class ToolResult extends StreamEvent
      */
     public function toArray(): array
     {
+        // A failed call's result can carry the tool's exception message, so the client only learns that it failed...
+        $failed = ! $this->successful && ! $this->denied;
+
         return [
             'id' => $this->id,
             'invocation_id' => $this->invocationId,
             'type' => 'tool_result',
             'tool_id' => $this->toolResult->id,
             'tool_name' => $this->toolResult->name,
-            'result' => $this->toolResult->result,
+            'result' => $failed ? 'The tool call failed.' : $this->toolResult->result,
             'successful' => $this->successful,
-            'error' => $this->error,
+            'error' => $failed ? 'The tool call failed.' : $this->error,
             'denied' => $this->denied,
             ...($this->preliminary ? ['preliminary' => true] : []),
             'timestamp' => $this->timestamp,

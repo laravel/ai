@@ -287,7 +287,7 @@ test('an unexecuted tool call streams as a tool output error', function () {
     expect($parts[3])->toBe([
         'type' => 'tool-output-error',
         'toolCallId' => 'call-1',
-        'errorText' => 'The agent reached its maximum number of steps without running this tool call.',
+        'errorText' => 'The tool call failed.',
     ]);
 });
 

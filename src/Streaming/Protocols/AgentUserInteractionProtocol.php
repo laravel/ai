@@ -403,8 +403,13 @@ class AgentUserInteractionProtocol extends StreamProtocol
      */
     protected function toolResultContent(ToolResult $event): string
     {
-        if (! $event->successful) {
+        if ($event->denied) {
             return $event->error ?? 'The tool call failed.';
+        }
+
+        // A failed call's error can carry the tool's exception message, so the client only learns that it failed...
+        if (! $event->successful) {
+            return 'The tool call failed.';
         }
 
         return is_string($event->toolResult->result)

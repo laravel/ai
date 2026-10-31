@@ -281,6 +281,8 @@ class AgentUserInteraction
 
         $content = match (true) {
             $denied => 'The tool call was denied.',
+            // A failed call's result can carry the tool's exception message, so the client only learns that it failed...
+            $failed => 'The tool call failed.',
             is_string($toolResult['result'] ?? null) => $toolResult['result'],
             default => static::json($toolResult['result'] ?? null),
         };

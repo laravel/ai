@@ -54,7 +54,7 @@ class Vercel
         foreach ($messages as $message) {
             if ($message instanceof ToolResultMessage) {
                 foreach ($message->toolResults as $toolResult) {
-                    static::applyUiToolOutput($result, $partRefs, $toolResult->id, $toolResult->result, $toolResult->denied);
+                    static::applyUiToolOutput($result, $partRefs, $toolResult->id, $toolResult->result, $toolResult->denied, $toolResult->failed);
                 }
 
                 continue;
@@ -82,7 +82,7 @@ class Vercel
 
             if ($message instanceof ConversationMessage) {
                 foreach ($message->tool_results ?? [] as $toolResult) {
-                    static::applyUiToolOutput($result, $partRefs, $toolResult['id'], $toolResult['result'] ?? null, $toolResult['denied'] ?? false);
+                    static::applyUiToolOutput($result, $partRefs, $toolResult['id'], $toolResult['result'] ?? null, $toolResult['denied'] ?? false, $toolResult['failed'] ?? false);
                 }
             }
         }
@@ -147,7 +147,7 @@ class Vercel
      * @param  array<int, array<string, mixed>>  $result
      * @param  array<string, array{int, int}>  $partRefs
      */
-    protected static function applyUiToolOutput(array &$result, array $partRefs, string $id, mixed $output, bool $denied): void
+    protected static function applyUiToolOutput(array &$result, array $partRefs, string $id, mixed $output, bool $denied, bool $failed): void
     {
         if (! isset($partRefs[$id])) {
             return;
@@ -155,11 +155,18 @@ class Vercel
 
         [$message, $part] = $partRefs[$id];
 
-        $result[$message]['parts'][$part]['state'] = $denied ? 'output-denied' : 'output-available';
+        $result[$message]['parts'][$part]['state'] = match (true) {
+            $denied => 'output-denied',
+            $failed => 'output-error',
+            default => 'output-available',
+        };
 
         unset($result[$message]['parts'][$part]['approval']);
 
-        if (! $denied) {
+        // A failed call's result can carry the tool's exception message, so it hydrates as the error part the stream sent...
+        if ($failed && ! $denied) {
+            $result[$message]['parts'][$part]['errorText'] = 'The tool call failed.';
+        } elseif (! $denied) {
             $result[$message]['parts'][$part]['output'] = $output;
         }
     }

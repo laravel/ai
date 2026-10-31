@@ -1,14 +1,41 @@
 <?php
 
+use Illuminate\Broadcasting\AnonymousEvent;
+use Illuminate\Broadcasting\Channel;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
+use Laravel\Ai\AgentUserInteraction\AgentUserInteraction;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Exceptions\ToolExecutionException;
+use Laravel\Ai\Models\ConversationMessage;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\StreamableAgentResponse;
+use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolResult;
+use Laravel\Ai\Vercel\Vercel;
+use Tests\Fixtures\Agents\RememberingFailingToolAgent;
 use Tests\Fixtures\Agents\ThrowingToolAgent;
+
+function toolFailureStreamedBody(StreamableAgentResponse $response): string
+{
+    $output = '';
+
+    ob_start(function (string $buffer) use (&$output): string {
+        $output .= $buffer;
+
+        return '';
+    });
+
+    $response->toResponse(request())->sendContent();
+
+    ob_end_clean();
+
+    return $output;
+}
 
 test('a throwing tool returns a failed result to the model', function (): void {
     Exceptions::fake();
@@ -80,3 +107,76 @@ test('a tool failed listener that rethrows fails the run with the tool exception
 
     Exceptions::assertNothingReported();
 });
+
+test('a throwing tool streams to the client without its exception message', function (Closure $protocol): void {
+    Exceptions::fake();
+
+    ThrowingToolAgent::fake([
+        new ToolCall('call_1', 'FixedNumberGenerator', []),
+        'The tool could not run.',
+    ]);
+
+    $toolResults = null;
+
+    $response = $protocol((new ThrowingToolAgent)->stream('Generate'))
+        ->then(function (StreamedAgentResponse $response) use (&$toolResults): void {
+            $toolResults = $response->toolResults;
+        });
+
+    expect(toolFailureStreamedBody($response))
+        ->toContain('The tool call failed.')
+        ->not->toContain('Forced to throw exception.')
+        ->and($toolResults)->toHaveCount(1)
+        ->and($toolResults[0]->result)->toBe('The tool call failed: Forced to throw exception.');
+})->with([
+    'vercel' => [fn (StreamableAgentResponse $response): StreamableAgentResponse => $response->usingVercelDataProtocol()],
+    'ag-ui' => [fn (StreamableAgentResponse $response): StreamableAgentResponse => $response->usingAgentUserInteractionProtocol()],
+    'server-sent events' => [fn (StreamableAgentResponse $response): StreamableAgentResponse => $response],
+]);
+
+test('a throwing tool broadcasts its result without the exception message', function (): void {
+    Event::fake();
+    Exceptions::fake();
+
+    ThrowingToolAgent::fake([
+        new ToolCall('call_1', 'FixedNumberGenerator', []),
+        'The tool could not run.',
+    ]);
+
+    $toolResults = null;
+
+    (new ThrowingToolAgent)
+        ->broadcastNow('Generate', new Channel('test-channel'))
+        ->then(function (StreamedAgentResponse $response) use (&$toolResults): void {
+            $toolResults = $response->toolResults;
+        });
+
+    Event::assertDispatched(AnonymousEvent::class, fn (AnonymousEvent $event): bool => $event->broadcastAs() === 'tool_result'
+        && $event->broadcastWith()['result'] === 'The tool call failed.'
+        && $event->broadcastWith()['error'] === 'The tool call failed.');
+
+    expect($toolResults[0]->result)->toBe('The tool call failed: Forced to throw exception.');
+});
+
+test('a stored throwing tool call replays to the client without its exception message', function (Closure $render, string $part): void {
+    Config::set('ai.conversations.generate_title', false);
+    Exceptions::fake();
+
+    RememberingFailingToolAgent::fake([
+        new ToolCall('call_1', 'FixedNumberGenerator', []),
+        'The tool could not run.',
+    ]);
+
+    (new RememberingFailingToolAgent)->forUser((object) ['id' => 1])->prompt('Generate');
+
+    $replayed = (string) json_encode($render(ConversationMessage::query()->orderBy('created_at')->orderBy('id')->get()));
+
+    expect($replayed)
+        ->toContain($part)
+        ->not->toContain('Forced to throw exception.')
+        ->and(DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps'))
+        ->toContain('The tool call failed: Forced to throw exception.');
+})->with([
+    'vercel' => [fn ($messages): array => Vercel::toUiMessages($messages), '"state":"output-error","input":[],"errorText":"The tool call failed."'],
+    'ag-ui' => [fn ($messages): array => AgentUserInteraction::toClientState($messages), '"content":"The tool call failed."'],
+]);
