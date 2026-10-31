@@ -3,15 +3,20 @@
 namespace Laravel\Ai\Streaming\Events;
 
 use Illuminate\Support\Collection;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\Step;
+use Laravel\Ai\Responses\Data\TextUsage;
 
 class StreamEnd extends StreamEvent
 {
+    /**
+     * @param  Collection<int, Step>  $steps  replay state for the completed turn; never serialized to clients
+     */
     public function __construct(
         public string $id,
         public string $reason,
-        public Usage $usage,
+        public TextUsage $usage,
         public int $timestamp,
+        public Collection $steps = new Collection,
     ) {
         //
     }
@@ -19,14 +24,14 @@ class StreamEnd extends StreamEvent
     /**
      * Combine the stream end usages in the given collection of events into a single usage instance.
      */
-    public static function combineUsage(Collection|array $events): Usage
+    public static function combineUsage(Collection|array $events): TextUsage
     {
         $events = is_array($events) ? new Collection($events) : $events;
 
         return $events->whereInstanceOf(StreamEnd::class)
             ->values()
-            ->map(fn (StreamEnd $event): Usage => $event->usage)
-            ->reduce(fn ($a, $b) => $a->add($b), new Usage);
+            ->map(fn (StreamEnd $event): TextUsage => $event->usage)
+            ->reduce(fn ($a, $b) => $a->add($b), new TextUsage);
     }
 
     /**
@@ -39,38 +44,10 @@ class StreamEnd extends StreamEvent
             'invocation_id' => $this->invocationId,
             'type' => 'stream_end',
             'reason' => $this->reason,
-            'usage' => $this->usage instanceof Usage
+            'usage' => $this->usage instanceof TextUsage
                 ? $this->usage->toArray()
                 : null,
             'timestamp' => $this->timestamp,
-        ];
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function toVercelProtocolArray(): ?array
-    {
-        return [
-            'type' => 'finish',
-            'finishReason' => match ($this->reason) {
-                'stop' => 'stop',
-                'tool_calls' => 'tool-calls',
-                'length' => 'length',
-                'content_filter' => 'content-filter',
-                'error' => 'error',
-                'unknown' => 'other',
-                default => 'other',
-            },
-            'messageMetadata' => [
-                'usage' => [
-                    'inputTokens' => $this->usage->promptTokens,
-                    'outputTokens' => $this->usage->completionTokens,
-                    'totalTokens' => $this->usage->promptTokens + $this->usage->completionTokens,
-                    'reasoningTokens' => $this->usage->reasoningTokens,
-                    'cachedInputTokens' => $this->usage->cacheReadInputTokens,
-                ],
-            ],
         ];
     }
 }

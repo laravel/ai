@@ -189,8 +189,8 @@ test('response usage is correctly parsed', function (): void {
 
     $response = agent()->prompt('Hello', provider: 'azure');
 
-    expect($response->usage->promptTokens)->toBe(10)
-        ->and($response->usage->completionTokens)->toBe(5);
+    expect($response->usage->inputTokens)->toBe(10)
+        ->and($response->usage->outputTokens)->toBe(5);
 });
 
 test('structured response is correctly parsed', function (): void {

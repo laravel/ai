@@ -6,14 +6,17 @@ use Generator;
 use Illuminate\Container\Container;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
+use Laravel\Ai\Approvals\Approval;
+use Laravel\Ai\Concerns\InteractsWithApprovals;
+use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Concerns\NormalizesMcpResult;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
 
-class McpServerTool implements Tool
+class McpServerTool implements Approvable, Tool
 {
-    use NormalizesMcpResult;
+    use InteractsWithApprovals, NormalizesMcpResult;
 
     /**
      * The MCP server tool class name.
@@ -62,6 +65,16 @@ class McpServerTool implements Tool
     public function description(): string
     {
         return $this->tool->description();
+    }
+
+    /**
+     * Get the MCP annotations describing the tool's behavior.
+     *
+     * @return array<string, mixed>
+     */
+    public function annotations(): array
+    {
+        return $this->tool->annotations();
     }
 
     /**
@@ -153,5 +166,13 @@ class McpServerTool implements Tool
         return $final->isError()
             ? $this->errorMessage($text)
             : $text;
+    }
+
+    /**
+     * Determine whether the tool needs approval for the given request.
+     */
+    protected function needsApproval(Request $request): Approval|bool
+    {
+        return false;
     }
 }

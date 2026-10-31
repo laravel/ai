@@ -7,16 +7,18 @@ use InvalidArgumentException;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
+use Laravel\Ai\Contracts\Providers\SupportsCodeExecution;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Xai\XaiGateway;
 use Laravel\Ai\Gateway\Xai\XaiImageGateway;
+use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class XaiProvider extends Provider implements ImageProvider, SupportsFileSearch, SupportsWebSearch, TextProvider
+class XaiProvider extends Provider implements ImageProvider, SupportsCodeExecution, SupportsFileSearch, SupportsWebSearch, TextProvider
 {
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
@@ -28,6 +30,14 @@ class XaiProvider extends Provider implements ImageProvider, SupportsFileSearch,
         protected array $config,
         protected Dispatcher $events,
     ) {}
+
+    /**
+     * Get the code execution tool options for the provider.
+     */
+    public function codeExecutionToolOptions(CodeExecution $codeExecution): array
+    {
+        return $codeExecution->providerOptions(Lab::xAI);
+    }
 
     /**
      * Get the file search tool options for the provider.
@@ -68,7 +78,7 @@ class XaiProvider extends Provider implements ImageProvider, SupportsFileSearch,
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'grok-4.20-non-reasoning';
+        return $this->config['models']['text']['default'] ?? 'grok-4.7';
     }
 
     /**
@@ -84,7 +94,7 @@ class XaiProvider extends Provider implements ImageProvider, SupportsFileSearch,
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'grok-4.3';
+        return $this->config['models']['text']['smartest'] ?? 'grok-4.7';
     }
 
     /**
@@ -100,7 +110,7 @@ class XaiProvider extends Provider implements ImageProvider, SupportsFileSearch,
      */
     public function defaultImageModel(): string
     {
-        return $this->config['models']['image']['default'] ?? 'grok-imagine-image';
+        return $this->config['models']['image']['default'] ?? 'grok-imagine-image-2.0';
     }
 
     /**

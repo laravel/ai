@@ -45,15 +45,6 @@ class Base64Audio extends Audio implements Arrayable, JsonSerializable, Storable
     }
 
     /**
-     * Get the file's MIME type.
-     */
-    #[\Override]
-    public function mimeType(): ?string
-    {
-        return $this->mime;
-    }
-
-    /**
      * Generate a transcription of the given audio.
      */
     public function transcription(): PendingTranscriptionGeneration

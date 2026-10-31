@@ -9,8 +9,8 @@ use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Prompts\ImagePrompt;
 use Laravel\Ai\Responses\Data\GeneratedImage;
+use Laravel\Ai\Responses\Data\ImageUsage;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\ImageResponse;
 use RuntimeException;
 
@@ -29,6 +29,7 @@ class FakeImageGateway implements ImageGateway
      *
      * @param  array<Image>  $attachments
      * @param  'low'|'medium'|'high'|null  $quality
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateImage(
         ImageProvider $provider,
@@ -38,8 +39,9 @@ class FakeImageGateway implements ImageGateway
         ?string $size = null,
         ?string $quality = null,
         ?int $timeout = null,
+        array $providerOptions = [],
     ): ImageResponse {
-        $imagePrompt = new ImagePrompt($prompt, $attachments, $size, $quality, $provider, $model);
+        $imagePrompt = new ImagePrompt($prompt, $attachments, $size, $quality, $provider, $model, $timeout, $providerOptions);
 
         return $this->nextResponse($provider, $model, $imagePrompt);
     }
@@ -82,7 +84,7 @@ class FakeImageGateway implements ImageGateway
         if (is_string($response)) {
             return new ImageResponse(
                 new Collection([new GeneratedImage($response, 'image/png')]),
-                new Usage,
+                new ImageUsage,
                 new Meta($provider->name(), $model),
             );
         }

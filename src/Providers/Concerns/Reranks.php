@@ -6,8 +6,10 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Events\Reranked;
 use Laravel\Ai\Events\Reranking;
+use Laravel\Ai\Events\RerankingFailed;
 use Laravel\Ai\Prompts\RerankingPrompt;
 use Laravel\Ai\Responses\RerankingResponse;
+use Throwable;
 
 trait Reranks
 {
@@ -15,14 +17,15 @@ trait Reranks
      * Rerank the given documents based on their relevance to the query.
      *
      * @param  array<int, string>  $documents
+     * @param  array<string, mixed>  $providerOptions
      */
-    public function rerank(array $documents, string $query, ?int $limit = null, ?string $model = null): RerankingResponse
+    public function rerank(array $documents, string $query, ?int $limit = null, ?string $model = null, int $timeout = 30, array $providerOptions = []): RerankingResponse
     {
         $invocationId = (string) Str::uuid7();
 
         $model ??= $this->defaultRerankingModel();
 
-        $prompt = new RerankingPrompt($documents, $query, $limit, $this, $model);
+        $prompt = new RerankingPrompt($documents, $query, $limit, $this, $model, $timeout, $providerOptions);
 
         if (Ai::rerankingIsFaked()) {
             Ai::recordReranking($prompt);
@@ -32,12 +35,17 @@ trait Reranks
             $invocationId, $this, $model, $prompt,
         ));
 
-        return tap($this->rerankingGateway()->rerank(
-            $this,
-            $model,
-            $documents,
-            $query,
-            $limit
+        return tap($this->dispatchingFailure(
+            fn () => $this->rerankingGateway()->rerank(
+                $this,
+                $model,
+                $documents,
+                $query,
+                $limit,
+                $timeout,
+                $providerOptions,
+            ),
+            fn (Throwable $exception) => new RerankingFailed($invocationId, $this, $model, $prompt, $exception),
         ), fn (RerankingResponse $response) => $this->events->dispatch(new Reranked(
             $invocationId, $this, $model, $prompt, $response,
         )));

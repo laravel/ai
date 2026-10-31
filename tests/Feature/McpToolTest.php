@@ -1,6 +1,9 @@
 <?php
 
+use Illuminate\Support\Facades\Config;
+use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -113,4 +116,49 @@ test('it runs mcp client tools whose schema uses unrepresentable json schema', f
             ['name' => 'set_value', 'arguments' => ['value' => 'bug']],
         ]
     );
+});
+
+test('mcp client tools that are not read-only can require approval', function (): void {
+    Config::set('ai.conversations.generate_title', false);
+
+    $client = new FakeMcpClient;
+
+    $tools = collect([
+        new FakeMcpTool($client, 'search', null, 'Search records.', ['type' => 'object'], annotations: ['readOnlyHint' => true]),
+        new FakeMcpTool($client, 'delete', null, 'Delete a record.', ['type' => 'object']),
+    ])->mapInto(McpTool::class)->map(fn (McpTool $tool) => ($tool->annotations()['readOnlyHint'] ?? false) ? $tool : $tool->requireApproval());
+
+    $client->results['search'] = new FakeMcpToolResult([
+        ['type' => 'text', 'text' => 'Found results.'],
+    ], false);
+
+    $agent = new class($tools->all()) implements Agent, Conversational, HasTools
+    {
+        use Promptable, RemembersConversations;
+
+        public function __construct(public array $mcpTools) {}
+
+        public function instructions(): string
+        {
+            return 'Use available tools.';
+        }
+
+        public function tools(): iterable
+        {
+            return $this->mcpTools;
+        }
+    };
+
+    $agent::fake([
+        new ToolCall('call_search', 'mcp_tools_search', []),
+        new ToolCall('call_delete', 'mcp_tools_delete', []),
+    ]);
+
+    $response = $agent->forUser((object) ['id' => 1])->prompt('Clean up the records');
+
+    expect($response->pendingApprovals->pluck('id')->all())->toBe(['call_delete']);
+
+    expect($client)->toHaveProperty('toolCalls', [
+        ['name' => 'search', 'arguments' => []],
+    ]);
 });

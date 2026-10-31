@@ -5,13 +5,13 @@ namespace Laravel\Ai\Responses;
 use ArrayAccess;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 
 class StructuredTextResponse extends TextResponse implements ArrayAccess
 {
     use ProvidesStructuredResponse;
 
-    public function __construct(array $structured, string $text, public Usage $usage, public Meta $meta)
+    public function __construct(array $structured, string $text, public TextUsage $usage, public Meta $meta)
     {
         parent::__construct($text, $usage, $meta);
 

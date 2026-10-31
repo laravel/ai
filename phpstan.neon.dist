@@ -3,7 +3,8 @@ parameters:
     - config
     - src
     - database
+    - types
 
-  level: 2
+  level: 3
 
   treatPhpDocTypesAsCertain: false

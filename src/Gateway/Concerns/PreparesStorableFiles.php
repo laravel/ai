@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\Concerns;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Files\File;
 
 trait PreparesStorableFiles
 {
@@ -23,12 +24,15 @@ trait PreparesStorableFiles
     }
 
     /**
-     * Resolve the provider-specific upload options for the given file.
+     * Resolve the upload body options and HTTP headers for the given file.
      *
-     * @return array<string, mixed>
+     * @return array{array<string, mixed>, array<string, string>}
      */
-    protected function resolveProviderOptions(StorableFile $file, Lab|string $provider): array
+    protected function resolveProviderOptionsAndHeaders(StorableFile $file, Lab|string $provider): array
     {
-        return $file instanceof HasProviderOptions ? $file->providerOptions($provider) : [];
+        return [
+            $file instanceof HasProviderOptions ? $file->providerOptions($provider) : [],
+            $file instanceof File ? $file->headers($provider) : [],
+        ];
     }
 }

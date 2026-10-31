@@ -4,6 +4,8 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Tools\McpServerTool;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use Tests\Fixtures\Mcp\FakeMcpServerTool;
 
 test('agents can return mcp server tools directly', function (): void {
@@ -40,4 +42,10 @@ test('agents can return mcp server tools directly', function (): void {
     expect($response->toolResults->first())->toHaveProperty('result', 'Sunny in Paris.');
 
     expect($serverTool->invocations)->toBe([['city' => 'Paris']]);
+});
+
+test('mcp server tools expose their annotations', function (): void {
+    $tool = new #[IsReadOnly] class extends FakeMcpServerTool {};
+
+    expect((new McpServerTool($tool))->annotations())->toBe(['readOnlyHint' => true]);
 });

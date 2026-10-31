@@ -3,19 +3,20 @@
 namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
-use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
-    use DecodesStructuredOutput;
+    use DecodesStructuredOutput, JoinsReasoning;
 
     /**
      * Validate the OpenRouter response data.
@@ -62,7 +63,36 @@ trait ParsesTextResponses
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model, $citations),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
+            replayBlocks: $this->extractReasoningDetails($message),
+            reasoning: $this->extractReasoning($message),
         );
+    }
+
+    /**
+     * Extract the reasoning text from an assistant message.
+     */
+    protected function extractReasoning(array $message): string
+    {
+        if (filled($message['reasoning'] ?? '')) {
+            return (string) $message['reasoning'];
+        }
+
+        return static::joinReasoning(
+            (new Collection($message['reasoning_details'] ?? []))
+                ->map(fn (array $detail): string => (string) ($detail['text'] ?? $detail['summary'] ?? ''))
+        );
+    }
+
+    /**
+     * Extract the reasoning details to replay with the message's tool calls.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function extractReasoningDetails(array $message): array
+    {
+        return is_array($message['reasoning_details'] ?? null)
+            ? array_values($message['reasoning_details'])
+            : [];
     }
 
     /**
@@ -91,19 +121,16 @@ trait ParsesTextResponses
     /**
      * Extract usage data from the response.
      */
-    protected function extractUsage(array $data): Usage
+    protected function extractUsage(array $data): TextUsage
     {
         $usage = $data['usage'] ?? [];
-        $promptDetails = $usage['prompt_tokens_details'] ?? [];
-        $cachedTokens = $promptDetails['cached_tokens'] ?? 0;
-        $cacheWriteTokens = $promptDetails['cache_write_tokens'] ?? 0;
 
-        return new Usage(
-            ($usage['prompt_tokens'] ?? 0) - $cachedTokens - $cacheWriteTokens,
-            $usage['completion_tokens'] ?? 0,
-            cacheWriteInputTokens: $cacheWriteTokens,
-            cacheReadInputTokens: $cachedTokens,
-            reasoningTokens: $usage['completion_tokens_details']['reasoning_tokens'] ?? 0,
+        return new TextUsage(
+            inputTokens: $usage['prompt_tokens'] ?? 0,
+            outputTokens: $usage['completion_tokens'] ?? 0,
+            cacheReadInputTokens: $usage['prompt_tokens_details']['cached_tokens'] ?? null,
+            cacheWriteInputTokens: $usage['prompt_tokens_details']['cache_write_tokens'] ?? null,
+            reasoningTokens: $usage['completion_tokens_details']['reasoning_tokens'] ?? null,
         );
     }
 

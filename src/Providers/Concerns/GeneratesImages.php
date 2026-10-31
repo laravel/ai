@@ -5,10 +5,12 @@ namespace Laravel\Ai\Providers\Concerns;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Events\GeneratingImage;
+use Laravel\Ai\Events\ImageFailed;
 use Laravel\Ai\Events\ImageGenerated;
 use Laravel\Ai\Files\Image;
 use Laravel\Ai\Prompts\ImagePrompt;
 use Laravel\Ai\Responses\ImageResponse;
+use Throwable;
 
 trait GeneratesImages
 {
@@ -17,6 +19,7 @@ trait GeneratesImages
      *
      * @param  array<Image>  $attachments
      * @param  'low'|'medium'|'high'|null  $quality
+     * @param  array<string, mixed>  $providerOptions
      */
     public function image(
         string $prompt,
@@ -25,12 +28,13 @@ trait GeneratesImages
         ?string $quality = null,
         ?string $model = null,
         ?int $timeout = null,
+        array $providerOptions = [],
     ): ImageResponse {
         $invocationId = (string) Str::uuid7();
 
         $model ??= $this->defaultImageModel();
 
-        $prompt = new ImagePrompt($prompt, $attachments, $size, $quality, $this, $model);
+        $prompt = new ImagePrompt($prompt, $attachments, $size, $quality, $this, $model, $timeout, $providerOptions);
 
         if (Ai::imagesAreFaked()) {
             Ai::recordImageGeneration($prompt);
@@ -40,8 +44,11 @@ trait GeneratesImages
             $invocationId, $this, $model, $prompt,
         ));
 
-        return tap($this->imageGateway()->generateImage(
-            $this, $model, $prompt->prompt, $prompt->attachments->all(), $prompt->size, $prompt->quality, $timeout,
+        return tap($this->dispatchingFailure(
+            fn () => $this->imageGateway()->generateImage(
+                $this, $model, $prompt->prompt, $prompt->attachments->all(), $prompt->size, $prompt->quality, $timeout, $prompt->providerOptions,
+            ),
+            fn (Throwable $exception) => new ImageFailed($invocationId, $this, $model, $prompt, $exception),
         ), function (ImageResponse $response) use ($invocationId, $prompt, $model): void {
             $this->events->dispatch(new ImageGenerated(
                 $invocationId, $this, $model, $prompt, $response,

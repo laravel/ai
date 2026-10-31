@@ -8,8 +8,8 @@ use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
-use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
@@ -60,23 +60,22 @@ trait ParsesTextResponses
             usage: $this->extractUsage($data),
             meta: new Meta($provider->name(), $model),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
+            reasoning: (string) ($message['reasoning_content'] ?? $message['reasoning'] ?? ''),
         );
     }
 
     /**
      * Extract usage data from the response.
      */
-    protected function extractUsage(array $data): Usage
+    protected function extractUsage(array $data): TextUsage
     {
         $usage = $data['usage'] ?? [];
-        $promptDetails = $usage['prompt_tokens_details'] ?? [];
-        $completionDetails = $usage['completion_tokens_details'] ?? [];
 
-        return new Usage(
-            promptTokens: ($usage['prompt_tokens'] ?? 0) - ($promptDetails['cached_tokens'] ?? 0),
-            completionTokens: $usage['completion_tokens'] ?? 0,
-            cacheReadInputTokens: $promptDetails['cached_tokens'] ?? 0,
-            reasoningTokens: $completionDetails['reasoning_tokens'] ?? 0,
+        return new TextUsage(
+            inputTokens: $usage['prompt_tokens'] ?? 0,
+            outputTokens: $usage['completion_tokens'] ?? 0,
+            cacheReadInputTokens: $usage['prompt_tokens_details']['cached_tokens'] ?? null,
+            reasoningTokens: $usage['completion_tokens_details']['reasoning_tokens'] ?? null,
         );
     }
 

@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Exceptions\EmbeddingsCountMismatchException;
@@ -31,6 +32,17 @@ test('cache is used when enabled explicitly', function (): void {
 
     expect(Http::recorded())->toHaveCount(1);
 });
+
+test('only freshly generated embeddings expose a raw response', function (bool $individually): void {
+    $fresh = Embeddings::for(['a'])->cache(3600, individually: $individually)->generate(provider: 'cohere', model: 'embed-v4.0');
+    $partial = Embeddings::for(['b', 'a'])->cache(3600, individually: $individually)->generate(provider: 'cohere', model: 'embed-v4.0');
+    $cached = Embeddings::for(['b', 'a'])->cache(3600, individually: $individually)->generate(provider: 'cohere', model: 'embed-v4.0');
+
+    expect($fresh->raw)->toBeInstanceOf(Response::class)
+        ->and($partial->raw)->toBeInstanceOf(Response::class)
+        ->and($partial->raw->json('meta.billed_units.input_tokens'))->toBe($individually ? 1 : 2)
+        ->and($cached->raw)->toBeNull();
+})->with([true, false]);
 
 test('cache is used when enabled globally via config', function (): void {
     config(['ai.caching.embeddings.cache' => true]);
@@ -137,7 +149,7 @@ test('fully individually cached requests are served in any input order without a
     $response = Embeddings::for(['b', 'a'])->cache(3600, individually: true)->generate(provider: 'cohere', model: 'embed-v4.0');
 
     expect(Http::recorded())->toHaveCount(1)
-        ->and($response->tokens)->toBe(0)
+        ->and($response->usage->inputTokens)->toBe(0)
         ->and($response->meta->provider)->toBe('cohere')
         ->and($response->meta->model)->toBe('embed-v4.0')
         ->and($response->embeddings)->toEqual([fakeCohereEmbedding('b'), fakeCohereEmbedding('a')]);
@@ -153,7 +165,7 @@ test('partially cached requests only generate embeddings for the uncached inputs
     [$request] = Http::recorded()[1];
 
     expect($request->data()['texts'])->toBe(['c', 'd'])
-        ->and($response->tokens)->toBe(2)
+        ->and($response->usage->inputTokens)->toBe(2)
         ->and($response->embeddings)->toEqual([
             fakeCohereEmbedding('c'),
             fakeCohereEmbedding('a'),

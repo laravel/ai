@@ -7,10 +7,12 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Sleep;
+use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\CreatesClient;
+use Laravel\Ai\Gateway\Concerns\EncodesResourceIds;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
@@ -19,6 +21,7 @@ use Laravel\Ai\Store;
 class GeminiStoreGateway implements StoreGateway
 {
     use CreatesClient;
+    use EncodesResourceIds;
     use HandlesFailoverErrors;
 
     /**
@@ -148,9 +151,9 @@ class GeminiStoreGateway implements StoreGateway
         $storeId = $this->normalizeStoreId($storeId);
         $documentId = $this->normalizeDocumentId($storeId, $documentId);
 
-        $this->withErrorHandling($provider->name(), fn () => $this->client($provider)->delete($this->baseUrl($provider)."/{$documentId}", [
-            'force' => true,
-        ])->throw());
+        // Gemini only accepts force as a query parameter, and refuses to delete a document that still has chunks without it...
+        $this->withErrorHandling($provider->name(), fn () => $this->client($provider)
+            ->delete($this->baseUrl($provider)."/{$documentId}?force=true")->throw());
 
         return true;
     }
@@ -164,7 +167,7 @@ class GeminiStoreGateway implements StoreGateway
 
         $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider)->delete($this->baseUrl($provider)."/{$storeId}")->throw(),
+            fn () => $this->client($provider)->delete($this->baseUrl($provider)."/{$storeId}?force=true")->throw(),
         );
 
         return true;
@@ -194,9 +197,7 @@ class GeminiStoreGateway implements StoreGateway
      */
     protected function normalizeStoreId(string $storeId): string
     {
-        return str_starts_with($storeId, 'fileSearchStores/')
-            ? $storeId
-            : "fileSearchStores/{$storeId}";
+        return 'fileSearchStores/'.$this->resourceId(Str::chopStart($storeId, 'fileSearchStores/'));
     }
 
     /**
@@ -204,9 +205,7 @@ class GeminiStoreGateway implements StoreGateway
      */
     protected function normalizeFileId(string $fileId): string
     {
-        return str_starts_with($fileId, 'files/')
-            ? $fileId
-            : "files/{$fileId}";
+        return 'files/'.$this->resourceId(Str::chopStart($fileId, 'files/'));
     }
 
     /**
@@ -214,17 +213,6 @@ class GeminiStoreGateway implements StoreGateway
      */
     protected function normalizeDocumentId(string $storeId, string $documentId): string
     {
-        // Already a full document path...
-        if (str_starts_with($documentId, 'fileSearchStores/')) {
-            return $documentId;
-        }
-
-        $documentId = match (true) {
-            str_starts_with($documentId, 'documents/') => substr($documentId, 10),
-            str_starts_with($documentId, 'files/') => substr($documentId, 6),
-            default => $documentId,
-        };
-
-        return "{$storeId}/documents/{$documentId}";
+        return "{$storeId}/documents/".$this->resourceId(Str::chopStart($documentId, ["{$storeId}/documents/", 'documents/', 'files/']));
     }
 }

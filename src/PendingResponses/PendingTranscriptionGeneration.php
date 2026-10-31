@@ -81,7 +81,9 @@ class PendingTranscriptionGeneration
 
             $model ??= $provider->defaultTranscriptionModel();
 
-            $providerOptions = $this->resolveProviderOptions($provider);
+            [$providerOptions, $headers] = $this->resolveProviderOptionsAndHeaders($provider);
+
+            $provider = $provider->withHeaders($headers);
 
             try {
                 return $provider->transcribe($this->audio, $this->language, $this->diarize, $model, $this->timeout, $providerOptions);
@@ -117,7 +119,8 @@ class PendingTranscriptionGeneration
                     $this->diarize,
                     $provider,
                     $model,
-                    is_array($this->providerOptions) ? $this->providerOptions : [],
+                    $this->timeout,
+                    $this->queuedProviderOptions(),
                 )
             );
         }

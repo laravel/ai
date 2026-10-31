@@ -8,7 +8,7 @@ use Laravel\Ai\Prompts\QueuedTranscriptionPrompt;
 use Laravel\Ai\Prompts\TranscriptionPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TranscriptionUsage;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use Laravel\Ai\Transcription;
 
@@ -31,7 +31,7 @@ test('transcriptions can be faked', function (): void {
         new TranscriptionResponse(
             'Third transcription',
             new Collection([new TranscriptionSegment('Third transcription', 'Speaker 1', 0.0, 1.0)]),
-            new Usage,
+            new TranscriptionUsage,
             new Meta,
         ),
     ]);
@@ -215,4 +215,12 @@ test('transcription can have timeouts', function (): void {
     Transcription::of(base64_encode('audio'))->timeout(60)->generate();
 
     Transcription::assertGenerated(fn (TranscriptionPrompt $prompt): bool => $prompt->timeout === 60);
+});
+
+test('queued transcription timeout is recorded', function (): void {
+    Transcription::fake();
+
+    Transcription::fromPath('/path/to/audio.mp3')->timeout(90)->queue();
+
+    Transcription::assertQueued(fn (QueuedTranscriptionPrompt $prompt): bool => $prompt->timeout === 90);
 });

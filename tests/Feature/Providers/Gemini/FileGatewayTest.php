@@ -21,7 +21,8 @@ test('get file sends correct request', function (): void {
 
     $response = Files::get('abc123', provider: 'gemini');
 
-    expect($response->id)->toBe('files/abc123');
+    expect($response->id)->toBe('files/abc123')
+        ->and($response->raw)->not->toBeNull();
     expect($response->mime)->toBe('text/plain');
 
     Http::assertSent(fn ($request): bool => $request->method() === 'GET'
@@ -56,7 +57,8 @@ test('put file sends multipart upload', function (): void {
         provider: 'gemini',
     );
 
-    expect($response->id)->toBe('files/uploaded123');
+    expect($response->id)->toBe('files/uploaded123')
+        ->and($response->raw)->not->toBeNull();
 
     Http::assertSent(fn ($request): bool => $request->method() === 'POST'
         && str_contains((string) $request->url(), '/upload/v1beta/files')
@@ -142,4 +144,23 @@ test('file gateway uses custom base url', function (): void {
     Files::get('abc123', provider: 'gemini');
 
     Http::assertSent(fn ($request): bool => str_contains((string) $request->url(), 'custom.api.example.com/v1beta/files/abc123'));
+});
+
+test('delete file encodes the id as a single path segment', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([], 200),
+    ]);
+
+    Files::delete('files/../fileSearchStores/store123?force=true', provider: 'gemini');
+
+    Http::assertSent(fn ($request): bool => $request->method() === 'DELETE'
+        && $request->url() === 'https://generativelanguage.googleapis.com/v1beta/files/..%2FfileSearchStores%2Fstore123%3Fforce%3Dtrue');
+});
+
+test('delete file rejects a prefixed dot segment id', function (): void {
+    Http::fake();
+
+    expect(fn () => Files::delete('files/..', provider: 'gemini'))->toThrow(InvalidArgumentException::class);
+
+    Http::assertNothingSent();
 });

@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
 
 beforeEach(function (): void {
@@ -45,4 +46,15 @@ test('provider options are resolved with the azure key, not openai', function ()
         ->put(provider: 'azure');
 
     expect(multipartField(sentRequest(), 'purpose'))->toBe('batch');
+});
+
+test('delete file encodes the id as a single path segment', function (): void {
+    Http::fake([
+        'test-resource.openai.azure.com/*' => Http::response(['deleted' => true]),
+    ]);
+
+    Files::delete('../vector_stores/vs-123', provider: 'azure');
+
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'DELETE'
+        && $request->url() === 'https://test-resource.openai.azure.com/openai/v1/files/..%2Fvector_stores%2Fvs-123');
 });

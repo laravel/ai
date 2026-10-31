@@ -27,6 +27,7 @@ use Laravel\Ai\PendingResponses\Concerns\ResolvesProviderOptions;
 use Laravel\Ai\Prompts\QueuedEmbeddingsPrompt;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\QueuedEmbeddingsResponse;
 
@@ -140,7 +141,9 @@ class PendingEmbeddingsGeneration
 
             $dimensions = $this->dimensions ?: $provider->defaultEmbeddingsDimensions();
 
-            $providerOptions = $this->resolveProviderOptions($provider);
+            [$providerOptions, $headers] = $this->resolveProviderOptionsAndHeaders($provider);
+
+            $provider = $provider->withHeaders($headers);
 
             try {
                 return $this->shouldCacheIndividually()
@@ -187,7 +190,7 @@ class PendingEmbeddingsGeneration
         $cached = $this->cachedIndividualEmbeddings($provider, $model, $dimensions, $providerOptions);
 
         if (count($this->inputs) === count($cached)) {
-            return new EmbeddingsResponse(array_values($cached), 0, new Meta(
+            return new EmbeddingsResponse(array_values($cached), new Usage, new Meta(
                 provider: $provider->name(),
                 model: $model,
             ));
@@ -209,7 +212,8 @@ class PendingEmbeddingsGeneration
 
         ksort($embeddings);
 
-        return new EmbeddingsResponse(array_values($embeddings), $response->tokens, $response->meta);
+        return (new EmbeddingsResponse(array_values($embeddings), $response->usage, $response->meta))
+            ->withRawResponse($response->raw);
     }
 
     /**
@@ -228,7 +232,7 @@ class PendingEmbeddingsGeneration
         if (! is_null($response)) {
             $response = json_decode((string) $response, true);
 
-            return new EmbeddingsResponse($response['embeddings'], 0, new Meta(
+            return new EmbeddingsResponse($response['embeddings'], new Usage, new Meta(
                 provider: $response['meta']['provider'],
                 model: $response['meta']['model'],
             ));
@@ -430,7 +434,7 @@ class PendingEmbeddingsGeneration
                     $provider,
                     $model,
                     $this->timeout,
-                    is_array($this->providerOptions) ? $this->providerOptions : [],
+                    $this->queuedProviderOptions(),
                 )
             );
         }

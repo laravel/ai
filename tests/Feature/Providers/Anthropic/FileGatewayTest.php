@@ -19,7 +19,8 @@ test('get file sends correct request', function (): void {
 
     $response = Files::get('file-abc123', provider: 'anthropic');
 
-    expect($response->id)->toBe('file-abc123');
+    expect($response->id)->toBe('file-abc123')
+        ->and($response->raw)->not->toBeNull();
 
     Http::assertSent(fn (Request $request): bool => $request->method() === 'GET'
         && $request->url() === 'https://api.anthropic.com/v1/files/file-abc123'
@@ -35,7 +36,8 @@ test('put file sends multipart upload', function (): void {
         provider: 'anthropic',
     );
 
-    expect($response->id)->toBe('file-uploaded123');
+    expect($response->id)->toBe('file-uploaded123')
+        ->and($response->raw)->not->toBeNull();
 
     $request = sentRequest();
 
@@ -67,4 +69,15 @@ test('delete file sends correct request', function (): void {
     Http::assertSent(fn (Request $request): bool => $request->method() === 'DELETE'
         && $request->url() === 'https://api.anthropic.com/v1/files/file-abc123'
         && $request->hasHeader('x-api-key', 'test-key'));
+});
+
+test('delete file encodes the id as a single path segment', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(['id' => 'file-abc123']),
+    ]);
+
+    Files::delete('../skills/skill-123?beta=true', provider: 'anthropic');
+
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'DELETE'
+        && $request->url() === 'https://api.anthropic.com/v1/files/..%2Fskills%2Fskill-123%3Fbeta%3Dtrue');
 });

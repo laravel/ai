@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Attributes\CacheInstructions;
 use Laravel\Ai\Attributes\CacheToolDefinitions;
+use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
@@ -32,6 +33,7 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\Usage;
@@ -54,10 +56,19 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
     use CreatesBedrockClient;
     use DecodesStructuredOutput;
     use HandlesFailoverErrors;
+    use JoinsReasoning;
     use MapsAttachments;
     use ParsesEmbeddings;
 
     protected const STRUCTURED_OUTPUT_TOOL = 'structured_output';
+
+    // Substring match on the model ID, so application inference profile ARNs are not detected.
+    protected const MODELS_REJECTING_FORCED_TOOL_CHOICE = [
+        'claude-sonnet-5-5',
+        'claude-opus-5-5',
+        'claude-fable-5-1',
+        'claude-mythos-5-1',
+    ];
 
     public function __construct()
     {
@@ -141,7 +152,8 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
         StepContext $stepContext,
     ): array {
         $conversationMessages = $this->formatMessages($messages);
-        $schemaTools = $schema ? $this->buildSchemaTools($schema, $tools) : null;
+        $jsonSchema = $schema && $this->rejectsForcedToolChoice($model) ? $schema : null;
+        $schemaTools = $schema && $jsonSchema === null ? $this->buildSchemaTools($schema, $tools) : null;
         $formattedTools = $schemaTools === null && $tools !== [] ? $this->formatTools($tools) : null;
 
         return $this->buildConverseParameters(
@@ -153,6 +165,24 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             $tools === [],
             $options,
             isFinalStep: $stepContext->isFinalStep,
+            jsonSchema: $jsonSchema,
+        );
+    }
+
+    /**
+     * Extract usage data from a Converse response.
+     */
+    protected function extractUsage(array $data): TextUsage
+    {
+        $usage = $data['usage'] ?? [];
+        $cacheReadTokens = $usage['cacheReadInputTokens'] ?? null;
+        $cacheWriteTokens = $usage['cacheWriteInputTokens'] ?? null;
+
+        return new TextUsage(
+            inputTokens: ($usage['inputTokens'] ?? 0) + ($cacheReadTokens ?? 0) + ($cacheWriteTokens ?? 0),
+            outputTokens: $usage['outputTokens'] ?? 0,
+            cacheReadInputTokens: $cacheReadTokens,
+            cacheWriteInputTokens: $cacheWriteTokens,
         );
     }
 
@@ -161,20 +191,15 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
      */
     protected function parseTextResponse(array $result, TextProvider $provider, string $model, bool $structured): StepResponse
     {
-        $usage = new Usage(
-            promptTokens: $result['usage']['inputTokens'] ?? 0,
-            completionTokens: $result['usage']['outputTokens'] ?? 0,
-            cacheWriteInputTokens: $result['usage']['cacheWriteInputTokens'] ?? 0,
-            cacheReadInputTokens: $result['usage']['cacheReadInputTokens'] ?? 0,
-        );
+        $usage = $this->extractUsage($result);
 
         $output = '';
         $toolCalls = [];
-        $providerContentBlocks = [];
+        $replayBlocks = [];
         $structuredOutput = null;
 
         foreach ($result['output']['message']['content'] ?? [] as $block) {
-            $providerContentBlocks[] = $block;
+            $replayBlocks[] = $block;
 
             if (isset($block['text'])) {
                 $output .= $block['text'];
@@ -199,6 +224,10 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             );
         }
 
+        if ($structured && $toolCalls === [] && $this->rejectsForcedToolChoice($model)) {
+            $structuredOutput = $output;
+        }
+
         $finishReason = $this->extractFinishReason($result);
 
         if ($toolCalls === [] && $structured && $finishReason === FinishReason::ToolCalls) {
@@ -211,9 +240,21 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             finishReason: $finishReason,
             usage: $usage,
             meta: new Meta($provider->name(), $model),
-            structured: $structuredOutput !== null ? $this->decodeStructuredOutput($structuredOutput) : null,
-            providerContentBlocks: $providerContentBlocks,
+            structured: $structured ? $this->decodeStructuredOutput($structuredOutput ?? $output) : null,
+            replayBlocks: $replayBlocks,
+            reasoning: $this->extractReasoning($replayBlocks),
         );
+    }
+
+    /**
+     * Extract the reasoning text from Converse content blocks.
+     */
+    protected function extractReasoning(array $content): string
+    {
+        return static::joinReasoning(array_map(
+            fn (array $block): string => $block['reasoningContent']['reasoningText']['text'] ?? '',
+            $content,
+        ));
     }
 
     /**
@@ -230,7 +271,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
     ): Generator {
         $messageId = (string) Str::uuid();
         $timestamp = time();
-        $totalUsage = new Usage;
+        $totalUsage = new TextUsage;
 
         yield (new StreamStart(
             (string) Str::uuid(),
@@ -449,12 +490,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             }
 
             if (isset($event['metadata']['usage'])) {
-                $totalUsage = $totalUsage->add(new Usage(
-                    promptTokens: $event['metadata']['usage']['inputTokens'] ?? 0,
-                    completionTokens: $event['metadata']['usage']['outputTokens'] ?? 0,
-                    cacheWriteInputTokens: $event['metadata']['usage']['cacheWriteInputTokens'] ?? 0,
-                    cacheReadInputTokens: $event['metadata']['usage']['cacheReadInputTokens'] ?? 0,
-                ));
+                $totalUsage = $totalUsage->add($this->extractUsage($event['metadata']));
             }
         }
 
@@ -473,11 +509,11 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             $finishReason = FinishReason::Stop;
         }
 
-        $providerContentBlocks = array_values($responseContent);
+        $replayBlocks = array_values($responseContent);
 
         if (! $hasReasoningBlocks) {
-            $providerContentBlocks = array_values(array_filter(
-                $providerContentBlocks,
+            $replayBlocks = array_values(array_filter(
+                $replayBlocks,
                 fn (array $block) => ! isset($block['text']) || $block['text'] !== '',
             ));
         }
@@ -489,7 +525,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             usage: $totalUsage,
             meta: new Meta($provider->name(), $model),
             structured: $structuredOutput !== null ? $this->decodeStructuredOutput($structuredOutput) : null,
-            providerContentBlocks: $providerContentBlocks,
+            replayBlocks: $replayBlocks,
         );
     }
 
@@ -542,7 +578,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
 
         return new EmbeddingsResponse(
             $embeddings,
-            $totalTokens,
+            new Usage($totalTokens),
             new Meta($provider->name(), $model),
         );
     }
@@ -585,7 +621,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
 
         return new EmbeddingsResponse(
             $this->parseCohereEmbeddings($result['embeddings'] ?? []),
-            $inputTokens,
+            new Usage($inputTokens),
             new Meta($provider->name(), $model),
         );
     }
@@ -632,6 +668,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
      * @param  array<string, mixed>|null  $schemaTools
      * @param  array<string, mixed>|null  $formattedTools  Pre-formatted real tools (used when no schema is active).
      * @param  bool  $toolsEmpty  Whether the caller passed any real tools at all.
+     * @param  array<string, mixed>|null  $jsonSchema
      */
     protected function buildConverseParameters(
         string $model,
@@ -642,6 +679,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
         bool $toolsEmpty,
         ?TextGenerationOptions $options,
         bool $isFinalStep,
+        ?array $jsonSchema = null,
     ): array {
         $parameters = [
             'modelId' => $model,
@@ -667,6 +705,10 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
         }
 
         $parameters = array_merge($parameters, $providerOptions);
+
+        if ($jsonSchema !== null) {
+            $parameters['system'][] = ['text' => $this->jsonInstruction($jsonSchema)];
+        }
 
         $this->ensureValidPromptCacheOrder($options);
 
@@ -721,12 +763,12 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
      * Build the assistant conversation message block combining text and tool calls.
      *
      * @param  array<ToolCall>  $toolCalls
-     * @param  array<int, array<string, mixed>>  $providerContentBlocks
+     * @param  array<int, array<string, mixed>>  $replayBlocks
      */
-    protected function buildAssistantConversationMessage(string $text, array $toolCalls, array $providerContentBlocks = []): array
+    protected function buildAssistantConversationMessage(string $text, array $toolCalls, array $replayBlocks = []): array
     {
         return $this->formatAssistantMessage(
-            new AssistantMessage($text, new Collection($toolCalls), $providerContentBlocks)
+            new AssistantMessage($text, new Collection($toolCalls), $replayBlocks)
         );
     }
 
@@ -765,6 +807,23 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                 ],
             ], $toolResults),
         ];
+    }
+
+    /**
+     * Determine if the model rejects a forced tool choice, so structured output must come from the text answer.
+     */
+    protected function rejectsForcedToolChoice(string $model): bool
+    {
+        return Str::contains($model, self::MODELS_REJECTING_FORCED_TOOL_CHOICE);
+    }
+
+    /**
+     * Build the system instruction that asks for the final answer as JSON matching the schema.
+     */
+    protected function jsonInstruction(array $schema): string
+    {
+        return "JSON schema:\n".json_encode((new ObjectSchema($schema))->toArray())
+            ."\n\nYou must answer with only a JSON object that matches the JSON schema above. Do not wrap it in markdown fences or include any other text.";
     }
 
     /**
@@ -830,10 +889,10 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
      */
     protected function formatAssistantMessage(AssistantMessage $message): array
     {
-        if (filled($message->providerContentBlocks)) {
+        if (filled($message->replayBlocks)) {
             return [
                 'role' => 'assistant',
-                'content' => $this->ensureToolInputIsObject($message->providerContentBlocks),
+                'content' => $this->ensureToolInputIsObject($message->replayBlocks),
             ];
         }
 

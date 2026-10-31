@@ -9,10 +9,13 @@ use IteratorAggregate;
 use JsonSerializable;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
+use Laravel\Ai\Responses\Data\RerankingUsage;
 use Traversable;
 
 class RerankingResponse implements Arrayable, Countable, IteratorAggregate, JsonSerializable
 {
+    use Concerns\HasRawResponse;
+
     /**
      * Create a new reranking response instance.
      *
@@ -20,6 +23,7 @@ class RerankingResponse implements Arrayable, Countable, IteratorAggregate, Json
      */
     public function __construct(
         public readonly array $results,
+        public readonly RerankingUsage $usage,
         public readonly Meta $meta,
     ) {}
 
@@ -38,7 +42,7 @@ class RerankingResponse implements Arrayable, Countable, IteratorAggregate, Json
      */
     public function documents(): Collection
     {
-        return (new Collection($this->results))->map->document;
+        return (new Collection($this->results))->map(fn (RankedDocument $result): string => $result->document);
     }
 
     /**
@@ -66,6 +70,7 @@ class RerankingResponse implements Arrayable, Countable, IteratorAggregate, Json
     {
         return [
             'results' => $this->results,
+            'usage' => $this->usage,
             'meta' => $this->meta,
         ];
     }

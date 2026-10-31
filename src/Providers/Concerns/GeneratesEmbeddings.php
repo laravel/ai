@@ -5,6 +5,7 @@ namespace Laravel\Ai\Providers\Concerns;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Events\EmbeddingsFailed;
 use Laravel\Ai\Events\EmbeddingsGenerated;
 use Laravel\Ai\Events\GeneratingEmbeddings;
 use Laravel\Ai\Files\Audio;
@@ -13,6 +14,7 @@ use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\Video;
 use Laravel\Ai\Prompts\EmbeddingsPrompt;
 use Laravel\Ai\Responses\EmbeddingsResponse;
+use Throwable;
 
 trait GeneratesEmbeddings
 {
@@ -49,13 +51,16 @@ trait GeneratesEmbeddings
             $invocationId, $this, $model, $prompt,
         ));
 
-        return tap($this->embeddingGateway()->generateEmbeddings(
-            $this,
-            $model,
-            $inputs,
-            $dimensions,
-            $timeout,
-            $providerOptions,
+        return tap($this->dispatchingFailure(
+            fn () => $this->embeddingGateway()->generateEmbeddings(
+                $this,
+                $model,
+                $inputs,
+                $dimensions,
+                $timeout,
+                $providerOptions,
+            ),
+            fn (Throwable $exception) => new EmbeddingsFailed($invocationId, $this, $model, $prompt, $exception),
         ), fn (EmbeddingsResponse $response) => $this->events->dispatch(new EmbeddingsGenerated(
             $invocationId, $this, $model, $prompt, $response,
         )));

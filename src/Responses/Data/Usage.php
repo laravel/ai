@@ -5,28 +5,23 @@ namespace Laravel\Ai\Responses\Data;
 use Illuminate\Contracts\Support\Arrayable;
 use JsonSerializable;
 
-class Usage implements Arrayable, JsonSerializable
+readonly class Usage implements Arrayable, JsonSerializable
 {
+    /**
+     * @param  int  $inputTokens  Total input tokens.
+     * @param  int  $outputTokens  Total output tokens.
+     */
     public function __construct(
-        public int $promptTokens = 0,
-        public int $completionTokens = 0,
-        public int $cacheWriteInputTokens = 0,
-        public int $cacheReadInputTokens = 0,
-        public int $reasoningTokens = 0,
+        public int $inputTokens = 0,
+        public int $outputTokens = 0,
     ) {}
 
     /**
-     * Add the given usage to the current usage and return a new usage instance.
+     * Get the total number of input and output tokens.
      */
-    public function add(Usage $usage): Usage
+    public function totalTokens(): int
     {
-        return new Usage(
-            $this->promptTokens + $usage->promptTokens,
-            $this->completionTokens + $usage->completionTokens,
-            $this->cacheWriteInputTokens + $usage->cacheWriteInputTokens,
-            $this->cacheReadInputTokens + $usage->cacheReadInputTokens,
-            $this->reasoningTokens + $usage->reasoningTokens,
-        );
+        return $this->inputTokens + $this->outputTokens;
     }
 
     /**
@@ -35,11 +30,8 @@ class Usage implements Arrayable, JsonSerializable
     public function toArray(): array
     {
         return [
-            'prompt_tokens' => $this->promptTokens,
-            'completion_tokens' => $this->completionTokens,
-            'cache_write_input_tokens' => $this->cacheWriteInputTokens,
-            'cache_read_input_tokens' => $this->cacheReadInputTokens,
-            'reasoning_tokens' => $this->reasoningTokens,
+            'input_tokens' => $this->inputTokens,
+            'output_tokens' => $this->outputTokens,
         ];
     }
 

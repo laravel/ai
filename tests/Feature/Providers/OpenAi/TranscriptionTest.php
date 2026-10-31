@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
@@ -87,8 +88,18 @@ test('transcription usage is correctly parsed', function (): void {
     $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'openai');
 
-    expect($response->usage->promptTokens)->toBe(100)
-        ->and($response->usage->completionTokens)->toBe(50);
+    expect($response->usage->inputTokens)->toBe(100)
+        ->and($response->usage->outputTokens)->toBe(50);
+});
+
+test('the raw http response is exposed on the transcription response', function (): void {
+    Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openai');
+
+    expect($response->raw)->toBeInstanceOf(Response::class)
+        ->and($response->raw->json('text'))->toBe('Hello, world!');
 });
 
 test('transcription sends language when provided', function (): void {
@@ -163,3 +174,51 @@ function fakeOpenAiTranscriptionResponse(string $text = 'Hello, world!')
         ],
     ]);
 }
+
+test('transcription reports the billed audio seconds for duration based models', function (): void {
+    Http::fake(['*' => Http::response([
+        'text' => 'Hello, world!',
+        'usage' => ['type' => 'duration', 'seconds' => 12.5],
+    ])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openai', model: 'whisper-1');
+
+    expect($response->usage->audioSeconds)->toBe(12.5)
+        ->and($response->usage->inputTokens)->toBe(0);
+});
+
+test('transcription leaves the audio seconds null for token based models', function (): void {
+    Http::fake(['*' => Http::response([
+        'text' => 'Hello, world!',
+        'usage' => [
+            'type' => 'tokens',
+            'input_tokens' => 14,
+            'output_tokens' => 4,
+            'input_token_details' => ['text_tokens' => 0, 'audio_tokens' => 14],
+        ],
+    ])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
+
+    expect($response->usage->audioSeconds)->toBeNull()
+        ->and($response->usage->inputTokens)->toBe(14);
+});
+
+test('diarized transcription reports the audio duration when usage is token based', function (): void {
+    Http::fake(['*' => Http::response([
+        'task' => 'transcribe',
+        'duration' => 42.7,
+        'text' => 'Hello, world!',
+        'segments' => [],
+        'usage' => ['type' => 'tokens', 'input_tokens' => 14, 'output_tokens' => 4, 'total_tokens' => 18],
+    ])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->diarize()
+        ->generate(provider: 'openai', model: 'gpt-4o-transcribe-diarize');
+
+    expect($response->usage->audioSeconds)->toBe(42.7)
+        ->and($response->usage->inputTokens)->toBe(14);
+});

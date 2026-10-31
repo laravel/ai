@@ -3,19 +3,22 @@
 namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Responses\Data\ImageUsage;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\ProviderToolCall;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
-use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
-    use DecodesStructuredOutput;
+    use DecodesStructuredOutput, JoinsReasoning;
 
     /**
      * Validate the OpenAI response data.
@@ -62,7 +65,9 @@ trait ParsesTextResponses
             meta: new Meta($provider->name(), $data['model'] ?? '', $this->extractCitations($output)),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
             continuationToken: $data['id'] ?? '',
-            providerContentBlocks: $this->isStateless($provider) ? $this->extractReplayBlocks($output) : [],
+            replayBlocks: $this->extractReplayBlocks($output),
+            reasoning: $this->extractReasoning($output),
+            providerToolCalls: $this->extractProviderToolCalls($output),
         );
     }
 
@@ -74,6 +79,21 @@ trait ParsesTextResponses
         $lastOutput = last($output);
 
         return is_array($lastOutput) ? ($lastOutput['content'][0]['text'] ?? '') : '';
+    }
+
+    /**
+     * Extract the reasoning text from the output array.
+     */
+    protected function extractReasoning(array $output): string
+    {
+        return static::joinReasoning(
+            (new Collection($output))
+                ->where('type', 'reasoning')
+                ->flatMap(fn (array $item): array => [
+                    (new Collection($item['summary'] ?? []))->pluck('text')->implode(''),
+                    (new Collection($item['content'] ?? []))->pluck('text')->implode(''),
+                ])
+        );
     }
 
     /**
@@ -108,7 +128,7 @@ trait ParsesTextResponses
     }
 
     /**
-     * Extract the ordered response output for stateless (store=false) replay.
+     * Extract the ordered response output for full-history replay.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -118,21 +138,49 @@ trait ParsesTextResponses
     }
 
     /**
+     * Extract the provider-hosted tool items from the output array.
+     *
+     * @return array<int, ProviderToolCall>
+     */
+    protected function extractProviderToolCalls(array $output): array
+    {
+        return array_values(array_map(
+            fn (array $item): ProviderToolCall => new ProviderToolCall($item['id'] ?? '', $item['type'], $item),
+            array_filter($output, fn ($item): bool => is_array($item)
+                && ($item['type'] ?? '') !== 'function_call'
+                && str_ends_with((string) ($item['type'] ?? ''), '_call')),
+        ));
+    }
+
+    /**
      * Extract usage data from the response.
      */
-    protected function extractUsage(array $data): Usage
+    protected function extractUsage(array $data): TextUsage
     {
         $usage = $data['usage'] ?? [];
-        $inputTokens = $usage['input_tokens'] ?? 0;
-        $cachedTokens = $usage['input_tokens_details']['cached_tokens'] ?? 0;
-        $cacheWriteTokens = $usage['input_tokens_details']['cache_write_tokens'] ?? 0;
 
-        return new Usage(
-            $inputTokens - $cachedTokens - $cacheWriteTokens,
-            $usage['output_tokens'] ?? 0,
-            $cacheWriteTokens,
-            $cachedTokens,
-            $usage['output_tokens_details']['reasoning_tokens'] ?? 0,
+        return new TextUsage(
+            inputTokens: $usage['input_tokens'] ?? 0,
+            outputTokens: $usage['output_tokens'] ?? 0,
+            cacheReadInputTokens: $usage['input_tokens_details']['cached_tokens'] ?? null,
+            cacheWriteInputTokens: $usage['input_tokens_details']['cache_write_tokens'] ?? null,
+            reasoningTokens: $usage['output_tokens_details']['reasoning_tokens'] ?? null,
+        );
+    }
+
+    /**
+     * Extract usage data from an image generation response.
+     */
+    protected function extractImageUsage(array $data): ImageUsage
+    {
+        $usage = $data['usage'] ?? [];
+
+        return new ImageUsage(
+            inputTokens: $usage['input_tokens'] ?? 0,
+            outputTokens: $usage['output_tokens'] ?? 0,
+            cacheReadInputTokens: $usage['input_tokens_details']['cached_tokens'] ?? null,
+            imageInputTokens: $usage['input_tokens_details']['image_tokens'] ?? null,
+            imageOutputTokens: $usage['output_tokens_details']['image_tokens'] ?? null,
         );
     }
 
@@ -141,6 +189,14 @@ trait ParsesTextResponses
      */
     protected function extractFinishReason(array $data): FinishReason
     {
+        if (($data['status'] ?? '') === 'incomplete') {
+            return match ($data['incomplete_details']['reason'] ?? null) {
+                'max_output_tokens' => FinishReason::Length,
+                'content_filter' => FinishReason::ContentFilter,
+                default => FinishReason::Unknown,
+            };
+        }
+
         $lastOutput = last($data['output'] ?? []);
         $status = $lastOutput['status'] ?? $data['status'] ?? '';
         $type = $lastOutput['type'] ?? '';

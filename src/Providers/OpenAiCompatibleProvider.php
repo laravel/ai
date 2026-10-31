@@ -4,19 +4,24 @@ namespace Laravel\Ai\Providers;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use InvalidArgumentException;
+use Laravel\Ai\Contracts\Gateway\ClassificationGateway;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Gateway\TranscriptionGateway;
+use Laravel\Ai\Contracts\Providers\ClassificationProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Gateway\OpenAiCompatible\OpenAiCompatibleClassificationGateway;
 use Laravel\Ai\Gateway\OpenAiCompatible\OpenAiCompatibleGateway;
 
-class OpenAiCompatibleProvider extends Provider implements EmbeddingProvider, TextProvider, TranscriptionProvider
+class OpenAiCompatibleProvider extends Provider implements ClassificationProvider, EmbeddingProvider, TextProvider, TranscriptionProvider
 {
+    use Concerns\Classifies;
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesText;
     use Concerns\GeneratesTranscriptions;
+    use Concerns\HasClassificationGateway;
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasTextGateway;
     use Concerns\HasTranscriptionGateway;
@@ -104,6 +109,32 @@ class OpenAiCompatibleProvider extends Provider implements EmbeddingProvider, Te
         return $this->config['models']['transcription']['default'] ?? throw new InvalidArgumentException(
             "The [{$this->name()}] openai-compatible provider requires a default transcription model. Set [models.transcription.default] in its configuration or pass a model explicitly."
         );
+    }
+
+    /**
+     * Get the provider's classification gateway.
+     */
+    public function classificationGateway(): ClassificationGateway
+    {
+        return $this->classificationGateway ??= new OpenAiCompatibleClassificationGateway;
+    }
+
+    /**
+     * Get the name of the default classification model.
+     */
+    public function defaultClassificationModel(): string
+    {
+        return $this->config['models']['classification']['default'] ?? throw new InvalidArgumentException(
+            "The [{$this->name()}] openai-compatible provider requires a default classification model. Set [models.classification.default] in its configuration or pass a model explicitly."
+        );
+    }
+
+    /**
+     * Determine if the provider can classify attachments alongside the state.
+     */
+    public function supportsClassificationAttachments(): bool
+    {
+        return true;
     }
 
     /**

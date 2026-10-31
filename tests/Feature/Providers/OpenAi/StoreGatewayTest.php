@@ -162,3 +162,26 @@ test('delete store sends correct request', function (): void {
         && $request->url() === 'https://api.openai.com/v1/vector_stores/vs-123'
         && $request->hasHeader('Authorization', 'Bearer test-key'));
 });
+
+test('remove file encodes the store and document ids as single path segments', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response(['deleted' => true]),
+    ]);
+
+    $provider = openAiProvider();
+    $provider->storeGateway()->removeFile($provider, 'vs-123#', '../../files/file-456');
+
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'DELETE'
+        && $request->url() === 'https://api.openai.com/v1/vector_stores/vs-123%23/files/..%2F..%2Ffiles%2Ffile-456');
+});
+
+test('delete store encodes the id as a single path segment', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response(['deleted' => true]),
+    ]);
+
+    Stores::delete('../files/file-456', provider: 'openai');
+
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'DELETE'
+        && $request->url() === 'https://api.openai.com/v1/vector_stores/..%2Ffiles%2Ffile-456');
+});

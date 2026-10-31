@@ -11,18 +11,21 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Contracts\Providers\SupportsCodeExecution;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Gemini\GeminiFileGateway;
 use Laravel\Ai\Gateway\Gemini\GeminiStoreGateway;
+use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsFileSearch, SupportsWebFetch, SupportsWebSearch, TextProvider, TranscriptionProvider
+class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsCodeExecution, SupportsFileSearch, SupportsWebFetch, SupportsWebSearch, TextProvider, TranscriptionProvider
 {
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
@@ -46,8 +49,8 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
     public function fileSearchToolOptions(FileSearch $search): array
     {
         return array_filter([
-            'fileSearchStoreNames' => $search->ids(),
-            'metadataFilter' => $search->filters === []
+            'file_search_store_names' => $search->ids(),
+            'metadata_filter' => $search->filters === []
                 ? null
                 : $this->formatMetadataFilter($search->filters),
         ]);
@@ -60,16 +63,30 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     protected function formatMetadataFilter(array $filters): string
     {
-        return (new Collection($filters))->map(fn ($filter): string => match ($filter['type']) {
-            'eq' => is_numeric($filter['value'])
-                ? "{$filter['key']}={$filter['value']}"
-                : "{$filter['key']}=\"{$filter['value']}\"",
-            'ne' => is_numeric($filter['value'])
-                ? "{$filter['key']}!={$filter['value']}"
-                : "{$filter['key']}!=\"{$filter['value']}\"",
-            'in' => '('.(new Collection($filter['value']))->map(fn ($v): string => is_numeric($v) ? "{$filter['key']}={$v}" : "{$filter['key']}=\"{$v}\""
-            )->implode(' OR ').')',
+        $formatValue = fn ($value): string => is_numeric($value)
+            ? (string) $value
+            : '"'.str_replace(['\\', '"'], ['\\\\', '\\"'], (string) $value).'"';
+
+        return (new Collection($filters))->map(function ($filter) use ($formatValue): string {
+            if (! preg_match('/^[A-Za-z_][A-Za-z0-9_.]*$/D', $filter['key'])) {
+                throw new InvalidArgumentException("Invalid metadata filter key [{$filter['key']}].");
+            }
+
+            return '('.match ($filter['type']) {
+                'eq' => $filter['key'].'='.$formatValue($filter['value']),
+                'ne' => $filter['key'].'!='.$formatValue($filter['value']),
+                'in' => (new Collection($filter['value']))->map(fn ($value): string => $filter['key'].'='.$formatValue($value))->implode(' OR '),
+                'nin' => (new Collection($filter['value']))->map(fn ($value): string => $filter['key'].'!='.$formatValue($value))->implode(' AND '),
+            }.')';
         })->implode(' AND ');
+    }
+
+    /**
+     * Get the code execution tool options for the provider.
+     */
+    public function codeExecutionToolOptions(CodeExecution $codeExecution): array
+    {
+        return $codeExecution->providerOptions(Lab::Gemini);
     }
 
     /**
@@ -93,7 +110,7 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'gemini-3.6-flash';
+        return $this->config['models']['text']['default'] ?? 'gemini-3.8-flash';
     }
 
     /**
@@ -109,7 +126,7 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'gemini-3.6-flash';
+        return $this->config['models']['text']['smartest'] ?? 'gemini-3.8-flash';
     }
 
     /**
@@ -147,7 +164,7 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultAudioModel(): string
     {
-        return $this->config['models']['audio']['default'] ?? 'gemini-3.1-flash-tts-preview';
+        return $this->config['models']['audio']['default'] ?? 'gemini-3.8-flash-lite-tts';
     }
 
     /**
@@ -155,7 +172,7 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
      */
     public function defaultTranscriptionModel(): string
     {
-        return $this->config['models']['transcription']['default'] ?? 'gemini-3.5-flash';
+        return $this->config['models']['transcription']['default'] ?? 'gemini-3.5-transcribe';
     }
 
     /**

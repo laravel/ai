@@ -30,15 +30,6 @@ class Base64Video extends Video implements Arrayable, JsonSerializable, Storable
     }
 
     /**
-     * Get the file's MIME type.
-     */
-    #[\Override]
-    public function mimeType(): ?string
-    {
-        return $this->mime;
-    }
-
-    /**
      * Get the instance as an array.
      */
     public function toArray(): array

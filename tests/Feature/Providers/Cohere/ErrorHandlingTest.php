@@ -3,9 +3,12 @@
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Reranking;
+
+use function Laravel\Ai\agent;
 
 beforeEach(function (): void {
     config(['ai.providers.cohere' => [
@@ -61,3 +64,35 @@ test('reranking http error response throws request exception', function (): void
 
     Reranking::of(['doc1'])->rerank('What is AI?', provider: 'cohere', model: 'rerank-v3.5');
 })->throws(RequestException::class);
+
+test('text rate limit response throws rate limited exception', function (): void {
+    Http::fake([
+        'api.cohere.com/*' => Http::response(['message' => 'Rate limit exceeded'], 429),
+    ]);
+
+    agent()->prompt('Hello', provider: 'cohere');
+})->throws(RateLimitedException::class);
+
+test('text overloaded response throws provider overloaded exception', function (): void {
+    Http::fake([
+        'api.cohere.com/*' => Http::response(['message' => 'Service overloaded'], 503),
+    ]);
+
+    agent()->prompt('Hello', provider: 'cohere');
+})->throws(ProviderOverloadedException::class);
+
+test('text http error response throws request exception', function (): void {
+    Http::fake([
+        'api.cohere.com/*' => Http::response(['message' => 'invalid api token'], 401),
+    ]);
+
+    agent()->prompt('Hello', provider: 'cohere');
+})->throws(RequestException::class);
+
+test('text response without a message throws ai exception', function (): void {
+    Http::fake([
+        'api.cohere.com/*' => Http::response(['id' => 'abc', 'message' => 'Something went wrong'], 200),
+    ]);
+
+    agent()->prompt('Hello', provider: 'cohere');
+})->throws(AiException::class, 'Cohere Error: Something went wrong');

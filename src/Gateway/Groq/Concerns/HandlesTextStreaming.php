@@ -7,9 +7,13 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ProviderToolEvent;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
+use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
@@ -28,6 +32,7 @@ trait HandlesTextStreaming
         $streamBody,
     ): Generator {
         $messageId = $this->generateEventId();
+        $reasoningId = null;
         $streamStartEmitted = false;
         $textStartEmitted = false;
         $currentText = '';
@@ -74,6 +79,35 @@ trait HandlesTextStreaming
                 ))->withInvocationId($invocationId);
             }
 
+            if (isset($delta['reasoning']) && $delta['reasoning'] !== '') {
+                if ($reasoningId === null) {
+                    $reasoningId = $this->generateEventId();
+
+                    yield (new ReasoningStart(
+                        $this->generateEventId(),
+                        $reasoningId,
+                        time(),
+                    ))->withInvocationId($invocationId);
+                }
+
+                yield (new ReasoningDelta(
+                    $this->generateEventId(),
+                    $reasoningId,
+                    $delta['reasoning'],
+                    time(),
+                ))->withInvocationId($invocationId);
+            }
+
+            if ($reasoningId !== null && ((isset($delta['content']) && $delta['content'] !== '') || isset($delta['tool_calls']) || isset($delta['executed_tools']))) {
+                yield (new ReasoningEnd(
+                    $this->generateEventId(),
+                    $reasoningId,
+                    time(),
+                ))->withInvocationId($invocationId);
+
+                $reasoningId = null;
+            }
+
             if (isset($delta['content']) && $delta['content'] !== '') {
                 if (! $textStartEmitted) {
                     $textStartEmitted = true;
@@ -92,6 +126,18 @@ trait HandlesTextStreaming
                     $messageId,
                     $delta['content'],
                     time(),
+                ))->withInvocationId($invocationId);
+            }
+
+            foreach ($delta['executed_tools'] ?? [] as $executedTool) {
+                yield (new ProviderToolEvent(
+                    $this->generateEventId(),
+                    (string) ($executedTool['index'] ?? ''),
+                    (string) ($executedTool['name'] ?? $executedTool['type'] ?? ''),
+                    $executedTool,
+                    isset($executedTool['output']) ? 'completed' : 'in_progress',
+                    time(),
+                    provider: $provider->name(),
                 ))->withInvocationId($invocationId);
             }
 
@@ -122,6 +168,14 @@ trait HandlesTextStreaming
             }
         }
 
+        if ($reasoningId !== null) {
+            yield (new ReasoningEnd(
+                $this->generateEventId(),
+                $reasoningId,
+                time(),
+            ))->withInvocationId($invocationId);
+        }
+
         if ($textStartEmitted) {
             yield (new TextEnd(
                 $this->generateEventId(),
@@ -146,7 +200,7 @@ trait HandlesTextStreaming
             text: $currentText,
             toolCalls: $toolCalls,
             finishReason: $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
-            usage: $usage ?? new Usage(0, 0),
+            usage: $usage ?? new TextUsage(0, 0),
             meta: new Meta($provider->name(), $responseModel),
         );
     }

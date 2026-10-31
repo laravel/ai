@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Files\Document;
 
 use function Laravel\Ai\agent;
 
@@ -33,6 +34,17 @@ test('openrouter requests fall back to the default base url', function (): void 
 
     Http::assertSentCount(1);
     openRouterAssertRequestSent('POST', 'https://openrouter.ai/api/v1/chat/completions');
+});
+
+test('openrouter file requests ignore an in-region base url', function (): void {
+    configureOpenRouterProvider('https://eu.openrouter.ai/api/v1');
+
+    Http::fake(['*' => Http::response(['id' => 'or_file_uploaded123'])]);
+
+    Document::fromString('Hello, World!', 'text/plain')->as('hello.txt')->put(provider: 'openrouter');
+
+    Http::assertSentCount(1);
+    openRouterAssertRequestSent('POST', 'https://openrouter.ai/api/v1/files');
 });
 
 function configureOpenRouterProvider(?string $url = null): void

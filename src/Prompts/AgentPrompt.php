@@ -7,12 +7,32 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Exceptions\FailoverableException;
+use Laravel\Ai\Gateway\RunContext;
+use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Providers\Tools\ProviderTool;
+use Throwable;
 
 class AgentPrompt extends Prompt
 {
     public readonly Agent $agent;
 
     public readonly Collection $attachments;
+
+    /**
+     * The ad-hoc message history to send ahead of the prompt.
+     *
+     * @var list<Message>|null
+     */
+    public readonly ?array $messages;
+
+    /**
+     * The tools available for this run, or null to use the tools the agent declares.
+     *
+     * @var array<int, Agent|Tool|ProviderTool>|null
+     */
+    public readonly ?array $tools;
 
     public readonly ?int $timeout;
 
@@ -23,6 +43,8 @@ class AgentPrompt extends Prompt
     public readonly ?string $parentToolInvocationId;
 
     protected readonly bool $isFinalAttempt;
+
+    protected ?RunContext $runContext = null;
 
     /**
      * @param  bool  $isFinalAttempt  Whether the caller has run out of providers to retry this prompt against.
@@ -39,11 +61,15 @@ class AgentPrompt extends Prompt
         ?string $parentInvocationId = null,
         ?string $parentToolInvocationId = null,
         bool $isFinalAttempt = true,
+        ?array $messages = null,
+        ?array $tools = null,
     ) {
         parent::__construct($prompt, $provider, $model, $approvalDecisions);
 
         $this->agent = $agent;
         $this->attachments = Collection::make($attachments);
+        $this->messages = $messages;
+        $this->tools = $tools;
         $this->timeout = $timeout;
         $this->invocationId = $invocationId;
         $this->parentInvocationId = $parentInvocationId;
@@ -100,6 +126,36 @@ class AgentPrompt extends Prompt
             $this->parentInvocationId,
             $this->parentToolInvocationId,
             $this->isFinalAttempt,
+            $this->messages,
+            $this->tools,
+        );
+    }
+
+    /**
+     * Replace the tools for this run, returning a new prompt instance.
+     *
+     * @param  iterable<int, Tool|ProviderTool|Agent>  $tools
+     */
+    public function withTools(iterable $tools): AgentPrompt
+    {
+        if ($this->hasApprovalDecisions()) {
+            return $this;
+        }
+
+        return new self(
+            $this->agent,
+            $this->prompt,
+            $this->attachments,
+            $this->provider,
+            $this->model,
+            $this->timeout,
+            $this->invocationId,
+            $this->approvalDecisions,
+            $this->parentInvocationId,
+            $this->parentToolInvocationId,
+            $this->isFinalAttempt,
+            $this->messages,
+            [...$tools],
         );
     }
 
@@ -127,5 +183,35 @@ class AgentPrompt extends Prompt
     public function isFinalAttempt(): bool
     {
         return $this->isFinalAttempt;
+    }
+
+    /**
+     * Set the context the run dispatched for this prompt records its steps on.
+     *
+     * @internal
+     */
+    public function setRunContext(?RunContext $context): void
+    {
+        $this->runContext = $context;
+    }
+
+    /**
+     * The context the run dispatched for this prompt is recording its steps on.
+     *
+     * @internal
+     */
+    public function runContext(): ?RunContext
+    {
+        return $this->runContext;
+    }
+
+    /**
+     * Determine whether the caller will retry this prompt against another provider.
+     *
+     * @internal
+     */
+    public function willRetry(Throwable $exception): bool
+    {
+        return $exception instanceof FailoverableException && ! $this->isFinalAttempt;
     }
 }

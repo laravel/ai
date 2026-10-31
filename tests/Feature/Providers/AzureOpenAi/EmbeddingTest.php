@@ -46,7 +46,7 @@ test('embeddings response is correctly parsed', function (): void {
 
     expect($response->embeddings)->toHaveCount(1)
         ->and($response->embeddings[0])->toHaveCount(3)
-        ->and($response->tokens)->toBe(10)
+        ->and($response->usage->inputTokens)->toBe(10)
         ->and($response->meta->provider)->toBe('azure');
 });
 
@@ -81,6 +81,28 @@ test('multiple inputs return multiple embeddings', function (): void {
     $response = Embeddings::for(['Hello', 'World'])->generate(provider: 'azure', model: 'text-embedding-3-small');
 
     expect($response->embeddings)->toHaveCount(2);
+});
+
+test('embeddings are returned in input order even when the response is shuffled', function (): void {
+    Http::fake(['*' => Http::response([
+        'id' => 'embd-123',
+        'object' => 'list',
+        'model' => 'text-embedding-3-small',
+        'data' => [
+            ['object' => 'embedding', 'index' => 2, 'embedding' => [0.7, 0.8, 0.9]],
+            ['object' => 'embedding', 'index' => 0, 'embedding' => [0.1, 0.2, 0.3]],
+            ['object' => 'embedding', 'index' => 1, 'embedding' => [0.4, 0.5, 0.6]],
+        ],
+        'usage' => ['prompt_tokens' => 30],
+    ])]);
+
+    $response = Embeddings::for(['Hello', 'World', 'Again'])->generate(provider: 'azure', model: 'text-embedding-3-small');
+
+    expect($response->embeddings)->toBe([
+        [0.1, 0.2, 0.3],
+        [0.4, 0.5, 0.6],
+        [0.7, 0.8, 0.9],
+    ]);
 });
 
 test('embeddings rate limit response throws rate limited exception', function (): void {

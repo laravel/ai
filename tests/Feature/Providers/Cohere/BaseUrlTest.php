@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Reranking;
 
+use function Laravel\Ai\agent;
+
 function fakeCohereBaseUrlEmbeddingsResponse(): PromiseInterface
 {
     return Http::response([
@@ -48,6 +50,20 @@ test('cohere reranking requests use the configured base url', function (): void 
     Reranking::of(['doc1'])->rerank('What is AI?', provider: 'cohere', model: 'rerank-v3.5');
 
     Http::assertSent(fn (Request $r): bool => $r->url() === 'http://localhost:8080/v2/rerank');
+});
+
+test('cohere text requests use the configured base url', function (): void {
+    config(['ai.providers.cohere' => [
+        ...config('ai.providers.cohere'),
+        'key' => 'test-key',
+        'url' => 'http://localhost:8080/v2',
+    ]]);
+
+    Http::fake(['*' => $this->fakeTextResponse('Hello')]);
+
+    agent()->prompt('Hello', provider: 'cohere');
+
+    Http::assertSent(fn (Request $r): bool => $r->url() === 'http://localhost:8080/v2/chat');
 });
 
 test('cohere requests fall back to the default base url', function (): void {

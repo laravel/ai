@@ -244,8 +244,8 @@ test('response usage is correctly parsed', function (): void {
 
     $response = agent()->prompt('Hello', provider: 'openrouter');
 
-    expect($response->usage->promptTokens)->toBe(10)
-        ->and($response->usage->completionTokens)->toBe(5);
+    expect($response->usage->inputTokens)->toBe(10)
+        ->and($response->usage->outputTokens)->toBe(5);
 });
 
 test('response usage includes cache and reasoning tokens', function (): void {
@@ -273,8 +273,8 @@ test('response usage includes cache and reasoning tokens', function (): void {
 
     $response = agent()->prompt('Hello', provider: 'openrouter');
 
-    expect($response->usage->promptTokens)->toBe(50)
-        ->and($response->usage->completionTokens)->toBe(50)
+    expect($response->usage->inputTokens)->toBe(100)
+        ->and($response->usage->outputTokens)->toBe(50)
         ->and($response->usage->cacheReadInputTokens)->toBe(20)
         ->and($response->usage->cacheWriteInputTokens)->toBe(30)
         ->and($response->usage->reasoningTokens)->toBe(10);

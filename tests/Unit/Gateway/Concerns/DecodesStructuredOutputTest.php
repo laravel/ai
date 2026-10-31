@@ -102,3 +102,29 @@ test('returns empty array when JSON decodes to a non-array scalar', function ():
     expect($host->decode('"just a string"'))->toBe([])
         ->and($host->decode('42'))->toBe([]);
 });
+
+test('escapes quotes left unescaped inside object keys', function (): void {
+    $host = decoderHost();
+
+    $payload = '{"expected_attributes":{"Jutiklinė juosta ("Touch Bar")":"Yra","Ekrano įstrižainė":"16\""}}';
+
+    expect($host->decode($payload))->toBe([
+        'expected_attributes' => [
+            'Jutiklinė juosta ("Touch Bar")' => 'Yra',
+            'Ekrano įstrižainė' => '16"',
+        ],
+    ]);
+});
+
+test('escapes unescaped key quotes inside arrays and fences without touching values', function (): void {
+    $host = decoderHost();
+
+    $payload = "```json\n{\"items\": [{\"Écran 16\"\" : \"oui, \\\"mat\\\"\"}, {\"plain\": [\"a\", \"b\"]}]}\n```";
+
+    expect($host->decode($payload))->toBe([
+        'items' => [
+            ['Écran 16"' => 'oui, "mat"'],
+            ['plain' => ['a', 'b']],
+        ],
+    ]);
+});

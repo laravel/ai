@@ -10,7 +10,7 @@ use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Prompts\TranscriptionPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TranscriptionUsage;
 use Laravel\Ai\Responses\TranscriptionResponse;
 use RuntimeException;
 
@@ -84,7 +84,7 @@ class FakeTranscriptionGateway implements TranscriptionGateway
                 new Collection([
                     new TranscriptionSegment($response, 'Speaker 1', 0.0, 1.0),
                 ]),
-                new Usage,
+                new TranscriptionUsage,
                 new Meta($provider->name(), $model),
             );
         }

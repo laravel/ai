@@ -55,6 +55,18 @@ class Store
     }
 
     /**
+     * Resolve the ID of the file a document was imported from, which Gemini does not reuse as the document ID.
+     */
+    protected function fileIdFor(HasProviderId|string $documentId): string
+    {
+        if ($documentId instanceof AddedDocumentResponse && $documentId->fileId() !== null) {
+            return $documentId->fileId();
+        }
+
+        return $documentId instanceof HasProviderId ? $documentId->id() : $documentId;
+    }
+
+    /**
      * Store the given file with the provider.
      */
     protected function storeFile(StorableFile $file): HasProviderId
@@ -70,10 +82,7 @@ class Store
         $removed = $this->provider->removeFileFromStore($this->id, $documentId);
 
         if ($deleteFile && $removed) {
-            Files::delete(
-                $documentId instanceof HasProviderId ? $documentId->id() : $documentId,
-                provider: $this->provider->name()
-            );
+            Files::delete($this->fileIdFor($documentId), provider: $this->provider->name());
         }
 
         return $removed;

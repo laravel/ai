@@ -50,7 +50,19 @@ test('embeddings response is correctly parsed', function (): void {
     expect($response->embeddings)->toHaveCount(2)
         ->and($response->embeddings[0])->toBe([0.1, 0.2, 0.3])
         ->and($response->embeddings[1])->toBe([0.4, 0.5, 0.6])
-        ->and($response->tokens)->toBe(10);
+        ->and($response->usage->inputTokens)->toBe(10);
+});
+
+test('embeddings expose provider specific usage from the raw response', function (): void {
+    Http::fake(['*' => Http::response([
+        'object' => 'list',
+        'data' => [['object' => 'embedding', 'index' => 0, 'embedding' => [0.1]]],
+        'usage' => ['prompt_tokens' => 1, 'cost' => 0.000013],
+    ])]);
+
+    $response = Ai::instance('openrouter')->embeddings(['Hello']);
+
+    expect($response->raw->json('usage.cost'))->toBe(0.000013);
 });
 
 test('embeddings request sends bearer token', function (): void {

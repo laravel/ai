@@ -5,16 +5,18 @@ namespace Laravel\Ai\Responses;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TranscriptionUsage;
 
 class TranscriptionResponse implements \Stringable
 {
+    use Concerns\HasRawResponse;
+
     public string $text;
 
     /** @var Collection<int, TranscriptionSegment> */
     public Collection $segments;
 
-    public Usage $usage;
+    public TranscriptionUsage $usage;
 
     public Meta $meta;
 
@@ -24,7 +26,7 @@ class TranscriptionResponse implements \Stringable
     public function __construct(
         string $text,
         Collection $segments,
-        Usage $usage,
+        TranscriptionUsage $usage,
         Meta $meta,
     ) {
         $this->text = $text;

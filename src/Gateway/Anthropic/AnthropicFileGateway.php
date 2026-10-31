@@ -7,6 +7,7 @@ use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Gateway\Concerns\EncodesResourceIds;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\PreparesStorableFiles;
 use Laravel\Ai\Providers\Provider;
@@ -16,6 +17,7 @@ use Laravel\Ai\Responses\StoredFileResponse;
 class AnthropicFileGateway implements FileGateway
 {
     use Concerns\CreatesAnthropicClient;
+    use EncodesResourceIds;
     use HandlesFailoverErrors;
     use PreparesStorableFiles;
 
@@ -26,13 +28,13 @@ class AnthropicFileGateway implements FileGateway
     {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider)->get("files/{$fileId}"),
+            fn () => $this->client($provider)->get("files/{$this->resourceId($fileId)}"),
         );
 
-        return new FileResponse(
+        return (new FileResponse(
             id: $response->json('id'),
             mimeType: $response->json('mime_type'),
-        );
+        ))->withRawResponse($response);
     }
 
     /**
@@ -44,7 +46,9 @@ class AnthropicFileGateway implements FileGateway
     ): StoredFileResponse {
         [$content, $mime, $name] = $this->prepareStorableFile($file);
 
-        $providerOptions = $this->resolveProviderOptions($file, Lab::Anthropic);
+        [$providerOptions, $headers] = $this->resolveProviderOptionsAndHeaders($file, Lab::Anthropic);
+
+        $provider = $provider->withHeaders($headers);
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -53,7 +57,7 @@ class AnthropicFileGateway implements FileGateway
                 ->post('files', $providerOptions),
         );
 
-        return new StoredFileResponse($response->json('id'));
+        return (new StoredFileResponse($response->json('id')))->withRawResponse($response);
     }
 
     /**
@@ -63,7 +67,7 @@ class AnthropicFileGateway implements FileGateway
     {
         $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider)->delete("files/{$fileId}"),
+            fn () => $this->client($provider)->delete("files/{$this->resourceId($fileId)}"),
         );
     }
 

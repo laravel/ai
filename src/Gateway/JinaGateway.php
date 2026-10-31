@@ -11,6 +11,8 @@ use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
+use Laravel\Ai\Responses\Data\RerankingUsage;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\RerankingResponse;
 
@@ -50,33 +52,36 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
 
         $embeddings = (new Collection($data['data']))->pluck('embedding')->all();
 
-        return new EmbeddingsResponse(
+        return (new EmbeddingsResponse(
             $embeddings,
-            $data['usage']['total_tokens'] ?? 0,
+            new Usage($data['usage']['total_tokens'] ?? 0),
             new Meta($provider->name(), $model),
-        );
+        ))->withRawResponse($response);
     }
 
     /**
      * Rerank the given documents based on their relevance to the query.
      *
      * @param  array<int, string>  $documents
+     * @param  array<string, mixed>  $providerOptions
      */
     public function rerank(
         RerankingProvider $provider,
         string $model,
         array $documents,
         string $query,
-        ?int $limit = null
+        ?int $limit = null,
+        int $timeout = 30,
+        array $providerOptions = [],
     ): RerankingResponse {
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider)->post('/rerank', array_filter([
+            fn () => $this->client($provider, $timeout)->post('/rerank', array_merge($providerOptions, array_filter([
                 'model' => $model,
                 'query' => $query,
                 'documents' => $documents,
                 'top_n' => $limit,
-            ])),
+            ]))),
         );
 
         $data = $response->json();
@@ -87,10 +92,11 @@ class JinaGateway implements EmbeddingGateway, RerankingGateway
             score: $result['relevance_score'],
         ))->all();
 
-        return new RerankingResponse(
+        return (new RerankingResponse(
             $results,
+            new RerankingUsage($data['usage']['total_tokens'] ?? 0),
             new Meta($provider->name(), $model),
-        );
+        ))->withRawResponse($response);
     }
 
     /**

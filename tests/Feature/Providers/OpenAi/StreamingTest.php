@@ -5,6 +5,7 @@ use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
 use Laravel\Ai\Streaming\Events\ReasoningStart;
@@ -157,16 +158,16 @@ test('streaming handles tool calls', function (): void {
         ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
         ->and($toolCallEvents[0]->toolCall->resultId)->toBe('call_1')
         ->and($streamEnd->reason)->toBe(FinishReason::Stop->value)
-        ->and($streamEnd->usage->promptTokens)->toBe(30)
-        ->and($streamEnd->usage->completionTokens)->toBe(15);
+        ->and($streamEnd->usage->inputTokens)->toBe(30)
+        ->and($streamEnd->usage->outputTokens)->toBe(15);
 });
 
-test('streaming handles reasoning events', function (): void {
+test('streaming handles reasoning events', function (string $eventType): void {
     Http::fake([
         'api.openai.com/*' => Http::response(
             body: $this->ssePayload([
                 $this->responseCreated(),
-                ['type' => 'response.reasoning_summary_text.delta', 'delta' => 'Let me think...', 'item_id' => 'rs_1'],
+                ['type' => $eventType, 'delta' => 'Let me think...', 'item_id' => 'rs_1'],
                 [
                     'type' => 'response.output_item.done',
                     'item' => ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => [['type' => 'summary_text', 'text' => 'Let me think...']]],
@@ -190,14 +191,15 @@ test('streaming handles reasoning events', function (): void {
 
     $reasoningDelta = array_values(array_filter($events, fn ($e): bool => $e instanceof ReasoningDelta))[0];
     expect($reasoningDelta->delta)->toBe('Let me think...');
-});
+})->with([
+    'reasoning summary' => 'response.reasoning_summary_text.delta',
+    'reasoning text' => 'response.reasoning_text.delta',
+]);
 
-test('streaming error event stops stream', function (): void {
+test('streaming error event stops stream', function (array $event): void {
     Http::fake([
         'api.openai.com/*' => Http::response(
-            body: $this->ssePayload([
-                ['type' => 'error', 'error' => ['code' => 'server_error', 'message' => 'Server overloaded']],
-            ]),
+            body: $this->ssePayload([$event]),
             status: 200,
             headers: ['Content-Type' => 'text/event-stream'],
         ),
@@ -214,7 +216,54 @@ test('streaming error event stops stream', function (): void {
     expect($error)->toBeInstanceOf(Error::class)
         ->and($error->type)->toBe('server_error')
         ->and($error->message)->toBe('Server overloaded');
-});
+})->with([
+    'error event' => [['type' => 'error', 'code' => 'server_error', 'message' => 'Server overloaded']],
+    'nested error event' => [['type' => 'error', 'error' => ['code' => 'server_error', 'message' => 'Server overloaded']]],
+    'failed response' => [['type' => 'response.failed', 'response' => ['id' => 'resp_1', 'status' => 'failed', 'error' => ['code' => 'server_error', 'message' => 'Server overloaded']]]],
+]);
+
+test('streaming without a terminal response throws', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([$this->responseCreated(), $this->outputTextDelta('Partial')]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $this->collectStreamEvents();
+})->throws(StreamErrorException::class, 'The provider ended the stream without completing the step.');
+
+test('streaming incomplete response keeps usage and skips tool calls', function (string $reason, FinishReason $expected): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->responseCreated(),
+                $this->outputItemAdded('fc_1', 'call_1', 'FixedNumberGenerator'),
+                $this->functionCallArgumentsDone('fc_1', '{}'),
+                $this->responseIncomplete($reason, 42, 128, output: [
+                    ['type' => 'function_call', 'status' => 'completed', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'FixedNumberGenerator', 'arguments' => '{}'],
+                ]),
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents(new ProviderOptionsWithToolsAgent);
+
+    $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
+
+    expect($streamEnd->reason)->toBe($expected->value)
+        ->and($streamEnd->usage->inputTokens)->toBe(42)
+        ->and($streamEnd->usage->outputTokens)->toBe(128);
+
+    Http::assertSentCount(1);
+})->with([
+    'output limit maps to Length' => ['max_output_tokens', FinishReason::Length],
+    'content filter maps to ContentFilter' => ['content_filter', FinishReason::ContentFilter],
+    'unknown reason maps to Unknown' => ['max_messages', FinishReason::Unknown],
+]);
 
 test('streaming captures usage from response completed', function (): void {
     Http::fake([
@@ -234,8 +283,8 @@ test('streaming captures usage from response completed', function (): void {
 
     $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
-    expect($streamEnd->usage->promptTokens)->toBe(37)
-        ->and($streamEnd->usage->completionTokens)->toBe(10)
+    expect($streamEnd->usage->inputTokens)->toBe(42)
+        ->and($streamEnd->usage->outputTokens)->toBe(10)
         ->and($streamEnd->usage->cacheReadInputTokens)->toBe(5);
 });
 
@@ -289,6 +338,32 @@ test('streaming captures cache write tokens from response completed', function (
 
     expect($streamEnd->usage->cacheWriteInputTokens)->toBe(8814)
         ->and($streamEnd->usage->cacheReadInputTokens)->toBe(0)
-        ->and($streamEnd->usage->promptTokens)->toBe(3)
-        ->and($streamEnd->usage->completionTokens)->toBe(120);
+        ->and($streamEnd->usage->inputTokens)->toBe(8817)
+        ->and($streamEnd->usage->outputTokens)->toBe(120);
+});
+
+test('streaming emits provider tool events for code interpreter code deltas', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->responseCreated(),
+                ['type' => 'response.code_interpreter_call.in_progress', 'item_id' => 'ci_1', 'output_index' => 0],
+                ['type' => 'response.code_interpreter_call_code.delta', 'item_id' => 'ci_1', 'output_index' => 0, 'delta' => 'print(1)'],
+                ['type' => 'response.code_interpreter_call_code.done', 'item_id' => 'ci_1', 'output_index' => 0, 'code' => 'print(1)'],
+                ['type' => 'response.code_interpreter_call.completed', 'item_id' => 'ci_1', 'output_index' => 0],
+                $this->outputTextDelta('1'),
+                $this->outputTextDone('1'),
+                $this->responseCompleted(10, 5),
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $providerEvents = array_values(array_filter($this->collectStreamEvents(), fn ($e): bool => $e instanceof ProviderToolEvent));
+
+    expect(array_map(fn (ProviderToolEvent $e): string => $e->status, $providerEvents))
+        ->toBe(['in_progress', 'code_delta', 'code_done', 'completed'])
+        ->and($providerEvents[1])->type->toBe('code_interpreter_call')->itemId->toBe('ci_1')
+        ->and($providerEvents[1]->data['delta'])->toBe('print(1)');
 });

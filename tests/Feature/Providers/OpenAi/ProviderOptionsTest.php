@@ -4,6 +4,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\ProviderOptionsAgent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
+use Tests\Fixtures\Agents\StructuredWithThinkingAgent;
 
 use function Laravel\Ai\agent;
 
@@ -65,4 +66,20 @@ test('provider options are persisted in tool call follow up requests', function 
     expect(data_get($followUpBody, 'reasoning.effort'))->toBe('high')
         ->and(data_get($followUpBody, 'frequency_penalty'))->toBe(0.5)
         ->and($followUpBody)->toHaveKey('previous_response_id');
+});
+
+test('structured output keeps its format when provider options set text', function (): void {
+    Http::fake([
+        '*' => fakeOpenAiResponse('{"name":"Taylor","age":30}'),
+    ]);
+
+    (new StructuredWithThinkingAgent)->prompt('Tell me about Taylor', provider: 'openai');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return data_get($body, 'text.format.type') === 'json_schema'
+            && data_get($body, 'text.verbosity') === 'low'
+            && data_get($body, 'reasoning.effort') === 'low';
+    });
 });

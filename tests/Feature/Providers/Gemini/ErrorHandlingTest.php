@@ -7,6 +7,7 @@ use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Exceptions\ProviderConnectionException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Tests\Fixtures\Agents\AssistantAgent;
 
 test('http error response throws request exception', function (): void {
@@ -88,6 +89,37 @@ test('error in 200 response throws ai exception', function (): void {
         provider: 'gemini',
     );
 })->throws(AiException::class, 'Gemini Error');
+
+test('a failed interaction throws ai exception', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'id' => 'int_123',
+            'status' => 'failed',
+            'steps' => [],
+            'errors' => [['code' => 'internal', 'message' => 'The model stopped responding.']],
+        ]),
+    ]);
+
+    (new AssistantAgent)->prompt(
+        'Hi',
+        provider: 'gemini',
+    );
+})->throws(AiException::class, 'Gemini Error: [internal] The model stopped responding.');
+
+test('a withheld answer is reported as a content filter finish reason', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'id' => 'int_123',
+            'status' => 'failed',
+            'steps' => [],
+            'errors' => [['code' => 'safety', 'message' => 'The response was blocked.']],
+        ]),
+    ]);
+
+    $response = (new AssistantAgent)->prompt('Hi', provider: 'gemini');
+
+    expect($response->steps->last()->finishReason)->toBe(FinishReason::ContentFilter);
+});
 
 test('connection failure throws a failoverable provider connection exception', function () {
     Http::fake(fn () => throw new ConnectionException('Connection refused'));

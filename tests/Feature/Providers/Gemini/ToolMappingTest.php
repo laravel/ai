@@ -1,7 +1,9 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\FileSearch;
+use Laravel\Ai\Providers\Tools\FileSearchQuery;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Tests\Fixtures\Agents\NamedToolAgent;
 use Tests\Fixtures\Agents\NestedObjectToolAgent;
@@ -10,6 +12,17 @@ use Tests\Fixtures\Agents\ToolUsingAgent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 use function Laravel\Ai\agent;
+
+function geminiTool(array $body, string $name): ?array
+{
+    foreach ($body['tools'] ?? [] as $tool) {
+        if (($tool['name'] ?? null) === $name) {
+            return $tool;
+        }
+    }
+
+    return null;
+}
 
 test('empty schema omits parameters key', function (): void {
     Http::fake([
@@ -21,22 +34,12 @@ test('empty schema omits parameters key', function (): void {
         provider: 'gemini',
     );
 
-    Http::assertSent(function ($request): bool {
-        $tools = $request->data()['tools'] ?? [];
-
-        foreach ($tools as $toolGroup) {
-            foreach ($toolGroup['function_declarations'] ?? [] as $decl) {
-                if ($decl['name'] === 'FixedNumberGenerator') {
-                    return ! isset($decl['parameters']);
-                }
-            }
-        }
-
-        return false;
-    });
+    expect(geminiTool(sentRequest()->data(), 'FixedNumberGenerator'))
+        ->not->toBeNull()
+        ->not->toHaveKey('parameters');
 });
 
-test('tool parameters exclude additional properties', function (): void {
+test('function tools are declared flat with a function type', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The number is 42'),
     ]);
@@ -46,20 +49,10 @@ test('tool parameters exclude additional properties', function (): void {
         provider: 'gemini',
     );
 
-    Http::assertSent(function ($request): bool {
-        $tools = $request->data()['tools'] ?? [];
-
-        foreach ($tools as $toolGroup) {
-            foreach ($toolGroup['function_declarations'] ?? [] as $decl) {
-                if ($decl['name'] === 'FixedNumberGenerator') {
-                    return ! isset($decl['parameters']['additionalProperties'])
-                        || $decl['parameters']['additionalProperties'] === false;
-                }
-            }
-        }
-
-        return false;
-    });
+    expect(geminiTool(sentRequest()->data(), 'FixedNumberGenerator'))
+        ->toMatchArray(['type' => 'function'])
+        ->description->toBeString()
+        ->and(sentRequest()->data()['tools'][0])->not->toHaveKey('function_declarations');
 });
 
 test('nested object parameters recursively exclude additional properties', function (): void {
@@ -87,15 +80,11 @@ test('nested object parameters recursively exclude additional properties', funct
         return false;
     };
 
-    Http::assertSent(function ($request) use ($hasAdditionalProperties): bool {
-        $params = $request->data()['tools'][0]['function_declarations'][0]['parameters'];
+    $params = sentRequest()->data()['tools'][0]['parameters'];
 
-        // The nested object lives under the array's items and must survive the strip.
-        expect($params['properties']['items']['items']['properties'])
-            ->toHaveKeys(['name', 'description']);
-
-        return $hasAdditionalProperties($params) === false;
-    });
+    // The nested object lives under the array's items and must survive the strip.
+    expect($params['properties']['items']['items']['properties'])->toHaveKeys(['name', 'description'])
+        ->and($hasAdditionalProperties($params))->toBeFalse();
 });
 
 test('nullable tool parameters use OpenAPI-style nullable format', function (): void {
@@ -105,13 +94,11 @@ test('nullable tool parameters use OpenAPI-style nullable format', function (): 
 
     (new NullableToolAgent)->prompt('Test nullable params', provider: 'gemini');
 
-    Http::assertSent(function ($request): bool {
-        $props = $request->data()['tools'][0]['function_declarations'][0]['parameters']['properties'];
-
-        return $props['name'] === ['type' => 'string']
-            && $props['email'] === ['type' => 'string', 'nullable' => true]
-            && $props['age'] === ['type' => 'integer', 'nullable' => true];
-    });
+    expect(sentRequest()->data()['tools'][0]['parameters']['properties'])->toMatchArray([
+        'name' => ['type' => 'string'],
+        'email' => ['type' => 'string', 'nullable' => true],
+        'age' => ['type' => 'integer', 'nullable' => true],
+    ]);
 });
 
 test('tool with a name() method emits the declared name', function (): void {
@@ -121,17 +108,7 @@ test('tool with a name() method emits the declared name', function (): void {
 
     (new NamedToolAgent('aliased_tool'))->prompt('Search', provider: 'gemini');
 
-    Http::assertSent(function ($request): bool {
-        $names = [];
-
-        foreach ($request->data()['tools'] ?? [] as $toolGroup) {
-            foreach ($toolGroup['function_declarations'] ?? [] as $decl) {
-                $names[] = $decl['name'];
-            }
-        }
-
-        return in_array('aliased_tool', $names, true);
-    });
+    expect(geminiTool(sentRequest()->data(), 'aliased_tool'))->not->toBeNull();
 });
 
 test('tool without a name() method falls back to class basename', function (): void {
@@ -141,20 +118,10 @@ test('tool without a name() method falls back to class basename', function (): v
 
     (new ToolUsingAgent(fixed: true))->prompt('Generate', provider: 'gemini');
 
-    Http::assertSent(function ($request): bool {
-        $names = [];
-
-        foreach ($request->data()['tools'] ?? [] as $toolGroup) {
-            foreach ($toolGroup['function_declarations'] ?? [] as $decl) {
-                $names[] = $decl['name'];
-            }
-        }
-
-        return in_array('FixedNumberGenerator', $names, true);
-    });
+    expect(geminiTool(sentRequest()->data(), 'FixedNumberGenerator'))->not->toBeNull();
 });
 
-test('provider tools are sent without function_calling_config', function (): void {
+test('provider tools are sent without a tool choice', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
     ]);
@@ -164,17 +131,79 @@ test('provider tools are sent without function_calling_config', function (): voi
         tools: [new FileSearch(['fileSearchStores/store123'])],
     )->prompt('Question?', provider: 'gemini');
 
-    Http::assertSent(function ($request): bool {
-        $body = $request->data();
-        $tools = $body['tools'] ?? [];
-
-        return isset($tools[0]['fileSearch']['fileSearchStoreNames'])
-            && $tools[0]['fileSearch']['fileSearchStoreNames'] === ['fileSearchStores/store123']
-            && ! isset($body['tool_config']);
-    });
+    expect(sentRequest()->data()['tools'][0])->toMatchArray([
+        'type' => 'file_search',
+        'file_search_store_names' => ['fileSearchStores/store123'],
+    ])->and(sentRequest()->data()['generation_config'] ?? [])->not->toHaveKey('tool_choice');
 });
 
-test('mixed function and provider tools are sent without tool_config', function (): void {
+test('file search metadata filter escapes quotes and trailing backslashes', function (string $method, string $expected): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new FileSearch(['fileSearchStores/store123'], where: function (FileSearchQuery $query) use ($method): void {
+        if (in_array($method, ['whereIn', 'whereNotIn'])) {
+            $query->{$method}('category', ['x" OR tenant="globex', 'x\\']);
+        } else {
+            $query->{$method}('category', 'x" OR tenant="globex')->{$method}('path', 'x\\');
+        }
+    })])->prompt('Question?', provider: 'gemini');
+
+    expect(sentRequest()->data()['tools'][0]['metadata_filter'])->toBe($expected);
+})->with([
+    'where' => ['where', '(category="x\\" OR tenant=\\"globex") AND (path="x\\\\")'],
+    'whereNot' => ['whereNot', '(category!="x\\" OR tenant=\\"globex") AND (path!="x\\\\")'],
+    'whereIn' => ['whereIn', '(category="x\\" OR tenant=\\"globex" OR category="x\\\\")'],
+    'whereNotIn' => ['whereNotIn', '(category!="x\\" OR tenant=\\"globex" AND category!="x\\\\")'],
+]);
+
+test('file search metadata filter rejects invalid keys before sending a request', function (string $key): void {
+    Http::fake();
+
+    expect(fn () => agent(tools: [new FileSearch(['fileSearchStores/store123'], where: [$key => 'value'])])
+        ->prompt('Question?', provider: 'gemini'))
+        ->toThrow(InvalidArgumentException::class, "Invalid metadata filter key [{$key}].");
+
+    Http::assertNothingSent();
+})->with(['tenant="acme" OR category', 'tenant name', 'tenant-name', '1tenant', '', "tenant\n"]);
+
+test('file search metadata filter groups ordinary conditions and preserves numeric values', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new FileSearch(['fileSearchStores/store123'], where: fn (FileSearchQuery $query) => $query
+        ->where('tenant', 'acme')
+        ->whereIn('category', ['guide', 'reference'])
+        ->whereNot('_status', 'draft')
+        ->where('version.number', 2.5)
+        ->whereIn('year', [2024, '2025'])
+        ->whereNot('revision', 0)
+    )])->prompt('Question?', provider: 'gemini');
+
+    expect(sentRequest()->data()['tools'][0]['metadata_filter'])->toBe(
+        '(tenant="acme") AND (category="guide" OR category="reference") AND (_status!="draft") AND (version.number=2.5) AND (year=2024 OR year=2025) AND (revision!=0)'
+    );
+});
+
+test('file search metadata filter supports whereNotIn', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new FileSearch(['fileSearchStores/store123'], where: fn (FileSearchQuery $query) => $query
+        ->where('tenant', 'acme')
+        ->whereNotIn('category', ['draft', 'internal'])
+        ->whereNotIn('year', [2023, '2024'])
+    )])->prompt('Question?', provider: 'gemini');
+
+    expect(sentRequest()->data()['tools'][0]['metadata_filter'])->toBe(
+        '(tenant="acme") AND (category!="draft" AND category!="internal") AND (year!=2023 AND year!=2024)'
+    );
+});
+
+test('mixed function and provider tools are sent side by side', function (): void {
     Http::fake([
         'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
     ]);
@@ -184,40 +213,16 @@ test('mixed function and provider tools are sent without tool_config', function 
         tools: [new FixedNumberGenerator, new WebSearch],
     )->prompt('Generate', provider: 'gemini');
 
-    Http::assertSent(function ($request): bool {
-        $body = $request->data();
-        $tools = $body['tools'] ?? [];
-
-        $hasFunctionDeclarations = collect($tools)->contains(fn ($tool): bool => isset($tool['function_declarations']));
-        $hasGoogleSearch = collect($tools)->contains(fn ($tool): bool => isset($tool['google_search']));
-
-        return $hasFunctionDeclarations
-            && $hasGoogleSearch
-            && ! isset($body['tool_config']);
-    });
+    expect(array_column(sentRequest()->data()['tools'], 'type'))->toBe(['function', 'google_search'])
+        ->and(sentRequest()->data()['generation_config'] ?? [])->not->toHaveKey('tool_choice');
 });
 
-test('tools are wrapped in function declarations', function (): void {
+test('code execution tool sends a code_execution definition', function (): void {
     Http::fake([
-        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('The number is 42'),
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
     ]);
 
-    (new ToolUsingAgent(fixed: true))->prompt(
-        'Generate a number',
-        provider: 'gemini',
-    );
+    agent(tools: [new CodeExecution])->prompt('Run some code', provider: 'gemini');
 
-    Http::assertSent(function ($request): bool {
-        $tools = $request->data()['tools'] ?? [];
-
-        if (! isset($tools[0]['function_declarations']) || count($tools[0]['function_declarations']) === 0) {
-            return false;
-        }
-
-        $decl = $tools[0]['function_declarations'][0];
-
-        return isset($decl['name'])
-            && isset($decl['description'])
-            && is_string($decl['description']);
-    });
+    expect(sentRequest()->data()['tools'])->toBe([['type' => 'code_execution']]);
 });

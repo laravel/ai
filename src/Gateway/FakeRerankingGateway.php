@@ -9,6 +9,7 @@ use Laravel\Ai\Contracts\Providers\RerankingProvider;
 use Laravel\Ai\Prompts\RerankingPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
+use Laravel\Ai\Responses\Data\RerankingUsage;
 use Laravel\Ai\Responses\RerankingResponse;
 use RuntimeException;
 
@@ -26,15 +27,18 @@ class FakeRerankingGateway implements RerankingGateway
      * Rerank the given documents based on their relevance to the query.
      *
      * @param  array<int, string>  $documents
+     * @param  array<string, mixed>  $providerOptions
      */
     public function rerank(
         RerankingProvider $provider,
         string $model,
         array $documents,
         string $query,
-        ?int $limit = null
+        ?int $limit = null,
+        int $timeout = 30,
+        array $providerOptions = [],
     ): RerankingResponse {
-        $prompt = new RerankingPrompt($documents, $query, $limit, $provider, $model);
+        $prompt = new RerankingPrompt($documents, $query, $limit, $provider, $model, $timeout, $providerOptions);
 
         return $this->nextResponse($provider, $model, $prompt);
     }
@@ -84,6 +88,7 @@ class FakeRerankingGateway implements RerankingGateway
         if (is_array($response) && isset($response[0]) && $response[0] instanceof RankedDocument) {
             return new RerankingResponse(
                 $response,
+                new RerankingUsage,
                 new Meta($provider->name(), $model),
             );
         }

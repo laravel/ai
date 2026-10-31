@@ -2,8 +2,8 @@
 
 use Illuminate\Support\Collection;
 use Laravel\Ai\Responses\Data\GeneratedImage;
+use Laravel\Ai\Responses\Data\ImageUsage;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\ImageResponse;
 
 test('mime falls back to image/png when no mime type is set', function (): void {
@@ -14,7 +14,7 @@ test('mime falls back to image/png when no mime type is set', function (): void 
 test('toHtml renders an img tag with the image mime type', function (): void {
     $response = new ImageResponse(
         new Collection([new GeneratedImage('aGVsbG8=', 'image/jpeg')]),
-        new Usage,
+        new ImageUsage,
         new Meta('openai', 'gpt-image-1'),
     );
 
@@ -26,7 +26,7 @@ test('toHtml renders an img tag with the image mime type', function (): void {
 test('toHtml falls back to image/png when the image has no mime type', function (): void {
     $response = new ImageResponse(
         new Collection([new GeneratedImage('aGVsbG8=')]),
-        new Usage,
+        new ImageUsage,
         new Meta('openai', 'gpt-image-1'),
     );
 
@@ -35,22 +35,22 @@ test('toHtml falls back to image/png when the image has no mime type', function 
     );
 });
 
-test('toHtml escapes the alt attribute', function (): void {
+test('toHtml escapes the image attributes', function (): void {
     $response = new ImageResponse(
-        new Collection([new GeneratedImage('aGVsbG8=', 'image/png')]),
-        new Usage,
+        new Collection([new GeneratedImage('aGVsbG8=" onload="alert(2)', 'image/png" onerror="alert(1)')]),
+        new ImageUsage,
         new Meta('openai', 'gpt-image-1'),
     );
 
     expect($response->toHtml('"><script>alert(1)</script>'))->toBe(
-        '<img src="data:image/png;base64,aGVsbG8=" alt="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;" />'
+        '<img src="data:image/png&quot; onerror=&quot;alert(1);base64,aGVsbG8=&quot; onload=&quot;alert(2)" alt="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;" />'
     );
 });
 
 test('firstImage throws when the response contains no images', function (): void {
     $response = new ImageResponse(
         new Collection,
-        new Usage,
+        new ImageUsage,
         new Meta('openai', 'gpt-image-1'),
     );
 

@@ -2,13 +2,33 @@
 
 namespace Laravel\Ai\Models;
 
-use Illuminate\Database\Eloquent\Attributes\WithoutIncrementing;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Arr;
+use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Enums\MessageStatus;
 
-#[WithoutIncrementing]
+/**
+ * @property string $id
+ * @property string $role
+ * @property ?string $content
+ * @property ?array $attachments
+ * @property ?array $steps
+ * @property-read array $tool_calls
+ * @property-read array $provider_tool_calls
+ * @property-read array $tool_results
+ * @property MessageStatus $status
+ */
 class ConversationMessage extends Model
 {
+    /**
+     * Indicates if the model's ID is auto-incrementing.
+     *
+     * @var bool
+     */
+    public $incrementing = false;
+
     /**
      * The data type of the primary key ID.
      *
@@ -24,18 +44,51 @@ class ConversationMessage extends Model
     protected $guarded = [];
 
     /**
+     * The accessors to append to the model's array form.
+     *
+     * @var array<int, string>
+     */
+    protected $appends = ['tool_calls', 'tool_results', 'provider_tool_calls'];
+
+    /**
      * The attributes that should be cast.
      *
      * @var array<string, string>
      */
     protected $casts = [
         'attachments' => 'array',
-        'tool_calls' => 'array',
-        'tool_results' => 'array',
+        'steps' => 'array',
         'usage' => 'array',
         'meta' => 'array',
-        'approval_state' => 'array',
+        'status' => MessageStatus::class,
     ];
+
+    /**
+     * The tool calls made across every step of the turn, in step order.
+     */
+    protected function toolCalls(): Attribute
+    {
+        return Attribute::get(fn (): array => Arr::collapse(array_column($this->steps ?? [], 'tool_calls')));
+    }
+
+    /**
+     * The provider-hosted tool calls made across every step of the turn, in step order.
+     */
+    protected function providerToolCalls(): Attribute
+    {
+        return Attribute::get(fn (): array => Arr::collapse(array_column($this->steps ?? [], 'provider_tool_calls')));
+    }
+
+    /**
+     * The tool results recorded across every step of the turn, in step order.
+     */
+    protected function toolResults(): Attribute
+    {
+        return Attribute::get(fn (): array => array_values(array_map(
+            fn (array $toolCall): array => Arr::only($toolCall, ['id', 'name', 'arguments', 'result', 'result_id', 'denied', 'failed']),
+            array_filter($this->tool_calls, PendingApproval::isAnswered(...)),
+        )));
+    }
 
     /**
      * Get the conversation that owns the message.

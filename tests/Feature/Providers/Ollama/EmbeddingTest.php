@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
@@ -36,7 +37,7 @@ test('embeddings response is correctly parsed', function (): void {
 
     expect($response->embeddings)->toHaveCount(1)
         ->and($response->embeddings[0])->toHaveCount(3)
-        ->and($response->tokens)->toBe(10)
+        ->and($response->usage->inputTokens)->toBe(10)
         ->and($response->meta->provider)->toBe('ollama');
 });
 
@@ -121,6 +122,56 @@ test('embeddings request includes provider options in the request body', functio
             && $body['model'] === 'nomic-embed-text';
     });
 });
+
+test('embeddings request omits dimensions when none are configured', function (): void {
+    Http::fake(['*' => fakeOllamaEmbeddingsResponse()]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'ollama', model: 'qwen3-embedding:0.6b');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return $body['model'] === 'qwen3-embedding:0.6b'
+            && ! array_key_exists('dimensions', $body);
+    });
+});
+
+test('embeddings request sends the configured dimensions', function (): void {
+    config(['ai.providers.ollama.models.embeddings.dimensions' => 1024]);
+
+    Http::fake(['*' => fakeOllamaEmbeddingsResponse()]);
+
+    Embeddings::for(['Hello'])->generate(provider: 'ollama', model: 'qwen3-embedding:0.6b');
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['dimensions'] === 1024);
+});
+
+test('embeddings request sends explicit dimensions', function (): void {
+    Http::fake(['*' => fakeOllamaEmbeddingsResponse()]);
+
+    Embeddings::for(['Hello'])->dimensions(512)->generate(provider: 'ollama', model: 'nomic-embed-text');
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['dimensions'] === 512);
+});
+
+test('embeddings request omits dimensions when an explicit model is passed', function (): void {
+    Http::fake(['*' => fakeOllamaEmbeddingsResponse()]);
+
+    Ai::instance('ollama')->embeddings(['Hello'], model: 'qwen3-embedding:0.6b');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return $body['model'] === 'qwen3-embedding:0.6b'
+            && ! array_key_exists('dimensions', $body);
+    });
+});
+
+test('automatic embedding fakes require dimensions when the model dimensions are unknown', function (): void {
+    Embeddings::fake();
+
+    Embeddings::for(['Hello'])->generate(provider: 'ollama', model: 'qwen3-embedding:0.6b');
+})->throws(RuntimeException::class, 'Unable to generate fake embeddings without positive dimensions');
 
 function fakeOllamaEmbeddingsResponse()
 {

@@ -8,6 +8,7 @@ use Laravel\Ai\Contracts\Providers\AudioProvider;
 use Laravel\Ai\Prompts\AudioPrompt;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 use RuntimeException;
 
 class FakeAudioGateway implements AudioGateway
@@ -22,6 +23,8 @@ class FakeAudioGateway implements AudioGateway
 
     /**
      * Generate audio from the given text.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateAudio(
         AudioProvider $provider,
@@ -30,8 +33,9 @@ class FakeAudioGateway implements AudioGateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $providerOptions = [],
     ): AudioResponse {
-        $audioPrompt = new AudioPrompt($text, $voice, $instructions, $provider, $model, $timeout);
+        $audioPrompt = new AudioPrompt($text, $voice, $instructions, $provider, $model, $timeout, $providerOptions);
 
         return $this->nextResponse($provider, $model, $audioPrompt);
     }
@@ -72,7 +76,7 @@ class FakeAudioGateway implements AudioGateway
         }
 
         if (is_string($response)) {
-            return new AudioResponse($response, new Meta($provider->name(), $model));
+            return new AudioResponse($response, new Usage, new Meta($provider->name(), $model));
         }
 
         return $response;

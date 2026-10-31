@@ -7,6 +7,7 @@ use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use JMac\Testing\Double;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Promptable;
@@ -17,6 +18,7 @@ use Laravel\Ai\Tools\Filesystem\FileExists;
 use Laravel\Ai\Tools\Filesystem\GetFileMetadata;
 use Laravel\Ai\Tools\Filesystem\GetFileUrl;
 use Laravel\Ai\Tools\Filesystem\ListFiles;
+use Laravel\Ai\Tools\Filesystem\MoveFile;
 use Laravel\Ai\Tools\Filesystem\ReadFile;
 use Laravel\Ai\Tools\Filesystem\WriteFile;
 use Laravel\Ai\Tools\Request;
@@ -143,10 +145,9 @@ test('write file creates a file', function (): void {
 });
 
 test('write file reports write failures', function (): void {
-    $disk = Mockery::mock(Filesystem::class);
-    $disk->shouldReceive('put')->once()->with('out.txt', 'written')->andReturnFalse();
+    Storage::disk('local')->makeDirectory('out.txt');
 
-    $result = (new WriteFile($disk))->handle(new Request(['path' => 'out.txt', 'contents' => 'written']));
+    $result = (new WriteFile('local'))->handle(new Request(['path' => 'out.txt', 'contents' => 'written']));
 
     expect($result)->toBe('Unable to write [out.txt].');
 });
@@ -176,9 +177,9 @@ test('delete file does not report directories as files', function (): void {
 });
 
 test('delete file reports delete failures', function (): void {
-    $disk = Mockery::mock(Filesystem::class);
-    $disk->shouldReceive('size')->once()->with('gone.txt')->andReturn(1);
-    $disk->shouldReceive('delete')->once()->with('gone.txt')->andReturnFalse();
+    $disk = Double::for(Filesystem::class);
+    $disk->expects('size')->with('gone.txt')->returns(1);
+    $disk->expects('delete')->with('gone.txt')->returns(false);
 
     $result = (new DeleteFile($disk))->handle(new Request(['path' => 'gone.txt']));
 
@@ -197,14 +198,70 @@ test('copy file duplicates a file', function (): void {
 test('copy file reports a missing source', function (): void {
     $result = (new CopyFile('local'))->handle(new Request(['from' => 'missing.txt', 'to' => 'dst.txt']));
 
-    expect($result)->toBe('Unable to copy [missing.txt] to [dst.txt]. The source file may not exist.');
+    expect($result)->toBe('File [missing.txt] does not exist.');
+});
+
+test('copy file does not copy directories', function (): void {
+    Storage::disk('local')->makeDirectory('photos');
+
+    $result = (new CopyFile('local'))->handle(new Request(['from' => 'photos', 'to' => 'archive/photos']));
+
+    expect($result)->toBe('File [photos] does not exist.');
+    Storage::disk('local')->assertExists('photos');
+    Storage::disk('local')->assertMissing('archive/photos');
+});
+
+test('copy file reports copy failures', function (): void {
+    $disk = Double::for(Filesystem::class);
+    $disk->expects('size')->with('a.txt')->returns(1);
+    $disk->expects('copy')->with('a.txt', 'b.txt')->returns(false);
+
+    $result = (new CopyFile($disk))->handle(new Request(['from' => 'a.txt', 'to' => 'b.txt']));
+
+    expect($result)->toBe('Unable to copy [a.txt] to [b.txt].');
+});
+
+test('move file relocates a file', function (): void {
+    Storage::disk('local')->put('src.txt', 'data');
+
+    $result = (new MoveFile('local'))->handle(new Request(['from' => 'src.txt', 'to' => 'dst.txt']));
+
+    expect($result)->toBe('Moved [src.txt] to [dst.txt].');
+    Storage::disk('local')->assertMissing('src.txt');
+    Storage::disk('local')->assertExists('dst.txt');
+});
+
+test('move file reports a missing source', function (): void {
+    $result = (new MoveFile('local'))->handle(new Request(['from' => 'missing.txt', 'to' => 'dst.txt']));
+
+    expect($result)->toBe('File [missing.txt] does not exist.');
+});
+
+test('move file does not move directories', function (): void {
+    Storage::disk('local')->makeDirectory('photos');
+
+    $result = (new MoveFile('local'))->handle(new Request(['from' => 'photos', 'to' => 'archive/photos']));
+
+    expect($result)->toBe('File [photos] does not exist.');
+    Storage::disk('local')->assertExists('photos');
+    Storage::disk('local')->assertMissing('archive/photos');
+});
+
+test('move file reports move failures', function (): void {
+    $disk = Double::for(Filesystem::class);
+    $disk->expects('size')->with('a.txt')->returns(1);
+    $disk->expects('move')->with('a.txt', 'b.txt')->returns(false);
+
+    $result = (new MoveFile($disk))->handle(new Request(['from' => 'a.txt', 'to' => 'b.txt']));
+
+    expect($result)->toBe('Unable to move [a.txt] to [b.txt].');
 });
 
 test('file storage tools all returns every tool as a collection', function (): void {
     $tools = FileStorage::all('local');
 
     expect($tools)->toBeInstanceOf(Collection::class)
-        ->toHaveCount(8)
+        ->toHaveCount(9)
         ->and($tools->contains(fn ($tool): bool => $tool instanceof WriteFile))->toBeTrue();
 });
 
@@ -212,7 +269,7 @@ test('file storage tools can be filtered as a collection', function (): void {
     $tools = FileStorage::all('local')
         ->reject(fn ($tool): bool => $tool instanceof DeleteFile);
 
-    expect($tools)->toHaveCount(7)
+    expect($tools)->toHaveCount(8)
         ->and($tools->contains(fn ($tool): bool => $tool instanceof DeleteFile))->toBeFalse();
 });
 
@@ -253,7 +310,7 @@ test('every filesystem tool maps to a strict-compliant openai schema', function 
     Http::assertSent(function (Illuminate\Http\Client\Request $request): bool {
         $tools = collect(data_get(json_decode($request->body(), true), 'tools'))->where('type', 'function');
 
-        if ($tools->count() !== 8) {
+        if ($tools->count() !== 9) {
             return false;
         }
 

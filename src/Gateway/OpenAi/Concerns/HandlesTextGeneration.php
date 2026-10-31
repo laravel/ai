@@ -7,9 +7,9 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
@@ -47,16 +47,18 @@ trait HandlesTextGeneration
         foreach ($this->parseServerSentEvents($streamBody) as $data) {
             $type = $data['type'] ?? '';
 
-            if ($type === 'error') {
+            if ($type === 'error' || $type === 'response.failed') {
+                $error = $data['response']['error'] ?? $data['error'] ?? $data;
+
                 yield (new Error(
                     $this->generateEventId(),
-                    $data['error']['code'] ?? 'unknown_error',
-                    $data['error']['message'] ?? 'Unknown error',
+                    $error['code'] ?? 'unknown_error',
+                    $error['message'] ?? 'Unknown error',
                     false,
                     time(),
                 ))->withInvocationId($invocationId);
 
-                return;
+                return null;
             }
 
             if ($type === 'response.created' && ! $streamStartEmitted) {
@@ -132,7 +134,7 @@ trait HandlesTextGeneration
                 continue;
             }
 
-            if ($type === 'response.reasoning_summary_text.delta') {
+            if (in_array($type, ['response.reasoning_summary_text.delta', 'response.reasoning_text.delta'], true)) {
                 $delta = (string) ($data['delta'] ?? '');
 
                 if ($delta !== '') {
@@ -195,22 +197,18 @@ trait HandlesTextGeneration
                 }
             }
 
-            if (str_starts_with((string) $type, 'response.') && str_contains((string) $type, '_call.')) {
-                $parts = explode('.', (string) $type, 3);
+            if (preg_match('/^response\.([a-z_]+_call)(_code)?\.(.+)$/', (string) $type, $matches) === 1) {
+                yield (new ProviderToolEvent(
+                    $this->generateEventId(),
+                    $data['item_id'] ?? '',
+                    $matches[1],
+                    $data,
+                    $matches[2] === '' ? $matches[3] : 'code_'.$matches[3],
+                    time(),
+                    provider: $provider->name(),
+                ))->withInvocationId($invocationId);
 
-                if (count($parts) === 3 && str_ends_with($parts[1], '_call')) {
-                    yield (new ProviderToolEvent(
-                        $this->generateEventId(),
-                        $data['item_id'] ?? '',
-                        $parts[1],
-                        $data,
-                        $parts[2],
-                        time(),
-                        provider: $provider->name(),
-                    ))->withInvocationId($invocationId);
-
-                    continue;
-                }
+                continue;
             }
 
             if (($data['item']['type'] ?? '') === 'function_call' && $type === 'response.output_item.added') {
@@ -288,7 +286,7 @@ trait HandlesTextGeneration
                 continue;
             }
 
-            if ($type === 'response.completed') {
+            if ($type === 'response.completed' || $type === 'response.incomplete') {
                 $response = $data['response'] ?? [];
                 $responseData = $response;
                 $responseId = $response['id'] ?? $responseId;
@@ -297,16 +295,19 @@ trait HandlesTextGeneration
             }
         }
 
+        if ($responseData === []) {
+            return null;
+        }
+
         return new StepResponse(
             text: $currentText,
             toolCalls: $toolCalls,
             finishReason: $this->extractFinishReason($responseData),
-            usage: $usage ?? new Usage(0, 0),
+            usage: $usage ?? new TextUsage(0, 0),
             meta: new Meta($provider->name(), $responseData['model'] ?? $model),
             continuationToken: $responseId,
-            providerContentBlocks: $this->isStateless($provider)
-                ? $this->extractReplayBlocks($responseData['output'] ?? [])
-                : [],
+            replayBlocks: $this->extractReplayBlocks($responseData['output'] ?? []),
+            providerToolCalls: $this->extractProviderToolCalls($responseData['output'] ?? []),
         );
     }
 

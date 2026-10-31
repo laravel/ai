@@ -4,8 +4,10 @@ namespace Laravel\Ai\Storage;
 
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use JsonSerializable;
+use Laravel\Ai\Enums\MessageStatus;
 
 /**
  * A conversation message as it was persisted, with its JSON columns decoded.
@@ -18,9 +20,7 @@ class StoredMessage implements Arrayable, JsonSerializable
     /**
      * @param  array<string, mixed>  $usage
      * @param  array<string, mixed>  $meta
-     * @param  list<array<string, mixed>>  $toolCalls
-     * @param  list<array<string, mixed>>  $toolResults
-     * @param  array<string, mixed>|null  $approvalState
+     * @param  list<array<string, mixed>>  $steps
      * @param  list<array<string, mixed>>  $attachments
      */
     public function __construct(
@@ -30,9 +30,8 @@ class StoredMessage implements Arrayable, JsonSerializable
         public ?CarbonInterface $createdAt = null,
         public array $usage = [],
         public array $meta = [],
-        public array $toolCalls = [],
-        public array $toolResults = [],
-        public ?array $approvalState = null,
+        public array $steps = [],
+        public MessageStatus $status = MessageStatus::Completed,
         public array $attachments = [],
     ) {}
 
@@ -50,9 +49,8 @@ class StoredMessage implements Arrayable, JsonSerializable
             createdAt: blank($record['created_at'] ?? null) ? null : Carbon::parse($record['created_at']),
             usage: static::decoded($record['usage'] ?? null),
             meta: static::decoded($record['meta'] ?? null),
-            toolCalls: array_values(static::decoded($record['tool_calls'] ?? null)),
-            toolResults: array_values(static::decoded($record['tool_results'] ?? null)),
-            approvalState: blank($record['approval_state'] ?? null) ? null : static::decoded($record['approval_state']),
+            steps: array_values(static::decoded($record['steps'] ?? null)),
+            status: MessageStatus::from($record['status'] ?? MessageStatus::Completed->value),
             attachments: array_values(static::decoded($record['attachments'] ?? null)),
         );
     }
@@ -71,9 +69,8 @@ class StoredMessage implements Arrayable, JsonSerializable
             'created_at' => $this->createdAt?->toJSON(),
             'usage' => $this->usage,
             'meta' => $this->meta,
-            'tool_calls' => $this->toolCalls,
-            'tool_results' => $this->toolResults,
-            'approval_state' => $this->approvalState,
+            'steps' => $this->steps,
+            'status' => $this->status->value,
             'attachments' => $this->attachments,
         ];
     }
@@ -84,6 +81,39 @@ class StoredMessage implements Arrayable, JsonSerializable
     public function jsonSerialize(): array
     {
         return $this->toArray();
+    }
+
+    /**
+     * The tool calls made across every step of the turn, in step order.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function toolCalls(): array
+    {
+        return Arr::collapse(array_column($this->steps, 'tool_calls'));
+    }
+
+    /**
+     * The provider-hosted tool calls made across every step of the turn, in step order.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function providerToolCalls(): array
+    {
+        return Arr::collapse(array_column($this->steps, 'provider_tool_calls'));
+    }
+
+    /**
+     * The tool results recorded across every step of the turn, in step order.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function toolResults(): array
+    {
+        return array_values(array_map(
+            fn (array $toolCall): array => Arr::only($toolCall, ['id', 'name', 'arguments', 'result', 'result_id', 'denied', 'failed']),
+            array_filter($this->toolCalls(), fn (array $toolCall): bool => array_key_exists('result', $toolCall)),
+        ));
     }
 
     /**

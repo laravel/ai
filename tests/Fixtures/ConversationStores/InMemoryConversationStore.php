@@ -5,8 +5,10 @@ namespace Tests\Fixtures\ConversationStores;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
+use Throwable;
 
 class InMemoryConversationStore implements ConversationStore
 {
@@ -14,7 +16,7 @@ class InMemoryConversationStore implements ConversationStore
 
     public array $messages = [];
 
-    public function latestConversationId(string $participantType, string|int $participantId): ?string
+    public function latestConversationId(string $participantType, string|int $participantId, string $agent): ?string
     {
         return collect($this->conversations)
             ->filter(fn ($conversation): bool => $conversation['participant_type'] === $participantType
@@ -23,16 +25,16 @@ class InMemoryConversationStore implements ConversationStore
             ->last();
     }
 
-    public function storeConversation(?string $participantType, string|int|null $participantId, string $title): string
+    public function storeConversation(?string $participantType, string|int|null $participantId, string $title, ?string $id = null): string
     {
-        $id = (string) Str::uuid7();
+        $id ??= (string) Str::uuid7();
 
         $this->conversations[$id] = ['participant_type' => $participantType, 'participant_id' => $participantId, 'title' => $title];
 
         return $id;
     }
 
-    public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt): string
+    public function storeUserMessage(string $conversationId, ?string $participantType, string|int|null $participantId, string $agent, UserMessage $message): string
     {
         $id = (string) Str::uuid7();
 
@@ -40,13 +42,13 @@ class InMemoryConversationStore implements ConversationStore
             'id' => $id,
             'conversation_id' => $conversationId,
             'role' => 'user',
-            'content' => $prompt->prompt,
+            'content' => $message->content,
         ];
 
         return $id;
     }
 
-    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response): ?string
+    public function storeAssistantMessage(string $conversationId, ?string $participantType, string|int|null $participantId, AgentPrompt $prompt, AgentResponse $response, ?Throwable $exception = null): ?string
     {
         $id = (string) Str::uuid7();
 
@@ -68,7 +70,7 @@ class InMemoryConversationStore implements ConversationStore
             ->values();
     }
 
-    public function storeApprovalResults(string $conversationId, ?string $participantType, string|int|null $participantId, array $toolResults): void
+    public function storeApprovalResults(string $conversationId, array $toolResults): void
     {
         //
     }

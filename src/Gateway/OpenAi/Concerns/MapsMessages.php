@@ -9,6 +9,7 @@ use Laravel\Ai\Messages\MessageRole;
 use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Responses\Data\ToolCall;
 
 trait MapsMessages
 {
@@ -31,7 +32,7 @@ trait MapsMessages
 
             match ($message->role) {
                 MessageRole::User => $this->mapUserMessage($message, $input, $provider),
-                MessageRole::Assistant => $this->mapAssistantMessage($message, $input),
+                MessageRole::Assistant => $this->mapAssistantMessage($message, $input, $provider),
                 MessageRole::ToolResult => $this->mapToolResultMessage($message, $input),
             };
         }
@@ -61,11 +62,14 @@ trait MapsMessages
     /**
      * Map an assistant message to OpenAI format.
      */
-    protected function mapAssistantMessage(AssistantMessage|Message $message, array &$input): void
+    protected function mapAssistantMessage(AssistantMessage|Message $message, array &$input, Provider $provider): void
     {
-        // Only reached on stateless (store=false) full-history replay...
-        if ($message instanceof AssistantMessage && filled($message->providerContentBlocks)) {
-            foreach ($message->providerContentBlocks as $block) {
+        if ($message instanceof AssistantMessage && filled($message->replayBlocks)) {
+            $blocks = $this->isStateless($provider)
+                ? $this->withoutStoredOnlyItems($message->replayBlocks)
+                : $message->replayBlocks;
+
+            foreach ($blocks as $block) {
                 $input[] = $block;
             }
 
@@ -89,24 +93,12 @@ trait MapsMessages
                 $input[] = $reasoningBlock;
 
                 foreach ($message->toolCalls->where('reasoningId', $reasoningBlock['id']) as $toolCall) {
-                    $input[] = [
-                        'id' => $toolCall->id,
-                        'call_id' => $toolCall->resultId,
-                        'type' => 'function_call',
-                        'name' => $toolCall->name,
-                        'arguments' => json_encode($toolCall->arguments ?: (object) []),
-                    ];
+                    $input[] = $this->functionCallItem($toolCall);
                 }
             }
 
             foreach ($message->toolCalls->whereNull('reasoningId') as $toolCall) {
-                $input[] = [
-                    'id' => $toolCall->id,
-                    'call_id' => $toolCall->resultId,
-                    'type' => 'function_call',
-                    'name' => $toolCall->name,
-                    'arguments' => json_encode($toolCall->arguments ?: (object) []),
-                ];
+                $input[] = $this->functionCallItem($toolCall);
             }
         }
 
@@ -121,6 +113,37 @@ trait MapsMessages
                 ],
             ];
         }
+    }
+
+    /**
+     * Remove file_search_call items, which the API resolves by id and so rejects when store is false.
+     *
+     * @param  array<int, array<string, mixed>>  $blocks
+     * @return array<int, array<string, mixed>>
+     */
+    protected function withoutStoredOnlyItems(array $blocks): array
+    {
+        return array_values(array_filter(
+            $blocks,
+            fn (array $block): bool => ($block['type'] ?? null) !== 'file_search_call',
+        ));
+    }
+
+    /**
+     * Map a tool call to a function_call input item, keeping the item id only when OpenAI issued it and its reasoning survived.
+     *
+     * @return array<string, mixed>
+     */
+    protected function functionCallItem(ToolCall $toolCall): array
+    {
+        // A replayed call whose reasoning was dropped cannot carry its item id, as the API rejects an fc_ item with no reasoning item before it...
+        return Arr::whereNotNull([
+            'id' => $toolCall->reasoningId !== null && str_starts_with($toolCall->id, 'fc_') ? $toolCall->id : null,
+            'call_id' => $toolCall->resultId,
+            'type' => 'function_call',
+            'name' => $toolCall->name,
+            'arguments' => json_encode($toolCall->arguments ?: (object) []),
+        ]);
     }
 
     /**

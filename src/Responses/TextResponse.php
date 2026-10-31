@@ -10,9 +10,9 @@ use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Responses\Concerns\HasRawResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Step;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
-use Laravel\Ai\Responses\Data\Usage;
 
 class TextResponse implements \Stringable
 {
@@ -33,10 +33,12 @@ class TextResponse implements \Stringable
     /** @var Collection<int, PendingApproval> */
     public Collection $pendingApprovals;
 
+    public string $reasoning = '';
+
     /**
      * Create a new text response instance.
      */
-    public function __construct(public string $text, public Usage $usage, public Meta $meta)
+    public function __construct(public string $text, public TextUsage $usage, public Meta $meta)
     {
         $this->messages = new Collection;
         $this->toolCalls = new Collection;
@@ -90,6 +92,16 @@ class TextResponse implements \Stringable
     }
 
     /**
+     * Provide the reasoning emitted across every step of the response.
+     */
+    public function withReasoning(string $reasoning): self
+    {
+        $this->reasoning = $reasoning;
+
+        return $this;
+    }
+
+    /**
      * Provide the steps taken to generate the response.
      *
      * @param  Collection<int, Step>  $steps
@@ -106,7 +118,7 @@ class TextResponse implements \Stringable
      *
      * @param  Collection<int, PendingApproval>  $pendingApprovals
      */
-    public function withPendingApprovals(Collection $pendingApprovals): self
+    public function withPendingApprovals(Collection $pendingApprovals): static
     {
         $this->pendingApprovals = $pendingApprovals->values();
 

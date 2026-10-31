@@ -7,11 +7,14 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ReasoningDelta;
+use Laravel\Ai\Streaming\Events\ReasoningEnd;
+use Laravel\Ai\Streaming\Events\ReasoningStart;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -29,6 +32,8 @@ trait HandlesTextStreaming
         $streamBody,
     ): Generator {
         $messageId = $this->generateEventId();
+        $reasoningId = null;
+        $reasoningDetails = [];
         $streamModel = $model;
         $streamStartEmitted = false;
         $textStartEmitted = false;
@@ -88,6 +93,43 @@ trait HandlesTextStreaming
                     $streamModel,
                     time(),
                 ))->withInvocationId($invocationId);
+            }
+
+            $reasoningDetails = $this->mergeReasoningDetails($reasoningDetails, $delta['reasoning_details'] ?? []);
+
+            $reasoning = $delta['reasoning'] ?? '';
+
+            if ($reasoning === '') {
+                $reasoning = $this->reasoningTextIn($delta['reasoning_details'] ?? []);
+            }
+
+            if ($reasoning !== '') {
+                if ($reasoningId === null) {
+                    $reasoningId = $this->generateEventId();
+
+                    yield (new ReasoningStart(
+                        $this->generateEventId(),
+                        $reasoningId,
+                        time(),
+                    ))->withInvocationId($invocationId);
+                }
+
+                yield (new ReasoningDelta(
+                    $this->generateEventId(),
+                    $reasoningId,
+                    $reasoning,
+                    time(),
+                ))->withInvocationId($invocationId);
+            }
+
+            if ($reasoningId !== null && ((isset($delta['content']) && $delta['content'] !== '') || isset($delta['tool_calls']))) {
+                yield (new ReasoningEnd(
+                    $this->generateEventId(),
+                    $reasoningId,
+                    time(),
+                ))->withInvocationId($invocationId);
+
+                $reasoningId = null;
             }
 
             if (isset($delta['content']) && $delta['content'] !== '') {
@@ -158,6 +200,14 @@ trait HandlesTextStreaming
             }
         }
 
+        if ($reasoningId !== null) {
+            yield (new ReasoningEnd(
+                $this->generateEventId(),
+                $reasoningId,
+                time(),
+            ))->withInvocationId($invocationId);
+        }
+
         if ($textStartEmitted) {
             yield (new TextEnd(
                 $this->generateEventId(),
@@ -189,9 +239,55 @@ trait HandlesTextStreaming
             text: $currentText,
             toolCalls: $toolCalls,
             finishReason: $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
-            usage: $usage ?? new Usage(0, 0),
+            usage: $usage ?? new TextUsage(0, 0),
             meta: new Meta($provider->name(), $streamModel),
+            replayBlocks: array_values($reasoningDetails),
         );
+    }
+
+    /**
+     * Merge a delta's reasoning detail fragments by index.
+     *
+     * @param  array<int, array<string, mixed>>  $merged
+     * @param  array<int, array<string, mixed>>  $details
+     * @return array<int, array<string, mixed>>
+     */
+    protected function mergeReasoningDetails(array $merged, array $details): array
+    {
+        foreach ($details as $detail) {
+            $index = $detail['index'] ?? count($merged);
+
+            if (! isset($merged[$index])) {
+                $merged[$index] = $detail;
+
+                continue;
+            }
+
+            foreach ($detail as $key => $value) {
+                if (in_array($key, ['text', 'summary', 'data'], true) && is_string($value)) {
+                    $merged[$index][$key] = ($merged[$index][$key] ?? '').$value;
+                } elseif ($value !== null) {
+                    $merged[$index][$key] = $value;
+                }
+            }
+        }
+
+        ksort($merged);
+
+        return $merged;
+    }
+
+    /**
+     * Get the human readable reasoning carried by a delta's reasoning details.
+     *
+     * @param  array<int, array<string, mixed>>  $details
+     */
+    protected function reasoningTextIn(array $details): string
+    {
+        return implode('', array_map(
+            fn (array $detail): string => (string) ($detail['text'] ?? $detail['summary'] ?? ''),
+            $details,
+        ));
     }
 
     /**

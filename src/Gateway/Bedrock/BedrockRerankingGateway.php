@@ -9,6 +9,7 @@ use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\RankedDocument;
+use Laravel\Ai\Responses\Data\RerankingUsage;
 use Laravel\Ai\Responses\RerankingResponse;
 use Throwable;
 
@@ -21,15 +22,18 @@ class BedrockRerankingGateway implements RerankingGateway
      * Rerank the given documents based on their relevance to the query.
      *
      * @param  array<int, string>  $documents
+     * @param  array<string, mixed>  $providerOptions
      */
     public function rerank(
         RerankingProvider $provider,
         string $model,
         array $documents,
         string $query,
-        ?int $limit = null
+        ?int $limit = null,
+        int $timeout = 30,
+        array $providerOptions = []
     ): RerankingResponse {
-        $client = $this->createBedrockClient($provider);
+        $client = $this->createBedrockClient($provider, $timeout);
 
         try {
             $response = $this->withErrorHandling(
@@ -38,12 +42,12 @@ class BedrockRerankingGateway implements RerankingGateway
                     'modelId' => $model,
                     'contentType' => 'application/json',
                     'accept' => 'application/json',
-                    'body' => json_encode(array_filter([
+                    'body' => json_encode(array_merge($providerOptions, array_filter([
                         'query' => $query,
                         'documents' => array_values($documents),
                         'top_n' => $limit,
                         'api_version' => str_starts_with($model, 'cohere.') ? 2 : null,
-                    ])),
+                    ]))),
                 ]),
             );
 
@@ -60,6 +64,7 @@ class BedrockRerankingGateway implements RerankingGateway
 
         return new RerankingResponse(
             $results,
+            new RerankingUsage,
             new Meta($provider->name(), $model),
         );
     }

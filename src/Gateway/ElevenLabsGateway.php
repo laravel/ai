@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway;
 
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Contracts\Gateway\AudioGateway;
@@ -13,6 +14,7 @@ use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
+use Laravel\Ai\Responses\Data\TranscriptionUsage;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\TranscriptionResponse;
 
@@ -23,6 +25,8 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
 
     /**
      * Generate audio from the given text.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
     public function generateAudio(
         AudioProvider $provider,
@@ -31,6 +35,7 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $providerOptions = [],
     ): AudioResponse {
         $voice = match ($voice) {
             'default-male' => 'onwK4e9ZLuTAKqWW03F9',
@@ -38,16 +43,20 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
             default => $voice,
         };
 
+        [$query, $body] = $this->splitQueryOptions($providerOptions, ['output_format', 'enable_logging', 'optimize_streaming_latency']);
+
         $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider, $timeout)
-            ->post('text-to-speech/'.$voice, [
+            ->withQueryParameters($query)
+            ->post('text-to-speech/'.$voice, array_merge($body, [
                 'model_id' => $model,
                 'text' => $text,
-            ])->throw());
+            ]))->throw());
 
         return new AudioResponse(
             base64_encode((string) $response),
+            new Usage,
             new Meta($provider->name(), $model),
-            'audio/mpeg'
+            $response->header('Content-Type') ?: 'audio/mpeg',
         );
     }
 
@@ -65,22 +74,25 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
         int $timeout = 30,
         array $providerOptions = [],
     ): TranscriptionResponse {
+        [$query, $body] = $this->splitQueryOptions($providerOptions, ['enable_logging']);
+
         $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider, $timeout)
+            ->withQueryParameters($query)
             ->attach('file', $audio->content(), 'file', array_filter(['Content-Type' => $audio->mimeType()]))
-            ->post('speech-to-text', array_merge($providerOptions, array_filter([
+            ->post('speech-to-text', array_merge($body, array_filter([
                 'model_id' => $model,
                 'language_code' => $language,
                 'diarize' => $diarize ? 'true' : 'false',
             ])))->throw());
 
-        $response = $response->json();
+        $data = $response->json();
 
         $segments = $diarize
-            ? ($response['words'] ?? [])
+            ? ($data['words'] ?? [])
             : [];
 
-        return new TranscriptionResponse(
-            $response['text'],
+        return (new TranscriptionResponse(
+            $data['text'],
             (new Collection($segments))->map(function (array $segment) {
                 if ($segment['type'] !== 'word') {
                     return;
@@ -93,9 +105,27 @@ class ElevenLabsGateway implements AudioGateway, TranscriptionGateway
                     $segment['end'],
                 );
             })->filter()->values(),
-            new Usage,
+            new TranscriptionUsage(audioSeconds: $data['audio_duration_secs'] ?? null),
             new Meta($provider->name(), $model),
-        );
+        ))->withRawResponse($response);
+    }
+
+    /**
+     * Split the provider options into query string parameters and the request body.
+     *
+     * @param  array<string, mixed>  $providerOptions
+     * @param  array<int, string>  $queryOptions
+     * @return array{0: array<string, mixed>, 1: array<string, mixed>}
+     */
+    protected function splitQueryOptions(array $providerOptions, array $queryOptions): array
+    {
+        return [
+            array_map(
+                fn (mixed $value): mixed => is_bool($value) ? ($value ? 'true' : 'false') : $value,
+                Arr::only($providerOptions, $queryOptions),
+            ),
+            Arr::except($providerOptions, $queryOptions),
+        ];
     }
 
     /**

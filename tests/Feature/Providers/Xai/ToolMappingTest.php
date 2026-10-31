@@ -4,6 +4,7 @@ use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
@@ -191,16 +192,18 @@ test('file search tool forwards xai provider options into the tool payload', fun
     });
 });
 
-test('unsupported provider tools are omitted from the tools payload', function (): void {
-    Http::fake(['*' => fakeXaiToolMappingResponse('result')]);
+test('provider tools xAI does not support are dropped after failing over to it', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(['type' => 'error', 'error' => ['type' => 'rate_limit_error', 'message' => 'Rate limited']], 429),
+        'api.x.ai/*' => fakeXaiToolMappingResponse('result'),
+    ]);
 
     agent(tools: [new WebFetch, new WebSearch])
-        ->prompt('Search', provider: 'xai');
+        ->prompt('Search', provider: ['anthropic', 'xai']);
 
     Http::assertSent(function (Request $request): bool {
-        $body = json_decode($request->body(), true);
-
-        return data_get($body, 'tools') === [['type' => 'web_search']];
+        return str_contains($request->url(), 'api.x.ai')
+            && data_get(json_decode($request->body(), true), 'tools') === [['type' => 'web_search']];
     });
 });
 
@@ -227,3 +230,15 @@ function fakeXaiToolMappingResponse(string $text): PromiseInterface
         ],
     ]);
 }
+
+test('code execution tool sends type code_interpreter', function (): void {
+    Http::fake(['*' => fakeXaiToolMappingResponse('result')]);
+
+    agent(tools: [new CodeExecution])->prompt('Run some code', provider: 'xai');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return collect(data_get($body, 'tools'))->firstWhere('type', 'code_interpreter') !== null;
+    });
+});

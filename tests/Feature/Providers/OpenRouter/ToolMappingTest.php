@@ -2,10 +2,8 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
-use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
@@ -69,13 +67,6 @@ test('tool parameters are not wrapped in schema definition', function (): void {
         return ! array_key_exists('schema_definition', $function['parameters']['properties'] ?? [])
             && ! in_array('schema_definition', $function['parameters']['required'] ?? []);
     });
-});
-
-test('unsupported provider tools throw runtime exception', function (): void {
-    Http::fake(['*' => fakeOpenRouterResponse('done')]);
-
-    expect(fn (): AgentResponse => agent(tools: [new FileSearch(['store'])])->prompt('Search', provider: 'openrouter'))
-        ->toThrow(RuntimeException::class, 'OpenRouter does not support [FileSearch] provider tools.');
 });
 
 test('web fetch tool is sent as openrouter:web_fetch type', function (): void {
@@ -203,6 +194,23 @@ test('web search tool sends allowed_domains', function (): void {
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'openrouter:web_search');
 
         return data_get($tool, 'parameters.allowed_domains') === ['example.com', 'laravel.com'];
+    });
+});
+
+test('web search tool sends user_location', function (): void {
+    Http::fake(['*' => fakeOpenRouterResponse('done')]);
+
+    agent(tools: [(new WebSearch)->location(city: 'San Francisco', country: 'US')])->prompt('Search the web', provider: 'openrouter');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+        $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'openrouter:web_search');
+
+        return data_get($tool, 'parameters.user_location') === [
+            'type' => 'approximate',
+            'city' => 'San Francisco',
+            'country' => 'US',
+        ];
     });
 });
 

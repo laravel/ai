@@ -235,13 +235,17 @@ test('response usage is correctly parsed', function (): void {
         'usage' => [
             'input_tokens' => 10,
             'output_tokens' => 5,
+            'input_tokens_details' => ['cached_tokens' => 2],
+            'output_tokens_details' => ['reasoning_tokens' => 3],
         ],
     ])]);
 
     $response = agent()->prompt('Hello', provider: 'xai');
 
-    expect($response->usage->promptTokens)->toBe(10)
-        ->and($response->usage->completionTokens)->toBe(5);
+    expect($response->usage->inputTokens)->toBe(10)
+        ->and($response->usage->outputTokens)->toBe(8)
+        ->and($response->usage->cacheReadInputTokens)->toBe(2)
+        ->and($response->usage->reasoningTokens)->toBe(3);
 });
 
 test('structured response is correctly parsed', function (): void {

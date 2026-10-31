@@ -77,7 +77,7 @@ test('embeddings response is correctly parsed', function (): void {
 
     expect($response->embeddings)->toHaveCount(1)
         ->and($response->embeddings[0])->toBe([0.1, 0.2, 0.3])
-        ->and($response->tokens)->toBe(10)
+        ->and($response->usage->inputTokens)->toBe(10)
         ->and($response->meta->provider)->toBe('gemini')
         ->and($response->meta->model)->toBe('gemini-embedding-001');
 });
@@ -121,7 +121,7 @@ test('gemini embedding 2 inputs are sent in a single batch request', function ()
     expect($response->embeddings)->toBe([
         [0.1, 0.2, 0.3],
         [0.4, 0.5, 0.6],
-    ])->and($response->tokens)->toBe(30);
+    ])->and($response->usage->inputTokens)->toBe(30);
 });
 
 test('explicit dimensions are sent as outputDimensionality', function (): void {
@@ -298,7 +298,7 @@ test('missing usageMetadata in response returns zero tokens', function (): void 
 
     $response = Embeddings::for(['Hello'])->generate(provider: 'gemini', model: 'gemini-embedding-001');
 
-    expect($response->tokens)->toBe(0);
+    expect($response->usage->inputTokens)->toBe(0);
 });
 
 test('rate limit response throws rate limited exception', function (): void {

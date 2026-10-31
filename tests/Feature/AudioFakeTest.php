@@ -1,7 +1,5 @@
 <?php
 
-use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
-use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -13,6 +11,7 @@ use Laravel\Ai\Prompts\QueuedAudioPrompt;
 use Laravel\Ai\Providers\ElevenLabsProvider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 
 test('audio rejects empty text', function (): void {
     Audio::fake();
@@ -30,7 +29,7 @@ test('audio can be faked', function (): void {
     Audio::fake([
         base64_encode('first-audio'),
         fn (AudioPrompt $prompt): string => base64_encode('second-audio-'.$prompt->text),
-        new AudioResponse(base64_encode('third-audio'), new Meta),
+        new AudioResponse(base64_encode('third-audio'), new Usage, new Meta),
     ]);
 
     $response = Audio::of('First text')->generate();
@@ -150,19 +149,22 @@ test('audio is stored under a random name derived from its mime type', function 
     Storage::fake('audio');
 
     Audio::fake([
-        new AudioResponse(base64_encode('wav-bytes'), new Meta, 'audio/wav'),
-        new AudioResponse(base64_encode('alias-bytes'), new Meta, 'audio/x-wav'),
-        new AudioResponse(base64_encode('mp3-bytes'), new Meta),
+        new AudioResponse(base64_encode('wav-bytes'), new Usage, new Meta, 'audio/wav'),
+        new AudioResponse(base64_encode('alias-bytes'), new Usage, new Meta, 'audio/x-wav'),
+        new AudioResponse(base64_encode('mp3-bytes'), new Usage, new Meta),
+        new AudioResponse(base64_encode('pcm-bytes'), new Usage, new Meta, 'audio/pcm'),
     ]);
 
     $wav = Audio::of('First text')->generate()->store('generated', 'audio');
     $alias = Audio::of('Second text')->generate()->store('generated', 'audio');
     $default = Audio::of('Third text')->generate()->store('generated', 'audio');
+    $pcm = Audio::of('Fourth text')->generate()->store('generated', 'audio');
 
     expect($wav)->toStartWith('generated/')
         ->and($wav)->toEndWith('.wav')
         ->and($alias)->toEndWith('.wav')
         ->and($default)->toEndWith('.mp3')
+        ->and($pcm)->toEndWith('.pcm')
         ->and(Storage::disk('audio')->get($wav))->toBe('wav-bytes')
         ->and(Storage::disk('audio')->get($default))->toBe('mp3-bytes');
 });
@@ -181,32 +183,20 @@ test('audio can be stored under an explicit path and name', function (): void {
 });
 
 test('storing audio publicly passes public visibility to the disk', function (): void {
-    $writes = [];
-
-    $disk = Mockery::mock(Filesystem::class);
-    $disk->shouldReceive('put')->andReturnUsing(function (string $path, string $contents, array $options) use (&$writes): bool {
-        $writes[] = ['path' => $path, 'options' => $options];
-
-        return true;
-    });
-
-    $factory = Mockery::mock(FilesystemFactory::class);
-    $factory->shouldReceive('disk')->with('audio')->andReturn($disk);
-
-    app()->instance(FilesystemFactory::class, $factory);
+    Storage::fake('audio', ['visibility' => 'private']);
 
     Audio::fake([base64_encode('raw-bytes')]);
 
     $response = Audio::of('Hello world')->generate();
 
-    $response->store('generated', 'audio');
-    $response->storePublicly('generated', 'audio');
-    $response->storePubliclyAs('hello.mp3', null, 'audio');
+    $private = $response->store('private', 'audio');
+    $public = $response->storePublicly('public', 'audio');
+    $named = $response->storePubliclyAs('hello.mp3', null, 'audio');
 
-    expect($writes[0]['options'])->toBe([])
-        ->and($writes[1]['options'])->toBe(['visibility' => 'public'])
-        ->and($writes[2]['options'])->toBe(['visibility' => 'public'])
-        ->and($writes[2]['path'])->toBe('hello.mp3');
+    expect(Storage::disk('audio')->getVisibility($private))->toBe('private')
+        ->and(Storage::disk('audio')->getVisibility($public))->toBe('public')
+        ->and(Storage::disk('audio')->getVisibility($named))->toBe('public')
+        ->and($named)->toBe('hello.mp3');
 });
 
 test('queued audio can be faked', function (): void {

@@ -8,8 +8,9 @@ use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Responses\Concerns\HasRawResponse;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\ProviderToolCall;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
-use Laravel\Ai\Responses\Data\Usage;
 
 class StepResponse implements Arrayable, JsonSerializable
 {
@@ -18,19 +19,22 @@ class StepResponse implements Arrayable, JsonSerializable
     /**
      * @param  ToolCall[]  $toolCalls
      * @param  array<string, mixed>|null  $structured
-     * @param  array<int, array<string, mixed>>  $providerContentBlocks
+     * @param  array<array-key, mixed>  $replayBlocks
      * @param  PendingApproval[]  $pendingApprovals
+     * @param  ProviderToolCall[]  $providerToolCalls
      */
     public function __construct(
         public string $text,
         public array $toolCalls,
         public FinishReason $finishReason,
-        public Usage $usage,
+        public TextUsage $usage,
         public Meta $meta,
         public ?array $structured = null,
         public ?string $continuationToken = null,
-        public array $providerContentBlocks = [],
+        public array $replayBlocks = [],
         public array $pendingApprovals = [],
+        public string $reasoning = '',
+        public array $providerToolCalls = [],
     ) {}
 
     /**
@@ -42,7 +46,8 @@ class StepResponse implements Arrayable, JsonSerializable
             'text' => $this->text,
             'structured' => $this->structured,
             'tool_calls' => array_map(fn (ToolCall $tc): array => $tc->toArray(), $this->toolCalls),
-            'provider_content_blocks' => $this->providerContentBlocks,
+            'provider_tool_calls' => array_map(fn (ProviderToolCall $call): array => $call->toArray(), $this->providerToolCalls),
+            'replay_blocks' => $this->replayBlocks,
             'finish_reason' => $this->finishReason->value,
             'usage' => $this->usage->toArray(),
             'meta' => $this->meta->toArray(),

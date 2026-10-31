@@ -183,8 +183,8 @@ test('response usage is correctly parsed', function (): void {
 
     $response = agent()->prompt('Hello', provider: 'openai');
 
-    expect($response->usage->promptTokens)->toBe(10)
-        ->and($response->usage->completionTokens)->toBe(5);
+    expect($response->usage->inputTokens)->toBe(10)
+        ->and($response->usage->outputTokens)->toBe(5);
 });
 
 test('structured response is correctly parsed', function (): void {
@@ -344,8 +344,9 @@ test('response usage captures cache write tokens', function (): void {
 
     expect($response->usage->cacheWriteInputTokens)->toBe(8814)
         ->and($response->usage->cacheReadInputTokens)->toBe(0)
-        ->and($response->usage->promptTokens)->toBe(3)
-        ->and($response->usage->completionTokens)->toBe(120)
+        ->and($response->usage->inputTokens)->toBe(8817)
+        ->and($response->usage->uncachedInputTokens())->toBe(3)
+        ->and($response->usage->outputTokens)->toBe(120)
         ->and($response->usage->reasoningTokens)->toBe(64);
 });
 
@@ -376,5 +377,6 @@ test('response usage separates cache reads from cache writes', function (): void
 
     expect($response->usage->cacheWriteInputTokens)->toBe(0)
         ->and($response->usage->cacheReadInputTokens)->toBe(8814)
-        ->and($response->usage->promptTokens)->toBe(3);
+        ->and($response->usage->inputTokens)->toBe(8817)
+        ->and($response->usage->uncachedInputTokens())->toBe(3);
 });

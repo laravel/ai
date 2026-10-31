@@ -1,10 +1,15 @@
 <?php
 
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use Laravel\Ai\Gateway\CohereGateway;
+use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Reranking;
 use Laravel\Ai\Responses\Data\RankedDocument;
 
@@ -54,7 +59,9 @@ test('reranking response is correctly parsed into RankedDocuments', function ():
         ->and($response->first()->document)->toBe('Laravel is a PHP framework')
         ->and($response->first()->score)->toBe(0.95)
         ->and($response->meta->provider)->toBe('cohere')
-        ->and($response->meta->model)->toBe('rerank-v3.5');
+        ->and($response->meta->model)->toBe('rerank-v3.5')
+        ->and($response->raw)->toBeInstanceOf(Response::class)
+        ->and($response->raw->json('results.0.relevance_score'))->toBe(0.95);
 });
 
 test('reranking request sends bearer token', function (): void {
@@ -70,7 +77,7 @@ test('reranking uses default model when none specified', function (): void {
 
     Reranking::of(['Doc A', 'Doc B'])->rerank('query', provider: 'cohere');
 
-    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['model'] === 'rerank-v3.5');
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['model'] === 'rerank-v4.0-pro');
 });
 
 test('reranking maps documents by index when results are returned out of order', function (): void {
@@ -121,3 +128,51 @@ function fakeCohereRerankingResponse()
         ],
     ]);
 }
+
+test('reranking request uses the configured timeout', function (): void {
+    Http::fake(['*' => fakeCohereRerankingResponse()]);
+
+    $spy = new class extends CohereGateway
+    {
+        public array $timeouts = [];
+
+        protected function client(Provider $provider, int $timeout = 30): PendingRequest
+        {
+            $this->timeouts[] = $timeout;
+
+            return parent::client($provider, $timeout);
+        }
+    };
+
+    Ai::instance('cohere')->useRerankingGateway($spy);
+
+    Reranking::of(['Doc A', 'Doc B'])->timeout(45)->rerank('query', provider: 'cohere', model: 'rerank-v3.5');
+
+    expect($spy->timeouts)->toBe([45]);
+});
+
+test('reranking response reports the billed units', function (): void {
+    Http::fake(['*' => Http::response([
+        'results' => [['index' => 0, 'relevance_score' => 0.95]],
+        'meta' => [
+            'billed_units' => ['input_tokens' => 320, 'search_units' => 2.0],
+            'tokens' => ['input_tokens' => 298],
+        ],
+    ])]);
+
+    $response = Reranking::of(['Laravel is a PHP framework'])
+        ->rerank('What is Laravel?', provider: 'cohere', model: 'rerank-v3.5');
+
+    expect($response->usage->inputTokens)->toBe(320)
+        ->and($response->usage->searchUnits)->toBe(2.0);
+});
+
+test('reranking response leaves the search units null when cohere omits the meta', function (): void {
+    Http::fake(['*' => fakeCohereRerankingResponse()]);
+
+    $response = Reranking::of(['Laravel is a PHP framework', 'React is a JS library'])
+        ->rerank('What is Laravel?', provider: 'cohere', model: 'rerank-v3.5');
+
+    expect($response->usage->inputTokens)->toBe(0)
+        ->and($response->usage->searchUnits)->toBeNull();
+});

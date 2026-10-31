@@ -200,8 +200,8 @@ test('response usage is parsed using the openai standard shape', function (): vo
 
     $response = agent()->prompt('Hello', provider: 'openai-compatible');
 
-    expect($response->usage->promptTokens)->toBe(60)
-        ->and($response->usage->completionTokens)->toBe(50)
+    expect($response->usage->inputTokens)->toBe(100)
+        ->and($response->usage->outputTokens)->toBe(50)
         ->and($response->usage->cacheReadInputTokens)->toBe(40)
         ->and($response->usage->reasoningTokens)->toBe(10);
 });
@@ -326,16 +326,6 @@ test('named instances resolve provider options by their instance name', function
     Http::assertSent(fn (Request $request): bool => $request->url() === 'http://localhost:8000/v1/chat/completions'
         && data_get(json_decode($request->body(), true), 'top_k') === 10);
 });
-
-function configureOpenAiCompatible(): void
-{
-    config(['ai.providers.openai-compatible' => [
-        'driver' => 'openai-compatible',
-        'url' => 'http://localhost:1234/v1',
-        'key' => 'test-key',
-        'models' => ['text' => ['default' => 'local-model']],
-    ]]);
-}
 
 function fakeOpenAiCompatibleResponse(string $content)
 {

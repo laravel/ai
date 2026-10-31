@@ -141,3 +141,31 @@ test('transcription can be faked for the groq provider', function (): void {
 
     expect($response->text)->toBe('Faked transcript');
 });
+
+test('transcription requests verbose json so the audio duration is returned', function (): void {
+    Http::fake(['*' => Http::response(['text' => 'Hello, world!', 'duration' => 8.47])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'groq');
+
+    Http::assertSent(fn (Request $request): bool => str_contains($request->body(), 'verbose_json'));
+
+    expect($response->usage->audioSeconds)->toBe(8.47);
+});
+
+test('transcription response format can be overridden with a provider option', function (): void {
+    Http::fake(['*' => Http::response(['text' => 'Hello, world!'])]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->withProviderOptions(['response_format' => 'json'])
+        ->generate(provider: 'groq');
+
+    Http::assertSent(fn (Request $request): bool => ! str_contains($request->body(), 'verbose_json'));
+});
+
+test('transcription leaves the audio duration null when not returned', function (): void {
+    Http::fake(['*' => Http::response(['text' => 'Hello, world!'])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'groq');
+
+    expect($response->usage->audioSeconds)->toBeNull();
+});

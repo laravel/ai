@@ -228,7 +228,7 @@ test('default store true preserves previous response id behaviour', function ():
     expect($followUp)->toHaveKey('previous_response_id')
         ->and($followUp['previous_response_id'])->toBe('resp_tool_1')
         ->and($followUp)->not->toHaveKey('store')
-        ->and($followUp)->not->toHaveKey('include');
+        ->and($followUp['include'] ?? [])->toContain('reasoning.encrypted_content');
 
     $input = collect($followUp['input']);
 
@@ -280,19 +280,8 @@ test('stateless (store=false) responses capture replay blocks', function () {
 
     $response = (new OpenAiAgent)->prompt('Hello', provider: 'openai');
 
-    expect($response->messages->whereInstanceOf(AssistantMessage::class)->last()->providerContentBlocks)
+    expect($response->messages->whereInstanceOf(AssistantMessage::class)->last()->replayBlocks)
         ->not->toBeEmpty();
-});
-
-test('stateful (store=true) responses do not capture replay blocks', function () {
-    config(['ai.providers.openai' => [...config('ai.providers.openai'), 'store' => true]]);
-
-    Http::fake(['api.openai.com/*' => fakeOpenAiResponse('Hi')]);
-
-    $response = (new OpenAiAgent)->prompt('Hello', provider: 'openai');
-
-    expect($response->messages->whereInstanceOf(AssistantMessage::class)->last()->providerContentBlocks)
-        ->toBeEmpty();
 });
 
 function fakeOpenAiToolCallResponseWithEncryptedReasoning(string $reasoningId, string $encryptedContent, string $functionCallId, string $callId): PromiseInterface
@@ -323,3 +312,56 @@ function fakeOpenAiToolCallResponseWithEncryptedReasoning(string $reasoningId, s
         ],
     ]);
 }
+
+test('default store true still retains replay blocks with encrypted reasoning', function (): void {
+    config(['ai.providers.openai' => [
+        ...config('ai.providers.openai'),
+        'store' => true,
+    ]]);
+
+    Http::fake([
+        'api.openai.com/*' => Http::sequence([
+            fakeOpenAiToolCallResponseWithEncryptedReasoning('rs_1', 'enc-blob-1', 'fc_1', 'call_1'),
+            fakeOpenAiResponse('Done'),
+        ]),
+    ]);
+
+    $response = (new ToolUsingAgent(fixed: true))->prompt('Generate a number', provider: 'openai');
+
+    $blocks = $response->messages->whereInstanceOf(AssistantMessage::class)->first()->replayBlocks;
+
+    expect(collect($blocks)->firstWhere('type', 'reasoning'))->toMatchArray(['id' => 'rs_1', 'encrypted_content' => 'enc-blob-1'])
+        ->and(collect($blocks)->firstWhere('type', 'function_call')['call_id'] ?? null)->toBe('call_1');
+});
+
+test('stateless tool follow up drops file search calls but keeps the surrounding reasoning', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'resp_tool_1',
+                'status' => 'completed',
+                'model' => 'gpt-5.4',
+                'output' => [
+                    ['type' => 'reasoning', 'id' => 'rs_1', 'summary' => [], 'encrypted_content' => 'enc-blob-1'],
+                    ['type' => 'file_search_call', 'id' => 'fs_1', 'status' => 'completed', 'queries' => ['numbers'], 'results' => null],
+                    ['type' => 'function_call', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'FixedNumberGenerator', 'arguments' => '{}', 'status' => 'completed'],
+                ],
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            fakeOpenAiResponse('Done'),
+        ]),
+    ]);
+
+    $response = (new ToolUsingAgent(fixed: true))->prompt('Generate a number', provider: 'openai');
+
+    $input = collect(json_decode((string) Http::recorded()[1][0]->body(), true)['input']);
+
+    expect($input->whereNotNull('type')->pluck('type')->all())
+        ->toBe(['reasoning', 'function_call', 'function_call_output'])
+        ->and($input->firstWhere('type', 'reasoning'))->toMatchArray(['id' => 'rs_1', 'encrypted_content' => 'enc-blob-1']);
+
+    $blocks = $response->messages->whereInstanceOf(AssistantMessage::class)->first()->replayBlocks;
+
+    expect(collect($blocks)->firstWhere('type', 'file_search_call')['id'] ?? null)
+        ->toBe('fs_1');
+});

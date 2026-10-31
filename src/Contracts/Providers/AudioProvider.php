@@ -9,6 +9,8 @@ interface AudioProvider extends Provider
 {
     /**
      * Generate audio from the given text.
+     *
+     * @param  array<string, mixed>  $providerOptions
      */
     public function audio(
         string $text,
@@ -16,6 +18,7 @@ interface AudioProvider extends Provider
         ?string $instructions = null,
         ?string $model = null,
         int $timeout = 30,
+        array $providerOptions = [],
     ): AudioResponse;
 
     /**

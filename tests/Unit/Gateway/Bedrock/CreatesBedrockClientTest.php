@@ -4,7 +4,7 @@ use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Aws\MockHandler;
 use Aws\Result;
 use Aws\Sts\StsClient;
-use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Events\Dispatcher;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Providers\BedrockProvider;
 use Laravel\Ai\Providers\Provider;
@@ -83,7 +83,7 @@ test('configured headers are added before request signing', function (): void {
         'secret_access_key' => 'test-secret',
         'region' => 'us-east-1',
         'headers' => ['X-Session-Affinity' => 'abc-123'],
-    ], Mockery::mock(Dispatcher::class));
+    ], new Dispatcher);
 
     $client = bedrockClientTrait()->create($provider);
     $handler = new MockHandler([new Result]);

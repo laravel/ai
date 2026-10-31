@@ -6,15 +6,20 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
+use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Base64Image;
+use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredImage;
+use Laravel\Ai\Gateway\Concerns\ResolvesDocumentFilenames;
 
 trait MapsAttachments
 {
+    use ResolvesDocumentFilenames;
+
     /**
      * Map the given Laravel attachments to Chat Completions content parts.
      */
@@ -53,10 +58,20 @@ trait MapsAttachments
                 $attachment instanceof RemoteDocument => [
                     'type' => 'document_url',
                     'document_url' => $attachment->url,
-                    'document_name' => $attachment->name ?? basename($attachment->url),
+                    'document_name' => $attachment->name(),
+                ],
+                $attachment instanceof Document && $attachment instanceof StorableFile => [
+                    'type' => 'document_url',
+                    'document_url' => 'data:'.($attachment->mimeType() ?? 'application/pdf').';base64,'.base64_encode($attachment->content()),
+                    'document_name' => $attachment->name() ?? $this->fallbackFilename($attachment->mimeType()),
+                ],
+                $attachment instanceof UploadedFile => [
+                    'type' => 'document_url',
+                    'document_url' => 'data:'.$attachment->getClientMimeType().';base64,'.base64_encode($attachment->get()),
+                    'document_name' => $attachment->getClientOriginalName(),
                 ],
                 default => throw new InvalidArgumentException(
-                    'Mistral only supports image attachments and remote document URLs. Unsupported attachment type ['.$attachment::class.'].'
+                    'Mistral only supports image and document attachments. Unsupported attachment type ['.$attachment::class.'].'
                 ),
             };
         })->all();
@@ -72,7 +87,7 @@ trait MapsAttachments
             'image/png',
             'image/gif',
             'image/webp',
-        ],
-            true);
+            'image/avif',
+        ], true);
     }
 }

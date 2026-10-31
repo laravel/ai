@@ -88,8 +88,8 @@ test('multi step tool loop returns accumulated response shape', function (): voi
         ->and($response->steps)->toHaveCount(3)
         ->and($response->toolCalls)->toHaveCount(2)
         ->and($response->toolResults)->toHaveCount(2)
-        ->and($response->usage->promptTokens)->toBe(30)
-        ->and($response->usage->completionTokens)->toBe(15);
+        ->and($response->usage->inputTokens)->toBe(30)
+        ->and($response->usage->outputTokens)->toBe(15);
 });
 
 test('unregistered tool call throws', function (): void {

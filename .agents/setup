@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+echo 'Installing PHP 8.4 and required extensions...'
+SECONDS=0
+packages=(ca-certificates curl unzip php8.4-cli php8.4-curl php8.4-mbstring php8.4-xml php8.4-sqlite3 php8.4-zip php8.4-bcmath php8.4-intl php8.4-gd)
+missing=()
+for package in "${packages[@]}"; do
+    if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -qx 'install ok installed'; then
+        missing+=("$package")
+    fi
+done
+
+if ((${#missing[@]})); then
+    if [[ ! -f /etc/apt/sources.list.d/php.list ]]; then
+        sudo apt-get update -qq
+        sudo apt-get install -y ca-certificates curl
+        keyring=$(mktemp --suffix=.deb)
+        curl -fsSL https://packages.sury.org/debsuryorg-archive-keyring.deb -o "$keyring"
+        sudo dpkg -i "$keyring"
+        rm -f "$keyring"
+        . /etc/os-release
+        echo "deb [signed-by=/usr/share/keyrings/debsuryorg-archive-keyring.gpg] https://packages.sury.org/php/ $VERSION_CODENAME main" | sudo tee /etc/apt/sources.list.d/php.list >/dev/null
+    fi
+    sudo apt-get update -qq
+    sudo apt-get install -y "${missing[@]}"
+fi
+sudo update-alternatives --set php /usr/bin/php8.4
+echo "PHP ready (${SECONDS}s)."
+
+echo 'Preparing Composer 2...'
+SECONDS=0
+if ! command -v composer >/dev/null || [[ $(composer --version --no-ansi) != 'Composer version 2.'* ]]; then
+    installer=$(mktemp)
+    curl -fsSL https://getcomposer.org/installer -o "$installer"
+    expected=$(curl -fsSL https://composer.github.io/installer.sig)
+    actual=$(php -r 'echo hash_file("sha384", $argv[1]);' "$installer")
+    if [[ "$actual" != "$expected" ]]; then
+        rm -f "$installer"
+        echo 'Composer installer checksum mismatch.' >&2
+        exit 1
+    fi
+    sudo php "$installer" --2 --install-dir=/usr/local/bin --filename=composer
+    rm -f "$installer"
+fi
+echo "Composer ready (${SECONDS}s)."
+
+echo 'Installing PHP development dependencies...'
+SECONDS=0
+# Avoid Testbench's generated database queue default; the package tests need no
+# queue worker or jobs table. Preserve any existing local configuration.
+if [[ ! -f .env ]]; then
+    printf 'QUEUE_CONNECTION=sync\n' > .env
+fi
+# This library intentionally ignores composer.lock; resolve its supported versions
+# as CI does. Composer reuses installed packages and its download cache on reruns.
+composer update --prefer-stable --prefer-dist --no-interaction --no-progress
+echo "PHP dependencies ready (${SECONDS}s)."
+
+echo 'Installing workbench dependencies (using the orb Node.js toolchain)...'
+SECONDS=0
+node --version
+npm ci --prefix workbench --prefer-offline --no-audit --no-fund
+echo "Workbench dependencies ready (${SECONDS}s)."

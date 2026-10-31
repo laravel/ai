@@ -493,17 +493,17 @@ class AgentCommand extends Command
         $usage = $response->usage;
 
         // A zeroed usage is reported for turns that end without real usage, such as errors.
-        if ($usage === null || ($usage->promptTokens === 0 && $usage->completionTokens === 0)) {
+        if ($usage === null || ($usage->inputTokens === 0 && $usage->outputTokens === 0)) {
             return;
         }
 
-        $output = $usage->completionTokens;
+        $output = $usage->outputTokens;
         $message = $mode === 'output-token-count'
             ? "Output · {$output} tokens"
             : 'Output · '.number_format($output / max($seconds, 0.001), 1).' tokens/s';
 
         if ($contextSize !== null) {
-            $total = $usage->promptTokens + $usage->completionTokens;
+            $total = $usage->totalTokens();
             $message .= ' · Context '.number_format(($total / $contextSize) * 100, 1)."% ({$total}/{$contextSize})";
         }
 

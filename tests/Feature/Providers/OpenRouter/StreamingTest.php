@@ -107,8 +107,8 @@ test('streaming tool loop emits a single stream end with accumulated usage', fun
 
     expect($streamEndEvents)->toHaveCount(1)
         ->and($streamEndEvents[0]->reason)->toBe(FinishReason::Stop->value)
-        ->and($streamEndEvents[0]->usage->promptTokens)->toBe(30)
-        ->and($streamEndEvents[0]->usage->completionTokens)->toBe(15);
+        ->and($streamEndEvents[0]->usage->inputTokens)->toBe(30)
+        ->and($streamEndEvents[0]->usage->outputTokens)->toBe(15);
 });
 
 test('streaming error event stops stream', function (): void {
@@ -178,11 +178,11 @@ test('streaming captures usage from final chunk', function (): void {
 
     $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd));
     expect($streamEnd)->toHaveCount(1)
-        ->and($streamEnd[0]->usage->promptTokens)->toBe(15)
-        ->and($streamEnd[0]->usage->completionTokens)->toBe(3);
+        ->and($streamEnd[0]->usage->inputTokens)->toBe(15)
+        ->and($streamEnd[0]->usage->outputTokens)->toBe(3);
 });
 
-test('streaming excludes cached tokens from the prompt token count', function (): void {
+test('streaming reports cached tokens within the input token count', function (): void {
     Http::fake([
         '*' => Http::response($this->ssePayload([
             ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'content' => 'Hi'], 'finish_reason' => null]]],
@@ -198,8 +198,8 @@ test('streaming excludes cached tokens from the prompt token count', function ()
 
     $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd));
     expect($streamEnd)->toHaveCount(1)
-        ->and($streamEnd[0]->usage->promptTokens)->toBe(50)
-        ->and($streamEnd[0]->usage->completionTokens)->toBe(5)
+        ->and($streamEnd[0]->usage->inputTokens)->toBe(100)
+        ->and($streamEnd[0]->usage->outputTokens)->toBe(5)
         ->and($streamEnd[0]->usage->cacheReadInputTokens)->toBe(20)
         ->and($streamEnd[0]->usage->cacheWriteInputTokens)->toBe(30);
 });

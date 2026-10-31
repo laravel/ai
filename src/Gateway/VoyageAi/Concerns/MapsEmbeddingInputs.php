@@ -14,6 +14,7 @@ use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\RemoteVideo;
 use Laravel\Ai\Files\Video as VideoFile;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 
 trait MapsEmbeddingInputs
@@ -46,7 +47,7 @@ trait MapsEmbeddingInputs
 
         $this->validateMultimodalEmbeddingInputSources($inputs);
 
-        $data = $this->withErrorHandling(
+        $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('/multimodalembeddings', array_merge($providerOptions, [
                 'model' => $model,
@@ -54,13 +55,15 @@ trait MapsEmbeddingInputs
                     'content' => [$this->mapMultimodalEmbeddingInput($input)],
                 ], $inputs),
             ], $model === 'voyage-multimodal-3' ? [] : ['output_dimension' => $dimensions])),
-        )->json();
-
-        return new EmbeddingsResponse(
-            (new Collection($data['data'] ?? []))->pluck('embedding')->all(),
-            $data['usage']['total_tokens'] ?? $data['total_tokens'] ?? 0,
-            new Meta($provider->name(), $model),
         );
+
+        $data = $response->json();
+
+        return (new EmbeddingsResponse(
+            (new Collection($data['data'] ?? []))->pluck('embedding')->all(),
+            new Usage($data['usage']['total_tokens'] ?? $data['total_tokens'] ?? 0),
+            new Meta($provider->name(), $model),
+        ))->withRawResponse($response);
     }
 
     /**

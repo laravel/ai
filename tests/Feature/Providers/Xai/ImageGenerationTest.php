@@ -83,6 +83,27 @@ test('image response is correctly parsed', function (): void {
         ->and($response->meta->provider)->toBe('xai');
 });
 
+test('all generated images are returned when n is greater than one', function (): void {
+    Http::fake([
+        '*' => Http::response([
+            'data' => [
+                ['b64_json' => base64_encode('image-1')],
+                ['b64_json' => base64_encode('image-2')],
+            ],
+        ]),
+    ]);
+
+    $response = Image::of('A red apple')
+        ->withProviderOptions(['n' => 2])
+        ->generate(provider: 'xai', model: 'grok-imagine-image');
+
+    expect($response->images)->toHaveCount(2)
+        ->and($response->images->first()->image)->toBe(base64_encode('image-1'))
+        ->and($response->images->last()->image)->toBe(base64_encode('image-2'));
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['n'] === 2);
+});
+
 test('request sends bearer token authorization', function (): void {
     Http::fake([
         '*' => fakeXaiImageResponse(),

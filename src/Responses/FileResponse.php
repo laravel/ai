@@ -2,8 +2,12 @@
 
 namespace Laravel\Ai\Responses;
 
+use Laravel\Ai\Responses\Concerns\HasRawResponse;
+
 class FileResponse
 {
+    use HasRawResponse;
+
     public readonly ?string $mime;
 
     public function __construct(

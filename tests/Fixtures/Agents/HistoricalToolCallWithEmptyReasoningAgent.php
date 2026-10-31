@@ -34,7 +34,7 @@ class HistoricalToolCallWithEmptyReasoningAgent implements Agent, Conversational
                 collect([
                     new ToolCall('call_empty', 'SearchProducts', ['keyword' => 'lampu'], 'call_empty'),
                 ]),
-                ['reasoning_content' => '']
+                [['type' => 'reasoning', 'reasoning_content' => '']]
             ),
             new ToolResultMessage(collect([
                 new ToolResult('call_empty', 'SearchProducts', ['keyword' => 'lampu'], '[{"name":"Lampu LED"}]', 'call_empty'),

@@ -21,6 +21,11 @@ function stepStart(): StreamStart
     return new StreamStart(uniqid(), 'fake', 'fake-model', time());
 }
 
+function toolResult(string $callId): ToolResult
+{
+    return new ToolResult(uniqid(), new Data\ToolResult($callId, 'get_weather', [], '12°C'), true, null, time());
+}
+
 test('combine joins the deltas of a single step without separators', function () {
     $events = [
         stepStart(),
@@ -62,13 +67,26 @@ test('combine drops a step that produced only whitespace', function () {
     $events = [
         stepStart(),
         textDelta('message-1', 'First.'),
+        toolResult('call-1'),
         stepStart(),
         textDelta('message-2', "\n"),
+        toolResult('call-2'),
         stepStart(),
         textDelta('message-3', 'Second.'),
     ];
 
     expect(TextDelta::combine($events))->toBe("First.\n\nSecond.");
+});
+
+test('combine continues a step that ran no tools without a separator', function () {
+    $events = [
+        stepStart(),
+        textDelta('message-1', 'The latest figures show that'),
+        stepStart(),
+        textDelta('message-2', ' revenue grew.'),
+    ];
+
+    expect(TextDelta::combine($events))->toBe('The latest figures show that revenue grew.');
 });
 
 test('combine ignores events that are not text deltas', function () {

@@ -6,6 +6,7 @@ use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Aws\BedrockRuntime\Exception\BedrockRuntimeException;
 use Aws\MockHandler;
 use Aws\Result;
+use Closure;
 use GuzzleHttp\Psr7\Utils;
 use Laravel\Ai\Gateway\Bedrock\BedrockRerankingGateway;
 use Laravel\Ai\Gateway\Bedrock\BedrockTextGateway;
@@ -56,10 +57,16 @@ trait BedrockHelpers
         )));
     }
 
-    protected function fakeBedrockConverseSequence(array $results): BedrockRuntimeClient
+    protected function fakeBedrockConverseSequence(array $results, array &$requests = []): BedrockRuntimeClient
     {
         return $this->bedrockClient(new MockHandler(array_map(
-            fn (array $result): Result => new Result($result),
+            function (array $result) use (&$requests): Closure {
+                return function ($command) use ($result, &$requests): Result {
+                    $requests[] = $command->toArray();
+
+                    return new Result($result);
+                };
+            },
             $results,
         )));
     }
@@ -115,6 +122,24 @@ trait BedrockHelpers
             protected function createBedrockClient(Provider $provider, ?int $timeout = null): BedrockRuntimeClient
             {
                 return $this->stub;
+            }
+        };
+    }
+
+    protected function gatewayWithHandler(MockHandler $mock): BedrockTextGateway
+    {
+        return new class($mock) extends BedrockTextGateway
+        {
+            public function __construct(private MockHandler $mock)
+            {
+                parent::__construct();
+            }
+
+            protected function createBedrockClient(Provider $provider, ?int $timeout = null): BedrockRuntimeClient
+            {
+                return tap(parent::createBedrockClient($provider, $timeout), fn (BedrockRuntimeClient $client) => $client
+                    ->getHandlerList()
+                    ->setHandler($this->mock));
             }
         };
     }

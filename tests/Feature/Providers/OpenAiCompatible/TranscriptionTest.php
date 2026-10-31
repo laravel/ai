@@ -109,8 +109,8 @@ test('transcription reads chat completion style usage keys', function (): void {
 
     $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openai-compatible');
 
-    expect($response->usage->promptTokens)->toBe(12)
-        ->and($response->usage->completionTokens)->toBe(3);
+    expect($response->usage->inputTokens)->toBe(12)
+        ->and($response->usage->outputTokens)->toBe(3);
 });
 
 test('transcription reads openai style usage keys', function (): void {
@@ -121,8 +121,8 @@ test('transcription reads openai style usage keys', function (): void {
 
     $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openai-compatible');
 
-    expect($response->usage->promptTokens)->toBe(7)
-        ->and($response->usage->completionTokens)->toBe(2);
+    expect($response->usage->inputTokens)->toBe(7)
+        ->and($response->usage->outputTokens)->toBe(2);
 });
 
 test('transcription uses the audio name for the upload filename', function (): void {
@@ -185,4 +185,20 @@ test('transcription can be faked for the openai-compatible provider', function (
     $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openai-compatible');
 
     expect($response->text)->toBe('Faked transcript');
+});
+
+test('transcription reports the whisper audio duration', function (): void {
+    Http::fake(['*' => Http::response(['text' => 'Hello, world!', 'duration' => 9.25])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openai-compatible');
+
+    expect($response->usage->audioSeconds)->toBe(9.25);
+});
+
+test('transcription prefers the usage seconds over the whisper duration', function (): void {
+    Http::fake(['*' => Http::response(['text' => 'Hello, world!', 'duration' => 9.25, 'usage' => ['seconds' => 3.5]])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openai-compatible');
+
+    expect($response->usage->audioSeconds)->toBe(3.5);
 });

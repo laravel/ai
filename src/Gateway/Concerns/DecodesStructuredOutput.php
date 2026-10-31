@@ -21,7 +21,54 @@ trait DecodesStructuredOutput
             $decoded = json_decode($this->extractJsonCodeFence($trimmed) ?? '', true);
         }
 
+        if (! is_array($decoded)) {
+            $decoded = json_decode($this->escapeQuotesInObjectKeys($this->extractJsonCodeFence($trimmed) ?? $trimmed), true);
+        }
+
         return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * Escape unescaped double quotes in object keys, where only a quote followed by a colon closes the key.
+     */
+    private function escapeQuotesInObjectKeys(string $json): string
+    {
+        $result = '';
+        $containers = [];
+        $offset = 0;
+
+        while (preg_match('/\G([^"]*)"/', $json, $match, offset: $offset) === 1) {
+            $structure = $match[1];
+
+            preg_match_all('/[{}\[\]]/', $structure, $brackets);
+
+            foreach ($brackets[0] as $bracket) {
+                if ($bracket === '{' || $bracket === '[') {
+                    $containers[] = $bracket;
+                } else {
+                    array_pop($containers);
+                }
+            }
+
+            $isKey = end($containers) === '{' && preg_match('/[{,]\s*$/', $structure) === 1;
+
+            $pattern = $isKey
+                ? '/\G"((?:\\\\.|[^\\\\])*?)"(?=\s*:)/s'
+                : '/\G"((?:\\\\.|[^"\\\\])*)"/s';
+
+            if (preg_match($pattern, $json, $string, offset: $offset + strlen($structure)) !== 1) {
+                break;
+            }
+
+            $contents = $isKey
+                ? preg_replace_callback('/\\\\.|"/s', fn (array $token) => $token[0] === '"' ? '\\"' : $token[0], $string[1])
+                : $string[1];
+
+            $result .= $structure.'"'.$contents.'"';
+            $offset += strlen($structure) + strlen($string[0]);
+        }
+
+        return $result.substr($json, $offset);
     }
 
     /**

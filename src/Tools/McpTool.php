@@ -6,14 +6,17 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\JsonSchema as JsonSchemaFactory;
 use Illuminate\JsonSchema\Types\ObjectType;
 use Illuminate\JsonSchema\Types\Type;
+use Laravel\Ai\Approvals\Approval;
+use Laravel\Ai\Concerns\InteractsWithApprovals;
+use Laravel\Ai\Contracts\Approvable;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Schema\SchemaNormalizer;
 use Laravel\Ai\Tools\Concerns\NormalizesMcpResult;
 use Throwable;
 
-class McpTool implements Tool
+class McpTool implements Approvable, Tool
 {
-    use NormalizesMcpResult;
+    use InteractsWithApprovals, NormalizesMcpResult;
 
     /**
      * The MCP client tool primitive class name.
@@ -52,6 +55,16 @@ class McpTool implements Tool
     public function description(): string
     {
         return $this->tool->description ?? $this->tool->title ?? $this->tool->name;
+    }
+
+    /**
+     * Get the MCP annotations describing the tool's behavior.
+     *
+     * @return array<string, mixed>
+     */
+    public function annotations(): array
+    {
+        return $this->tool->annotations;
     }
 
     /**
@@ -124,5 +137,13 @@ class McpTool implements Tool
         return is_callable([$result, 'text'])
             ? $result->text()
             : (string) $result;
+    }
+
+    /**
+     * Determine whether the tool needs approval for the given request.
+     */
+    protected function needsApproval(Request $request): Approval|bool
+    {
+        return false;
     }
 }

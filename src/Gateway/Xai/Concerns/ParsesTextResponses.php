@@ -3,19 +3,21 @@
 namespace Laravel\Ai\Gateway\Xai\Concerns;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\ProviderToolCall;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
-use Laravel\Ai\Responses\Data\Usage;
 
 trait ParsesTextResponses
 {
-    use DecodesStructuredOutput;
+    use DecodesStructuredOutput, JoinsReasoning;
 
     /**
      * Validate the xAI response data.
@@ -69,6 +71,8 @@ trait ParsesTextResponses
             meta: new Meta($provider->name(), $model, $citations),
             structured: $structured ? $this->decodeStructuredOutput($text) : null,
             continuationToken: $data['id'] ?? null,
+            reasoning: $this->extractReasoning($output),
+            providerToolCalls: $this->extractProviderToolCalls($output),
         );
     }
 
@@ -77,13 +81,9 @@ trait ParsesTextResponses
      */
     protected function extractText(array $output): string
     {
-        $lastOutput = last($output);
+        $message = (new Collection($output))->where('type', 'message')->last();
 
-        if (is_array($lastOutput)) {
-            return $lastOutput['content'][0]['text'] ?? '';
-        }
-
-        return '';
+        return $message['content'][0]['text'] ?? '';
     }
 
     /**
@@ -116,20 +116,33 @@ trait ParsesTextResponses
     }
 
     /**
+     * Extract the provider-hosted tool items from the output array.
+     *
+     * @return array<int, ProviderToolCall>
+     */
+    protected function extractProviderToolCalls(array $output): array
+    {
+        return array_values(array_map(
+            fn (array $item): ProviderToolCall => new ProviderToolCall($item['id'] ?? '', $item['type'], $item),
+            array_filter($output, fn ($item): bool => is_array($item)
+                && ($item['type'] ?? '') !== 'function_call'
+                && str_ends_with((string) ($item['type'] ?? ''), '_call')),
+        ));
+    }
+
+    /**
      * Extract usage data from the response.
      */
-    protected function extractUsage(array $data): Usage
+    protected function extractUsage(array $data): TextUsage
     {
         $usage = $data['usage'] ?? [];
-        $inputTokens = $usage['input_tokens'] ?? 0;
-        $cachedTokens = $usage['input_tokens_details']['cached_tokens'] ?? 0;
+        $reasoningTokens = $usage['output_tokens_details']['reasoning_tokens'] ?? null;
 
-        return new Usage(
-            $inputTokens - $cachedTokens,
-            $usage['output_tokens'] ?? 0,
-            0,
-            $cachedTokens,
-            $usage['output_tokens_details']['reasoning_tokens'] ?? 0,
+        return new TextUsage(
+            inputTokens: $usage['input_tokens'] ?? 0,
+            outputTokens: ($usage['output_tokens'] ?? 0) + ($reasoningTokens ?? 0),
+            cacheReadInputTokens: $usage['input_tokens_details']['cached_tokens'] ?? null,
+            reasoningTokens: $reasoningTokens,
         );
     }
 
@@ -138,7 +151,10 @@ trait ParsesTextResponses
      */
     protected function extractFinishReason(array $data): FinishReason
     {
-        $lastOutput = last($data['output'] ?? []);
+        $lastOutput = (new Collection($data['output'] ?? []))
+            ->reject(fn (array $item): bool => ($item['type'] ?? '') === 'reasoning')
+            ->last() ?? [];
+
         $status = $lastOutput['status'] ?? $data['status'] ?? '';
         $type = $lastOutput['type'] ?? '';
 
@@ -152,6 +168,21 @@ trait ParsesTextResponses
             },
             default => FinishReason::Unknown,
         };
+    }
+
+    /**
+     * Extract the reasoning text from the output array.
+     */
+    protected function extractReasoning(array $output): string
+    {
+        return static::joinReasoning(
+            (new Collection($output))
+                ->where('type', 'reasoning')
+                ->flatMap(fn (array $item): array => [
+                    (new Collection($item['summary'] ?? []))->pluck('text')->implode(''),
+                    (new Collection($item['content'] ?? []))->pluck('text')->implode(''),
+                ])
+        );
     }
 
     /**

@@ -138,7 +138,7 @@ test('transcription uses default model when none specified', function (): void {
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openrouter');
 
-    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['model'] === 'openai/whisper-1');
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['model'] === 'openai/gpt-transcribe');
 });
 
 test('transcription response text is correctly parsed', function (): void {
@@ -149,7 +149,15 @@ test('transcription response text is correctly parsed', function (): void {
     expect($response->text)->toBe('Hello, world!')
         ->and($response->segments)->toHaveCount(0)
         ->and($response->meta->provider)->toBe('openrouter')
-        ->and($response->meta->model)->toBe('openai/whisper-1');
+        ->and($response->meta->model)->toBe('openai/gpt-transcribe');
+});
+
+test('the raw transcription response exposes provider specific usage', function (): void {
+    Http::fake(['*' => fakeOpenRouterTranscriptionResponse()]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openrouter');
+
+    expect($response->raw->json('usage.cost'))->toBe(0.000100);
 });
 
 test('transcription usage is correctly parsed', function (): void {
@@ -166,8 +174,8 @@ test('transcription usage is correctly parsed', function (): void {
 
     $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')->generate(provider: 'openrouter');
 
-    expect($response->usage->promptTokens)->toBe(100)
-        ->and($response->usage->completionTokens)->toBe(50);
+    expect($response->usage->inputTokens)->toBe(100)
+        ->and($response->usage->outputTokens)->toBe(50);
 });
 
 test('transcription request sends bearer token', function (): void {
@@ -219,3 +227,25 @@ test('transcription http error response throws request exception', function (): 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'openrouter', model: 'openai/whisper-1');
 })->throws(RequestException::class);
+
+test('transcription reports the audio duration returned in usage', function (): void {
+    Http::fake(['*' => Http::response([
+        'text' => 'Hello, world!',
+        'usage' => ['seconds' => 9.2, 'input_tokens' => 83, 'output_tokens' => 30],
+    ])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openrouter', model: 'openai/whisper-1');
+
+    expect($response->usage->audioSeconds)->toBe(9.2)
+        ->and($response->usage->inputTokens)->toBe(83);
+});
+
+test('transcription leaves the audio duration null when not returned', function (): void {
+    Http::fake(['*' => Http::response(['text' => 'Hello, world!'])]);
+
+    $response = Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openrouter', model: 'openai/whisper-1');
+
+    expect($response->usage->audioSeconds)->toBeNull();
+});

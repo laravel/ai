@@ -7,6 +7,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Gateway\Concerns\EncodesResourceIds;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
 use Laravel\Ai\Store;
@@ -14,6 +15,7 @@ use Laravel\Ai\Store;
 class OpenAiStoreGateway implements StoreGateway
 {
     use Concerns\CreatesOpenAiClient;
+    use EncodesResourceIds;
     use HandlesFailoverErrors;
 
     /**
@@ -24,7 +26,7 @@ class OpenAiStoreGateway implements StoreGateway
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider)
-                ->get("vector_stores/{$storeId}")
+                ->get("vector_stores/{$this->resourceId($storeId)}")
         );
 
         return new Store(
@@ -77,7 +79,7 @@ class OpenAiStoreGateway implements StoreGateway
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider)
-                ->post("vector_stores/{$storeId}/files", array_filter([
+                ->post("vector_stores/{$this->resourceId($storeId)}/files", array_filter([
                     'file_id' => $fileId,
                     'attributes' => filled($metadata) ? $metadata : null,
                 ]))
@@ -94,7 +96,7 @@ class OpenAiStoreGateway implements StoreGateway
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider)
-                ->delete("vector_stores/{$storeId}/files/{$documentId}")
+                ->delete("vector_stores/{$this->resourceId($storeId)}/files/{$this->resourceId($documentId)}")
         );
 
         return $response->json('deleted', false);
@@ -108,7 +110,7 @@ class OpenAiStoreGateway implements StoreGateway
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider)
-                ->delete("vector_stores/{$storeId}")
+                ->delete("vector_stores/{$this->resourceId($storeId)}")
         );
 
         return $response->json('deleted', false);

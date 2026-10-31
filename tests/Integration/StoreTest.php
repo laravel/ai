@@ -9,6 +9,7 @@ use Laravel\Ai\Files\Document;
 use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Store;
 use Laravel\Ai\Stores;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 use function Illuminate\Support\days;
 use function Laravel\Ai\agent;
@@ -143,6 +144,31 @@ describe('file search', function (): void {
 
         expect((string) $response)->toContain('Yes')->toContain('Valkey');
     })->with('file-search-providers');
+
+    test('can follow up a stateless file search and function call made in the same step', function (): void {
+        requiresApiKey('OPENAI_API_KEY');
+
+        config(['ai.providers.openai.store' => false]);
+
+        $this->provider = 'openai';
+        [$this->fileSearchStore, $this->fileSearchFileIds] = createFileSearchStore('openai');
+
+        $response = agent(
+            instructions: 'In your first step, use the file search tool and the number generator tool together. '
+                .'Then answer using the results of both.',
+            tools: [
+                new FileSearch([$this->fileSearchStore->id]),
+                new FixedNumberGenerator,
+            ],
+        )->prompt('Is Valkey mentioned in the sixth month roadmap, and what number does the generator return?', provider: 'openai');
+
+        $firstStep = $response->steps->first();
+
+        // Both items must come from one step, or no follow-up replays the file_search_call and the bug never runs...
+        expect(collect($firstStep->providerToolCalls)->pluck('type'))->toContain('file_search_call')
+            ->and($firstStep->toolCalls)->not->toBeEmpty()
+            ->and((string) $response)->toContain('72019')->toContain('Valkey');
+    });
 
     test('can actually prompt an agent with filtered search data', function (): void {
         requiresApiKey('OPENAI_API_KEY');

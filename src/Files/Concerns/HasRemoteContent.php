@@ -3,8 +3,8 @@
 namespace Laravel\Ai\Files\Concerns;
 
 use Illuminate\Http\Client\Response;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Stringable;
+use Laravel\Ai\Files\UntrustedUrl;
 
 trait HasRemoteContent
 {
@@ -49,7 +49,7 @@ trait HasRemoteContent
      */
     protected function response(): Response
     {
-        return $this->response ??= Http::get($this->url)->throw();
+        return $this->response ??= UntrustedUrl::fetch($this->url)->throw();
     }
 
     public function __toString(): string

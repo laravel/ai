@@ -3,12 +3,14 @@
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Events\Dispatcher;
 use Illuminate\JsonSchema\Types\Type;
+use JMac\Testing\Double;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
+use Laravel\Ai\Exceptions\ToolExecutionException;
 use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Tools\Request;
@@ -59,8 +61,8 @@ function stubRunContext(Dispatcher $events, string $invocationId = 'inv_1'): Run
 {
     return new RunContext(
         $invocationId,
-        Mockery::mock(Agent::class),
-        Mockery::mock(TextProvider::class),
+        Double::for(Agent::class),
+        Double::for(TextProvider::class),
         'stub-model',
         $events,
     );
@@ -172,7 +174,7 @@ test('a listener that throws is not reported as a tool failure', function (): vo
     expect($failed)->toBe(0);
 });
 
-test('a failing tool handler is reported as a tool failure and rethrown', function (): void {
+test('a failing tool handler is reported as a tool failure and rethrown wrapped so the loop can recognize it', function (): void {
     $failure = null;
 
     $events = new Dispatcher;
@@ -185,7 +187,8 @@ test('a failing tool handler is reported as a tool failure and rethrown', functi
     });
 
     expect(fn (): string => toolInvokingGateway()->invoke($tool, ['a' => 1], stubRunContext($events)))
-        ->toThrow(RuntimeException::class, 'Handler exploded.');
+        ->toThrow(fn (ToolExecutionException $exception) => expect($exception->exception)->toBeInstanceOf(RuntimeException::class)
+            ->and($exception->exception->getMessage())->toBe('Handler exploded.'));
 
     expect($failure)->toBeInstanceOf(ToolFailed::class)
         ->and($failure->invocationId)->toBe('inv_1')

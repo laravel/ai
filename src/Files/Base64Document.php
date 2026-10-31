@@ -43,15 +43,6 @@ class Base64Document extends Document implements Arrayable, JsonSerializable, St
     }
 
     /**
-     * Get the file's MIME type.
-     */
-    #[\Override]
-    public function mimeType(): ?string
-    {
-        return $this->mime;
-    }
-
-    /**
      * Get the instance as an array.
      */
     public function toArray(): array

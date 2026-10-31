@@ -109,19 +109,23 @@ trait BuildsTextRequests
 
         $providerOptions = $options?->providerOptions($provider->driver());
 
+        if (isset($body['text'], $providerOptions['text'])) {
+            $providerOptions['text'] = array_merge($body['text'], $providerOptions['text']);
+        }
+
         if (filled($providerOptions)) {
             $body = array_merge($body, $providerOptions);
         }
 
         if ($this->isStateless($provider)) {
             $body['store'] = false;
+        }
 
-            if ($this->isReasoningModel($body['model'] ?? '')) {
-                $body['include'] = array_values(array_unique([
-                    ...($body['include'] ?? []),
-                    'reasoning.encrypted_content',
-                ]));
-            }
+        if ($this->isReasoningModel($body['model'] ?? '')) {
+            $body['include'] = array_values(array_unique([
+                ...($body['include'] ?? []),
+                'reasoning.encrypted_content',
+            ]));
         }
 
         return $body;
@@ -161,6 +165,7 @@ trait BuildsTextRequests
     protected function isReasoningModel(string $model): bool
     {
         return (str_starts_with($model, 'gpt-5') && ! str_starts_with($model, 'gpt-5-chat'))
+            || str_starts_with($model, 'gpt-6')
             || str_starts_with($model, 'o4-mini')
             || str_starts_with($model, 'o3')
             || str_starts_with($model, 'o1');

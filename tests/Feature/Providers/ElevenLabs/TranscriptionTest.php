@@ -39,6 +39,18 @@ test('transcription request sends diarize=true when enabled', function (): void 
     );
 });
 
+test('transcription sends enable_logging as a query parameter instead of in the body', function (): void {
+    Http::fake(['*' => fakeElevenTranscriptionResponse()]);
+
+    Transcription::of(base64_encode('fake-audio'))
+        ->withProviderOptions(['enable_logging' => false, 'tag_audio_events' => 'true'])
+        ->generate(provider: 'eleven', model: 'scribe_v2');
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.elevenlabs.io/v1/speech-to-text?enable_logging=false'
+        && ! collect($request->data())->contains(fn ($part): bool => $part['name'] === 'enable_logging')
+        && collect($request->data())->contains(fn ($part): bool => $part['name'] === 'tag_audio_events' && $part['contents'] === 'true'));
+});
+
 test('transcription request sends xi-api-key header', function (): void {
     Http::fake(['*' => fakeElevenTranscriptionResponse()]);
 
@@ -122,3 +134,19 @@ function fakeElevenTranscriptionResponse(bool $diarized = false)
 
     return Http::response($body);
 }
+
+test('transcription reports the transcribed audio duration', function (): void {
+    Http::fake(['*' => Http::response(['text' => 'Hello, world!', 'audio_duration_secs' => 41.2])]);
+
+    $response = Transcription::of(base64_encode('fake-audio'))->generate(provider: 'eleven');
+
+    expect($response->usage->audioSeconds)->toBe(41.2);
+});
+
+test('transcription leaves the audio duration null when not returned', function (): void {
+    Http::fake(['*' => Http::response(['text' => 'Hello, world!'])]);
+
+    $response = Transcription::of(base64_encode('fake-audio'))->generate(provider: 'eleven');
+
+    expect($response->usage->audioSeconds)->toBeNull();
+});

@@ -3,7 +3,7 @@
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\StructuredStep;
-use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\Data\TextUsage;
 
 test('structured step stores structured data', function (): void {
     $step = new StructuredStep(
@@ -12,11 +12,14 @@ test('structured step stores structured data', function (): void {
         [],
         [],
         FinishReason::Stop,
-        new Usage,
-        new Meta('openai', 'gpt-4o')
+        new TextUsage,
+        new Meta('openai', 'gpt-4o'),
+        'Structuring the answer.',
+        [],
     );
 
     expect($step->text)->toBe('test response')
+        ->and($step->reasoning)->toBe('Structuring the answer.')
         ->and($step->structured)->toBe(['key' => 'value']);
 });
 
@@ -27,8 +30,10 @@ test('structured step to array includes structured data', function (): void {
         [],
         [],
         FinishReason::Stop,
-        new Usage,
-        new Meta('anthropic', 'claude-3')
+        new TextUsage,
+        new Meta('anthropic', 'claude-3'),
+        '',
+        [],
     );
 
     $array = $step->toArray();
@@ -44,8 +49,10 @@ test('structured step jsonSerialize includes structured data', function (): void
         [],
         [],
         FinishReason::Stop,
-        new Usage,
-        new Meta('openai', 'gpt-4o')
+        new TextUsage,
+        new Meta('openai', 'gpt-4o'),
+        '',
+        [],
     );
 
     $json = json_decode(json_encode($step), true);

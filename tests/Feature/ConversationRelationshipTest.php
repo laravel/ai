@@ -6,6 +6,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Ai\Concerns\HasConversations;
+use Laravel\Ai\Enums\MessageStatus;
 use Laravel\Ai\Models\Conversation;
 
 uses(RefreshDatabase::class)->beforeEach(function (): void {
@@ -87,10 +88,10 @@ test('conversation can retrieve messages using relationship', function (): void 
             'role' => 'user',
             'content' => 'Hello',
             'attachments' => '[]',
-            'tool_calls' => '[]',
-            'tool_results' => '[]',
+            'steps' => '[]',
             'usage' => '[]',
             'meta' => '[]',
+            'status' => MessageStatus::Completed,
             'created_at' => now(),
             'updated_at' => now(),
         ],
@@ -99,6 +100,46 @@ test('conversation can retrieve messages using relationship', function (): void 
     expect($conversation->messages)->toHaveCount(1)
         ->and($conversation->messages->first()->content)->toBe('Hello')
         ->and($conversation->messages->first()->attachments)->toBeArray();
+});
+
+test('message tool calls and results flatten across steps in order and serialize with the model', function (): void {
+    $user = ConversationRelationshipUser::create(['name' => 'Taylor']);
+
+    $conversation = Conversation::create([
+        'id' => 'conversation-1',
+        'participant_type' => $user->getMorphClass(),
+        'participant_id' => $user->id,
+        'title' => 'Conversation',
+    ]);
+
+    DB::table('agent_conversation_messages')->insert([
+        'id' => 'message-1',
+        'conversation_id' => $conversation->id,
+        'participant_type' => $user->getMorphClass(),
+        'participant_id' => $user->id,
+        'agent' => 'Agent',
+        'role' => 'assistant',
+        'content' => 'Done',
+        'attachments' => '[]',
+        'steps' => json_encode([
+            ['tool_calls' => [['id' => 'call-1', 'name' => 'a', 'arguments' => [], 'result' => 'x', 'reasoning_encrypted_content' => 'gAAAAA']], 'replay_blocks' => []],
+            ['tool_calls' => [['id' => 'call-2', 'name' => 'b', 'arguments' => [], 'result' => 'y']], 'replay_blocks' => []],
+        ]),
+        'usage' => '[]',
+        'meta' => '[]',
+        'status' => MessageStatus::Completed,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $message = $conversation->messages->first();
+
+    expect(array_column($message->tool_calls, 'id'))->toBe(['call-1', 'call-2'])
+        ->and($message->tool_results)->toBe([
+            ['id' => 'call-1', 'name' => 'a', 'arguments' => [], 'result' => 'x'],
+            ['id' => 'call-2', 'name' => 'b', 'arguments' => [], 'result' => 'y'],
+        ])
+        ->and($message->toArray())->toHaveKeys(['tool_calls', 'tool_results']);
 });
 
 test('conversation can retrieve its participant using relationship', function (): void {
@@ -113,6 +154,34 @@ test('conversation can retrieve its participant using relationship', function ()
 
     expect($conversation->participant)->toBeInstanceOf(ConversationRelationshipUser::class)
         ->and($conversation->participant->is($user))->toBeTrue();
+});
+
+test('conversation and message keep their string keys when created', function (): void {
+    $user = ConversationRelationshipUser::create(['name' => 'Taylor']);
+
+    $conversation = Conversation::create([
+        'id' => 'conversation-1',
+        'participant_type' => $user->getMorphClass(),
+        'participant_id' => $user->id,
+        'title' => 'Conversation',
+    ]);
+
+    $message = $conversation->messages()->create([
+        'id' => 'message-1',
+        'participant_type' => $user->getMorphClass(),
+        'participant_id' => $user->id,
+        'agent' => 'Agent',
+        'role' => 'user',
+        'content' => 'Hello',
+        'attachments' => [],
+        'steps' => [],
+        'usage' => [],
+        'meta' => [],
+        'status' => MessageStatus::Completed,
+    ]);
+
+    expect($conversation->id)->toBe('conversation-1')
+        ->and($message->id)->toBe('message-1');
 });
 
 test('conversation model uses configured database connection', function (): void {

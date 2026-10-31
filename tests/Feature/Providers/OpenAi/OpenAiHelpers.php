@@ -136,4 +136,15 @@ trait OpenAiHelpers
             ],
         ];
     }
+
+    protected function responseIncomplete(string $reason, int $inputTokens, int $outputTokens, ?array $output = null): array
+    {
+        $event = $this->responseCompleted($inputTokens, $outputTokens, output: $output);
+
+        $event['type'] = 'response.incomplete';
+        $event['response']['status'] = 'incomplete';
+        $event['response']['incomplete_details'] = ['reason' => $reason];
+
+        return $event;
+    }
 }

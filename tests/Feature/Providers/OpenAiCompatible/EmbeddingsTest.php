@@ -56,7 +56,7 @@ test('embeddings response is correctly parsed', function (): void {
     expect($response->embeddings)->toHaveCount(2)
         ->and($response->embeddings[0])->toBe([0.1, 0.2, 0.3])
         ->and($response->embeddings[1])->toBe([0.4, 0.5, 0.6])
-        ->and($response->tokens)->toBe(10)
+        ->and($response->usage->inputTokens)->toBe(10)
         ->and($response->meta->provider)->toBe('openai-compatible');
 });
 

@@ -15,14 +15,19 @@ use Laravel\Ai\Events\AgentStreamed;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\StreamingAgent;
+use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\PendingStep;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Skills\Skill;
 use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\ToolChoice;
+use Laravel\Ai\Tools\LoadSkill;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ConversationalAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
@@ -53,6 +58,28 @@ test('agents can get a simple text response', function (string $provider, string
 
     Event::assertDispatched(PromptingAgent::class);
     Event::assertDispatched(AgentPrompted::class);
+})->with('agent-providers');
+
+test('agents can load a skill from a catalog longer than 1024 characters', function (string $provider, string $apiKey, string $model): void {
+    requiresApiKey($apiKey);
+
+    $skills = collect(range(1, 4))->map(fn (int $index): Skill => new Skill(
+        name: "filler-{$index}",
+        description: str_repeat('Use when the user asks about an unrelated filler topic. ', 9),
+        instructions: 'Reply with the word filler.',
+    ))->push(new Skill(
+        name: 'secret-word',
+        description: 'Use when the user asks for the secret word.',
+        instructions: 'The secret word is pomegranate.',
+    ))->all();
+
+    $response = agent(tools: [new LoadSkill($skills)])->prompt(
+        'Load the secret-word skill and tell me the secret word.',
+        provider: $provider,
+        model: $model,
+    );
+
+    expect(strtolower($response->text))->toContain('pomegranate');
 })->with('agent-providers');
 
 test('ad hoc agents can be prompted', function (string $provider, string $apiKey, string $model): void {
@@ -243,6 +270,26 @@ test('agents can use tools', function (string $provider, string $apiKey, string 
     expect($response['number'])->toBe(72019);
 })->with('agent-providers');
 
+test('agent middleware can steer each generation step', function (string $provider, string $apiKey, string $model): void {
+    requiresApiKey($apiKey);
+
+    $steps = [];
+
+    $response = (new AssistantAgent)
+        ->withTools([new FixedNumberGenerator])
+        ->withMiddleware([function (PendingStep $step, Closure $next) use (&$steps) {
+            $steps[] = $step->number;
+
+            return $next($step->withToolChoice($step->isFirstStep() ? ToolChoice::tool('FixedNumberGenerator') : ToolChoice::none));
+        }])
+        ->prompt('Fetch a number with the tool, then reply with it.', provider: $provider, model: $model);
+
+    expect($steps)->toBe([0, 1])
+        ->and($response->toolCalls)->toHaveCount(1)
+        ->and($response->toolResults->first()->result)->toBe('72019')
+        ->and($response->text)->not->toBe('');
+})->with('agent-providers');
+
 test('agents can replay empty tool arguments', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
 
@@ -352,31 +399,22 @@ test('agents can analyze local image attachments with a detected mime type', fun
     'jpeg' => ['blue.jpg', 'blue'],
 ]);
 
-test('agent tool exception handling is not magical', function (string $provider, string $apiKey, string $model): void {
+test('a throwing tool returns its failure to the model', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
 
     Event::fake();
 
-    $agent = new ToolUsingAgent(toolThrowsException: true);
+    $response = (new ToolUsingAgent(toolThrowsException: true))->prompt(
+        'Can I have a random number between 1 and 1000?',
+        provider: $provider,
+        model: $model,
+    );
 
-    $caught = false;
+    expect($response->toolResults)->not->toBeEmpty()
+        ->and($response->toolResults[0]->error())->toBe('The tool call failed: Forced to throw exception.')
+        ->and($response->text)->not->toBeEmpty();
 
-    try {
-        $response = $agent->prompt(
-            'Can I have a random number between 1 and 1000?',
-            provider: $provider,
-            model: $model,
-        );
-
-        $text = $response->text;
-    } catch (Exception $exception) {
-        $caught = true;
-
-        expect($exception)->toBeInstanceOf(Exception::class)
-            ->and($exception->getMessage())->toEqual('Forced to throw exception.');
-    }
-
-    expect($caught)->toBeTrue();
+    Event::assertDispatched(ToolFailed::class);
 })->with('agent-providers');
 
 test('openai replays echoed output blocks on a store=false tool-call continuation', function () {
@@ -390,9 +428,60 @@ test('openai replays echoed output blocks on a store=false tool-call continuatio
     $response = (new ToolUsingAgent(fixed: true))->prompt(
         'Give me a random number.',
         provider: 'openai',
-        model: 'gpt-5.4',
+        model: 'gpt-6-sol',
     );
 
     expect($response['number'])->toBe(72019)
         ->and($response->toolCalls)->toHaveCount(1);
 });
+
+test('agents surface the reasoning a prompted turn produced', function (string $provider, string $apiKey, string $model, array $options): void {
+    requiresApiKey($apiKey);
+
+    $response = reasoningAgent($options)->prompt(
+        reasoningPrompt(),
+        provider: $provider,
+        model: $model,
+    );
+
+    expect($response->reasoning)->not->toBe('')
+        ->and($response->text)->toContain('10')
+        ->and($response->steps->last()->reasoning)->not->toBe('');
+})->with('reasoning-providers');
+
+test('agents surface the same reasoning whether prompted or streamed', function (string $provider, string $apiKey, string $model, array $options): void {
+    requiresApiKey($apiKey);
+
+    $streamed = reasoningAgent($options)->stream(reasoningPrompt(), provider: $provider, model: $model);
+
+    iterator_to_array($streamed);
+
+    expect($streamed->reasoning)->not->toBe('')
+        ->and($streamed->text)->toContain('10');
+})->with('reasoning-providers');
+
+function reasoningPrompt(): string
+{
+    return 'Box A has twice as many balls as box B. Box C has five fewer balls than box A. '
+        .'The three boxes hold 45 balls in total. How many balls are in box B? Answer with just the number.';
+}
+
+function reasoningAgent(array $options): object
+{
+    return new class($options) implements Agent, HasProviderOptions
+    {
+        use Promptable;
+
+        public function __construct(public array $options) {}
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant that responds extremely concisely to all queries.';
+        }
+
+        public function providerOptions(Lab|string $provider): array
+        {
+            return $this->options;
+        }
+    };
+}

@@ -10,6 +10,7 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Tests\Feature\Providers\DeepSeek\DeepSeekHelpers;
+use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\HistoricalReasoningWithoutToolCallsAgent;
 use Tests\Fixtures\Agents\HistoricalToolCallWithEmptyReasoningAgent;
 use Tests\Fixtures\Agents\HistoricalToolCallWithoutReasoningAgent;
@@ -24,6 +25,28 @@ beforeEach(function (): void {
         ...config('ai.providers.deepseek'),
         'key' => 'test-key',
     ]]);
+});
+
+test('prompt reads reasoning content off the response', function (): void {
+    Http::fake([
+        'api.deepseek.com/*' => Http::response([
+            'id' => 'chatcmpl-deepseek-123',
+            'object' => 'chat.completion',
+            'model' => 'deepseek-reasoner',
+            'choices' => [[
+                'index' => 0,
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => 'Hello',
+                    'reasoning_content' => 'Let me think...',
+                ],
+                'finish_reason' => 'stop',
+            ]],
+            'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+        ]),
+    ]);
+
+    expect((new AssistantAgent)->prompt('Hi', provider: 'deepseek')->reasoning)->toBe('Let me think...');
 });
 
 test('preserves reasoning content across tool-call loops', function (): void {

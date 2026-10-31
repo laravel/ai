@@ -8,8 +8,10 @@ use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Events\FileDeleted;
 use Laravel\Ai\Events\FileStored;
 use Laravel\Ai\Events\StoringFile;
+use Laravel\Ai\Events\StoringFileFailed;
 use Laravel\Ai\Responses\FileResponse;
 use Laravel\Ai\Responses\StoredFileResponse;
+use Throwable;
 
 trait ManagesFiles
 {
@@ -37,7 +39,10 @@ trait ManagesFiles
         ));
 
         return tap(
-            $this->fileGateway()->putFile($this, $file),
+            $this->dispatchingFailure(
+                fn () => $this->fileGateway()->putFile($this, $file),
+                fn (Throwable $exception) => new StoringFileFailed($invocationId, $this, $file, $exception),
+            ),
             function (StoredFileResponse $response) use ($invocationId, $file): void {
                 $this->events->dispatch(new FileStored(
                     $invocationId, $this, $file, $response,

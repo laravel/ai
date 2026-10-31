@@ -307,3 +307,98 @@ test('store gateway uses custom base url', function (): void {
 
     Http::assertSent(fn ($request): bool => str_contains((string) $request->url(), 'custom.api.example.com/v1beta/fileSearchStores/store123'));
 });
+
+test('removing a document deletes the file it was imported from, not the document', function (): void {
+    Http::fake([
+        '*:importFile' => Http::response([
+            'name' => 'fileSearchStores/store123/operations/import456',
+            'done' => true,
+            'response' => ['documentName' => 'fileSearchStores/store123/documents/file789-abc123'],
+        ]),
+        '*/fileSearchStores/store123' => Http::response(fakeStoreResponse()),
+        'generativelanguage.googleapis.com/*' => Http::response([], 200),
+    ]);
+
+    $store = Stores::get('store123', provider: 'gemini');
+
+    $document = $store->add('files/file789');
+
+    expect($document->id())->toBe('file789-abc123')
+        ->and($document->fileId())->toBe('files/file789');
+
+    expect($store->remove($document, deleteFile: true))->toBeTrue();
+
+    $deletes = Http::recorded()
+        ->map(fn (array $pair) => $pair[0])
+        ->filter(fn ($request): bool => $request->method() === 'DELETE')
+        ->map(fn ($request): string => (string) $request->url())
+        ->values();
+
+    // Gemini mints a document ID of its own, so deleting files/{document} would 403...
+    expect($deletes)->toHaveCount(2)
+        ->and($deletes[0])->toContain('fileSearchStores/store123/documents/file789-abc123')
+        ->and($deletes[1])->toEndWith('/files/file789')
+        ->and($deletes[1])->not->toContain('file789-abc123');
+});
+
+test('deleting a store forces removal so a non-empty store still deletes', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([], 200),
+    ]);
+
+    $provider = geminiProvider();
+
+    expect($provider->storeGateway()->deleteStore($provider, 'store123'))->toBeTrue();
+
+    // Gemini rejects deleting a non-empty store unless force is a query parameter...
+    expect(sentRequest()->url())->toEndWith('/fileSearchStores/store123?force=true')
+        ->and(sentRequest()->method())->toBe('DELETE');
+});
+
+test('removing a document sends force as a query parameter', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([], 200),
+    ]);
+
+    $provider = geminiProvider();
+
+    $provider->storeGateway()->removeFile($provider, 'store123', 'doc456');
+
+    expect(sentRequest()->url())->toEndWith('/fileSearchStores/store123/documents/doc456?force=true')
+        ->and(sentRequest()->body())->toBe('');
+});
+
+test('delete store encodes the id as a single path segment', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([], 200),
+    ]);
+
+    Stores::delete('fileSearchStores/../files/abc123#', provider: 'gemini');
+
+    Http::assertSent(fn ($request): bool => $request->method() === 'DELETE'
+        && $request->url() === 'https://generativelanguage.googleapis.com/v1beta/fileSearchStores/..%2Ffiles%2Fabc123%23?force=true');
+});
+
+test('remove file encodes the document id as a single path segment', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([], 200),
+    ]);
+
+    $provider = geminiProvider();
+    $provider->storeGateway()->removeFile($provider, 'store123', 'documents/../../store456');
+
+    Http::assertSent(fn ($request): bool => $request->method() === 'DELETE'
+        && str_starts_with((string) $request->url(), 'https://generativelanguage.googleapis.com/v1beta/fileSearchStores/store123/documents/..%2F..%2Fstore456'));
+});
+
+test('remove file rebuilds a full document path from encoded segments', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([], 200),
+    ]);
+
+    $provider = geminiProvider();
+    $provider->storeGateway()->removeFile($provider, 'store123', 'fileSearchStores/store123/documents/doc456?force=false');
+
+    Http::assertSent(fn ($request): bool => $request->method() === 'DELETE'
+        && str_starts_with((string) $request->url(), 'https://generativelanguage.googleapis.com/v1beta/fileSearchStores/store123/documents/doc456%3Fforce%3Dfalse'));
+});

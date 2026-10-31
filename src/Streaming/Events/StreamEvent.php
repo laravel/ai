@@ -51,19 +51,11 @@ abstract class StreamEvent implements \Stringable
     /**
      * Set the invocation ID associated with the event.
      */
-    public function withInvocationId(string $id): self
+    public function withInvocationId(string $id): static
     {
         $this->invocationId = $id;
 
         return $this;
-    }
-
-    /**
-     * Get the array representation of the event that is compatible with the Vercel AI SDK.
-     */
-    public function toVercelProtocolArray(): ?array
-    {
-        return null;
     }
 
     /**

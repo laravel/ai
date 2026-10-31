@@ -6,6 +6,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
+use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Audio;
 use Laravel\Ai\Files\Base64Audio;
 use Laravel\Ai\Files\Base64Document;
@@ -13,6 +14,8 @@ use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\LocalImage;
+use Laravel\Ai\Files\ProviderDocument;
+use Laravel\Ai\Files\ProviderImage;
 use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
@@ -91,7 +94,7 @@ trait MapsAttachments
                         'data' => $attachment->base64,
                     ],
                 ],
-                $attachment instanceof Audio => [
+                $attachment instanceof Audio && $attachment instanceof StorableFile => [
                     'type' => 'input_audio',
                     'input_audio' => [
                         'format' => $this->audioFormat($attachment->mimeType() ?? 'audio/mp3'),
@@ -116,6 +119,10 @@ trait MapsAttachments
                         'file_data' => 'data:'.$attachment->getClientMimeType().';base64,'.base64_encode($attachment->get()),
                     ],
                 ],
+                $attachment instanceof ProviderDocument,
+                $attachment instanceof ProviderImage => throw new InvalidArgumentException(
+                    'Provider-stored attachments are not supported by OpenRouter; uploaded files may only be loaded into a sandbox container by the shell tool.'
+                ),
                 default => throw new InvalidArgumentException('Unsupported attachment type ['.$attachment::class.']'),
             };
         })->all();

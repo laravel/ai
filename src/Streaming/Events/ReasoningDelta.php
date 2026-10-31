@@ -2,8 +2,13 @@
 
 namespace Laravel\Ai\Streaming\Events;
 
+use Illuminate\Support\Collection;
+use Laravel\Ai\Concerns\JoinsReasoning;
+
 class ReasoningDelta extends StreamEvent
 {
+    use JoinsReasoning;
+
     public function __construct(
         public string $id,
         public string $reasoningId,
@@ -12,6 +17,20 @@ class ReasoningDelta extends StreamEvent
         public ?array $summary = null,
     ) {
         //
+    }
+
+    /**
+     * Combine reasoning deltas by block, separating each block with a blank line.
+     */
+    public static function combine(Collection|array $events): string
+    {
+        return static::joinReasoning(
+            Collection::wrap($events)
+                ->whereInstanceOf(ReasoningDelta::class)
+                ->groupBy(fn (ReasoningDelta $event) => $event->reasoningId)
+                ->map(fn (Collection $deltas) => $deltas->pluck('delta')->implode(''))
+                ->values()
+        );
     }
 
     /**
@@ -27,18 +46,6 @@ class ReasoningDelta extends StreamEvent
             'delta' => $this->delta,
             'timestamp' => $this->timestamp,
             'summary' => $this->summary,
-        ];
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function toVercelProtocolArray(): ?array
-    {
-        return [
-            'type' => 'reasoning-delta',
-            'id' => $this->reasoningId,
-            'delta' => $this->delta,
         ];
     }
 }

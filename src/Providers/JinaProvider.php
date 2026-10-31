@@ -50,7 +50,7 @@ class JinaProvider extends Provider implements EmbeddingProvider, RerankingProvi
      */
     public function defaultRerankingModel(): string
     {
-        return $this->config['models']['reranking']['default'] ?? 'jina-reranker-v3';
+        return $this->config['models']['reranking']['default'] ?? 'jina-reranker-v3.5';
     }
 
     /**

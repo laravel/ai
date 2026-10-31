@@ -99,8 +99,8 @@ test('streaming handles tool calls', function (): void {
         ->and($toolResultEvents)->not->toBeEmpty()
         ->and($streamEndEvents)->toHaveCount(1)
         ->and($streamEndEvents[0]->reason)->toBe(FinishReason::Stop->value)
-        ->and($streamEndEvents[0]->usage->promptTokens)->toBe(30)
-        ->and($streamEndEvents[0]->usage->completionTokens)->toBe(15);
+        ->and($streamEndEvents[0]->usage->inputTokens)->toBe(30)
+        ->and($streamEndEvents[0]->usage->outputTokens)->toBe(15);
 });
 
 test('streaming captures usage', function (): void {
@@ -119,8 +119,8 @@ test('streaming captures usage', function (): void {
 
     $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
-    expect($streamEnd->usage->promptTokens)->toBe(10)
-        ->and($streamEnd->usage->completionTokens)->toBe(5);
+    expect($streamEnd->usage->inputTokens)->toBe(10)
+        ->and($streamEnd->usage->outputTokens)->toBe(5);
 });
 
 test('streaming error event stops stream', function (): void {

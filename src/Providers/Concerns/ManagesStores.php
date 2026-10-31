@@ -8,13 +8,17 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\HasProviderId;
 use Laravel\Ai\Events\AddingFileToStore;
+use Laravel\Ai\Events\AddingFileToStoreFailed;
 use Laravel\Ai\Events\CreatingStore;
+use Laravel\Ai\Events\CreatingStoreFailed;
 use Laravel\Ai\Events\FileAddedToStore;
 use Laravel\Ai\Events\FileRemovedFromStore;
 use Laravel\Ai\Events\RemovingFileFromStore;
+use Laravel\Ai\Events\RemovingFileFromStoreFailed;
 use Laravel\Ai\Events\StoreCreated;
 use Laravel\Ai\Events\StoreDeleted;
 use Laravel\Ai\Store;
+use Throwable;
 
 trait ManagesStores
 {
@@ -48,7 +52,10 @@ trait ManagesStores
         ));
 
         return tap(
-            $this->storeGateway()->createStore($this, $name, $description, $fileIds, $expiresWhenIdleFor),
+            $this->dispatchingFailure(
+                fn () => $this->storeGateway()->createStore($this, $name, $description, $fileIds, $expiresWhenIdleFor),
+                fn (Throwable $exception) => new CreatingStoreFailed($invocationId, $this, $name, $description, $fileIds, $expiresWhenIdleFor, $exception),
+            ),
             function (Store $store) use ($invocationId, $name, $description, $fileIds, $expiresWhenIdleFor): void {
                 $this->events->dispatch(new StoreCreated(
                     $invocationId, $this, $name, $description, $fileIds, $expiresWhenIdleFor, $store,
@@ -69,7 +76,10 @@ trait ManagesStores
         ));
 
         return tap(
-            $this->storeGateway()->addFile($this, $storeId, $file->id(), $metadata),
+            $this->dispatchingFailure(
+                fn () => $this->storeGateway()->addFile($this, $storeId, $file->id(), $metadata),
+                fn (Throwable $exception) => new AddingFileToStoreFailed($invocationId, $this, $storeId, $file->id(), $exception),
+            ),
             function (string $documentId) use ($invocationId, $storeId, $file): void {
                 $this->events->dispatch(new FileAddedToStore(
                     $invocationId, $this, $storeId, $file->id(), $documentId,
@@ -96,7 +106,10 @@ trait ManagesStores
         ));
 
         return tap(
-            $this->storeGateway()->removeFile($this, $storeId, $documentId),
+            $this->dispatchingFailure(
+                fn () => $this->storeGateway()->removeFile($this, $storeId, $documentId),
+                fn (Throwable $exception) => new RemovingFileFromStoreFailed($invocationId, $this, $storeId, $documentId, $exception),
+            ),
             function () use ($invocationId, $storeId, $documentId): void {
                 $this->events->dispatch(new FileRemovedFromStore(
                     $invocationId, $this, $storeId, $documentId,

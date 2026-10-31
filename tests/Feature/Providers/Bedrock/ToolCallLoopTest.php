@@ -9,6 +9,7 @@ use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
+use Tests\Fixtures\Tools\ApprovableNumberGenerator;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 function bedrockToolCallResponse(string $toolUseId): array
@@ -55,8 +56,8 @@ describe('tool call loop', function (): void {
             ->and($response->steps)->toHaveCount(3)
             ->and($response->toolCalls)->toHaveCount(2)
             ->and($response->toolResults)->toHaveCount(2)
-            ->and($response->usage->promptTokens)->toBe(21)
-            ->and($response->usage->completionTokens)->toBe(11);
+            ->and($response->usage->inputTokens)->toBe(21)
+            ->and($response->usage->outputTokens)->toBe(11);
     });
 
     test('max steps limits tool call depth', function (): void {
@@ -101,13 +102,15 @@ describe('tool call loop', function (): void {
     });
 
     test('structured output is parsed from the synthetic tool call', function (): void {
-        $client = $this->fakeBedrockConverse([
+        $requests = [];
+
+        $client = $this->fakeBedrockConverseSequence([[
             'output' => ['message' => ['content' => [
                 ['toolUse' => ['toolUseId' => 's1', 'name' => 'structured_output', 'input' => ['symbol' => 'Fe']]],
             ]]],
             'usage' => ['inputTokens' => 8, 'outputTokens' => 4],
             'stopReason' => 'tool_use',
-        ]);
+        ]], $requests);
 
         $gateway = $this->gatewayWithClient($client);
 
@@ -121,8 +124,85 @@ describe('tool call loop', function (): void {
         expect($response)->toBeInstanceOf(StructuredTextResponse::class)
             ->and($response->structured)->toMatchArray(['symbol' => 'Fe'])
             ->and($response->steps)->toHaveCount(1)
-            ->and($response->usage->promptTokens)->toBe(8)
-            ->and($response->usage->completionTokens)->toBe(4);
+            ->and($response->usage->inputTokens)->toBe(8)
+            ->and($response->usage->outputTokens)->toBe(4)
+            ->and($requests[0]['toolConfig']['toolChoice'])->toBe(['tool' => ['name' => 'structured_output']])
+            ->and($requests[0])->not->toHaveKey('system');
+    });
+
+    test('structured output is parsed from the json answer of models that reject forced tool choice', function (): void {
+        $requests = [];
+
+        $client = $this->fakeBedrockConverseSequence([
+            bedrockTextResponse('{"symbol": "Fe"}'),
+        ], $requests);
+
+        $response = (new TextGenerationLoop($this->gatewayWithClient($client)))->generate(
+            $this->bedrockProvider(),
+            'us.anthropic.claude-sonnet-5-5',
+            'You are a helpful assistant.',
+            schema: ['symbol' => (new JsonSchemaTypeFactory)->string()],
+        );
+
+        expect($response)->toBeInstanceOf(StructuredTextResponse::class)
+            ->and($response->structured)->toBe(['symbol' => 'Fe'])
+            ->and($requests[0])->not->toHaveKey('toolConfig')
+            ->and($requests[0]['system'])->toHaveCount(2)
+            ->and($requests[0]['system'][0])->toBe(['text' => 'You are a helpful assistant.'])
+            ->and($requests[0]['system'][1]['text'])->toContain('"symbol"');
+    });
+
+    test('models that reject forced tool choice keep real tools on auto selection before the json answer', function (): void {
+        $requests = [];
+
+        $client = $this->fakeBedrockConverseSequence([
+            bedrockToolCallResponse('t1'),
+            bedrockTextResponse('{"number": 42}'),
+        ], $requests);
+
+        $response = (new TextGenerationLoop($this->gatewayWithClient($client)))->generate(
+            $this->bedrockProvider(),
+            'us.anthropic.claude-opus-5-5',
+            null,
+            messages: [new UserMessage('Generate a number')],
+            tools: [new FixedNumberGenerator],
+            schema: ['number' => (new JsonSchemaTypeFactory)->integer()],
+            options: new TextGenerationOptions(maxSteps: 2),
+        );
+
+        expect($response->structured)->toBe(['number' => 42])
+            ->and($response->toolResults)->toHaveCount(1)
+            ->and($requests)->toHaveCount(2);
+
+        foreach ($requests as $request) {
+            expect($request['toolConfig'])->not->toHaveKey('toolChoice')
+                ->and(array_column(array_column($request['toolConfig']['tools'], 'toolSpec'), 'name'))->toBe(['FixedNumberGenerator']);
+        }
+    });
+
+    test('structured runs paused for tool approval keep the structured response shape', function (): void {
+        $client = $this->fakeBedrockConverseSequence([[
+            'output' => ['message' => ['content' => [
+                ['toolUse' => ['toolUseId' => 't1', 'name' => 'ApprovableNumberGenerator', 'input' => []]],
+            ]]],
+            'usage' => ['inputTokens' => 7, 'outputTokens' => 3],
+            'stopReason' => 'tool_use',
+        ]]);
+
+        $response = (new TextGenerationLoop($this->gatewayWithClient($client)))->generate(
+            $this->bedrockProvider(),
+            'anthropic.claude-opus-4-7-v1:0',
+            null,
+            messages: [new UserMessage('Generate a number')],
+            tools: [new ApprovableNumberGenerator],
+            schema: ['number' => (new JsonSchemaTypeFactory)->integer()],
+            options: new TextGenerationOptions(maxSteps: 2),
+        );
+
+        expect($response)->toBeInstanceOf(StructuredTextResponse::class)
+            ->and($response->structured)->toBe([])
+            ->and($response->pendingApprovals)->toHaveCount(1)
+            ->and($response->pendingApprovals[0]->id)->toBe('t1');
     });
 
     test('streaming tool loop emits a single stream end with accumulated usage', function (): void {
@@ -161,8 +241,8 @@ describe('tool call loop', function (): void {
 
         expect($streamEnds)->toHaveCount(1)
             ->and($streamEnds[0]->reason)->toBe('stop')
-            ->and($streamEnds[0]->usage->promptTokens)->toBe(10)
-            ->and($streamEnds[0]->usage->completionTokens)->toBe(4)
+            ->and($streamEnds[0]->usage->inputTokens)->toBe(10)
+            ->and($streamEnds[0]->usage->outputTokens)->toBe(4)
             ->and($toolResults)->toHaveCount(1)
             ->and($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class);
     });

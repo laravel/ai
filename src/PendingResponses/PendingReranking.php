@@ -8,14 +8,18 @@ use Laravel\Ai\Ai;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\ProviderFailedOver;
 use Laravel\Ai\Exceptions\FailoverableException;
+use Laravel\Ai\PendingResponses\Concerns\ResolvesProviderOptions;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\RerankingResponse;
 
 class PendingReranking
 {
     use Conditionable;
+    use ResolvesProviderOptions;
 
     protected ?int $limit = null;
+
+    protected int $timeout = 30;
 
     /**
      * Create a new pending reranking instance.
@@ -53,6 +57,16 @@ class PendingReranking
     }
 
     /**
+     * Specify the timeout (in seconds) for the reranking request.
+     */
+    public function timeout(int $seconds = 30): self
+    {
+        $this->timeout = $seconds;
+
+        return $this;
+    }
+
+    /**
      * Rerank the documents based on their relevance to the query.
      *
      * @throws FailoverableException if every configured provider fails to rerank the documents.
@@ -68,10 +82,12 @@ class PendingReranking
         foreach ($providers as $provider => $model) {
             $provider = Ai::fakeableRerankingProvider($provider);
 
+            [$providerOptions, $headers] = $this->resolveProviderOptionsAndHeaders($provider);
+
             $model ??= $provider->defaultRerankingModel();
 
             try {
-                return $provider->rerank($this->documents, $query, $this->limit, $model);
+                return $provider->withHeaders($headers)->rerank($this->documents, $query, $this->limit, $model, $this->timeout, $providerOptions);
             } catch (FailoverableException $e) {
                 $lastException = $e;
 

@@ -23,6 +23,7 @@ use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
+use Laravel\Ai\Responses\Data\TranscriptionUsage;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\EmbeddingsResponse;
 use Laravel\Ai\Responses\TranscriptionResponse;
@@ -73,6 +74,7 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
         string $voice,
         ?string $instructions = null,
         int $timeout = 30,
+        array $providerOptions = [],
     ): AudioResponse {
         $voice = match ($voice) {
             'default-male' => 'en_paul_neutral',
@@ -82,12 +84,12 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('audio/speech', [
+            fn () => $this->client($provider, $timeout)->post('audio/speech', array_merge($providerOptions, [
                 'model' => $model,
                 'input' => $text,
                 'voice_id' => $voice,
                 'response_format' => 'mp3',
-            ]),
+            ])),
         );
 
         $encodedAudio = $response->json('audio_data');
@@ -98,6 +100,7 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
 
         return new AudioResponse(
             $encodedAudio,
+            new Usage,
             new Meta($provider->name(), $model),
             'audio/mpeg',
         );
@@ -124,11 +127,11 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
 
         $data = $response->json();
 
-        return new EmbeddingsResponse(
+        return (new EmbeddingsResponse(
             collect($data['data'] ?? [])->pluck('embedding')->all(),
-            $data['usage']['total_tokens'] ?? 0,
+            new Usage($data['usage']['prompt_tokens'] ?? 0),
             new Meta($provider->name(), $model),
-        );
+        ))->withRawResponse($response);
     }
 
     /**
@@ -161,7 +164,7 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
 
         $data = $response->json();
 
-        return new TranscriptionResponse(
+        return (new TranscriptionResponse(
             $data['text'] ?? '',
             collect($data['segments'] ?? [])->map(fn (array $segment): TranscriptionSegment => new TranscriptionSegment(
                 $segment['text'] ?? '',
@@ -169,12 +172,13 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
                 $segment['start'] ?? 0,
                 $segment['end'] ?? 0,
             )),
-            new Usage(
-                $data['usage']['prompt_tokens'] ?? 0,
-                $data['usage']['completion_tokens'] ?? 0,
+            new TranscriptionUsage(
+                inputTokens: $data['usage']['prompt_tokens'] ?? 0,
+                outputTokens: $data['usage']['completion_tokens'] ?? 0,
+                audioSeconds: $data['usage']['prompt_audio_seconds'] ?? null,
             ),
             new Meta($provider->name(), $model),
-        );
+        ))->withRawResponse($response);
     }
 
     /**

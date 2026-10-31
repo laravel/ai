@@ -4,10 +4,12 @@ namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
+use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
-use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
@@ -24,13 +26,32 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 trait HandlesTextStreaming
 {
     /**
+     * Get the content of the paused steps the turn being continued is made of.
+     *
+     * @param  array<int, Message>  $messages
+     * @return array<int, array<string, mixed>>
+     */
+    protected function pausedContent(array $messages): array
+    {
+        return collect($messages)
+            ->reverse()
+            ->takeWhile(fn (Message $message) => $message instanceof AssistantMessage)
+            ->reverse()
+            ->flatMap(fn (AssistantMessage $message) => $message->replayBlocks)
+            ->all();
+    }
+
+    /**
      * Process a single Anthropic streaming turn and yield Laravel stream events.
+     *
+     * @param  array<int, array<string, mixed>>  $pausedContent
      */
     protected function processTextStream(
         string $invocationId,
         Provider $provider,
         string $model,
         $streamBody,
+        array $pausedContent = [],
     ): Generator {
         $messageId = $this->generateEventId();
         $reasoningId = '';
@@ -38,7 +59,6 @@ trait HandlesTextStreaming
         $textStartEmitted = false;
         $reasoningStartEmitted = false;
 
-        $currentText = '';
         $currentBlockType = '';
         $currentBlockIndex = -1;
         $currentBlockText = '';
@@ -48,14 +68,26 @@ trait HandlesTextStreaming
         $currentServerToolInput = '';
         $pendingToolCalls = [];
         $responseContent = [];
+        $afterTool = false;
+        $lastTextDelta = '';
 
-        $inputTokens = 0;
-        $cacheCreationTokens = 0;
-        $cacheReadTokens = 0;
+        // A turn resumed after pause_turn picks up where the paused content ended...
+        foreach ($pausedContent as $block) {
+            $blockType = $block['type'] ?? '';
+
+            if ($blockType === 'text' && ($block['text'] ?? '') !== '') {
+                $lastTextDelta = (string) $block['text'];
+                $afterTool = false;
+            } elseif ($this->isToolBlock($blockType)) {
+                $afterTool = true;
+            }
+        }
+
+        $messageUsage = [];
         $usage = null;
         $stopReason = '';
 
-        $emitTextStart = function () use (&$textStartEmitted, &$messageId, $invocationId): ?StreamEvent {
+        $emitTextStart = function () use (&$textStartEmitted, $messageId, $invocationId): ?StreamEvent {
             if ($textStartEmitted) {
                 return null;
             }
@@ -102,10 +134,7 @@ trait HandlesTextStreaming
             if ($type === 'message_start' && ! $streamStartEmitted) {
                 $streamStartEmitted = true;
 
-                $messageStartUsage = $data['message']['usage'] ?? [];
-                $inputTokens = $messageStartUsage['input_tokens'] ?? 0;
-                $cacheCreationTokens = $messageStartUsage['cache_creation_input_tokens'] ?? 0;
-                $cacheReadTokens = $messageStartUsage['cache_read_input_tokens'] ?? 0;
+                $messageUsage = $data['message']['usage'] ?? [];
 
                 yield (new StreamStart(
                     $this->generateEventId(),
@@ -121,6 +150,10 @@ trait HandlesTextStreaming
                 $blockType = $data['content_block']['type'] ?? '';
                 $currentBlockType = $blockType;
                 $currentBlockIndex = $data['index'] ?? count($responseContent);
+
+                if ($this->isToolBlock($blockType)) {
+                    $afterTool = true;
+                }
 
                 if ($blockType === 'text') {
                     $currentBlockText = '';
@@ -193,17 +226,20 @@ trait HandlesTextStreaming
                     $textDelta = (string) ($data['delta']['text'] ?? '');
 
                     if ($textDelta !== '') {
+                        $separator = $afterTool && $lastTextDelta !== '' ? $this->textSeparator($lastTextDelta, $textDelta) : '';
+                        $afterTool = false;
+                        $lastTextDelta = $textDelta;
+
                         if (($event = $emitTextStart()) instanceof StreamEvent) {
                             yield $event;
                         }
 
-                        $currentText .= $textDelta;
                         $currentBlockText .= $textDelta;
 
                         yield (new TextDelta(
                             $this->generateEventId(),
                             $messageId,
-                            $textDelta,
+                            $separator.$textDelta,
                             time(),
                         ))->withInvocationId($invocationId);
                     }
@@ -240,7 +276,7 @@ trait HandlesTextStreaming
                 } elseif ($deltaType === 'input_json_delta') {
                     $partial = (string) ($data['delta']['partial_json'] ?? '');
 
-                    if ($currentBlockType === 'tool_use' && $currentToolIndex >= 0 && isset($pendingToolCalls[$currentToolIndex])) {
+                    if ($currentBlockType === 'tool_use' && isset($pendingToolCalls[$currentToolIndex])) {
                         $pendingToolCalls[$currentToolIndex]['arguments'] .= $partial;
                     } elseif ($currentBlockType === 'server_tool_use') {
                         $currentServerToolInput .= $partial;
@@ -251,19 +287,13 @@ trait HandlesTextStreaming
             }
 
             if ($type === 'content_block_stop') {
-                if ($currentBlockType === 'text' && $textStartEmitted) {
+                if ($currentBlockType === 'text') {
+                    // The block closes, the message does not. Anthropic opens a text block per
+                    // citable span, so one answer arrives as several; the replay content keeps
+                    // them apart while the stream reports the step as a single message...
                     if (isset($responseContent[$currentBlockIndex])) {
                         $responseContent[$currentBlockIndex]['text'] = $currentBlockText;
                     }
-
-                    yield (new TextEnd(
-                        $this->generateEventId(),
-                        $messageId,
-                        time(),
-                    ))->withInvocationId($invocationId);
-
-                    $textStartEmitted = false;
-                    $messageId = $this->generateEventId();
                 } elseif ($currentBlockType === 'thinking' && $reasoningStartEmitted) {
                     if (isset($responseContent[$currentBlockIndex])) {
                         $responseContent[$currentBlockIndex]['thinking'] = $currentThinkingText;
@@ -278,7 +308,7 @@ trait HandlesTextStreaming
 
                     $reasoningStartEmitted = false;
                     $reasoningId = '';
-                } elseif ($currentBlockType === 'tool_use' && $currentToolIndex >= 0 && isset($pendingToolCalls[$currentToolIndex])) {
+                } elseif ($currentBlockType === 'tool_use' && isset($pendingToolCalls[$currentToolIndex])) {
                     $call = $pendingToolCalls[$currentToolIndex];
                     $parsedArguments = json_decode($call['arguments'] ?: '{}', true) ?? [];
 
@@ -323,38 +353,29 @@ trait HandlesTextStreaming
 
             if ($type === 'message_delta') {
                 $stopReason = $data['delta']['stop_reason'] ?? '';
-                $deltaUsage = $data['usage'] ?? [];
 
                 // Usage on message_delta is cumulative for the whole message...
-                $inputTokens = $deltaUsage['input_tokens'] ?? $inputTokens;
-                $cacheCreationTokens = $deltaUsage['cache_creation_input_tokens'] ?? $cacheCreationTokens;
-                $cacheReadTokens = $deltaUsage['cache_read_input_tokens'] ?? $cacheReadTokens;
-
-                $usage = new Usage(
-                    $inputTokens,
-                    $deltaUsage['output_tokens'] ?? 0,
-                    $cacheCreationTokens,
-                    $cacheReadTokens,
-                );
+                $usage = $this->extractUsage(['usage' => array_merge($messageUsage, $data['usage'] ?? [])]);
             }
+        }
+
+        // Closed once the step is over rather than once per block, so the step is one message...
+        if ($textStartEmitted) {
+            yield (new TextEnd(
+                $this->generateEventId(),
+                $messageId,
+                time(),
+            ))->withInvocationId($invocationId);
         }
 
         return $this->buildStepResponse(
             content: array_values($responseContent),
             provider: $provider,
             model: $model,
-            usage: $usage ?? new Usage(0, 0),
+            usage: $usage ?? new TextUsage(0, 0),
             finishReason: $this->extractFinishReason(['stop_reason' => $stopReason]),
             structured: false,
         );
-    }
-
-    /**
-     * Determine if the given block type is a provider tool result.
-     */
-    protected function isProviderToolResultBlock(string $blockType): bool
-    {
-        return str_ends_with($blockType, '_tool_result');
     }
 
     /**

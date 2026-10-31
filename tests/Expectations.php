@@ -21,9 +21,9 @@ expect()->extend('toContainStreamEventTypes', function (array $eventClasses): ob
     return $this;
 });
 
-expect()->extend('toHaveUsage', function (int $promptTokens, int $completionTokens): object {
-    $this->usage->promptTokens->toBe($promptTokens)
-        ->usage->completionTokens->toBe($completionTokens);
+expect()->extend('toHaveUsage', function (int $inputTokens, int $outputTokens): object {
+    $this->usage->inputTokens->toBe($inputTokens)
+        ->usage->outputTokens->toBe($outputTokens);
 
     return $this;
 });

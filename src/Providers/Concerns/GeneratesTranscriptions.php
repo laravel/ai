@@ -6,9 +6,11 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Events\GeneratingTranscription;
+use Laravel\Ai\Events\TranscriptionFailed;
 use Laravel\Ai\Events\TranscriptionGenerated;
 use Laravel\Ai\Prompts\TranscriptionPrompt;
 use Laravel\Ai\Responses\TranscriptionResponse;
+use Throwable;
 
 trait GeneratesTranscriptions
 {
@@ -39,8 +41,11 @@ trait GeneratesTranscriptions
             $invocationId, $this, $model, $prompt,
         ));
 
-        return tap($this->transcriptionGateway()->generateTranscription(
-            $this, $model, $prompt->audio, $prompt->language, $prompt->diarize, $prompt->timeout ?? 30, $prompt->providerOptions
+        return tap($this->dispatchingFailure(
+            fn () => $this->transcriptionGateway()->generateTranscription(
+                $this, $model, $prompt->audio, $prompt->language, $prompt->diarize, $prompt->timeout ?? 30, $prompt->providerOptions
+            ),
+            fn (Throwable $exception) => new TranscriptionFailed($invocationId, $this, $model, $prompt, $exception),
         ), function (TranscriptionResponse $response) use ($invocationId, $model, $prompt): void {
             $this->events->dispatch(new TranscriptionGenerated(
                 $invocationId, $this, $model, $prompt, $response

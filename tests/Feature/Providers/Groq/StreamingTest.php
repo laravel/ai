@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ProviderToolEvent;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
@@ -41,6 +42,34 @@ test('streaming emits text events', function (): void {
         ->and($events[3])->toBeInstanceOf(TextDelta::class)->delta->toBe(' world')
         ->and($events[count($events) - 2])->toBeInstanceOf(TextEnd::class)
         ->and($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class);
+});
+
+test('streaming emits provider tool events for executed built-in tools', function (): void {
+    $running = ['name' => 'python', 'index' => 0, 'type' => 'function', 'arguments' => 'print(1 + 1)'];
+    $finished = [...$running, 'output' => "2\n", 'code_results' => [['text' => '2']]];
+
+    Http::fake([
+        'api.groq.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->chatChunk(['executed_tools' => [$running]]),
+                $this->chatChunk(['executed_tools' => [$finished]]),
+                $this->chatChunk(['content' => '2']),
+                $this->chatChunkFinish('stop', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+                '[DONE]',
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = array_values(array_filter($this->collectStreamEvents(), fn ($event) => $event instanceof ProviderToolEvent));
+
+    expect($events)->toHaveCount(2)
+        ->and($events[0]->type)->toBe('python')
+        ->and($events[0]->status)->toBe('in_progress')
+        ->and($events[1]->status)->toBe('completed')
+        ->and($events[1]->data)->toBe($finished)
+        ->and($events[1]->provider)->toBe('groq');
 });
 
 test('streaming handles tool calls', function (): void {
@@ -108,8 +137,8 @@ test('streaming tool call loop emits a single accumulated stream end', function 
 
     expect($streamEnds)->toHaveCount(1)
         ->and($streamEnds[0]->reason)->toBe(FinishReason::Stop->value)
-        ->and($streamEnds[0]->usage->promptTokens)->toBe(30)
-        ->and($streamEnds[0]->usage->completionTokens)->toBe(15);
+        ->and($streamEnds[0]->usage->inputTokens)->toBe(30)
+        ->and($streamEnds[0]->usage->outputTokens)->toBe(15);
 });
 
 test('streaming error event stops stream', function (): void {
@@ -153,8 +182,8 @@ test('streaming captures usage from final chunk', function (): void {
 
     $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
-    expect($streamEnd->usage->promptTokens)->toBe(42)
-        ->and($streamEnd->usage->completionTokens)->toBe(10);
+    expect($streamEnd->usage->inputTokens)->toBe(42)
+        ->and($streamEnd->usage->outputTokens)->toBe(10);
 });
 
 test('streaming captures reasoning tokens', function (): void {
@@ -181,8 +210,8 @@ test('streaming captures reasoning tokens', function (): void {
 
     $streamEnd = array_values(array_filter($events, fn ($e): bool => $e instanceof StreamEnd))[0];
 
-    expect($streamEnd->usage->promptTokens)->toBe(100)
-        ->and($streamEnd->usage->completionTokens)->toBe(50)
+    expect($streamEnd->usage->inputTokens)->toBe(100)
+        ->and($streamEnd->usage->outputTokens)->toBe(50)
         ->and($streamEnd->usage->reasoningTokens)->toBe(20);
 });
 
