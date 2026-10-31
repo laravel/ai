@@ -30,7 +30,7 @@ trait ParsesTextResponses
         if (! $data || isset($data['error'])) {
             throw new AiException(sprintf(
                 'OpenAI Error: [%s] %s',
-                $data['error']['type'] ?? 'unknown',
+                $data['error']['type'] ?? $data['error']['code'] ?? 'unknown',
                 $data['error']['message'] ?? 'Unknown OpenAI error.',
             ));
         }
