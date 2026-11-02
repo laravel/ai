@@ -4,6 +4,7 @@ namespace Laravel\Ai\Middleware;
 
 use Closure;
 use Illuminate\Support\Str;
+use Laravel\Ai\AnonymousAgent;
 use Laravel\Ai\Concerns\RemembersConversations as RemembersConversationsTrait;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
@@ -156,7 +157,7 @@ class RememberConversation
             $agent->continue($this->store->storeConversation(
                 $participantType,
                 $participantId,
-                $this->generateTitle($prompt->prompt),
+                $this->generateTitle($prompt),
                 $pendingConversationId,
             ), $participant);
         }
@@ -209,23 +210,29 @@ class RememberConversation
     /**
      * Generate a title for the conversation.
      */
-    protected function generateTitle(string $prompt): string
+    protected function generateTitle(AgentPrompt $prompt): string
     {
         if (! (bool) config('ai.conversations.generate_title', true)) {
-            return Str::limit($prompt, 50, preserveWords: true);
+            return Str::limit($prompt->prompt, 50, preserveWords: true);
         }
 
         try {
-            $response = $this->provider->textGenerationLoop()->generate(
+            $response = $this->provider->prompt(new AgentPrompt(
+                new AnonymousAgent(
+                    'Generate a concise 3-5 word title for a conversation that starts with the following message. Use the same language as the message. Respond with only the title, no quotes or punctuation.',
+                    [],
+                    [],
+                ),
+                Str::limit($prompt->prompt, 500),
+                [],
                 $this->provider,
                 $this->provider->cheapestTextModel(),
-                'Generate a concise 3-5 word title for a conversation that starts with the following message. Use the same language as the message. Respond with only the title, no quotes or punctuation.',
-                [new UserMessage(Str::limit($prompt, 500))],
-            );
+                parentInvocationId: $prompt->invocationId,
+            ));
 
             return Str::limit($response->text, 100);
         } catch (Throwable) {
-            return Str::limit($prompt, 100, preserveWords: true);
+            return Str::limit($prompt->prompt, 100, preserveWords: true);
         }
     }
 }
