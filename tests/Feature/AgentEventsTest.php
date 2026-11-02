@@ -1,12 +1,11 @@
 <?php
 
-use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
-use Laravel\Ai\Agents\TitleAgent;
+use Laravel\Ai\AnonymousAgent;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Events\AgentFailed;
@@ -34,7 +33,6 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Tools\AgentTool;
 use Tests\Fixtures\Agents\AssistantAgent;
-use Tests\Fixtures\Agents\CustomTitleAgent;
 use Tests\Fixtures\Agents\DelegatingAgent;
 use Tests\Fixtures\Agents\DelegatingViaCustomToolAgent;
 use Tests\Fixtures\Agents\MiddleManagerAgent;
@@ -231,12 +229,8 @@ test('conversation title generation does not report steps against the run that t
 
     $response = (new RememberingAssistantAgent)->forUser($user)->prompt('Test prompt');
 
-    // Title generation runs its own loop on the same provider, and must not be attributed to this run...
-    Event::assertDispatchedTimes(StartingStep::class, 1);
-    Event::assertDispatchedTimes(StepCompleted::class, 1);
-
-    Event::assertDispatched(StartingStep::class, fn (StartingStep $event): bool => $event->invocationId === $response->invocationId
-        && $event->stepNumber === 0);
+    expect(Event::dispatched(StartingStep::class, fn (StartingStep $event): bool => $event->invocationId === $response->invocationId))->toHaveCount(1)
+        ->and(Event::dispatched(StepCompleted::class, fn (StepCompleted $event): bool => $event->invocationId === $response->invocationId))->toHaveCount(1);
 });
 
 describe('conversation title events', function (): void {
@@ -257,10 +251,9 @@ describe('conversation title events', function (): void {
 
         $response = (new RememberingAssistantAgent)->forUser((object) ['id' => 1])->prompt('Hello', provider: 'groq');
 
-        $title = Event::dispatched(AgentPrompted::class, fn (AgentPrompted $event): bool => $event->prompt->agent instanceof TitleAgent)->sole()[0];
+        $title = Event::dispatched(AgentPrompted::class, fn (AgentPrompted $event): bool => $event->prompt->parentInvocationId === $response->invocationId)->sole()[0];
 
         expect($title->invocationId)->not->toBe($response->invocationId)
-            ->and($title->prompt->parentInvocationId)->toBe($response->invocationId)
             ->and($title->prompt->provider->name())->toBe('groq')
             ->and($title->prompt->model)->toBe('openai/gpt-oss-20b')
             ->and($title->prompt->prompt)->toBe('Hello')
@@ -283,7 +276,7 @@ describe('conversation title events', function (): void {
 
         $failed = Event::dispatched(AgentFailed::class)->sole()[0];
 
-        expect($failed->prompt->agent)->toBeInstanceOf(TitleAgent::class)
+        expect($failed->prompt->agent)->toBeInstanceOf(AnonymousAgent::class)
             ->and($failed->prompt->parentInvocationId)->toBe($response->invocationId)
             ->and($failed->exception)->toBeInstanceOf(RequestException::class);
     });
@@ -301,8 +294,7 @@ describe('conversation title events', function (): void {
 
         $failedRun = Event::dispatched(AgentFailed::class)->sole()[0];
 
-        Event::assertDispatched(AgentPrompted::class, fn (AgentPrompted $event): bool => $event->prompt->agent instanceof TitleAgent
-            && $event->prompt->parentInvocationId === $failedRun->invocationId
+        Event::assertDispatched(AgentPrompted::class, fn (AgentPrompted $event): bool => $event->prompt->parentInvocationId === $failedRun->invocationId
             && $event->response->text === 'Number Report');
     });
 
@@ -312,7 +304,7 @@ describe('conversation title events', function (): void {
             ->pushResponse(fakeGroqResponse('Greeting Conversation'));
 
         Event::listen(AgentPrompted::class, function (AgentPrompted $event): void {
-            if ($event->prompt->agent instanceof TitleAgent) {
+            if ($event->prompt->parentInvocationId !== null) {
                 throw new RuntimeException('observability backend is down');
             }
         });
@@ -321,38 +313,6 @@ describe('conversation title events', function (): void {
 
         expect($response->text)->toBe('Hello there.')
             ->and($this->store->conversations[$response->conversationId]['title'])->toBe('Hello');
-    });
-
-    test('the configured title agent titles conversations with its own provider and model', function (): void {
-        config(['ai.conversations.title_agent' => CustomTitleAgent::class]);
-
-        Http::fakeSequence()
-            ->pushResponse(fakeGroqResponse('Hello there.'))
-            ->pushResponse(fakeGroqResponse('Greeting Conversation'));
-
-        $response = (new RememberingAssistantAgent)->forUser((object) ['id' => 1])->prompt('Hello', provider: 'groq', model: 'openai/gpt-oss-120b');
-
-        expect($this->store->conversations[$response->conversationId]['title'])->toBe('Greeting Conversation');
-
-        Http::assertSent(fn (Request $request): bool => $request['model'] === 'llama-3.1-8b-instant'
-            && $request['messages'][0]['content'] === 'Title the conversation.');
-    });
-
-    test('a faked agent titles its conversation through the faked title agent and never the provider', function (): void {
-        RememberingAssistantAgent::fake(['First answer.', 'Second answer.']);
-
-        $first = (new RememberingAssistantAgent)->forUser((object) ['id' => 1])->prompt('Hello');
-
-        TitleAgent::fake(['Greeting Conversation']);
-
-        $second = (new RememberingAssistantAgent)->forUser((object) ['id' => 1])->prompt('Hello again');
-
-        expect($first->text)->toBe('First answer.')
-            ->and($second->text)->toBe('Second answer.')
-            ->and($this->store->conversations[$first->conversationId]['title'])->toBe('Hello')
-            ->and($this->store->conversations[$second->conversationId]['title'])->toBe('Greeting Conversation');
-
-        Http::assertNothingSent();
     });
 
     test('disabled conversation title generation makes no title call', function (): void {
