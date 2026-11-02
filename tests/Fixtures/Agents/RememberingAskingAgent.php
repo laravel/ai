@@ -9,11 +9,11 @@ use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContrac
 use Laravel\Ai\Promptable;
 use Tests\Fixtures\Tools\DescribedApprovalTool;
 use Tests\Fixtures\Tools\GuardedGeolocationTool;
-use Tests\Fixtures\Tools\InteractiveChoiceTool;
+use Tests\Fixtures\Tools\ChoiceTool;
 use Tests\Fixtures\Tools\ReceiptTool;
 use Tests\Fixtures\Tools\SilentGeolocationTool;
 
-class RememberingInteractiveAgent implements Agent, HasTools, RemembersConversationsContract
+class RememberingAskingAgent implements Agent, HasTools, RemembersConversationsContract
 {
     use Promptable;
     use RemembersConversations;
@@ -25,6 +25,6 @@ class RememberingInteractiveAgent implements Agent, HasTools, RemembersConversat
 
     public function tools(): iterable
     {
-        return [new DescribedApprovalTool, new GuardedGeolocationTool, new InteractiveChoiceTool, new ReceiptTool, new SilentGeolocationTool];
+        return [new DescribedApprovalTool, new GuardedGeolocationTool, new ChoiceTool, new ReceiptTool, new SilentGeolocationTool];
     }
 }

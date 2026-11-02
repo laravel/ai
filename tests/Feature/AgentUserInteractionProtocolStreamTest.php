@@ -547,6 +547,25 @@ test('a pending approval without a reason omits the interrupt message', function
     expect(end($events)['outcome']['interrupts'][0])->not->toHaveKey('message');
 });
 
+test('a run paused on input asks for the values its schema describes', function () {
+    $schema = ['type' => 'object', 'properties' => ['answer' => ['type' => 'string']], 'required' => ['answer']];
+
+    $events = agUiProtocolEvents([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new ToolApprovalRequest('event-1', collect([
+            new PendingApproval('call-1', 'ChoiceTool', [], null, $schema, ['hint' => 'Pick one.']),
+        ]), time()),
+        new StreamEnd('event-2', 'tool_calls', new TextUsage, time()),
+    ]);
+
+    $interrupt = end($events)['outcome']['interrupts'][0];
+
+    expect($interrupt['reason'])->toBe('input_required')
+        ->and($interrupt['metadata']['kind'])->toBe('input')
+        ->and($interrupt['metadata']['data'])->toBe(['hint' => 'Pick one.'])
+        ->and($interrupt['responseSchema'])->toBe($schema);
+});
+
 test('a resumed run emits the approved tool result for the prior turn tool call', function () {
     $events = agUiProtocolEvents([
         new ToolResult('event-1', new Data\ToolResult('call-1', 'DeleteFile', ['path' => 'a.txt'], 'deleted'), true, null, time()),

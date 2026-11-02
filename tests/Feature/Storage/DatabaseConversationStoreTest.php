@@ -43,8 +43,8 @@ use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
+use Tests\Fixtures\Agents\RememberingAskingAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
-use Tests\Fixtures\Agents\RememberingInteractiveAgent;
 use Tests\Fixtures\Agents\RememberingToolUsingAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
@@ -256,7 +256,7 @@ test('it reports the tool calls a paused turn is waiting on', function (): void 
         ->and($pending[1]->reason)->toBeNull();
 });
 
-test('it reports the payload a paused interactive turn is waiting on', function (): void {
+test('it reports the payload a turn paused on input is waiting on', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Paused');
 
@@ -290,24 +290,52 @@ test('it keeps the payload of the calls still pending after another is resolved'
         ->and($pending[0]->data)->toBe(['options' => ['Home']]);
 });
 
-test('it persists the payload of a paused interactive turn from a remembered agent prompt', function (): void {
+test('it persists the payload of a turn paused on input from a remembered agent prompt', function (): void {
     Config::set('ai.conversations.generate_title', false);
 
     Http::fake([
         'api.anthropic.com/*' => Http::response([
             'id' => 'msg_1', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-sonnet-4-6',
-            'content' => [['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'InteractiveChoiceTool', 'input' => ['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]]],
+            'content' => [['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'ChoiceTool', 'input' => ['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]]],
             'stop_reason' => 'tool_use', 'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
         ]),
     ]);
 
-    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
     $pending = (new DatabaseConversationStore)->pendingApprovalsFor($paused->conversationId);
 
     expect($pending)->toHaveCount(1)
         ->and($pending[0]->inputSchema['required'])->toBe(['answer'])
         ->and($pending[0]->inputSchema['properties']['answer']['enum'])->toBe(['Basic', 'Pro']);
+});
+
+test('it keeps the data a resumed tool returned for the client', function (): void {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence()
+            ->push([
+                'id' => 'msg_1', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'ChoiceTool', 'input' => ['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]]],
+                'stop_reason' => 'tool_use', 'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ])
+            ->push([
+                'id' => 'msg_2', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'Good choice.']],
+                'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+    ]);
+
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+
+    (new RememberingAskingAgent)
+        ->continue($paused->conversationId, (object) ['id' => 1])
+        ->prompt(Decisions::from(['toolu_1' => Decision::submit(['answer' => 'Pro'])]), provider: 'anthropic');
+
+    $toolResults = ConversationMessage::where('conversation_id', $paused->conversationId)->get()->flatMap->tool_results;
+
+    expect($toolResults->firstWhere('id', 'toolu_1')['data'])->toBe(['chosen' => 'Pro']);
 });
 
 test('it drops a call that already has a result', function (): void {

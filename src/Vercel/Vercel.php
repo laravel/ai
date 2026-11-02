@@ -82,7 +82,7 @@ class Vercel
 
             if ($message instanceof ConversationMessage) {
                 foreach ($message->tool_results ?? [] as $toolResult) {
-                    static::applyUiToolOutput($result, $partRefs, $toolResult['id'], $toolResult['result'] ?? null, $toolResult['denied'] ?? false);
+                    static::applyUiToolOutput($result, $partRefs, $toolResult['id'], $toolResult['data'] ?? $toolResult['result'] ?? null, $toolResult['denied'] ?? false);
                 }
             }
         }
@@ -133,7 +133,14 @@ class Vercel
                 'state' => $isPending ? 'approval-requested' : 'input-available',
                 'input' => $toolCall['arguments'],
                 ...($isPending
-                    ? ['approval' => ['id' => $toolCall['id'], 'reason' => $toolCall['approval_reason']]]
+                    ? ['approval' => [
+                        'id' => $toolCall['id'],
+                        'reason' => $toolCall['approval_reason'],
+                        ...array_filter(['descriptor' => array_filter([
+                            'inputSchema' => $toolCall['approval_input_schema'] ?? null,
+                            'data' => $toolCall['approval_data'] ?? null,
+                        ])]),
+                    ]]
                     : []),
             ];
         }

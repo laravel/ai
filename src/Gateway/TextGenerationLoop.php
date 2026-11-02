@@ -789,7 +789,7 @@ class TextGenerationLoop
     protected function executedToolResult(ToolCall $toolCall, Tool $tool, ?RunContext $context = null): ToolResult
     {
         try {
-            $response = $this->invokeTool($tool, $toolCall->arguments, $toolCall->id, $context);
+            $response = $this->invokeTool($tool, $this->modelArguments($tool, $toolCall), $toolCall->id, $context);
         } catch (ToolExecutionException $exception) {
             report($exception->exception);
 
@@ -973,12 +973,31 @@ class TextGenerationLoop
     protected function argumentsForDecision(Decision $decision, ToolCall $toolCall, Tool $tool): array
     {
         if (! $decision->isSubmitted()) {
-            return $decision->arguments ?? $toolCall->arguments;
+            return $decision->arguments ?? $this->modelArguments($tool, $toolCall);
         }
 
         $properties = $this->approvalForTool($tool, $toolCall)?->inputSchema['properties'] ?? [];
 
-        return [...$toolCall->arguments, ...array_intersect_key($decision->arguments ?? [], $properties)];
+        return [...$this->modelArguments($tool, $toolCall), ...array_intersect_key($decision->arguments ?? [], $properties)];
+    }
+
+    /**
+     * Get the arguments the model sent, without any value it set for a key only the caller may supply.
+     *
+     * @return array<string, mixed>
+     */
+    protected function modelArguments(Tool $tool, ToolCall $toolCall): array
+    {
+        if (! $tool instanceof RequiresInput) {
+            return $toolCall->arguments;
+        }
+
+        $callerOnly = array_diff_key(
+            $tool->requiresInput(new JsonSchemaTypeFactory, new Request($toolCall->arguments, $toolCall->id)),
+            $tool->schema(new JsonSchemaTypeFactory),
+        );
+
+        return array_diff_key($toolCall->arguments, $callerOnly);
     }
 
     /**
@@ -1057,6 +1076,14 @@ class TextGenerationLoop
             throw new ApprovalMismatchException('There are no tool calls pending approval.', collect());
         }
 
+        $submittedWithoutInput = $gated->filter(
+            fn (ToolCall $toolCall) => ($approval[$toolCall->id] ?? null)?->isSubmitted() && $approvals[$toolCall->id]->inputSchema === null
+        );
+
+        if ($submittedWithoutInput->isNotEmpty()) {
+            throw new ApprovalMismatchException('Values may only be submitted to a pause waiting on input.', $this->pendingApprovalsFor($submittedWithoutInput, $approvals));
+        }
+
         $this->validateSubmittedInput($gated, $approval, $approvals, $resolvedTools);
 
         return [$pendingToolCalls, $resolvedTools];
@@ -1117,7 +1144,11 @@ class TextGenerationLoop
      */
     protected function approvalForTool(?Tool $tool, ToolCall $toolCall): ?Approval
     {
-        $request = new Request($toolCall->arguments, $toolCall->id);
+        if (! $tool instanceof Tool) {
+            return null;
+        }
+
+        $request = new Request($this->modelArguments($tool, $toolCall), $toolCall->id);
 
         $approval = $tool instanceof Approvable ? $tool->shouldRequestApproval($request) : null;
 

@@ -5,11 +5,11 @@ namespace Tests\Fixtures\Agents;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Promptable;
-use Tests\Fixtures\Tools\InteractiveChoiceTool;
+use Tests\Fixtures\Tools\ChoiceTool;
 use Tests\Fixtures\Tools\ReceiptTool;
 use Tests\Fixtures\Tools\SilentGeolocationTool;
 
-class InteractiveAgent implements Agent, HasTools
+class AskingAgent implements Agent, HasTools
 {
     use Promptable;
 
@@ -20,6 +20,6 @@ class InteractiveAgent implements Agent, HasTools
 
     public function tools(): iterable
     {
-        return [new InteractiveChoiceTool, new ReceiptTool, new SilentGeolocationTool];
+        return [new ChoiceTool, new ReceiptTool, new SilentGeolocationTool];
     }
 }

@@ -135,8 +135,14 @@ class AgentUserInteraction
                 continue;
             }
 
-            if ($status === 'resolved' && is_bool($approved = $entry['payload']['approved'] ?? null)) {
-                $decisions[$id] = $approved;
+            if ($status !== 'resolved' || ! is_array($payload = $entry['payload'] ?? null)) {
+                continue;
+            }
+
+            if (! array_key_exists('approved', $payload) && $payload !== []) {
+                $decisions[$id] = Decision::submit($payload);
+            } elseif (is_bool($payload['approved'] ?? null)) {
+                $decisions[$id] = $payload['approved'];
             }
         }
 
@@ -235,6 +241,8 @@ class AgentUserInteraction
                     is_string($call['approval_reason']) ? $call['approval_reason'] : null,
                     is_string($call['name'] ?? null) ? $call['name'] : null,
                     is_array($call['arguments'] ?? null) ? $call['arguments'] : [],
+                    is_array($call['approval_input_schema'] ?? null) ? $call['approval_input_schema'] : null,
+                    is_array($call['approval_data'] ?? null) ? $call['approval_data'] : null,
                 );
             }
         }
@@ -243,24 +251,27 @@ class AgentUserInteraction
     }
 
     /**
-     * Get the interrupt that represents a pending tool approval.
+     * Get the interrupt that represents a pending tool approval, or the values a paused tool waits on.
      *
      * @param  array<string, mixed>  $arguments
+     * @param  array<string, mixed>|null  $inputSchema
+     * @param  array<string, mixed>|null  $data
      * @return array<string, mixed>
      */
-    public static function interrupt(string $id, ?string $reason = null, ?string $tool = null, array $arguments = []): array
+    public static function interrupt(string $id, ?string $reason = null, ?string $tool = null, array $arguments = [], ?array $inputSchema = null, ?array $data = null): array
     {
         return [
             'id' => $id,
-            'reason' => 'approval_required',
+            'reason' => $inputSchema === null ? 'approval_required' : 'input_required',
             ...(filled($reason) ? ['message' => $reason] : []),
             'toolCallId' => $id,
             'metadata' => [
-                'kind' => 'approval',
+                'kind' => $inputSchema === null ? 'approval' : 'input',
                 'toolName' => (string) $tool,
                 'input' => (object) $arguments,
+                ...($data === null ? [] : ['data' => $data]),
             ],
-            'responseSchema' => [
+            'responseSchema' => $inputSchema ?? [
                 'type' => 'object',
                 'properties' => ['approved' => ['type' => 'boolean']],
                 'required' => ['approved'],

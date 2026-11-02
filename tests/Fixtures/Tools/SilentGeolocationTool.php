@@ -27,6 +27,6 @@ class SilentGeolocationTool implements RequiresInput, Tool
 
     public function schema(JsonSchema $schema): array
     {
-        return [];
+        return ['latitude' => $schema->string()];
     }
 }

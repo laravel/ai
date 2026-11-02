@@ -6,13 +6,15 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
+use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\InvalidToolInputException;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
-use Tests\Fixtures\Agents\InteractiveAgent;
-use Tests\Fixtures\Agents\RememberingInteractiveAgent;
+use Tests\Fixtures\Agents\AskingAgent;
+use Tests\Fixtures\Agents\RememberingAskingAgent;
+use Tests\Fixtures\Agents\TripPlanner;
 
-function interactiveToolCall(string $tool, array $input, string $id = 'toolu_1'): array
+function requiresInputToolCall(string $tool, array $input, string $id = 'toolu_1'): array
 {
     return [
         'id' => 'msg_1', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-sonnet-4-6',
@@ -21,11 +23,33 @@ function interactiveToolCall(string $tool, array $input, string $id = 'toolu_1')
     ];
 }
 
-function interactiveText(string $text): array
+function requiresInputText(string $text): array
 {
     return [
         'id' => 'msg_2', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-sonnet-4-6',
         'content' => [['type' => 'text', 'text' => $text]],
+        'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+    ];
+}
+
+function askUserCall(): array
+{
+    return [
+        'id' => 'msg_1', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-sonnet-4-6',
+        'content' => [['type' => 'tool_use', 'id' => 'toolu_ask', 'name' => 'AskUser', 'input' => [
+            'question' => 'What do you want to do in Lisbon?',
+            'options' => ['Food tours', 'Museums', 'Beaches', 'Nightlife'],
+            'multiple' => true,
+        ]]],
+        'stop_reason' => 'tool_use', 'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+    ];
+}
+
+function askUserReply(): array
+{
+    return [
+        'id' => 'msg_2', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-sonnet-4-6',
+        'content' => [['type' => 'text', 'text' => 'Here is a 3-day plan...']],
         'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
     ];
 }
@@ -36,12 +60,12 @@ beforeEach(function () {
 
 test('a call missing the values a tool needs pauses carrying its schema', function () {
     Http::fake([
-        'api.anthropic.com/*' => Http::response(interactiveToolCall('InteractiveChoiceTool', [
+        'api.anthropic.com/*' => Http::response(requiresInputToolCall('ChoiceTool', [
             'question' => 'Which plan?', 'options' => ['Basic', 'Pro'],
         ])),
     ]);
 
-    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
     $pending = $paused->pendingApprovals->sole();
 
@@ -55,40 +79,46 @@ test('a call missing the values a tool needs pauses carrying its schema', functi
 test('a call already carrying the values runs without a round-trip', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence()
-            ->push(interactiveToolCall('SilentGeolocationTool', ['latitude' => '48.85']))
-            ->push(interactiveText('Got it.')),
+            ->push(requiresInputToolCall('SilentGeolocationTool', ['latitude' => '48.85']))
+            ->push(requiresInputText('Got it.')),
     ]);
 
-    $response = (new InteractiveAgent)->prompt('Where am I?', provider: 'anthropic');
+    $response = (new AskingAgent)->prompt('Where am I?', provider: 'anthropic');
 
     expect($response->hasPendingApprovals())->toBeFalse()
         ->and($response->toolResults->sole()->result)->toBe('at: 48.85');
 });
 
-test('a call carrying a value outside the schema pauses instead of running', function () {
+test('a value the model sets for a key only the caller may supply never reaches the tool', function () {
     Http::fake([
-        'api.anthropic.com/*' => Http::response(interactiveToolCall('InteractiveChoiceTool', [
-            'question' => 'Which plan?', 'options' => ['Basic', 'Pro'], 'answer' => 'Gold',
-        ])),
+        'api.anthropic.com/*' => Http::sequence()
+            ->push(requiresInputToolCall('ChoiceTool', ['question' => 'Which plan?', 'options' => ['Basic', 'Pro'], 'answer' => 'Pro']))
+            ->push(requiresInputText('Good choice.')),
     ]);
 
-    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
     expect($paused->toolResults)->toBeEmpty()
         ->and($paused->pendingApprovals->sole()->requiresInput())->toBeTrue();
+
+    $resumed = (new RememberingAskingAgent)
+        ->continue($paused->conversationId, (object) ['id' => 1])
+        ->prompt(Decisions::from(['toolu_1' => Decision::submit(['answer' => 'Basic'])]), provider: 'anthropic');
+
+    expect($resumed->toolResults->firstWhere('id', 'toolu_1')->result)->toBe('chose: Basic');
 });
 
 test('an invalid submission renders the pause again for JSON clients', function () {
     Http::fake([
-        'api.anthropic.com/*' => Http::response(interactiveToolCall('InteractiveChoiceTool', [
+        'api.anthropic.com/*' => Http::response(requiresInputToolCall('ChoiceTool', [
             'question' => 'Which plan?', 'options' => ['Basic', 'Pro'],
         ])),
     ]);
 
-    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
     try {
-        (new RememberingInteractiveAgent)
+        (new RememberingAskingAgent)
             ->continue($paused->conversationId, (object) ['id' => 1])
             ->prompt(Decisions::from(['toolu_1' => Decision::submit(['answer' => 'Gold'])]), provider: 'anthropic');
 
@@ -105,10 +135,10 @@ test('an invalid submission renders the pause again for JSON clients', function 
 
 test('a null value counts as missing', function () {
     Http::fake([
-        'api.anthropic.com/*' => Http::response(interactiveToolCall('SilentGeolocationTool', ['latitude' => null])),
+        'api.anthropic.com/*' => Http::response(requiresInputToolCall('SilentGeolocationTool', ['latitude' => null])),
     ]);
 
-    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Where am I?', provider: 'anthropic');
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Where am I?', provider: 'anthropic');
 
     expect($paused->hasPendingApprovals())->toBeTrue()
         ->and($paused->pendingApprovals->sole()->inputSchema['required'])->toBe(['latitude']);
@@ -117,13 +147,13 @@ test('a null value counts as missing', function () {
 test('a submission changes only the keys it names, leaving the rest of the call intact', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence()
-            ->push(interactiveToolCall('InteractiveChoiceTool', ['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]))
-            ->push(interactiveText('Good choice.')),
+            ->push(requiresInputToolCall('ChoiceTool', ['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]))
+            ->push(requiresInputText('Good choice.')),
     ]);
 
-    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
-    $resumed = (new RememberingInteractiveAgent)
+    $resumed = (new RememberingAskingAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
         ->prompt(Decisions::from([
             'toolu_1' => Decision::submit(['answer' => 'Pro']),
@@ -142,13 +172,13 @@ test('a submission changes only the keys it names, leaving the rest of the call 
 test('a submission ignores keys the tool did not ask for', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence()
-            ->push(interactiveToolCall('InteractiveChoiceTool', ['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]))
-            ->push(interactiveText('Good choice.')),
+            ->push(requiresInputToolCall('ChoiceTool', ['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]))
+            ->push(requiresInputText('Good choice.')),
     ]);
 
-    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
-    $resumed = (new RememberingInteractiveAgent)
+    $resumed = (new RememberingAskingAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
         ->prompt(Decisions::from([
             'toolu_1' => Decision::submit(['answer' => 'Pro', 'question' => 'Injected']),
@@ -160,11 +190,11 @@ test('a submission ignores keys the tool did not ask for', function () {
 test('the data a tool returns reaches the client but never the model', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence()
-            ->push(interactiveToolCall('ReceiptTool', ['total' => '$41.00']))
-            ->push(interactiveText('Thanks.')),
+            ->push(requiresInputToolCall('ReceiptTool', ['total' => '$41.00']))
+            ->push(requiresInputText('Thanks.')),
     ]);
 
-    $response = (new InteractiveAgent)->prompt('Show my receipt.', provider: 'anthropic');
+    $response = (new AskingAgent)->prompt('Show my receipt.', provider: 'anthropic');
 
     $result = $response->toolResults->sole();
 
@@ -184,42 +214,42 @@ test('the data a tool returns reaches the client but never the model', function 
 
 test('a pause waiting on values refuses a bare approval', function () {
     Http::fake([
-        'api.anthropic.com/*' => Http::response(interactiveToolCall('InteractiveChoiceTool', [
+        'api.anthropic.com/*' => Http::response(requiresInputToolCall('ChoiceTool', [
             'question' => 'Which plan?', 'options' => ['Basic', 'Pro'],
         ])),
     ]);
 
-    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
-    (new RememberingInteractiveAgent)
+    (new RememberingAskingAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
         ->prompt(Decisions::from(['toolu_1' => true]), provider: 'anthropic');
 })->throws(ValidationException::class, 'The answer field is required.');
 
 test('a pause waiting on values refuses a wildcard approval', function () {
     Http::fake([
-        'api.anthropic.com/*' => Http::response(interactiveToolCall('InteractiveChoiceTool', [
+        'api.anthropic.com/*' => Http::response(requiresInputToolCall('ChoiceTool', [
             'question' => 'Which plan?', 'options' => ['Basic', 'Pro'],
         ])),
     ]);
 
-    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
-    (new RememberingInteractiveAgent)
+    (new RememberingAskingAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
         ->prompt(Decision::approveAll(), provider: 'anthropic');
 })->throws(ValidationException::class, 'The answer field is required.');
 
 test('a pause waiting on values refuses a submission that skips one', function () {
     Http::fake([
-        'api.anthropic.com/*' => Http::response(interactiveToolCall('InteractiveChoiceTool', [
+        'api.anthropic.com/*' => Http::response(requiresInputToolCall('ChoiceTool', [
             'question' => 'Which plan?', 'options' => ['Basic', 'Pro'],
         ])),
     ]);
 
-    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
-    (new RememberingInteractiveAgent)
+    (new RememberingAskingAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
         ->prompt(Decisions::from(['toolu_1' => Decision::submit(['note' => 'later'])]), provider: 'anthropic');
 })->throws(ValidationException::class, 'The answer field is required.');
@@ -227,14 +257,14 @@ test('a pause waiting on values refuses a submission that skips one', function (
 test('a submission outside the schema is refused before the tool runs and the pause stays open', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence()
-            ->push(interactiveToolCall('InteractiveChoiceTool', ['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]))
-            ->push(interactiveText('Good choice.')),
+            ->push(requiresInputToolCall('ChoiceTool', ['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]))
+            ->push(requiresInputText('Good choice.')),
     ]);
 
-    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
     try {
-        (new RememberingInteractiveAgent)
+        (new RememberingAskingAgent)
             ->continue($paused->conversationId, (object) ['id' => 1])
             ->prompt(Decisions::from(['toolu_1' => Decision::submit(['answer' => 'Gold'])]), provider: 'anthropic');
 
@@ -245,7 +275,7 @@ test('a submission outside the schema is refused before the tool runs and the pa
 
     Http::assertSentCount(1);
 
-    $resumed = (new RememberingInteractiveAgent)
+    $resumed = (new RememberingAskingAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
         ->prompt(Decisions::from(['toolu_1' => Decision::submit(['answer' => 'Pro'])]), provider: 'anthropic');
 
@@ -254,28 +284,28 @@ test('a submission outside the schema is refused before the tool runs and the pa
 
 test('a submitted null counts as missing', function () {
     Http::fake([
-        'api.anthropic.com/*' => Http::response(interactiveToolCall('InteractiveChoiceTool', [
+        'api.anthropic.com/*' => Http::response(requiresInputToolCall('ChoiceTool', [
             'question' => 'Which plan?', 'options' => ['Basic', 'Pro'],
         ])),
     ]);
 
-    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
-    (new RememberingInteractiveAgent)
+    (new RememberingAskingAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
         ->prompt(Decisions::from(['toolu_1' => Decision::submit(['answer' => null])]), provider: 'anthropic');
 })->throws(ValidationException::class, 'The answer field is required.');
 
 test('an edit is held to the same input schema as a submission', function () {
     Http::fake([
-        'api.anthropic.com/*' => Http::response(interactiveToolCall('InteractiveChoiceTool', [
+        'api.anthropic.com/*' => Http::response(requiresInputToolCall('ChoiceTool', [
             'question' => 'Which plan?', 'options' => ['Basic', 'Pro'],
         ])),
     ]);
 
-    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
-    (new RememberingInteractiveAgent)
+    (new RememberingAskingAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
         ->prompt(Decisions::from(['toolu_1' => Decision::edit([
             'question' => 'Which plan?', 'options' => ['Basic', 'Pro'], 'answer' => 'Gold',
@@ -284,14 +314,14 @@ test('an edit is held to the same input schema as a submission', function () {
 
 test('a streamed resume refuses an invalid submission before the stream starts', function () {
     Http::fake([
-        'api.anthropic.com/*' => Http::response(interactiveToolCall('InteractiveChoiceTool', [
+        'api.anthropic.com/*' => Http::response(requiresInputToolCall('ChoiceTool', [
             'question' => 'Which plan?', 'options' => ['Basic', 'Pro'],
         ])),
     ]);
 
-    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
-    (new RememberingInteractiveAgent)
+    (new RememberingAskingAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
         ->stream(Decisions::from(['toolu_1' => Decision::submit(['answer' => 'Gold'])]), provider: 'anthropic');
 })->throws(ValidationException::class, 'The selected answer is invalid.');
@@ -299,13 +329,13 @@ test('a streamed resume refuses an invalid submission before the stream starts',
 test('a pause waiting on values may still be rejected', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence()
-            ->push(interactiveToolCall('InteractiveChoiceTool', ['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]))
-            ->push(interactiveText('No problem.')),
+            ->push(requiresInputToolCall('ChoiceTool', ['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]))
+            ->push(requiresInputText('No problem.')),
     ]);
 
-    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
-    $resumed = (new RememberingInteractiveAgent)
+    $resumed = (new RememberingAskingAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
         ->prompt(Decision::rejectAll('Cancelled.'), provider: 'anthropic');
 
@@ -315,37 +345,49 @@ test('a pause waiting on values may still be rejected', function () {
 test('an approvable tool may describe its approval with data without waiting on values', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence()
-            ->push(interactiveToolCall('DescribedApprovalTool', []))
-            ->push(interactiveText('Done.')),
+            ->push(requiresInputToolCall('DescribedApprovalTool', []))
+            ->push(requiresInputText('Done.')),
     ]);
 
-    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Delete my account.', provider: 'anthropic');
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Delete my account.', provider: 'anthropic');
 
     expect($paused->pendingApprovals->sole()->reason)->toBe('Deletes the account.')
         ->and($paused->pendingApprovals->sole()->data)->toBe(['scope' => 'account:delete'])
         ->and($paused->pendingApprovals->sole()->requiresInput())->toBeFalse();
 
-    $resumed = (new RememberingInteractiveAgent)
+    $resumed = (new RememberingAskingAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
         ->prompt(Decisions::from(['toolu_1' => true]), provider: 'anthropic');
 
     expect($resumed->toolResults->sole()->result)->toBe('deleted');
 });
 
+test('a pause waiting only on approval refuses submitted values', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(requiresInputToolCall('DescribedApprovalTool', [])),
+    ]);
+
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Delete my account.', provider: 'anthropic');
+
+    (new RememberingAskingAgent)
+        ->continue($paused->conversationId, (object) ['id' => 1])
+        ->prompt(Decisions::from(['toolu_1' => Decision::submit(['confirm' => true])]), provider: 'anthropic');
+})->throws(ApprovalMismatchException::class, 'Values may only be submitted to a pause waiting on input.');
+
 test('a tool that needs both values and approval asks for approval once it has them', function () {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence()
-            ->push(interactiveToolCall('GuardedGeolocationTool', ['latitude' => '48.85']))
-            ->push(interactiveText('Got it.')),
+            ->push(requiresInputToolCall('GuardedGeolocationTool', ['latitude' => '48.85']))
+            ->push(requiresInputText('Got it.')),
     ]);
 
-    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Where am I?', provider: 'anthropic');
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Where am I?', provider: 'anthropic');
 
     expect($paused->hasPendingApprovals())->toBeTrue()
         ->and($paused->pendingApprovals->sole()->requiresInput())->toBeFalse()
         ->and($paused->pendingApprovals->sole()->reason)->toBe('Uses your location.');
 
-    $resumed = (new RememberingInteractiveAgent)
+    $resumed = (new RememberingAskingAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
         ->prompt(Decisions::from(['toolu_1' => true]), provider: 'anthropic');
 
@@ -354,22 +396,22 @@ test('a tool that needs both values and approval asks for approval once it has t
 
 test('a tool that needs both values and approval asks for the values first', function () {
     Http::fake([
-        'api.anthropic.com/*' => Http::response(interactiveToolCall('GuardedGeolocationTool', [])),
+        'api.anthropic.com/*' => Http::response(requiresInputToolCall('GuardedGeolocationTool', [])),
     ]);
 
-    $paused = (new RememberingInteractiveAgent)->forUser((object) ['id' => 1])->prompt('Where am I?', provider: 'anthropic');
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Where am I?', provider: 'anthropic');
 
     expect($paused->pendingApprovals->sole()->requiresInput())->toBeTrue()
         ->and($paused->pendingApprovals->sole()->reason)->toBe('Uses your location.');
 });
 
 test('a streamed tool result event carries the data the tool returned', function () {
-    InteractiveAgent::fake([
+    AskingAgent::fake([
         new ToolCall('call_1', 'ReceiptTool', ['total' => '$41.00']),
         'Thanks.',
     ]);
 
-    $response = (new InteractiveAgent)->stream('Show my receipt.');
+    $response = (new AskingAgent)->stream('Show my receipt.');
     $response->each(fn (): true => true);
 
     $event = collect($response->events)->first(fn ($event): bool => $event instanceof ToolResultEvent);
@@ -377,3 +419,71 @@ test('a streamed tool result event carries the data the tool returned', function
     expect($event->toArray()['data'])->toBe(['total' => '$41.00'])
         ->and($event->toArray()['result'])->toBe('Total: $41.00');
 });
+
+test('the model asks, the user picks several options and types one of their own', function () {
+    Http::fake(['api.anthropic.com/*' => Http::sequence()->push(askUserCall())->push(askUserReply())]);
+
+    $paused = (new TripPlanner)->forUser((object) ['id' => 1])->prompt('Plan 3 days in Lisbon.', provider: 'anthropic');
+
+    $pending = $paused->pendingApprovals->sole();
+
+    expect($pending->requiresInput())->toBeTrue()
+        ->and($pending->arguments['options'])->toBe(['Food tours', 'Museums', 'Beaches', 'Nightlife'])
+        ->and($pending->inputSchema['required'])->toBe(['answers']);
+
+    $resumed = (new TripPlanner)->continue($paused->conversationId, (object) ['id' => 1])->prompt(
+        Decisions::from([$pending->id => Decision::submit(['answers' => ['Food tours', 'Fado night']])]),
+        provider: 'anthropic',
+    );
+
+    $result = $resumed->toolResults->firstWhere('id', 'toolu_ask');
+
+    expect($result->result)->toBe('The user answered: Food tours, Fado night. Typed by the user: Fado night')
+        ->and($result->data['typed'])->toBe(['Fado night'])
+        ->and((string) $resumed)->toBe('Here is a 3-day plan...');
+});
+
+test('an answer without the answers key is refused before the tool runs', function () {
+    Http::fake(['api.anthropic.com/*' => Http::response(askUserCall())]);
+
+    $paused = (new TripPlanner)->forUser((object) ['id' => 1])->prompt('Plan 3 days in Lisbon.', provider: 'anthropic');
+
+    (new TripPlanner)->continue($paused->conversationId, (object) ['id' => 1])->prompt(
+        Decisions::from(['toolu_ask' => true]),
+        provider: 'anthropic',
+    );
+})->throws(ValidationException::class, 'The answers field is required.');
+
+test('the user may rewrite the question and options along with the answer', function () {
+    Http::fake(['api.anthropic.com/*' => Http::sequence()->push(askUserCall())->push(askUserReply())]);
+
+    $paused = (new TripPlanner)->forUser((object) ['id' => 1])->prompt('Plan 3 days in Lisbon.', provider: 'anthropic');
+
+    $resumed = (new TripPlanner)->continue($paused->conversationId, (object) ['id' => 1])->prompt(
+        Decisions::from(['toolu_ask' => Decision::edit([
+            'question' => 'What do you want to do in Porto?',
+            'options' => ['Wine cellars', 'River cruise'],
+            'multiple' => false,
+            'answers' => ['Wine cellars'],
+        ])]),
+        provider: 'anthropic',
+    );
+
+    expect($resumed->toolResults->firstWhere('id', 'toolu_ask')->result)->toBe('The user answered: Wine cellars');
+});
+
+test('an edit is held to the input schema of its edited arguments', function () {
+    Http::fake(['api.anthropic.com/*' => Http::response(askUserCall())]);
+
+    $paused = (new TripPlanner)->forUser((object) ['id' => 1])->prompt('Plan 3 days in Lisbon.', provider: 'anthropic');
+
+    (new TripPlanner)->continue($paused->conversationId, (object) ['id' => 1])->prompt(
+        Decisions::from(['toolu_ask' => Decision::edit([
+            'question' => 'What do you want to do in Porto?',
+            'options' => ['Wine cellars', 'River cruise'],
+            'multiple' => false,
+            'answers' => ['Wine cellars', 'River cruise'],
+        ])]),
+        provider: 'anthropic',
+    );
+})->throws(ValidationException::class, 'The answers field must not have more than 1 items.');

@@ -9,7 +9,7 @@ use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\Response;
 use Stringable;
 
-class InteractiveChoiceTool implements RequiresInput, Tool
+class ChoiceTool implements RequiresInput, Tool
 {
     public function description(): string
     {
@@ -28,6 +28,9 @@ class InteractiveChoiceTool implements RequiresInput, Tool
 
     public function schema(JsonSchema $schema): array
     {
-        return [];
+        return [
+            'question' => $schema->string()->required(),
+            'options' => $schema->array()->items($schema->string())->required(),
+        ];
     }
 }

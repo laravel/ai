@@ -32,7 +32,7 @@ class GuardedGeolocationTool implements Approvable, RequiresInput, Tool
 
     public function schema(JsonSchema $schema): array
     {
-        return [];
+        return ['latitude' => $schema->string()];
     }
 
     protected function needsApproval(Request $request): Approval|bool
