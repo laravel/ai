@@ -7,9 +7,9 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\RemembersConversations as RemembersConversationsContract;
 use Laravel\Ai\Promptable;
+use Tests\Fixtures\Tools\ChoiceTool;
 use Tests\Fixtures\Tools\DescribedApprovalTool;
 use Tests\Fixtures\Tools\GuardedGeolocationTool;
-use Tests\Fixtures\Tools\ChoiceTool;
 use Tests\Fixtures\Tools\ReceiptTool;
 use Tests\Fixtures\Tools\SilentGeolocationTool;
 
