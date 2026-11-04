@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Approvals\Approval;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Attributes\ExecuteToolsEagerly;
 use Laravel\Ai\Attributes\RepairToolCalls;
 use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Contracts\Approvable;
@@ -252,6 +253,7 @@ class TextGenerationLoop
         $previous = null;
         $accumulatedUsage = new TextUsage;
         $finalReason = null;
+        $executesToolsEagerly = ExecuteToolsEagerly::isAppliedTo($options?->agent);
 
         if ($approval !== null) {
             $resumption = $this->resumeFromApproval($approval, $messages, $tools, $validatedApproval, $context);
@@ -333,6 +335,7 @@ class TextGenerationLoop
                 }
 
                 $reasoningDeltas = [];
+                $executedToolResults = [];
 
                 foreach ($stepResult as $event) {
                     yield $event;
@@ -343,6 +346,33 @@ class TextGenerationLoop
 
                     if ($event instanceof ReasoningDelta) {
                         $reasoningDeltas[] = $event;
+                    }
+
+                    // A tool call is complete once its event arrives, so an eager agent runs it while the model is still writing the rest of the step...
+                    if ($executesToolsEagerly && $event instanceof ToolCallEvent && ! isset($executedToolResults[$event->toolCall->id])
+                        && ($tool = $this->eagerTool($event->toolCall, $attempt?->step ?? $pending)) !== null) {
+                        if ($tool instanceof AgentTool) {
+                            $events = $this->executeAgentToolStreaming($tool, $event->toolCall->arguments, $event->toolCall->id, $context);
+
+                            // Re-yielded rather than delegated so every event keeps a distinct key and iterator_to_array() drops none of them...
+                            foreach ($this->preliminaryToolResults($events, $event->toolCall, $invocationId) as $preliminary) {
+                                yield $preliminary;
+                            }
+
+                            $toolResult = $this->toolResult($event->toolCall, $events->getReturn());
+                        } else {
+                            $toolResult = $this->executedToolResult($event->toolCall, $tool, $context);
+                        }
+
+                        $executedToolResults[$toolResult->id] = $toolResult;
+
+                        yield (new ToolResultEvent(
+                            $this->generateEventId(),
+                            $toolResult,
+                            $toolResult->successful(),
+                            $toolResult->error(),
+                            time(),
+                        ))->withInvocationId($invocationId);
                     }
                 }
 
@@ -382,7 +412,7 @@ class TextGenerationLoop
             $finalReason = $result->finishReason;
 
             $toolStream = $this->streamedStepToolResults(
-                $result, $prepared->isFinalStep, $prepared->tools, $invocationId, $prepared->options, $context,
+                $result, $prepared->isFinalStep, $prepared->tools, $invocationId, $prepared->options, $context, $executedToolResults,
             );
 
             // Re-yielded rather than delegated so every event keeps a distinct key and iterator_to_array() drops none of them...
@@ -395,6 +425,10 @@ class TextGenerationLoop
             $completedStep->toolResults = $toolResults;
 
             foreach ($toolResults as $toolResult) {
+                if (isset($executedToolResults[$toolResult->id])) {
+                    continue;
+                }
+
                 yield (new ToolResultEvent(
                     $this->generateEventId(),
                     $toolResult,
@@ -643,9 +677,10 @@ class TextGenerationLoop
      * Get tool results while streaming sub-agent activity.
      *
      * @param  array<Tool|ProviderTool>  $tools
+     * @param  array<string, ToolResult>  $executedToolResults  the results of tool calls already executed while the step streamed, keyed by tool call id
      * @return Generator<int, ToolResultEvent, mixed, array{array<int, ToolResult>, Collection<int, PendingApproval>}>
      */
-    protected function streamedStepToolResults(StepResponse $result, bool $isFinalStep, array $tools, string $invocationId, ?TextGenerationOptions $options = null, ?RunContext $context = null): Generator
+    protected function streamedStepToolResults(StepResponse $result, bool $isFinalStep, array $tools, string $invocationId, ?TextGenerationOptions $options = null, ?RunContext $context = null, array $executedToolResults = []): Generator
     {
         if (($earlyOutcome = $this->earlyStepToolResults($result)) !== null) {
             return $earlyOutcome;
@@ -658,6 +693,13 @@ class TextGenerationLoop
         $toolResults = [];
 
         foreach ($resolved as [$toolCall, $tool]) {
+            // Recorded only now, in the order the model wrote the calls, because the step itself is recorded after its stream ends...
+            if (isset($executedToolResults[$toolCall->id])) {
+                $toolResults[] = $this->recordedToolResult($executedToolResults[$toolCall->id], $context);
+
+                continue;
+            }
+
             if (! $tool instanceof AgentTool || $isFinalStep) {
                 $toolResults[] = $this->withRepairSetting(
                     $options, fn (): ToolResult => $this->resolvedToolResult($toolCall, $tool, $isFinalStep, $tools, $context),
@@ -674,6 +716,27 @@ class TextGenerationLoop
         }
 
         return [$toolResults, $pendingApprovals];
+    }
+
+    /**
+     * The tool a streamed call may run on as soon as it is complete, or null when it must wait for the end of its step.
+     *
+     * Gated tools always wait, as do calls on the final step and calls to unknown tools.
+     */
+    protected function eagerTool(ToolCall $toolCall, PendingStep $step): ?Tool
+    {
+        $tool = $this->findTool($toolCall->name, $step->tools);
+
+        if ($step->isFinalStep || ! $tool instanceof Tool) {
+            return null;
+        }
+
+        // A sub-agent is only gated when asked to be, whereas any other approvable tool decides per call and is asked only once, at the end of the step...
+        if ($tool instanceof AgentTool ? $this->approvalForTool($tool, $toolCall) !== null : $tool instanceof Approvable) {
+            return null;
+        }
+
+        return $tool;
     }
 
     /**

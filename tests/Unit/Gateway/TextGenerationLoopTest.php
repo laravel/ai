@@ -5,6 +5,7 @@ use Illuminate\Events\Dispatcher;
 use JMac\Testing\Double;
 use Laravel\Ai\Approvals\Approval;
 use Laravel\Ai\Approvals\Decision;
+use Laravel\Ai\Attributes\ExecuteToolsEagerly;
 use Laravel\Ai\Attributes\RepairToolCalls;
 use Laravel\Ai\Concerns\InteractsWithApprovals;
 use Laravel\Ai\Contracts\Agent;
@@ -1625,3 +1626,202 @@ test('a gated tool pauses the streamed loop while a sub-agent still reports its 
         ->and($approvalRequests)->toHaveCount(1)
         ->and($approvalRequests->first()->pendingApprovals->first()->id)->toBe('call-gated');
 });
+
+test('an eager agent executes each streamed tool call as soon as it is complete', function (): void {
+    $tool = new TextGenerationLoopCountingTool;
+    $firstCall = new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1');
+    $secondCall = new ToolCall('call-2', TextGenerationLoopCountingTool::class, [], 'call-2');
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        textGenerationLoopStreamStep(
+            events: [
+                new ToolCallEvent('tool-call-event-1', $firstCall, time()),
+                new TextDelta('text-delta-1', 'message-1', 'Still writing', time()),
+                new ToolCallEvent('tool-call-event-2', $secondCall, time()),
+            ],
+            returns: new StepResponse('', [$firstCall, $secondCall], FinishReason::ToolCalls, new TextUsage, new Meta('fake', 'model')),
+        ),
+        textGenerationLoopStreamStep(
+            events: [new TextDelta('text-delta-2', 'message-2', 'Done', time())],
+            returns: new StepResponse('Done', [], FinishReason::Stop, new TextUsage, new Meta('fake', 'model')),
+        ),
+    ]);
+
+    $events = collect(iterator_to_array((new TextGenerationLoop($gateway))->stream(
+        'invocation-1',
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [$tool],
+        null,
+        new TextGenerationOptions(maxSteps: 2, agent: new TextGenerationLoopEagerAgent()),
+        null,
+    )))->values();
+
+    $order = $events->map(fn (StreamEvent $event): string => match (true) {
+        $event instanceof ToolCallEvent => 'call:'.$event->toolCall->id,
+        $event instanceof ToolResultEvent => 'result:'.$event->toolResult->id,
+        $event instanceof TextDelta => 'text:'.$event->delta,
+        $event instanceof StreamEnd => 'end',
+        default => get_class($event),
+    })->all();
+
+    $streamEnd = $events->whereInstanceOf(StreamEnd::class)->first();
+
+    expect($order)->toBe(['call:call-1', 'result:call-1', 'text:Still writing', 'call:call-2', 'result:call-2', 'text:Done', 'end'])
+        ->and($tool->calls)->toBe(2)
+        ->and($streamEnd->steps[0]->toolResults)->toHaveCount(2)
+        ->and(collect($streamEnd->steps[0]->toolResults)->pluck('id')->all())->toBe(['call-1', 'call-2']);
+});
+
+test('an eager agent leaves gated calls and calls on the final step for the end of the step', function (): void {
+    $gated = new TextGenerationLoopApprovableTool;
+    $ungated = new TextGenerationLoopCountingTool;
+    $gatedCall = new ToolCall('call-gated', TextGenerationLoopApprovableTool::class, ['value' => 'danger'], 'call-gated');
+    $ungatedCall = new ToolCall('call-ungated', TextGenerationLoopCountingTool::class, [], 'call-ungated');
+    $stream = fn (): array => [textGenerationLoopStreamStep(
+        events: [
+            new ToolCallEvent('tool-call-event-1', $gatedCall, time()),
+            new ToolCallEvent('tool-call-event-2', $ungatedCall, time()),
+            new TextDelta('text-delta', 'message-1', 'Still writing', time()),
+        ],
+        returns: new StepResponse('', [$gatedCall, $ungatedCall], FinishReason::ToolCalls, new TextUsage, new Meta('fake', 'model')),
+    )];
+
+    $run = fn (int $maxSteps): array => collect(iterator_to_array((new TextGenerationLoop(new TextGenerationLoopFakeGateway(streams: $stream())))->stream(
+        'invocation-1',
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [$gated, $ungated],
+        null,
+        new TextGenerationOptions(maxSteps: $maxSteps, agent: new TextGenerationLoopEagerAgent()),
+        null,
+    )))->values()->map(fn (StreamEvent $event): string => class_basename($event).(property_exists($event, 'toolCall') ? ':'.$event->toolCall->id : (property_exists($event, 'toolResult') ? ':'.$event->toolResult->id : '')))->all();
+
+    expect($run(2))->toBe(['ToolCall:call-gated', 'ToolCall:call-ungated', 'ToolResult:call-ungated', 'TextDelta', 'ToolApprovalRequest', 'StreamEnd'])
+        ->and($ungated->calls)->toBe(1)
+        ->and($run(1))->toBe(['ToolCall:call-gated', 'ToolCall:call-ungated', 'TextDelta', 'ToolResult:call-ungated', 'ToolApprovalRequest', 'StreamEnd'])
+        ->and($ungated->calls)->toBe(1)
+        ->and($gated->calls)->toBe(0);
+});
+
+test('an eager agent does not record a tool result for a step that fails after the call ran', function (): void {
+    $tool = new TextGenerationLoopCountingTool;
+    $toolCall = new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1');
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        textGenerationLoopStreamStep(
+            events: [
+                new ToolCallEvent('tool-call-event', $toolCall, time()),
+                new Error('error-event', 'overloaded_error', 'Overloaded', false, time()),
+            ],
+        ),
+    ]);
+
+    $events = [];
+
+    expect(function () use ($gateway, $tool, &$events): void {
+        foreach ((new TextGenerationLoop($gateway))->stream(
+            'invocation-1',
+            textGenerationLoopProvider(),
+            'model',
+            null,
+            [],
+            [$tool],
+            null,
+            new TextGenerationOptions(maxSteps: 2, agent: new TextGenerationLoopEagerAgent()),
+            null,
+        ) as $event) {
+            $events[] = $event;
+        }
+    })->toThrow(StreamErrorException::class);
+
+    expect($tool->calls)->toBe(1)
+        ->and(collect($events)->whereInstanceOf(ToolResultEvent::class))->toHaveCount(1)
+        ->and(collect($events)->whereInstanceOf(StreamEnd::class))->toHaveCount(0);
+});
+
+test('an eager agent streams a sub-agent call as soon as it is complete', function (): void {
+    $subAgent = textGenerationLoopAgentTool();
+    $tool = new TextGenerationLoopCountingTool;
+    $subAgentCall = new ToolCall('call-sub-agent', 'research_agent', ['task' => 'Research'], 'call-sub-agent');
+    $toolCall = new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1');
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        textGenerationLoopStreamStep(
+            events: [
+                new ToolCallEvent('tool-call-event-1', $subAgentCall, time()),
+                new ToolCallEvent('tool-call-event-2', $toolCall, time()),
+                new TextDelta('text-delta-1', 'message-1', 'Still writing', time()),
+            ],
+            returns: new StepResponse('', [$subAgentCall, $toolCall], FinishReason::ToolCalls, new TextUsage, new Meta('fake', 'model')),
+        ),
+        textGenerationLoopStreamStep(
+            events: [new TextDelta('text-delta-2', 'message-2', 'Done', time())],
+            returns: new StepResponse('Done', [], FinishReason::Stop, new TextUsage, new Meta('fake', 'model')),
+        ),
+    ]);
+
+    $order = collect(iterator_to_array((new TextGenerationLoop($gateway))->stream(
+        'invocation-1',
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [$subAgent, $tool],
+        null,
+        new TextGenerationOptions(maxSteps: 2, agent: new TextGenerationLoopEagerAgent()),
+        null,
+    )))->values()->map(fn (StreamEvent $event): string => match (true) {
+        $event instanceof ToolCallEvent => 'call:'.$event->toolCall->id,
+        $event instanceof ToolResultEvent => ($event->preliminary ? 'preliminary:' : 'result:').$event->toolResult->id,
+        $event instanceof TextDelta => 'text:'.$event->delta,
+        $event instanceof StreamEnd => 'end',
+        default => class_basename($event),
+    })->all();
+
+    expect($order)->toBe([
+        'call:call-sub-agent', 'preliminary:call-sub-agent', 'result:call-sub-agent',
+        'call:call-1', 'result:call-1', 'text:Still writing', 'text:Done', 'end',
+    ]);
+});
+
+test('an eager agent leaves a sub-agent that requires approval for the end of the step', function (): void {
+    $agent = Double::for(Agent::class, CanActAsTool::class);
+    $agent->allows('name')->returns('research_agent');
+    $agent->expects('stream')->never();
+    $subAgent = (new AgentTool($agent))->requireApproval();
+    $subAgentCall = new ToolCall('call-sub-agent', 'research_agent', ['task' => 'Research'], 'call-sub-agent');
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        textGenerationLoopStreamStep(
+            events: [new ToolCallEvent('tool-call-event', $subAgentCall, time())],
+            returns: new StepResponse('', [$subAgentCall], FinishReason::ToolCalls, new TextUsage, new Meta('fake', 'model')),
+        ),
+    ]);
+
+    $events = collect(iterator_to_array((new TextGenerationLoop($gateway))->stream(
+        'invocation-1',
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [$subAgent],
+        null,
+        new TextGenerationOptions(maxSteps: 2, agent: new TextGenerationLoopEagerAgent()),
+        null,
+    )));
+
+    expect($events->whereInstanceOf(ToolResultEvent::class))->toHaveCount(0)
+        ->and($events->whereInstanceOf(ToolApprovalRequest::class))->toHaveCount(1);
+});
+
+#[ExecuteToolsEagerly]
+class TextGenerationLoopEagerAgent implements Agent
+{
+    use Promptable;
+
+    public function instructions(): string
+    {
+        return 'You are a helpful assistant.';
+    }
+}
