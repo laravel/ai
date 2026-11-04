@@ -882,7 +882,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
      */
     protected function formatUserMessage(UserMessage $message): array
     {
-        $content = [['text' => $message->content]];
+        $content = filled($message->content) ? [['text' => $message->content]] : [];
 
         if ($message->attachments->isNotEmpty()) {
             $content = array_merge($content, $this->mapAttachments($message->attachments));

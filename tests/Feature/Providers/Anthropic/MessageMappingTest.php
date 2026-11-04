@@ -8,6 +8,7 @@ use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Gateway\Anthropic\AnthropicGateway;
 use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
@@ -104,6 +105,59 @@ test('local image attachment without explicit mime type detects mime from file',
         return $imageBlock !== null
             && $imageBlock['source']['type'] === 'base64'
             && $imageBlock['source']['media_type'] === 'image/png';
+    });
+});
+
+test('image only user message maps to only the image block', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('I see an image'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        '',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request): bool {
+        return array_column($request->data()['messages'][0]['content'], 'type') === ['image'];
+    });
+});
+
+test('user message with image and text maps the image before the text', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('I see an image'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        'What is in this image?',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request): bool {
+        $content = $request->data()['messages'][0]['content'];
+
+        return array_column($content, 'type') === ['image', 'text']
+            && $content[1]['text'] === 'What is in this image?';
+    });
+});
+
+test('history with an image only user message maps without an empty text block', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('It is red.'),
+    ]);
+
+    agent('You are helpful.', messages: [
+        new UserMessage('', [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')]),
+        new AssistantMessage('A red square.'),
+    ])->prompt('What color is it?', provider: 'anthropic');
+
+    Http::assertSent(function ($request): bool {
+        $messages = $request->data()['messages'];
+
+        return array_column($messages[0]['content'], 'type') === ['image']
+            && $messages[2]['content'] === [['type' => 'text', 'text' => 'What color is it?']];
     });
 });
 
