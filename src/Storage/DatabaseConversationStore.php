@@ -4,6 +4,7 @@ namespace Laravel\Ai\Storage;
 
 use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Pagination\Cursor;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +16,11 @@ use Laravel\Ai\Contracts\PaginatesConversations;
 use Laravel\Ai\Contracts\ResolvesPendingApprovals;
 use Laravel\Ai\Contracts\VerifiesConversationOwnership;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
+use Laravel\Ai\Files\Base64Audio;
+use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\File;
+use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\Video;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -93,7 +98,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'agent' => $prompt->agent::class,
             'role' => 'user',
             'content' => $prompt->prompt,
-            'attachments' => $prompt->attachments->toJson(),
+            'attachments' => $this->storableAttachments($prompt->attachments)->toJson(),
             'tool_calls' => '[]',
             'tool_results' => '[]',
             'usage' => '[]',
@@ -409,6 +414,27 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         }
 
         return $messages;
+    }
+
+    /**
+     * Convert uploaded files to Base64 attachments so they survive the request.
+     *
+     * @return Collection<int, File>
+     */
+    protected function storableAttachments(Collection $attachments): Collection
+    {
+        return $attachments->map(function ($attachment) {
+            if (! $attachment instanceof UploadedFile) {
+                return $attachment;
+            }
+
+            return match (Str::before($attachment->getClientMimeType(), '/')) {
+                'image' => Image::fromUpload($attachment),
+                'audio' => Base64Audio::fromUpload($attachment)->as($attachment->getClientOriginalName()),
+                'video' => Video::fromUpload($attachment),
+                default => Document::fromUpload($attachment),
+            };
+        });
     }
 
     /**

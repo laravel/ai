@@ -3,6 +3,7 @@
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,8 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\ResolvesPendingApprovals;
 use Laravel\Ai\Contracts\VerifiesConversationOwnership;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
+use Laravel\Ai\Files\Base64Document;
+use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -1229,6 +1232,32 @@ test('user messages with multiple attachment types are all rehydrated', function
         ->and($messages[0]->attachments[0])->toBeInstanceOf(RemoteImage::class)
         ->and($messages[0]->attachments[1])->toBeInstanceOf(StoredDocument::class)
         ->and($messages[0]->attachments[1]->path)->toBe('docs/report.pdf');
+});
+
+test('uploaded file attachments are stored as base64 and rehydrated on later turns', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Upload conversation');
+
+    $store->storeUserMessage($conversationId, 'user', 1, new AgentPrompt(
+        new ToolUsingAgent,
+        '',
+        [
+            UploadedFile::fake()->createWithContent('photo.png', 'png-bytes'),
+            UploadedFile::fake()->createWithContent('report.pdf', 'pdf-bytes'),
+        ],
+        Mockery::mock(TextProvider::class),
+        'test-model',
+    ));
+
+    $attachments = $store->getLatestConversationMessages($conversationId, 10)[0]->attachments;
+
+    expect($attachments)->toHaveCount(2)
+        ->and($attachments[0])->toBeInstanceOf(Base64Image::class)
+        ->and($attachments[0]->content())->toBe('png-bytes')
+        ->and($attachments[0]->mimeType())->toBe('image/png')
+        ->and($attachments[0]->name())->toBe('photo.png')
+        ->and($attachments[1])->toBeInstanceOf(Base64Document::class)
+        ->and($attachments[1]->name())->toBe('report.pdf');
 });
 
 test('user messages with no attachments are returned as plain Message', function (): void {

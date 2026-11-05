@@ -140,6 +140,21 @@ test('user message is formatted with text block', function (): void {
     ]);
 });
 
+test('image only user message is formatted without a text block', function (): void {
+    $formatted = textGateway()->callFormatMessages([
+        new UserMessage('', [new Base64Image(base64_encode('png'), 'image/png')]),
+    ]);
+
+    expect($formatted[0]['content'])->toHaveCount(1)
+        ->and($formatted[0]['content'][0])->toHaveKey('image');
+});
+
+test('document only user message throws because bedrock requires text with documents', function (): void {
+    expect(fn () => textGateway()->callFormatMessages([
+        new UserMessage('', [new Base64Document(base64_encode('%PDF'), 'application/pdf')]),
+    ]))->toThrow(InvalidArgumentException::class, 'Bedrock requires prompt text alongside document attachments.');
+});
+
 test('assistant message is formatted with text block', function (): void {
     $formatted = textGateway()->callFormatMessages([
         new AssistantMessage('hi there'),
