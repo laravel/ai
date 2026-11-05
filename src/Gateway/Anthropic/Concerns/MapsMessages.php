@@ -35,9 +35,9 @@ trait MapsMessages
      */
     protected function mapUserMessage(UserMessage|Message $message, array &$mapped): void
     {
-        $content = [
-            ['type' => 'text', 'text' => $message->content],
-        ];
+        $content = filled($message->content)
+            ? [['type' => 'text', 'text' => $message->content]]
+            : [];
 
         if ($message instanceof UserMessage && $message->attachments->isNotEmpty()) {
             $content = array_merge($this->mapAttachments($message->attachments), $content);

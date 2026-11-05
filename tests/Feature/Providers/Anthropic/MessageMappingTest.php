@@ -107,6 +107,22 @@ test('local image attachment without explicit mime type detects mime from file',
     });
 });
 
+test('image only user message maps to only the image block', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('I see an image'),
+    ]);
+
+    agent('You are helpful.')->prompt(
+        '',
+        attachments: [new LocalImage(__DIR__.'/../../../Fixtures/Images/red.png')],
+        provider: 'anthropic',
+    );
+
+    Http::assertSent(function ($request): bool {
+        return array_column($request->data()['messages'][0]['content'], 'type') === ['image'];
+    });
+});
+
 test('base64 pdf document maps to document content block', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse('I see a PDF'),

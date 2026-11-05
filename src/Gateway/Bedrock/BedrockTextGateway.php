@@ -16,6 +16,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Files\Document;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Gateway\Bedrock\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\Cohere\Concerns\ParsesEmbeddings;
@@ -882,7 +883,11 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
      */
     protected function formatUserMessage(UserMessage $message): array
     {
-        $content = [['text' => $message->content]];
+        if (blank($message->content) && $message->attachments->contains(fn ($attachment): bool => $attachment instanceof Document)) {
+            throw new InvalidArgumentException('Bedrock requires prompt text alongside document attachments.');
+        }
+
+        $content = filled($message->content) ? [['text' => $message->content]] : [];
 
         if ($message->attachments->isNotEmpty()) {
             $content = array_merge($content, $this->mapAttachments($message->attachments));
