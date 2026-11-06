@@ -2,7 +2,9 @@
 
 namespace Laravel\Ai\Files\Concerns;
 
+use GuzzleHttp\Psr7\Utils;
 use Illuminate\Filesystem\Filesystem;
+use Psr\Http\Message\StreamInterface;
 use RuntimeException;
 
 trait HasLocalContent
@@ -21,6 +23,18 @@ trait HasLocalContent
         }
 
         return $content;
+    }
+
+    /**
+     * Open a fresh read stream of the file; the caller closes it.
+     *
+     * @throws RuntimeException if the file does not exist at the configured path.
+     */
+    public function stream(): StreamInterface
+    {
+        return Utils::streamFor(
+            @fopen($this->path, 'rb') ?: throw new RuntimeException("File does not exist at path [{$this->path}]")
+        );
     }
 
     /**

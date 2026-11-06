@@ -5,6 +5,7 @@ namespace Laravel\Ai\Files;
 use Illuminate\Contracts\Support\Arrayable;
 use InvalidArgumentException;
 use JsonSerializable;
+use Laravel\Ai\Contracts\Files\HasStream;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
@@ -12,7 +13,7 @@ use Laravel\Ai\Files\Concerns\HasLocalContent;
 use Laravel\Ai\PendingResponses\PendingTranscriptionGeneration;
 use Laravel\Ai\Transcription;
 
-class LocalAudio extends Audio implements Arrayable, JsonSerializable, StorableFile, TranscribableAudio
+class LocalAudio extends Audio implements Arrayable, HasStream, JsonSerializable, StorableFile, TranscribableAudio
 {
     use CanBeUploadedToProvider;
     use HasLocalContent;

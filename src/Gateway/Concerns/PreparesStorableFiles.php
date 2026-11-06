@@ -2,25 +2,32 @@
 
 namespace Laravel\Ai\Gateway\Concerns;
 
+use Closure;
+use Laravel\Ai\Contracts\Files\HasStream;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\File;
+use Psr\Http\Message\StreamInterface;
 
 trait PreparesStorableFiles
 {
     /**
-     * Prepare file data for upload.
+     * Open the file's content, MIME type, and name for a single upload attempt.
      *
-     * @return array{string, string, string}
+     * @param  Closure(StreamInterface|string, string, string): mixed  $callback
      */
-    protected function prepareStorableFile(StorableFile $file): array
+    protected function withPreparedStorableFile(StorableFile $file, Closure $callback): mixed
     {
-        return [
-            $file->content(),
-            $file->mimeType() ?? 'application/octet-stream',
-            $file->name() ?? 'file',
-        ];
+        $content = $file instanceof HasStream ? $file->stream() : $file->content();
+
+        try {
+            return $callback($content, $file->mimeType() ?? 'application/octet-stream', $file->name() ?? 'file');
+        } finally {
+            if ($content instanceof StreamInterface) {
+                $content->close();
+            }
+        }
     }
 
     /**

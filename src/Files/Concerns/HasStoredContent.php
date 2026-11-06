@@ -2,8 +2,10 @@
 
 namespace Laravel\Ai\Files\Concerns;
 
+use GuzzleHttp\Psr7\Utils;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Storage;
+use Psr\Http\Message\StreamInterface;
 use RuntimeException;
 
 trait HasStoredContent
@@ -17,6 +19,19 @@ trait HasStoredContent
     {
         return Storage::disk($this->disk)->get($this->path) ??
             throw new RuntimeException('File ['.$this->path.'] does not exist on disk ['.$this->disk.'].');
+    }
+
+    /**
+     * Open a fresh read stream of the file; the caller closes it.
+     *
+     * @throws RuntimeException if the file does not exist on the configured disk.
+     */
+    public function stream(): StreamInterface
+    {
+        return Utils::streamFor(
+            Storage::disk($this->disk)->readStream($this->path) ??
+                throw new RuntimeException('File ['.$this->path.'] does not exist on disk ['.$this->disk.'].')
+        );
     }
 
     /**
