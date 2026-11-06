@@ -277,6 +277,24 @@ describe('resuming an interrupted run', function () {
             ->and($decisions->get('call-1')->arguments)->toBe(['answer' => 'Pro']);
     });
 
+    test('a resolved resume entry with an approved value among other values submits them all', function () {
+        $decisions = AgentUserInteraction::decisionsFrom([
+            ['interruptId' => 'call-1', 'status' => 'resolved', 'payload' => ['approved' => true, 'note' => 'Ship it']],
+        ]);
+
+        expect($decisions->get('call-1')->isSubmitted())->toBeTrue()
+            ->and($decisions->get('call-1')->arguments)->toBe(['approved' => true, 'note' => 'Ship it']);
+    });
+
+    test('a resolved resume entry with a non-boolean approved value submits it', function () {
+        $decisions = AgentUserInteraction::decisionsFrom([
+            ['interruptId' => 'call-1', 'status' => 'resolved', 'payload' => ['approved' => 'yes']],
+        ]);
+
+        expect($decisions->get('call-1')->isSubmitted())->toBeTrue()
+            ->and($decisions->get('call-1')->arguments)->toBe(['approved' => 'yes']);
+    });
+
     test('a new user prompt cannot bypass the pending approvals', function () {
         AssistantAgent::fake(['Deleted.']);
 
@@ -310,7 +328,7 @@ describe('resuming an interrupted run', function () {
 
     test('malformed resume entries are skipped rather than rejected', function () {
         expect(AgentUserInteraction::decisionsFrom([['status' => 'cancelled']]))->toBeNull()
-            ->and(AgentUserInteraction::decisionsFrom([['interruptId' => 'call-1', 'status' => 'resolved', 'payload' => ['approved' => 'yes']]]))->toBeNull()
+            ->and(AgentUserInteraction::decisionsFrom([['interruptId' => 'call-1', 'status' => 'resolved', 'payload' => []]]))->toBeNull()
             ->and(AgentUserInteraction::decisionsFrom([['interruptId' => 'call-1', 'status' => 'ignored', 'payload' => ['approved' => true]]]))->toBeNull();
     });
 

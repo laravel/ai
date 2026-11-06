@@ -139,10 +139,10 @@ class AgentUserInteraction
                 continue;
             }
 
-            if (! array_key_exists('approved', $payload) && $payload !== []) {
-                $decisions[$id] = Decision::submit($payload);
-            } elseif (is_bool($payload['approved'] ?? null)) {
+            if (array_keys($payload) === ['approved'] && is_bool($payload['approved'])) {
                 $decisions[$id] = $payload['approved'];
+            } elseif ($payload !== []) {
+                $decisions[$id] = Decision::submit($payload);
             }
         }
 
