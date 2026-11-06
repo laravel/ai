@@ -26,10 +26,13 @@ use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Skills\Skill;
 use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\ToolChoice;
 use Laravel\Ai\Tools\LoadSkill;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ConversationalAgent;
+use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
@@ -433,6 +436,47 @@ test('openai replays echoed output blocks on a store=false tool-call continuatio
 
     expect($response['number'])->toBe(72019)
         ->and($response->toolCalls)->toHaveCount(1);
+});
+
+test('openai-compatible streams parallel tool calls sent without an index and finished with stop', function () {
+    requiresApiKey('GEMINI_API_KEY');
+
+    config(['ai.providers.openai-compatible' => [
+        ...config('ai.providers.openai-compatible'),
+        'url' => 'https://generativelanguage.googleapis.com/v1beta/openai',
+        'key' => env('GEMINI_API_KEY'),
+    ]]);
+
+    $response = (new MultiStepToolAgent)->stream(
+        'Generate two numbers by calling the tool twice in parallel, then reply with both numbers.',
+        provider: 'openai-compatible',
+        model: 'gemini-3-flash-preview',
+    );
+
+    $events = collect($response);
+
+    expect($events->whereInstanceOf(ToolCallEvent::class))->toHaveCount(2)
+        ->and($events->whereInstanceOf(ToolResultEvent::class))->toHaveCount(2)
+        ->and($response->text)->toContain('72019');
+});
+
+test('openai-compatible prompts with a tool call finished with stop', function () {
+    requiresApiKey('GEMINI_API_KEY');
+
+    config(['ai.providers.openai-compatible' => [
+        ...config('ai.providers.openai-compatible'),
+        'url' => 'https://generativelanguage.googleapis.com/v1beta/openai',
+        'key' => env('GEMINI_API_KEY'),
+    ]]);
+
+    $response = (new MultiStepToolAgent)->prompt(
+        'Generate a number by calling the tool, then reply with the number.',
+        provider: 'openai-compatible',
+        model: 'gemini-3-flash-preview',
+    );
+
+    expect($response->toolResults)->toHaveCount(1)
+        ->and($response->text)->toContain('72019');
 });
 
 test('agents surface the reasoning a prompted turn produced', function (string $provider, string $apiKey, string $model, array $options): void {
