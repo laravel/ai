@@ -15,7 +15,7 @@ class SilentGeolocationTool implements RequiresInput, Tool
         return 'Reads the browser location, unless it already has one.';
     }
 
-    public function requiresInput(JsonSchema $schema, Request $request): array
+    public function input(JsonSchema $schema, Request $request): array
     {
         return ['latitude' => $schema->string()->required()];
     }

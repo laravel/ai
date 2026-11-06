@@ -20,7 +20,7 @@ class GuardedGeolocationTool implements Approvable, RequiresInput, Tool
         return 'Reads the browser location unless it already has one, and always asks before using it.';
     }
 
-    public function requiresInput(JsonSchema $schema, Request $request): array
+    public function input(JsonSchema $schema, Request $request): array
     {
         return ['latitude' => $schema->string()->required()];
     }

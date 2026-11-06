@@ -13,6 +13,7 @@ use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Tests\Fixtures\Agents\AskingAgent;
 use Tests\Fixtures\Agents\RememberingAskingAgent;
 use Tests\Fixtures\Agents\TripPlanner;
+use Tests\Fixtures\Tools\ChoiceTool;
 
 function requiresInputToolCall(string $tool, array $input, string $id = 'toolu_1'): array
 {
@@ -487,3 +488,21 @@ test('an edit is held to the input schema of its edited arguments', function () 
         provider: 'anthropic',
     );
 })->throws(ValidationException::class, 'The answers field must not have more than 1 items.');
+
+test('a resume asks the tool for its input only while validating the submission', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence()
+            ->push(requiresInputToolCall('ChoiceTool', ['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]))
+            ->push(requiresInputText('Good choice.')),
+    ]);
+
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+
+    ChoiceTool::$inputRequests = 0;
+
+    (new RememberingAskingAgent)
+        ->continue($paused->conversationId, (object) ['id' => 1])
+        ->prompt(Decisions::from(['toolu_1' => Decision::submit(['answer' => 'Pro'])]), provider: 'anthropic');
+
+    expect(ChoiceTool::$inputRequests)->toBe(4);
+});

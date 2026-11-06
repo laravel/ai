@@ -480,7 +480,7 @@ describe('hydrating useChat from stored messages', function () {
         ]);
 
         expect($ui[0]['parts'][0]['state'])->toBe('approval-requested')
-            ->and($ui[0]['parts'][0]['approval'])->toBe(['id' => 'call-1', 'reason' => 'Deletes a file.']);
+            ->and($ui[0]['parts'][0]['approval'])->toBe(['id' => 'call-1', 'requestReason' => 'Deletes a file.']);
     });
 
     test('a turn paused on input hydrates the schema and data the client renders from', function () {
@@ -502,7 +502,6 @@ describe('hydrating useChat from stored messages', function () {
 
         expect($ui[0]['parts'][0]['approval'])->toBe([
             'id' => 'call-1',
-            'reason' => null,
             'descriptor' => [
                 'inputSchema' => ['type' => 'object', 'properties' => ['plan' => ['type' => 'string']]],
                 'data' => ['plans' => ['Basic', 'Pro']],

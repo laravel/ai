@@ -11,13 +11,17 @@ use Stringable;
 
 class ChoiceTool implements RequiresInput, Tool
 {
+    public static int $inputRequests = 0;
+
     public function description(): string
     {
         return 'Asks the user to choose.';
     }
 
-    public function requiresInput(JsonSchema $schema, Request $request): array
+    public function input(JsonSchema $schema, Request $request): array
     {
+        static::$inputRequests++;
+
         return ['answer' => $schema->string()->enum($request['options'] ?? [])->required()];
     }
 

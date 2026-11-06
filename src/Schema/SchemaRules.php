@@ -124,17 +124,17 @@ class SchemaRules
      */
     protected static function stringRules(array $schema): array
     {
-        return array_values(array_filter([
-            isset($schema['pattern']) ? 'regex:/'.preg_replace('~(?<!\\\\)/~', '\\/', $schema['pattern']).'/u' : null,
-            match ($schema['format'] ?? null) {
-                'email' => 'email',
-                'uri', 'url' => 'url',
-                'uuid' => 'uuid',
-                'date' => 'date_format:Y-m-d',
-                'date-time' => 'date',
-                default => null,
+        return [
+            ...isset($schema['pattern']) ? ['regex:/'.preg_replace('~(?<!\\\\)/~', '\\/', $schema['pattern']).'/u'] : [],
+            ...match ($schema['format'] ?? null) {
+                'email' => ['email'],
+                'uri', 'url' => ['url'],
+                'uuid' => ['uuid'],
+                'date' => ['date_format:Y-m-d'],
+                'date-time' => ['regex:/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/i', 'date'],
+                default => [],
             },
-        ]));
+        ];
     }
 
     /**

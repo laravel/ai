@@ -232,7 +232,7 @@ class TextGenerationLoop
      * @param  array<Tool|ProviderTool>  $tools
      * @param  array<string, mixed>|null  $schema
      * @param  array<string, Decision>|null  $approval
-     * @param  array{Collection<int, ToolCall>, Collection<string, ?Tool>}|null  $validatedApproval  the caller's own eager validateApproval() result, reused instead of re-validating
+     * @param  array{Collection<int, ToolCall>, Collection<string, ?Tool>, Collection<string, array<string, mixed>>}|null  $validatedApproval  the caller's own eager validateApproval() result, reused instead of re-validating
      */
     public function stream(
         string $invocationId,
@@ -879,7 +879,7 @@ class TextGenerationLoop
      * @param  array<string, Decision>  $approval
      * @param  Message[]  $messages
      * @param  array<Tool|ProviderTool>  $tools
-     * @param  array{Collection<int, ToolCall>, Collection<string, ?Tool>}|null  $validatedApproval  a caller's own eager validateApproval() result, reused instead of re-validating
+     * @param  array{Collection<int, ToolCall>, Collection<string, ?Tool>, Collection<string, array<string, mixed>>}|null  $validatedApproval  a caller's own eager validateApproval() result, reused instead of re-validating
      */
     protected function resumeFromApproval(array $approval, array $messages, array $tools, ?array $validatedApproval = null, ?RunContext $context = null): ApprovalResumption
     {
@@ -905,12 +905,12 @@ class TextGenerationLoop
      * @param  array<string, Decision>  $approval
      * @param  Message[]  $messages
      * @param  array<Tool|ProviderTool>  $tools
-     * @param  array{Collection<int, ToolCall>, Collection<string, ?Tool>}|null  $validatedApproval  a caller's own eager validateApproval() result, reused instead of re-validating
+     * @param  array{Collection<int, ToolCall>, Collection<string, ?Tool>, Collection<string, array<string, mixed>>}|null  $validatedApproval  a caller's own eager validateApproval() result, reused instead of re-validating
      * @return array{array<int, ToolResult>, bool}
      */
     protected function resolveApprovalResults(array $approval, array $messages, array $tools, ?array $validatedApproval = null, ?RunContext $context = null): array
     {
-        [$pendingToolCalls, $resolvedTools] = $validatedApproval ?? $this->validateApproval($approval, $messages, $tools);
+        [$pendingToolCalls, $resolvedTools, $validatedArguments] = $validatedApproval ?? $this->validateApproval($approval, $messages, $tools);
 
         $toolResults = [];
         $hasBareRejection = false;
@@ -941,7 +941,7 @@ class TextGenerationLoop
                 throw new NoSuchToolException($toolCall->name);
             }
 
-            $arguments = $this->argumentsForDecision($decision, $toolCall, $tool);
+            $arguments = $validatedArguments[$toolCall->id] ?? $this->argumentsForDecision($decision, $toolCall, $tool);
             $failed = false;
 
             try {
@@ -970,13 +970,13 @@ class TextGenerationLoop
      *
      * @return array<string, mixed>
      */
-    protected function argumentsForDecision(Decision $decision, ToolCall $toolCall, Tool $tool): array
+    protected function argumentsForDecision(Decision $decision, ToolCall $toolCall, Tool $tool, ?Approval $approval = null): array
     {
         if (! $decision->isSubmitted()) {
             return $decision->arguments ?? $this->modelArguments($tool, $toolCall);
         }
 
-        $properties = $this->approvalForTool($tool, $toolCall)?->inputSchema['properties'] ?? [];
+        $properties = $approval?->inputSchema['properties'] ?? [];
 
         return [...$this->modelArguments($tool, $toolCall), ...array_intersect_key($decision->arguments ?? [], $properties)];
     }
@@ -993,7 +993,7 @@ class TextGenerationLoop
         }
 
         $callerOnly = array_diff_key(
-            $tool->requiresInput(new JsonSchemaTypeFactory, new Request($toolCall->arguments, $toolCall->id)),
+            $tool->input(new JsonSchemaTypeFactory, new Request($toolCall->arguments, $toolCall->id)),
             $tool->schema(new JsonSchemaTypeFactory),
         );
 
@@ -1036,7 +1036,7 @@ class TextGenerationLoop
      * @param  array<string, Decision>  $approval
      * @param  Message[]  $messages
      * @param  array<Tool|ProviderTool>  $tools
-     * @return array{Collection<int, ToolCall>, Collection<string, ?Tool>}
+     * @return array{Collection<int, ToolCall>, Collection<string, ?Tool>, Collection<string, array<string, mixed>>}
      */
     public function validateApproval(array $approval, array $messages, array $tools): array
     {
@@ -1084,38 +1084,40 @@ class TextGenerationLoop
             throw new ApprovalMismatchException('Values may only be submitted to a pause waiting on input.', $this->pendingApprovalsFor($submittedWithoutInput, $approvals));
         }
 
-        $this->validateSubmittedInput($gated, $approval, $approvals, $resolvedTools);
-
-        return [$pendingToolCalls, $resolvedTools];
+        return [$pendingToolCalls, $resolvedTools, $this->validatedArguments($gated, $approval, $approvals, $resolvedTools)];
     }
 
     /**
-     * Validate the arguments each decision runs its tool with against the input schema the tool declared.
+     * Resolve the arguments each approved decision runs its tool with, validating them against the input schema the tool declared.
      *
      * @param  Collection<int, ToolCall>  $gated
      * @param  array<string, Decision>  $approval
      * @param  Collection<string, ?Approval>  $approvals
      * @param  Collection<string, ?Tool>  $tools
+     * @return Collection<string, array<string, mixed>>
      *
      * @throws InvalidToolInputException
      */
-    protected function validateSubmittedInput(Collection $gated, array $approval, Collection $approvals, Collection $tools): void
+    protected function validatedArguments(Collection $gated, array $approval, Collection $approvals, Collection $tools): Collection
     {
-        $errors = $gated->flatMap(function (ToolCall $toolCall) use ($approval, $approvals, $tools) {
-            $decision = $approval[$toolCall->id] ?? $approval['*'];
-            $tool = $tools[$toolCall->id];
+        $arguments = $gated
+            ->reject(fn (ToolCall $toolCall) => ($approval[$toolCall->id] ?? $approval['*'])->isRejected())
+            ->mapWithKeys(fn (ToolCall $toolCall) => [$toolCall->id => $this->argumentsForDecision(
+                $approval[$toolCall->id] ?? $approval['*'], $toolCall, $tools[$toolCall->id], $approvals[$toolCall->id],
+            )]);
 
-            if ($approvals[$toolCall->id]->inputSchema === null || $decision->isRejected()) {
+        $errors = $gated->flatMap(function (ToolCall $toolCall) use ($arguments, $approvals, $tools) {
+            if (! $arguments->has($toolCall->id) || $approvals[$toolCall->id]->inputSchema === null) {
                 return [];
             }
 
-            $arguments = $this->argumentsForDecision($decision, $toolCall, $tool);
+            $tool = $tools[$toolCall->id];
 
             $inputSchema = $tool instanceof RequiresInput
-                ? $this->inputSchema($tool, new Request($arguments, $toolCall->id))
+                ? $this->inputSchemaFor($tool, new Request($arguments[$toolCall->id], $toolCall->id))
                 : $approvals[$toolCall->id]->inputSchema;
 
-            return collect($this->inputValidator($inputSchema, $arguments)->errors()->messages())
+            return collect($this->inputValidator($inputSchema, $arguments[$toolCall->id])->errors()->messages())
                 ->mapWithKeys(fn (array $messages, string $key) => ["{$toolCall->id}.{$key}" => $messages]);
         });
 
@@ -1126,6 +1128,8 @@ class TextGenerationLoop
 
             throw InvalidToolInputException::withPendingApprovals($errors->all(), $this->pendingApprovalsFor($invalid, $approvals));
         }
+
+        return $arguments;
     }
 
     /**
@@ -1166,7 +1170,7 @@ class TextGenerationLoop
      */
     protected function outstandingInput(RequiresInput $tool, Request $request): ?array
     {
-        $inputSchema = $this->inputSchema($tool, $request);
+        $inputSchema = $this->inputSchemaFor($tool, $request);
 
         return $this->inputValidator($inputSchema, $request->all())->fails() ? $inputSchema : null;
     }
@@ -1176,24 +1180,9 @@ class TextGenerationLoop
      *
      * @return array<string, mixed>
      */
-    protected function inputSchema(RequiresInput $tool, Request $request): array
+    protected function inputSchemaFor(RequiresInput $tool, Request $request): array
     {
-        return (new ObjectSchema($tool->requiresInput(new JsonSchemaTypeFactory, $request)))->toSchema();
-    }
-
-    /**
-     * Build the pending approval handed to the caller.
-     */
-    protected function pendingApproval(ToolCall $toolCall, Approval $approval): PendingApproval
-    {
-        return new PendingApproval(
-            $toolCall->id,
-            $toolCall->name,
-            $toolCall->arguments,
-            $approval->reason,
-            $approval->inputSchema,
-            $approval->data,
-        );
+        return (new ObjectSchema($tool->input(new JsonSchemaTypeFactory, $request)))->toSchema();
     }
 
     /**

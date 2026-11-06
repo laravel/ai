@@ -23,7 +23,7 @@ function toolInvokingGateway(): object
 
         public function invoke(Tool $tool, array $arguments = [], ?RunContext $context = null): string
         {
-            return $this->executeTool($tool, $arguments, null, $context);
+            return (string) $this->invokeTool($tool, $arguments, null, $context);
         }
     };
 }
@@ -222,7 +222,7 @@ test('a tool invocation without a run context is silent', function (): void {
 
         public function invoke(Tool $tool): string
         {
-            return $this->executeTool($tool, []);
+            return (string) $this->invokeTool($tool, []);
         }
     };
 

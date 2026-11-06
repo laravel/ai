@@ -157,4 +157,19 @@ trait HandlesToolApprovals
             $toolCall, $approvals[$toolCall->id],
         ))->values();
     }
+
+    /**
+     * Build the pending approval handed to the caller.
+     */
+    protected function pendingApproval(ToolCall $toolCall, Approval $approval): PendingApproval
+    {
+        return new PendingApproval(
+            $toolCall->id,
+            $toolCall->name,
+            $toolCall->arguments,
+            $approval->reason,
+            $approval->inputSchema,
+            $approval->data,
+        );
+    }
 }

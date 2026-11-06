@@ -23,16 +23,6 @@ trait InvokesTools
      *
      * @param  array<string, mixed>  $arguments
      */
-    protected function executeTool(Tool $tool, array $arguments, ?string $toolCallId = null, ?RunContext $context = null): string
-    {
-        return (string) $this->invokeTool($tool, $arguments, $toolCallId, $context);
-    }
-
-    /**
-     * Invoke the given tool, keeping any data it returns for the client.
-     *
-     * @param  array<string, mixed>  $arguments
-     */
     protected function invokeTool(Tool $tool, array $arguments, ?string $toolCallId = null, ?RunContext $context = null): Response
     {
         $toolInvocationId = (string) Str::uuid7();

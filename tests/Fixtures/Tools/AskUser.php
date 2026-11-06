@@ -25,7 +25,7 @@ class AskUser implements RequiresInput, Tool
         ];
     }
 
-    public function requiresInput(JsonSchema $schema, Request $request): array
+    public function input(JsonSchema $schema, Request $request): array
     {
         return [
             'answers' => $schema->array()

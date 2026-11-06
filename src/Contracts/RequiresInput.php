@@ -12,5 +12,5 @@ interface RequiresInput
      *
      * @return array<string, mixed>
      */
-    public function requiresInput(JsonSchema $schema, Request $request): array;
+    public function input(JsonSchema $schema, Request $request): array;
 }

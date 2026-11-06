@@ -135,11 +135,13 @@ class Vercel
                 ...($isPending
                     ? ['approval' => [
                         'id' => $toolCall['id'],
-                        'reason' => $toolCall['approval_reason'],
-                        ...array_filter(['descriptor' => array_filter([
-                            'inputSchema' => $toolCall['approval_input_schema'] ?? null,
-                            'data' => $toolCall['approval_data'] ?? null,
-                        ])]),
+                        ...array_filter([
+                            'requestReason' => $toolCall['approval_reason'],
+                            'descriptor' => array_filter([
+                                'inputSchema' => $toolCall['approval_input_schema'] ?? null,
+                                'data' => $toolCall['approval_data'] ?? null,
+                            ]),
+                        ]),
                     ]]
                     : []),
             ];
