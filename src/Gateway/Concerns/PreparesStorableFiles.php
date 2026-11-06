@@ -8,13 +8,14 @@ use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\File;
+use Psr\Http\Message\StreamInterface;
 
 trait PreparesStorableFiles
 {
     /**
      * Open the file's content, MIME type, and name for a single upload attempt.
      *
-     * @param  Closure(resource|string, string, string): mixed  $callback
+     * @param  Closure(StreamInterface|string, string, string): mixed  $callback
      */
     protected function withPreparedStorableFile(StorableFile $file, Closure $callback): mixed
     {
@@ -23,8 +24,8 @@ trait PreparesStorableFiles
         try {
             return $callback($content, $file->mimeType() ?? 'application/octet-stream', $file->name() ?? 'file');
         } finally {
-            if (is_resource($content)) {
-                fclose($content);
+            if ($content instanceof StreamInterface) {
+                $content->close();
             }
         }
     }

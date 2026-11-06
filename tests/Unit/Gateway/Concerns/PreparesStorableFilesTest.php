@@ -4,6 +4,7 @@ use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Gateway\Concerns\PreparesStorableFiles;
+use Psr\Http\Message\StreamInterface;
 
 function storableFileGateway(): object
 {
@@ -24,7 +25,7 @@ function recordingLocalDocument(): LocalDocument
     {
         public array $streams = [];
 
-        public function stream(): mixed
+        public function stream(): StreamInterface
         {
             return $this->streams[] = parent::stream();
         }
@@ -34,10 +35,10 @@ function recordingLocalDocument(): LocalDocument
 test('streamable files are passed as a stream that is closed after the upload', function (): void {
     $file = recordingLocalDocument();
 
-    $result = storableFileGateway()->upload($file, fn ($content, $mime, $name) => [stream_get_contents($content), $mime, $name]);
+    $result = storableFileGateway()->upload($file, fn ($content, $mime, $name) => [$content->getContents(), $mime, $name]);
 
     expect($result)->toBe(["I am a local document.\n", 'text/plain', 'document.txt'])
-        ->and(is_resource($file->streams[0]))->toBeFalse();
+        ->and($file->streams[0]->isReadable())->toBeFalse();
 });
 
 test('the stream is closed when the upload throws', function (): void {
@@ -45,7 +46,7 @@ test('the stream is closed when the upload throws', function (): void {
 
     expect(fn () => storableFileGateway()->upload($file, fn () => throw new RuntimeException('Upload aborted.')))
         ->toThrow(RuntimeException::class, 'Upload aborted.')
-        ->and(is_resource($file->streams[0]))->toBeFalse();
+        ->and($file->streams[0]->isReadable())->toBeFalse();
 });
 
 test('files without a stream are passed as their buffered content with fallback metadata', function (): void {

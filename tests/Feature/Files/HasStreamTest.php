@@ -15,9 +15,9 @@ $fixture = __DIR__.'/../../Fixtures/document.txt';
 test('local files stream their contents from disk', function (string $class) use ($fixture): void {
     $stream = (new $class($fixture))->stream();
 
-    expect(stream_get_contents($stream))->toBe("I am a local document.\n");
+    expect($stream->getContents())->toBe("I am a local document.\n");
 
-    fclose($stream);
+    $stream->close();
 })->with([LocalAudio::class, LocalDocument::class, LocalImage::class, LocalVideo::class]);
 
 test('local files throw when streaming a missing path', function (string $class): void {
@@ -31,9 +31,9 @@ test('stored files stream their contents from the configured disk', function (st
 
     $stream = (new $class('file.txt', 'uploads'))->stream();
 
-    expect(stream_get_contents($stream))->toBe('I am a stored file.');
+    expect($stream->getContents())->toBe('I am a stored file.');
 
-    fclose($stream);
+    $stream->close();
 })->with([StoredAudio::class, StoredDocument::class, StoredImage::class, StoredVideo::class]);
 
 test('stored files throw when streaming a missing path', function (string $class): void {

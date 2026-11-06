@@ -2,12 +2,12 @@
 
 namespace Laravel\Ai\Contracts\Files;
 
+use Psr\Http\Message\StreamInterface;
+
 interface HasStream
 {
     /**
      * Open a fresh read stream of the file; the caller closes it.
-     *
-     * @return resource
      */
-    public function stream(): mixed;
+    public function stream(): StreamInterface;
 }

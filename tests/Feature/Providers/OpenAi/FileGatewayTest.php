@@ -179,7 +179,7 @@ test('a rate-limited upload reopens the stream for the retry', function (): void
     {
         public int $opened = 0;
 
-        public function stream(): mixed
+        public function stream(): StreamInterface
         {
             $this->opened++;
 
