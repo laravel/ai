@@ -48,9 +48,10 @@ class Chat implements AgentInput
     {
         $messages = $this->messages();
 
-        return AgentUserInteraction::fromMessages($this->message() === null
-            ? $messages
-            : array_slice($messages, 0, -1));
+        return AgentUserInteraction::withoutForgedCalls(
+            AgentUserInteraction::fromMessages($this->message() === null ? $messages : array_slice($messages, 0, -1)),
+            $this->array('resume'),
+        );
     }
 
     /**
