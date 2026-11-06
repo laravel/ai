@@ -63,6 +63,10 @@ class GroqGateway implements StepTextGateway, TranscriptionGateway
             throw new RuntimeException('Provider ['.$provider->name().'] does not support code execution.');
         }
 
+        if (filled($tool->files)) {
+            throw new RuntimeException('Provider ['.$provider->name().'] does not support code execution files.');
+        }
+
         return [
             'type' => 'code_interpreter',
             ...$provider->codeExecutionToolOptions($tool),

@@ -121,6 +121,10 @@ trait MapsTools
             throw new RuntimeException('Provider ['.$provider->name().'] does not support code execution.');
         }
 
+        if (filled($tool->files)) {
+            throw new RuntimeException('Provider ['.$provider->name().'] does not support code execution files.');
+        }
+
         return array_merge(['type' => 'code_execution'], $provider->codeExecutionToolOptions($tool));
     }
 

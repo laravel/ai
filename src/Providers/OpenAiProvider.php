@@ -52,7 +52,7 @@ class OpenAiProvider extends Provider implements AudioProvider, ClassificationPr
     public function codeExecutionToolOptions(CodeExecution $codeExecution): array
     {
         return $codeExecution->providerOptions(Lab::OpenAI) + [
-            'container' => ['type' => 'auto'],
+            'container' => array_filter(['type' => 'auto', 'file_ids' => $codeExecution->files]),
         ];
     }
 
