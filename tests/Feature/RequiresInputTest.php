@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
+use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\InvalidToolInputException;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -100,7 +101,9 @@ test('a value the model sets for a key only the caller may supply never reaches 
     $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
 
     expect($paused->toolResults)->toBeEmpty()
-        ->and($paused->pendingApprovals->sole()->requiresInput())->toBeTrue();
+        ->and($paused->pendingApprovals->sole()->requiresInput())->toBeTrue()
+        ->and($paused->pendingApprovals->sole()->arguments)->toBe(['question' => 'Which plan?', 'options' => ['Basic', 'Pro']])
+        ->and(app(ConversationStore::class)->pendingApprovalsFor($paused->conversationId)[0]->arguments)->toBe(['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]);
 
     $resumed = (new RememberingAskingAgent)
         ->continue($paused->conversationId, (object) ['id' => 1])
@@ -504,5 +507,5 @@ test('a resume asks the tool for its input only while validating the submission'
         ->continue($paused->conversationId, (object) ['id' => 1])
         ->prompt(Decisions::from(['toolu_1' => Decision::submit(['answer' => 'Pro'])]), provider: 'anthropic');
 
-    expect(ChoiceTool::$inputRequests)->toBe(4);
+    expect(ChoiceTool::$inputRequests)->toBe(3);
 });

@@ -320,7 +320,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             return [
                 ...$stored,
                 ...$pending->has($toolCall->id) ? $this->approvalFields($pending[$toolCall->id]) : [],
-                ...$result === null ? [] : Arr::only($result->toArray(), ['result', 'denied', 'failed', 'data']),
+                ...$result === null ? [] : Arr::only($result->toArray(), ['arguments', 'result', 'denied', 'failed', 'data']),
             ];
         })->values()->all();
     }
@@ -376,6 +376,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     protected function approvalFields(PendingApproval $approval): array
     {
         return [
+            'arguments' => $approval->arguments,
             'approval_reason' => $approval->reason,
             ...array_filter(['approval_input_schema' => $approval->inputSchema, 'approval_data' => $approval->data], fn ($value) => $value !== null),
         ];

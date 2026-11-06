@@ -789,7 +789,7 @@ class TextGenerationLoop
     protected function executedToolResult(ToolCall $toolCall, Tool $tool, ?RunContext $context = null): ToolResult
     {
         try {
-            $response = $this->invokeTool($tool, $this->modelArguments($tool, $toolCall), $toolCall->id, $context);
+            $response = $this->invokeTool($tool, $toolCall->arguments, $toolCall->id, $context);
         } catch (ToolExecutionException $exception) {
             report($exception->exception);
 
@@ -841,6 +841,7 @@ class TextGenerationLoop
 
         foreach ($toolCalls as $toolCall) {
             $tool = $this->findTool($toolCall->name, $tools);
+            $toolCall = $this->withModelArguments($toolCall, $tool);
 
             $approval = $tool instanceof Tool ? $this->approvalForTool($tool, $toolCall) : null;
 
@@ -973,23 +974,21 @@ class TextGenerationLoop
     protected function argumentsForDecision(Decision $decision, ToolCall $toolCall, Tool $tool, ?Approval $approval = null): array
     {
         if (! $decision->isSubmitted()) {
-            return $decision->arguments ?? $this->modelArguments($tool, $toolCall);
+            return $decision->arguments ?? $toolCall->arguments;
         }
 
         $properties = $approval?->inputSchema['properties'] ?? [];
 
-        return [...$this->modelArguments($tool, $toolCall), ...array_intersect_key($decision->arguments ?? [], $properties)];
+        return [...$toolCall->arguments, ...array_intersect_key($decision->arguments ?? [], $properties)];
     }
 
     /**
-     * Get the arguments the model sent, without any value it set for a key only the caller may supply.
-     *
-     * @return array<string, mixed>
+     * Get the tool call without any value the model set for a key only the caller may supply.
      */
-    protected function modelArguments(Tool $tool, ToolCall $toolCall): array
+    protected function withModelArguments(ToolCall $toolCall, ?Tool $tool): ToolCall
     {
         if (! $tool instanceof RequiresInput) {
-            return $toolCall->arguments;
+            return $toolCall;
         }
 
         $callerOnly = array_diff_key(
@@ -997,7 +996,10 @@ class TextGenerationLoop
             $tool->schema(new JsonSchemaTypeFactory),
         );
 
-        return array_diff_key($toolCall->arguments, $callerOnly);
+        $modelCall = clone $toolCall;
+        $modelCall->arguments = array_diff_key($toolCall->arguments, $callerOnly);
+
+        return $modelCall;
     }
 
     /**
@@ -1013,7 +1015,9 @@ class TextGenerationLoop
         $pendingTools = $this->toolsForPendingCalls($pendingToolCalls, $tools);
 
         return ! $pendingTools->containsStrict(null)
-            && $pendingToolCalls->contains(fn (ToolCall $toolCall): bool => $this->approvalForTool($pendingTools[$toolCall->id], $toolCall) instanceof Approval);
+            && $pendingToolCalls->contains(fn (ToolCall $toolCall): bool => $this->approvalForTool(
+                $pendingTools[$toolCall->id], $this->withModelArguments($toolCall, $pendingTools[$toolCall->id]),
+            ) instanceof Approval);
     }
 
     /**
@@ -1049,6 +1053,10 @@ class TextGenerationLoop
         );
 
         $resolvedTools = $this->toolsForPendingCalls($pendingToolCalls, $tools);
+
+        $pendingToolCalls = $pendingToolCalls->map(
+            fn (ToolCall $toolCall) => $this->withModelArguments($toolCall, $resolvedTools[$toolCall->id]),
+        );
 
         $approvals = $pendingToolCalls->mapWithKeys(fn (ToolCall $toolCall) => [
             $toolCall->id => $this->approvalForTool($resolvedTools[$toolCall->id], $toolCall),
@@ -1144,7 +1152,7 @@ class TextGenerationLoop
     }
 
     /**
-     * Resolve the approval requirement for a tool call, or null when it is not gated.
+     * Resolve the approval requirement for a tool call already stripped of caller-only values, or null when it is not gated.
      */
     protected function approvalForTool(?Tool $tool, ToolCall $toolCall): ?Approval
     {
@@ -1152,7 +1160,7 @@ class TextGenerationLoop
             return null;
         }
 
-        $request = new Request($this->modelArguments($tool, $toolCall), $toolCall->id);
+        $request = new Request($toolCall->arguments, $toolCall->id);
 
         $approval = $tool instanceof Approvable ? $tool->shouldRequestApproval($request) : null;
 
