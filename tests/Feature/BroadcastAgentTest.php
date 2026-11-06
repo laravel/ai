@@ -10,6 +10,7 @@ use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Jobs\BroadcastAgent;
 use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Streaming\Events\Error;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ConversationalAgent;
 
@@ -123,6 +124,15 @@ test('failed broadcasts on every channel when given an array', function (): void
     Event::assertDispatched(AnonymousEvent::class, fn (AnonymousEvent $event): bool => $event->broadcastAs() === 'stream_failed'
         && $event->broadcastOn() === $channels);
 });
+
+test('a provider error broadcasts as error and keeps its code in the payload', function (string $code): void {
+    Event::fake();
+
+    (new Error('error-1', $code, 'Overloaded', false, time()))->broadcastNow(new Channel('test-channel'));
+
+    Event::assertDispatched(AnonymousEvent::class, fn (AnonymousEvent $event): bool => $event->broadcastAs() === 'error'
+        && $event->broadcastWith()['type'] === $code);
+})->with(['overloaded_error', 'not_found', 'unknown_error']);
 
 test('failed event shares the invocation id with broadcasts from handle', function (): void {
     Event::fake();
