@@ -60,7 +60,7 @@ test('audio request passes custom voice id through unchanged', function (): void
     Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['voice'] === 'nova');
 });
 
-test('audio request sends custom voice as an object', function (): void {
+test('audio request sends voice_ ids as an object', function (): void {
     Http::fake(['*' => fakeOpenAiAudioResponse()]);
 
     Audio::of('Hello')->voice('voice_1234')->generate(provider: 'openai', model: 'gpt-4o-mini-tts');
