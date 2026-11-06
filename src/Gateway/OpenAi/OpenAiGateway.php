@@ -169,7 +169,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
         $voice = match ($voice) {
             'default-male' => 'ash',
             'default-female' => 'alloy',
-            default => $voice,
+            default => str_starts_with($voice, 'voice_') ? ['id' => $voice] : $voice,
         };
 
         $response = $this->withErrorHandling(
