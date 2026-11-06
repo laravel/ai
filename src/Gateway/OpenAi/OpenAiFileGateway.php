@@ -53,7 +53,8 @@ class OpenAiFileGateway implements FileGateway
                 ->post('files', array_merge(
                     ['purpose' => $this->defaultPurpose()],
                     $providerOptions,
-                )))
+                ))
+            ),
         );
 
         return (new StoredFileResponse($response->json('id')))->withRawResponse($response);

@@ -1,46 +1,13 @@
 <?php
 
-use Laravel\Ai\Contracts\Files\HasStream;
 use Laravel\Ai\Contracts\Files\StorableFile;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Gateway\Concerns\PreparesStorableFiles;
 
-test('upload preparation closes the file stream on success and failure', function (): void {
-    $path = tempnam(sys_get_temp_dir(), 'ai-stream-');
-    file_put_contents($path, 'stream bytes');
-
-    $file = new class($path) implements HasStream, StorableFile
-    {
-        public array $streams = [];
-
-        public function __construct(public string $path) {}
-
-        public function stream(): mixed
-        {
-            return $this->streams[] = fopen($this->path, 'rb');
-        }
-
-        public function content(): string
-        {
-            throw new RuntimeException('Streaming files must not be buffered.');
-        }
-
-        public function mimeType(): ?string
-        {
-            return 'text/plain';
-        }
-
-        public function name(): ?string
-        {
-            return 'sample.txt';
-        }
-
-        public function __toString(): string
-        {
-            return 'stream bytes';
-        }
-    };
-
-    $gateway = new class
+function storableFileGateway(): object
+{
+    return new class
     {
         use PreparesStorableFiles;
 
@@ -49,26 +16,43 @@ test('upload preparation closes the file stream on success and failure', functio
             return $this->withPreparedStorableFile($file, $callback);
         }
     };
+}
 
-    try {
-        expect($gateway->upload($file, function ($content, $mime, $name): string {
-            expect(is_resource($content))->toBeTrue();
-            expect(stream_get_contents($content))->toBe('stream bytes');
+function recordingLocalDocument(): LocalDocument
+{
+    return new class(__DIR__.'/../../../Fixtures/document.txt', 'text/plain') extends LocalDocument
+    {
+        public array $streams = [];
 
-            return "{$mime}:{$name}";
-        }))->toBe('text/plain:sample.txt');
+        public function stream(): mixed
+        {
+            return $this->streams[] = parent::stream();
+        }
+    };
+}
 
-        expect(is_resource($file->streams[0]))->toBeFalse();
+test('streamable files are passed as a stream that is closed after the upload', function (): void {
+    $file = recordingLocalDocument();
 
-        expect(fn () => $gateway->upload($file, function ($content): void {
-            expect(is_resource($content))->toBeTrue();
+    $result = storableFileGateway()->upload($file, fn ($content, $mime, $name) => [stream_get_contents($content), $mime, $name]);
 
-            throw new RuntimeException('Upload aborted.');
-        }))->toThrow(RuntimeException::class, 'Upload aborted.');
+    expect($result)->toBe(["I am a local document.\n", 'text/plain', 'document.txt'])
+        ->and(is_resource($file->streams[0]))->toBeFalse();
+});
 
-        expect(is_resource($file->streams[1]))->toBeFalse()
-            ->and($file->streams[0])->not->toBe($file->streams[1]);
-    } finally {
-        unlink($path);
-    }
+test('the stream is closed when the upload throws', function (): void {
+    $file = recordingLocalDocument();
+
+    expect(fn () => storableFileGateway()->upload($file, fn () => throw new RuntimeException('Upload aborted.')))
+        ->toThrow(RuntimeException::class, 'Upload aborted.')
+        ->and(is_resource($file->streams[0]))->toBeFalse();
+});
+
+test('files without a stream are passed as their buffered content with fallback metadata', function (): void {
+    $result = storableFileGateway()->upload(
+        Document::fromString('Hello, World!'),
+        fn ($content, $mime, $name) => [$content, $mime, $name],
+    );
+
+    expect($result)->toBe(['Hello, World!', 'application/octet-stream', 'file']);
 });

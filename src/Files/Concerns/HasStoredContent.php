@@ -20,6 +20,19 @@ trait HasStoredContent
     }
 
     /**
+     * Open a fresh read stream of the file; the caller closes it.
+     *
+     * @return resource
+     *
+     * @throws RuntimeException if the file does not exist on the configured disk.
+     */
+    public function stream(): mixed
+    {
+        return Storage::disk($this->disk)->readStream($this->path) ??
+            throw new RuntimeException('File ['.$this->path.'] does not exist on disk ['.$this->disk.'].');
+    }
+
+    /**
      * Get the displayable name of the file.
      */
     public function name(): ?string

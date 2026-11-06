@@ -12,33 +12,16 @@ use Laravel\Ai\Files\File;
 trait PreparesStorableFiles
 {
     /**
-     * Prepare file data for upload.
+     * Open the file's content, MIME type, and name for a single upload attempt.
      *
-     * @return array{resource|string, string, string}
-     */
-    protected function prepareStorableFile(StorableFile $file): array
-    {
-        $mime = $file->mimeType() ?? 'application/octet-stream';
-        $name = $file->name() ?? 'file';
-
-        return [
-            $file instanceof HasStream ? $file->stream() : $file->content(),
-            $mime,
-            $name,
-        ];
-    }
-
-    /**
-     * Open and close any file stream around a single HTTP upload attempt.
-     *
-     * The surrounding retry handler calls this again for every attempt.
+     * @param  Closure(resource|string, string, string): mixed  $callback
      */
     protected function withPreparedStorableFile(StorableFile $file, Closure $callback): mixed
     {
-        [$content, $mime, $name] = $this->prepareStorableFile($file);
+        $content = $file instanceof HasStream ? $file->stream() : $file->content();
 
         try {
-            return $callback($content, $mime, $name);
+            return $callback($content, $file->mimeType() ?? 'application/octet-stream', $file->name() ?? 'file');
         } finally {
             if (is_resource($content)) {
                 fclose($content);

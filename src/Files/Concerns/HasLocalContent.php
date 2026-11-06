@@ -24,6 +24,19 @@ trait HasLocalContent
     }
 
     /**
+     * Open a fresh read stream of the file; the caller closes it.
+     *
+     * @return resource
+     *
+     * @throws RuntimeException if the file does not exist at the configured path.
+     */
+    public function stream(): mixed
+    {
+        return @fopen($this->path, 'rb')
+            ?: throw new RuntimeException("File does not exist at path [{$this->path}]");
+    }
+
+    /**
      * Get the displayable name of the file.
      */
     public function name(): ?string
