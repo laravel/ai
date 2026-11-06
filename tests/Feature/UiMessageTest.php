@@ -480,7 +480,46 @@ describe('hydrating useChat from stored messages', function () {
         ]);
 
         expect($ui[0]['parts'][0]['state'])->toBe('approval-requested')
-            ->and($ui[0]['parts'][0]['approval'])->toBe(['id' => 'call-1', 'reason' => 'Deletes a file.']);
+            ->and($ui[0]['parts'][0]['approval'])->toBe(['id' => 'call-1', 'requestReason' => 'Deletes a file.']);
+    });
+
+    test('a turn paused on input hydrates the schema and data the client renders from', function () {
+        $ui = Vercel::toUiMessages([
+            new ConversationMessage([
+                'id' => 'msg-2',
+                'role' => 'assistant',
+                'content' => null,
+                'steps' => [['tool_calls' => [[
+                    'id' => 'call-1',
+                    'name' => 'PickPlan',
+                    'arguments' => [],
+                    'approval_reason' => null,
+                    'approval_input_schema' => ['type' => 'object', 'properties' => ['plan' => ['type' => 'string']]],
+                    'approval_data' => ['plans' => ['Basic', 'Pro']],
+                ]]]],
+            ]),
+        ]);
+
+        expect($ui[0]['parts'][0]['approval'])->toBe([
+            'id' => 'call-1',
+            'descriptor' => [
+                'inputSchema' => ['type' => 'object', 'properties' => ['plan' => ['type' => 'string']]],
+                'data' => ['plans' => ['Basic', 'Pro']],
+            ],
+        ]);
+    });
+
+    test('a stored tool result hydrates the data it returned for the client', function () {
+        $ui = Vercel::toUiMessages([
+            new ConversationMessage([
+                'id' => 'msg-2',
+                'role' => 'assistant',
+                'content' => null,
+                'steps' => [['tool_calls' => [['id' => 'call-1', 'name' => 'ReceiptTool', 'arguments' => [], 'result' => 'Total: $41.00', 'data' => ['total' => '$41.00']]]]],
+            ]),
+        ]);
+
+        expect($ui[0]['parts'][0]['output'])->toBe(['total' => '$41.00']);
     });
 
     test('a denied tool call hydrates as output-denied', function () {

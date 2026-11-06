@@ -43,6 +43,7 @@ use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
+use Tests\Fixtures\Agents\RememberingAskingAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
 use Tests\Fixtures\Agents\RememberingToolUsingAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
@@ -253,6 +254,88 @@ test('it reports the tool calls a paused turn is waiting on', function (): void 
         ->and($pending[0]->arguments)->toBe(['path' => 'a.txt'])
         ->and($pending[0]->reason)->toBe('Deletes a file.')
         ->and($pending[1]->reason)->toBeNull();
+});
+
+test('it reports the payload a turn paused on input is waiting on', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Paused');
+
+    insertPausedConversationTurn($conversationId, 'message-001', [
+        ['id' => 'call-1', 'name' => 'PickPlan', 'arguments' => []],
+        ['id' => 'call-2', 'name' => 'SendEmail', 'arguments' => []],
+    ], ['call-1' => null, 'call-2' => null], ['call-1' => ['options' => ['Basic', 'Pro']]]);
+
+    $pending = $store->pendingApprovalsFor($conversationId);
+
+    expect($pending[0]->data)->toBe(['options' => ['Basic', 'Pro']])
+        ->and($pending[1]->data)->toBeNull();
+});
+
+test('it keeps the payload of the calls still pending after another is resolved', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Paused');
+
+    insertPausedConversationTurn($conversationId, 'message-001', [
+        ['id' => 'call-1', 'name' => 'PickPlan', 'arguments' => []],
+        ['id' => 'call-2', 'name' => 'PickAddress', 'arguments' => []],
+    ], ['call-1' => null, 'call-2' => null], ['call-1' => ['options' => ['Basic']], 'call-2' => ['options' => ['Home']]]);
+
+    $store->storeApprovalResults($conversationId, [
+        new ToolResult('call-1', 'PickPlan', [], 'chose: Basic'),
+    ]);
+
+    $pending = $store->pendingApprovalsFor($conversationId);
+
+    expect(collect($pending)->pluck('id')->all())->toBe(['call-2'])
+        ->and($pending[0]->data)->toBe(['options' => ['Home']]);
+});
+
+test('it persists the payload of a turn paused on input from a remembered agent prompt', function (): void {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'id' => 'msg_1', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-sonnet-4-6',
+            'content' => [['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'ChoiceTool', 'input' => ['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]]],
+            'stop_reason' => 'tool_use', 'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
+    ]);
+
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+
+    $pending = (new DatabaseConversationStore)->pendingApprovalsFor($paused->conversationId);
+
+    expect($pending)->toHaveCount(1)
+        ->and($pending[0]->inputSchema['required'])->toBe(['answer'])
+        ->and($pending[0]->inputSchema['properties']['answer']['enum'])->toBe(['Basic', 'Pro']);
+});
+
+test('it keeps the data a resumed tool returned for the client', function (): void {
+    Config::set('ai.conversations.generate_title', false);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence()
+            ->push([
+                'id' => 'msg_1', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'ChoiceTool', 'input' => ['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]]],
+                'stop_reason' => 'tool_use', 'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ])
+            ->push([
+                'id' => 'msg_2', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-sonnet-4-6',
+                'content' => [['type' => 'text', 'text' => 'Good choice.']],
+                'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+    ]);
+
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me something.', provider: 'anthropic');
+
+    (new RememberingAskingAgent)
+        ->continue($paused->conversationId, (object) ['id' => 1])
+        ->prompt(Decisions::from(['toolu_1' => Decision::submit(['answer' => 'Pro'])]), provider: 'anthropic');
+
+    $toolResults = ConversationMessage::where('conversation_id', $paused->conversationId)->get()->flatMap->tool_results;
+
+    expect($toolResults->firstWhere('id', 'toolu_1')['data'])->toBe(['chosen' => 'Pro']);
 });
 
 test('it drops a call that already has a result', function (): void {
@@ -1702,8 +1785,13 @@ function insertStoredConversationMessages(string $conversationId, array $ids): v
 }
 
 /** @param  list<array<string, mixed>>  $toolCalls */
-function insertPausedConversationTurn(string $conversationId, string $id, array $toolCalls, array $pending): void
+function insertPausedConversationTurn(string $conversationId, string $id, array $toolCalls, array $pending, array $data = [], array $schema = []): void
 {
+    $toolCalls = array_map(fn (array $toolCall): array => [
+        ...$toolCall,
+        ...array_filter(['approval_input_schema' => $schema[$toolCall['id']] ?? null, 'approval_data' => $data[$toolCall['id']] ?? null]),
+    ], $toolCalls);
+
     insertAssistantTurn($conversationId, $id, 'Waiting on you.', [assistantStep($toolCalls)], $pending);
 }
 

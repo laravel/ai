@@ -10,6 +10,7 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\RemembersConversations;
+use Laravel\Ai\Exceptions\InvalidToolInputException;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Models\Conversation;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -107,6 +108,11 @@ class RememberConversation
     {
         /** @var Agent&RemembersConversations $agent */
         $agent = $prompt->agent;
+
+        // A refused submission ran nothing, and the pause stays open for the caller to answer again...
+        if ($exception instanceof InvalidToolInputException) {
+            return;
+        }
 
         // A failover retry writes the turn itself, so only the attempt the caller gives up on is recorded...
         if ($retryable && $prompt->willRetry($exception)) {

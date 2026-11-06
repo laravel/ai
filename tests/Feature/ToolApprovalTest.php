@@ -75,7 +75,7 @@ test('decision maps may approve or reject every remaining tool call', function (
 
 test('invalid decision maps are rejected', function () {
     expect(fn () => Decision::normalize(['*' => Decision::edit(['path' => '/tmp/file'])]))
-        ->toThrow(InvalidArgumentException::class, 'The wildcard decision may not use the edit action.')
+        ->toThrow(InvalidArgumentException::class, 'The wildcard decision may only approve or reject.')
         ->and(fn () => Decision::normalize(['call-1' => 'approve']))
         ->toThrow(InvalidArgumentException::class, 'Tool approval decisions must be Decision instances or booleans.')
         ->and(fn () => Decision::normalize(['call-1' => ['call-1' => false]]))

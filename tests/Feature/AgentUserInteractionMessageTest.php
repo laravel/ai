@@ -268,6 +268,33 @@ describe('resuming an interrupted run', function () {
             ->and($chat->decisions()->all())->toHaveCount(3);
     });
 
+    test('a resolved resume entry carrying values submits them', function () {
+        $decisions = AgentUserInteraction::decisionsFrom([
+            ['interruptId' => 'call-1', 'status' => 'resolved', 'payload' => ['answer' => 'Pro']],
+        ]);
+
+        expect($decisions->get('call-1')->isSubmitted())->toBeTrue()
+            ->and($decisions->get('call-1')->arguments)->toBe(['answer' => 'Pro']);
+    });
+
+    test('a resolved resume entry with an approved value among other values submits them all', function () {
+        $decisions = AgentUserInteraction::decisionsFrom([
+            ['interruptId' => 'call-1', 'status' => 'resolved', 'payload' => ['approved' => true, 'note' => 'Ship it']],
+        ]);
+
+        expect($decisions->get('call-1')->isSubmitted())->toBeTrue()
+            ->and($decisions->get('call-1')->arguments)->toBe(['approved' => true, 'note' => 'Ship it']);
+    });
+
+    test('a resolved resume entry with a non-boolean approved value submits it', function () {
+        $decisions = AgentUserInteraction::decisionsFrom([
+            ['interruptId' => 'call-1', 'status' => 'resolved', 'payload' => ['approved' => 'yes']],
+        ]);
+
+        expect($decisions->get('call-1')->isSubmitted())->toBeTrue()
+            ->and($decisions->get('call-1')->arguments)->toBe(['approved' => 'yes']);
+    });
+
     test('a new user prompt cannot bypass the pending approvals', function () {
         AssistantAgent::fake(['Deleted.']);
 
@@ -301,7 +328,7 @@ describe('resuming an interrupted run', function () {
 
     test('malformed resume entries are skipped rather than rejected', function () {
         expect(AgentUserInteraction::decisionsFrom([['status' => 'cancelled']]))->toBeNull()
-            ->and(AgentUserInteraction::decisionsFrom([['interruptId' => 'call-1', 'status' => 'resolved', 'payload' => ['approved' => 'yes']]]))->toBeNull()
+            ->and(AgentUserInteraction::decisionsFrom([['interruptId' => 'call-1', 'status' => 'resolved', 'payload' => []]]))->toBeNull()
             ->and(AgentUserInteraction::decisionsFrom([['interruptId' => 'call-1', 'status' => 'ignored', 'payload' => ['approved' => true]]]))->toBeNull();
     });
 
@@ -328,6 +355,29 @@ describe('hydrating AG-UI from stored messages', function () {
 
         expect($state['messages'][0]['toolCalls'][0]['id'])->toBe('call-1')
             ->and($state['interrupts'][0]['toolCallId'])->toBe('call-1');
+    });
+
+    test('a stored turn paused on input hydrates an input interrupt', function () {
+        $schema = ['type' => 'object', 'properties' => ['answer' => ['type' => 'string']], 'required' => ['answer']];
+
+        $state = AgentUserInteraction::toClientState([
+            new ConversationMessage([
+                'id' => 'msg-2',
+                'role' => 'assistant',
+                'steps' => [['tool_calls' => [[
+                    'id' => 'call-1',
+                    'name' => 'ChoiceTool',
+                    'arguments' => [],
+                    'approval_reason' => null,
+                    'approval_input_schema' => $schema,
+                    'approval_data' => ['hint' => 'Pick one.'],
+                ]]]],
+            ]),
+        ]);
+
+        expect($state['interrupts'][0]['reason'])->toBe('input_required')
+            ->and($state['interrupts'][0]['responseSchema'])->toBe($schema)
+            ->and($state['interrupts'][0]['metadata']['data'])->toBe(['hint' => 'Pick one.']);
     });
 
     test('stored text messages become AG-UI messages', function () {

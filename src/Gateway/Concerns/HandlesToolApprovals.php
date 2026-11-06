@@ -153,11 +153,23 @@ trait HandlesToolApprovals
      */
     protected function pendingApprovalsFor(Collection $toolCalls, Collection $approvals): Collection
     {
-        return $toolCalls->map(fn (ToolCall $toolCall) => new PendingApproval(
+        return $toolCalls->map(fn (ToolCall $toolCall) => $this->pendingApproval(
+            $toolCall, $approvals[$toolCall->id],
+        ))->values();
+    }
+
+    /**
+     * Build the pending approval handed to the caller.
+     */
+    protected function pendingApproval(ToolCall $toolCall, Approval $approval): PendingApproval
+    {
+        return new PendingApproval(
             $toolCall->id,
             $toolCall->name,
             $toolCall->arguments,
-            $approvals[$toolCall->id]?->reason,
-        ))->values();
+            $approval->reason,
+            $approval->inputSchema,
+            $approval->data,
+        );
     }
 }
