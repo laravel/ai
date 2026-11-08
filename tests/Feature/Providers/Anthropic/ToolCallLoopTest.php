@@ -75,6 +75,37 @@ test('tool calls run when the message ends with end_turn', function (): void {
         ->and($response->text)->toBe('The number is 72019');
 });
 
+test('the code execution container is reused by the follow up request', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_123',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [
+                    ['type' => 'tool_use', 'id' => 'toolu_123', 'name' => 'FixedNumberGenerator', 'input' => (object) []],
+                ],
+                'container' => ['id' => 'container_123', 'expires_at' => '2026-11-08T11:00:00Z'],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
+
+    (new ToolUsingAgent(fixed: true))->prompt(
+        'Generate a random number',
+        provider: 'anthropic',
+    );
+
+    $recorded = Http::recorded();
+
+    expect($recorded)->toHaveCount(2)
+        ->and($recorded[0][0]->data())->not->toHaveKey('container')
+        ->and($recorded[1][0]->data()['container'])->toBe('container_123');
+});
+
 test('tool calls do not run when the message ends with max_tokens', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::response([
