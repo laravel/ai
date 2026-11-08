@@ -806,4 +806,59 @@ describe('provider tool citations', function (): void {
 
         expect($citations)->toBeEmpty();
     });
+
+    test('streaming emits a citation for each web search result once', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->messageStart(),
+                    $this->contentBlockStart(0, [
+                        'type' => 'web_search_tool_result',
+                        'tool_use_id' => 'srvtoolu_1',
+                        'content' => [
+                            ['type' => 'web_search_result', 'url' => 'https://laravel.com/docs/releases', 'title' => 'Release Notes', 'encrypted_content' => 'abc', 'page_age' => null],
+                            ['type' => 'web_search_result', 'url' => 'https://laravel-news.com/laravel-13', 'title' => 'Laravel 13', 'encrypted_content' => 'def', 'page_age' => null],
+                        ],
+                    ]),
+                    $this->contentBlockStop(0),
+                    $this->contentBlockStart(1, ['type' => 'text', 'text' => '', 'citations' => []]),
+                    $this->contentBlockDelta(1, ['type' => 'citations_delta', 'citation' => ['type' => 'web_search_result_location', 'url' => 'https://laravel-news.com/laravel-13', 'title' => 'Laravel 13', 'cited_text' => 'Laravel 13', 'encrypted_index' => 'xyz']]),
+                    $this->contentBlockDelta(1, ['type' => 'text_delta', 'text' => 'The latest version is Laravel 13.']),
+                    $this->contentBlockStop(1),
+                    $this->messageDelta('end_turn', 10),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $citations = array_values(array_filter($this->collectStreamEvents(), fn ($e): bool => $e instanceof CitationEvent));
+
+        expect($citations)->toHaveCount(2)
+            ->and($citations[0]->citation)->url->toBe('https://laravel.com/docs/releases')->title->toBe('Release Notes')
+            ->and($citations[1]->citation)->url->toBe('https://laravel-news.com/laravel-13');
+    });
+
+    test('streaming skips citations for a failed search', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->messageStart(),
+                    $this->contentBlockStart(0, [
+                        'type' => 'web_search_tool_result',
+                        'tool_use_id' => 'srvtoolu_1',
+                        'content' => ['type' => 'web_search_tool_result_error', 'error_code' => 'unavailable'],
+                    ]),
+                    $this->contentBlockStop(0),
+                    $this->messageDelta('end_turn', 10),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $citations = array_filter($this->collectStreamEvents(), fn ($e): bool => $e instanceof CitationEvent);
+
+        expect($citations)->toBeEmpty();
+    });
 });
