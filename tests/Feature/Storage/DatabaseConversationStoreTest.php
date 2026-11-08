@@ -256,21 +256,6 @@ test('it reports the tool calls a paused turn is waiting on', function (): void 
         ->and($pending[1]->reason)->toBeNull();
 });
 
-test('it reports the payload a turn paused on input is waiting on', function (): void {
-    $store = new DatabaseConversationStore;
-    $conversationId = $store->storeConversation('user', 1, 'Paused');
-
-    insertPausedConversationTurn($conversationId, 'message-001', [
-        ['id' => 'call-1', 'name' => 'PickPlan', 'arguments' => []],
-        ['id' => 'call-2', 'name' => 'SendEmail', 'arguments' => []],
-    ], ['call-1' => null, 'call-2' => null], ['call-1' => ['options' => ['Basic', 'Pro']]]);
-
-    $pending = $store->pendingApprovalsFor($conversationId);
-
-    expect($pending[0]->data)->toBe(['options' => ['Basic', 'Pro']])
-        ->and($pending[1]->data)->toBeNull();
-});
-
 test('it keeps the payload of the calls still pending after another is resolved', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Paused');
@@ -1785,11 +1770,11 @@ function insertStoredConversationMessages(string $conversationId, array $ids): v
 }
 
 /** @param  list<array<string, mixed>>  $toolCalls */
-function insertPausedConversationTurn(string $conversationId, string $id, array $toolCalls, array $pending, array $data = [], array $schema = []): void
+function insertPausedConversationTurn(string $conversationId, string $id, array $toolCalls, array $pending, array $data = []): void
 {
     $toolCalls = array_map(fn (array $toolCall): array => [
         ...$toolCall,
-        ...array_filter(['approval_input_schema' => $schema[$toolCall['id']] ?? null, 'approval_data' => $data[$toolCall['id']] ?? null]),
+        ...array_filter(['approval_data' => $data[$toolCall['id']] ?? null]),
     ], $toolCalls);
 
     insertAssistantTurn($conversationId, $id, 'Waiting on you.', [assistantStep($toolCalls)], $pending);
