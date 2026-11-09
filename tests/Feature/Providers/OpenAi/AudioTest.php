@@ -52,7 +52,7 @@ test('audio request resolves default-male voice to ash', function (): void {
     Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['voice'] === 'ash');
 });
 
-test('audio request passes custom voice id through unchanged', function (): void {
+test('audio request passes built-in voices through unchanged', function (): void {
     Http::fake(['*' => fakeOpenAiAudioResponse()]);
 
     Audio::of('Hello')->voice('nova')->generate(provider: 'openai', model: 'gpt-4o-mini-tts');
