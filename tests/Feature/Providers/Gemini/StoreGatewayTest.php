@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Sleep;
 use Laravel\Ai\AiManager;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Exceptions\InvalidApiKeyException;
 use Laravel\Ai\Stores;
 
 beforeEach(function (): void {
@@ -402,3 +403,16 @@ test('remove file rebuilds a full document path from encoded segments', function
     Http::assertSent(fn ($request): bool => $request->method() === 'DELETE'
         && str_starts_with((string) $request->url(), 'https://generativelanguage.googleapis.com/v1beta/fileSearchStores/store123/documents/doc456%3Fforce%3Dfalse'));
 });
+
+test('a rejected API key hints at the key', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response(['error' => [
+            'code' => 400,
+            'message' => 'API key not valid. Please pass a valid API key.',
+            'status' => 'INVALID_ARGUMENT',
+            'details' => [['@type' => 'type.googleapis.com/google.rpc.ErrorInfo', 'reason' => 'API_KEY_INVALID']],
+        ]], 400),
+    ]);
+
+    Stores::get('store123', provider: 'gemini');
+})->throws(InvalidApiKeyException::class, 'Missing or invalid API key for AI provider [gemini].');

@@ -39,7 +39,7 @@ trait HandlesFailoverErrors
             if ($requestException->response !== null) {
                 $status = $requestException->response->status();
 
-                if ($status === 401) {
+                if ($this->isInvalidApiKey($requestException)) {
                     throw new InvalidApiKeyException(
                         $providerName, $requestException->response, $requestException->truncateExceptionsAt
                     );
@@ -104,6 +104,14 @@ trait HandlesFailoverErrors
         $retryAfter = $exception->response->header('Retry-After');
 
         return ctype_digit($retryAfter) && (int) $retryAfter <= 10 ? (int) $retryAfter : null;
+    }
+
+    /**
+     * Determine if the provider rejected the request for a missing or invalid API key.
+     */
+    protected function isInvalidApiKey(RequestException $exception): bool
+    {
+        return $exception->response?->status() === 401;
     }
 
     /**
