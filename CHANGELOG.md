@@ -1,6 +1,42 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/ai/compare/v1.3.0...1.x)
+## [Unreleased](https://github.com/laravel/ai/compare/v1.4.0...1.x)
+
+## [v1.4.0](https://github.com/laravel/ai/compare/v1.3.0...v1.4.0) - 2026-11-09
+
+### What's Changed
+
+* Bump vite from 8.1.3 to 8.3.5 in /workbench by [@dependabot](https://github.com/dependabot)[bot] in https://github.com/laravel/ai/pull/1166
+* Preserve input order for batch embeddings from OpenAI by [@paulinevos](https://github.com/paulinevos) in https://github.com/laravel/ai/pull/1172
+* Skip credit pattern matching when the error message is not a string by [@lazerg](https://github.com/lazerg) in https://github.com/laravel/ai/pull/1157
+* [1.x] Report the stored message ids in RUN_FINISHED metadata by [@MohannadElemary](https://github.com/MohannadElemary) in https://github.com/laravel/ai/pull/1165
+* Update Mistral models to latest versions by [@GeorgeBetts](https://github.com/GeorgeBetts) in https://github.com/laravel/ai/pull/1173
+* Add handling for OpenAI insufficient credits and quota errors by [@grzegorczykp](https://github.com/grzegorczykp) in https://github.com/laravel/ai/pull/1174
+* Expose the raw HTTP response on classification responses by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/1178
+* Expose the raw HTTP response on embeddings responses by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/1181
+* Expose the raw HTTP response on transcription responses by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/1180
+* Expose the raw HTTP response on image responses by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/1179
+* Expose the raw HTTP response on reranking responses by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/1182
+* Rebuild a resumed turn's content from its merged steps by [@TPSJASPER](https://github.com/TPSJASPER) in https://github.com/laravel/ai/pull/1162
+* [1.x] Let agent fakes resume tool approvals by [@pascalbaljet](https://github.com/pascalbaljet) in https://github.com/laravel/ai/pull/1190
+* Run Anthropic tool calls when the message ends with end_turn by [@lazerg](https://github.com/lazerg) in https://github.com/laravel/ai/pull/1188
+* Pin hosts with a trailing dot as written in the URL by [@dwivedianuj9118](https://github.com/dwivedianuj9118) in https://github.com/laravel/ai/pull/1193
+* [1.x] Let agents recover from tool failures by [@pascalbaljet](https://github.com/pascalbaljet) in https://github.com/laravel/ai/pull/1191
+* Join streamed text across Anthropic pause_turn continuations by [@lazerg](https://github.com/lazerg) in https://github.com/laravel/ai/pull/1186
+* Report conversation title generation as an agent run by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/1203
+* Accept array criteria on boolean questions sent to OpenAI decisions by [@Taldres](https://github.com/Taldres) in https://github.com/laravel/ai/pull/1202
+* Broadcast provider stream errors under a fixed name by [@crishoj](https://github.com/crishoj) in https://github.com/laravel/ai/pull/1208
+* Send OpenAI custom voices as an object by [@lazerg](https://github.com/lazerg) in https://github.com/laravel/ai/pull/1212
+* Run OpenAI-compatible tool calls sent without an index or finished with stop by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/1192
+
+### New Contributors
+
+* [@MohannadElemary](https://github.com/MohannadElemary) made their first contribution in https://github.com/laravel/ai/pull/1165
+* [@grzegorczykp](https://github.com/grzegorczykp) made their first contribution in https://github.com/laravel/ai/pull/1174
+* [@TPSJASPER](https://github.com/TPSJASPER) made their first contribution in https://github.com/laravel/ai/pull/1162
+* [@dwivedianuj9118](https://github.com/dwivedianuj9118) made their first contribution in https://github.com/laravel/ai/pull/1193
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v1.3.0...v1.4.0
 
 ## [v1.3.0](https://github.com/laravel/ai/compare/v1.2.3...v1.3.0) - 2026-10-19
 
