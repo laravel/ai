@@ -27,12 +27,11 @@ dataset('transcription-providers', [
 ]);
 
 dataset('diarization-providers', [
-    'openai' => ['openai', 'OPENAI_API_KEY'],
     'gemini' => ['gemini', 'GEMINI_API_KEY'],
 ]);
 
 dataset('image-providers', [
-    'openai-gpt-image-2' => ['openai', 'OPENAI_API_KEY', 'gpt-image-2'],
+    'openai-gpt-image-2.6-flare' => ['openai', 'OPENAI_API_KEY', 'gpt-image-2.6-flare'],
     'xai' => ['xai', 'XAI_API_KEY', 'grok-imagine-image'],
     'gemini-2.5-flash-image' => ['gemini', 'GEMINI_API_KEY', 'gemini-2.5-flash-image'],
     'openrouter-gemini' => ['openrouter', 'OPENROUTER_API_KEY', 'google/gemini-3.1-flash-image'],

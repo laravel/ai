@@ -46,13 +46,13 @@ test('transcription request posts to correct endpoint', function (): void {
         && str_contains($request->header('Content-Type')[0] ?? '', 'multipart/form-data'));
 });
 
-test('transcription includes model in request', function (): void {
+test('transcription uses gpt-transcribe by default', function (): void {
     Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'openai');
 
-    Http::assertSent(fn (Request $request): bool => str_contains($request->body(), 'gpt-4o-transcribe'));
+    Http::assertSent(fn (Request $request): bool => str_contains($request->body(), 'gpt-transcribe'));
 });
 
 test('transcription strips diarize suffix from model when diarize is off', function (): void {
@@ -102,15 +102,53 @@ test('the raw http response is exposed on the transcription response', function 
         ->and($response->raw->json('text'))->toBe('Hello, world!');
 });
 
-test('transcription sends language when provided', function (): void {
+test('transcription sends languages instead of language for the current model', function (): void {
     Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
 
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->language('en')
+        ->withProviderOptions(['language' => 'de', 'languages' => ['fr']])
         ->generate(provider: 'openai');
 
-    Http::assertSent(fn (Request $request): bool => str_contains($request->body(), 'language')
-        && str_contains($request->body(), 'en'));
+    Http::assertSent(fn (Request $request): bool => str_contains($request->body(), 'name="languages[]"')
+        && str_contains($request->body(), "\r\n\r\nen\r\n")
+        && ! str_contains($request->body(), 'name="language"')
+        && ! str_contains($request->body(), "\r\n\r\nfr\r\n")
+        && ! str_contains($request->body(), "\r\n\r\nde\r\n"));
+});
+
+test('transcription sends languages as a multipart array', function (): void {
+    Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->withProviderOptions(['languages' => ['en', 'fr'], 'language' => 'de'])
+        ->generate(provider: 'openai');
+
+    Http::assertSent(fn (Request $request): bool => substr_count($request->body(), 'name="languages[]"') === 2
+        && str_contains($request->body(), "\r\n\r\nen\r\n")
+        && str_contains($request->body(), "\r\n\r\nfr\r\n")
+        && ! str_contains($request->body(), 'name="language"'));
+});
+
+test('transcription retains singular language for explicitly selected legacy models', function (): void {
+    Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->language('fr')
+        ->generate(provider: 'openai', model: 'gpt-4o-transcribe');
+
+    Http::assertSent(fn (Request $request): bool => str_contains($request->body(), 'name="language"')
+        && ! str_contains($request->body(), 'name="languages[]"'));
+});
+
+test('default transcription rejects diarization before sending audio', function (): void {
+    Http::fake();
+
+    expect(fn () => Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->diarize()->generate(provider: 'openai'))
+        ->toThrow(LogicException::class, 'OpenAI model [gpt-transcribe] does not support diarization.');
+
+    Http::assertNothingSent();
 });
 
 test('transcription request sends bearer token', function (): void {

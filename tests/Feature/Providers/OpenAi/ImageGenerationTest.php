@@ -64,17 +64,17 @@ test('image request does not include moderation for non gpt-image models', funct
     });
 });
 
-test('image request includes moderation low for gpt-image models', function (): void {
+test('image request defaults to gpt-image-2.6-flare with low moderation', function (): void {
     Http::fake([
         '*' => fakeOpenAiImageResponse(),
     ]);
 
-    Image::of('A red apple')->generate(provider: 'openai', model: 'gpt-image-1');
+    Image::of('A red apple')->generate(provider: 'openai');
 
     Http::assertSent(function (Request $request): bool {
         $body = json_decode($request->body(), true);
 
-        return $body['model'] === 'gpt-image-1'
+        return $body['model'] === 'gpt-image-2.6-flare'
             && $body['moderation'] === 'low';
     });
 });
