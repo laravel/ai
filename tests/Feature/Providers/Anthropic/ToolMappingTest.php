@@ -1,11 +1,17 @@
 <?php
 
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Attributes\Strict;
+use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
+use Laravel\Ai\Tools\Request;
 use Tests\Fixtures\Agents\NamedToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+use Tests\Fixtures\Tools\NonStrictTool;
+use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
 
@@ -46,6 +52,74 @@ test('tool with a name() method emits the declared name', function (): void {
         $names = collect($request->data()['tools'] ?? [])->pluck('name')->all();
 
         return in_array('aliased_tool', $names, true);
+    });
+});
+
+test('tool with Strict attribute sends strict true', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new RandomNumberGenerator])->prompt('Give me a random number', provider: 'anthropic');
+
+    Http::assertSent(function ($request): bool {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'RandomNumberGenerator');
+
+        return $tool['strict'] === true
+            && $tool['input_schema']['additionalProperties'] === false
+            && $tool['input_schema']['required'] === ['min', 'max'];
+    });
+});
+
+test('tool without Strict attribute omits strict', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new NonStrictTool])->prompt('Hi', provider: 'anthropic');
+
+    Http::assertSent(function ($request): bool {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'NonStrictTool');
+
+        return ! array_key_exists('strict', $tool)
+            && ! array_key_exists('additionalProperties', $tool['input_schema'])
+            && $tool['input_schema']['required'] === ['query'];
+    });
+});
+
+test('strict tool schemas drop keywords anthropic strict mode rejects', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    $tool = new #[Strict] class implements Tool
+    {
+        public function description(): string
+        {
+            return 'Orders a number of items.';
+        }
+
+        public function handle(Request $request): string
+        {
+            return 'ok';
+        }
+
+        public function schema(JsonSchema $schema): array
+        {
+            return [
+                'quantity' => $schema->integer()->min(1)->required(),
+            ];
+        }
+    };
+
+    agent(tools: [$tool])->prompt('Order two', provider: 'anthropic');
+
+    Http::assertSent(function ($request): bool {
+        $quantity = ((array) $request->data()['tools'][0]['input_schema']['properties'])['quantity'];
+
+        return $request->data()['tools'][0]['strict'] === true
+            && ! array_key_exists('minimum', $quantity)
+            && str_contains($quantity['description'] ?? '', 'Must be at least 1.');
     });
 });
 
