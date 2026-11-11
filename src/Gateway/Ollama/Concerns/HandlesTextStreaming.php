@@ -128,7 +128,11 @@ trait HandlesTextStreaming
             // partial fields - so we'll merge id /name / arguments per-index rather than
             // only storing the first chunk of the tool calls when we handle this here.
             if (! empty($data['message']['tool_calls'])) {
-                foreach ($data['message']['tool_calls'] as $index => $toolCall) {
+                foreach ($data['message']['tool_calls'] as $position => $toolCall) {
+                    // Ollama may stream each tool call in a chunk of its own, identified by its "function.index",
+                    // so the position within the chunk is always zero and cannot tell the calls apart...
+                    $index = $toolCall['function']['index'] ?? $position;
+
                     if (! isset($pendingToolCalls[$index])) {
                         $pendingToolCalls[$index] = [
                             'id' => null,
