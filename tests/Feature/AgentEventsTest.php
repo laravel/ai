@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
-use Laravel\Ai\AnonymousAgent;
+use Laravel\Ai\Agents\ConversationTitleAgent;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Events\AgentFailed;
@@ -276,7 +276,7 @@ describe('conversation title events', function (): void {
 
         $failed = Event::dispatched(AgentFailed::class)->sole()[0];
 
-        expect($failed->prompt->agent)->toBeInstanceOf(AnonymousAgent::class)
+        expect($failed->prompt->agent)->toBeInstanceOf(ConversationTitleAgent::class)
             ->and($failed->prompt->parentInvocationId)->toBe($response->invocationId)
             ->and($failed->exception)->toBeInstanceOf(RequestException::class);
     });
