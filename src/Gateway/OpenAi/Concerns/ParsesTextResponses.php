@@ -201,6 +201,10 @@ trait ParsesTextResponses
         $status = $lastOutput['status'] ?? $data['status'] ?? '';
         $type = $lastOutput['type'] ?? '';
 
+        if ($type === 'message' && (new Collection($lastOutput['content'] ?? []))->contains('type', 'refusal')) {
+            return FinishReason::ContentFilter;
+        }
+
         return match ($status) {
             'incomplete' => FinishReason::Length,
             'failed' => FinishReason::Error,
