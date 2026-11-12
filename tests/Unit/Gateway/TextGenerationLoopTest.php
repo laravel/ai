@@ -18,6 +18,7 @@ use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\InvokingTool;
 use Laravel\Ai\Events\ToolInvoked;
+use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
 use Laravel\Ai\Exceptions\NoSuchToolException;
 use Laravel\Ai\Exceptions\StreamErrorException;
@@ -52,6 +53,54 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\AgentTool;
 use Laravel\Ai\Tools\Request;
+
+test('invalid provider tool call ids are rejected before any tools run or request approval', function (string $id, bool $streaming): void {
+    $gated = new TextGenerationLoopApprovableTool;
+    $ungated = new TextGenerationLoopCountingTool;
+    $calls = [
+        new ToolCall('call-1', TextGenerationLoopCountingTool::class, []),
+        new ToolCall($id, TextGenerationLoopApprovableTool::class, ['value' => 'danger']),
+    ];
+    $step = new StepResponse('', $calls, FinishReason::ToolCalls, new TextUsage, new Meta('fake', 'model'));
+    $loop = new TextGenerationLoop(new TextGenerationLoopFakeGateway(
+        steps: [$step],
+        streams: [textGenerationLoopStreamStep(returns: $step)],
+    ));
+
+    expect(function () use ($loop, $gated, $ungated, $streaming): void {
+        if ($streaming) {
+            iterator_to_array($loop->stream('invocation', textGenerationLoopProvider(), 'model', null, tools: [$gated, $ungated]));
+        } else {
+            $loop->generate(textGenerationLoopProvider(), 'model', null, tools: [$gated, $ungated]);
+        }
+    })->toThrow(AiException::class, 'Tool call IDs must be non-empty, unique within a turn, and may not be "*".');
+
+    expect($gated->calls)->toBe(0)
+        ->and($ungated->calls)->toBe(0)
+        ->and($gated->approvalToolCallId)->toBeNull();
+})->with(['empty' => '', 'whitespace' => '  ', 'duplicate' => 'call-1', 'wildcard' => '*'])->with([false, true]);
+
+test('invalid tool call ids in approval history cannot authorize execution', function (string $id): void {
+    $tool = new TextGenerationLoopApprovableTool;
+    $loop = new TextGenerationLoop(new TextGenerationLoopFakeGateway([
+        new StepResponse('done', [], FinishReason::Stop, new TextUsage, new Meta('fake', 'model')),
+    ]));
+
+    expect(fn () => $loop->generate(
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [new AssistantMessage('', collect([
+            new ToolCall($id, TextGenerationLoopApprovableTool::class, ['value' => 'first']),
+            new ToolCall('call-2', TextGenerationLoopApprovableTool::class, ['value' => 'second']),
+        ]))],
+        [$tool],
+        approval: [$id => Decision::approve()],
+    ))->toThrow(AiException::class, 'Tool call IDs must be non-empty, unique within a turn, and may not be "*".');
+
+    expect($tool->calls)->toBe(0)
+        ->and($tool->approvalToolCallId)->toBeNull();
+})->with(['empty' => '', 'whitespace' => '  ', 'duplicate' => 'call-2', 'wildcard' => '*']);
 
 test('it pauses gated tool calls without executing them while running ungated calls immediately', function (): void {
     $gated = new TextGenerationLoopApprovableTool;
