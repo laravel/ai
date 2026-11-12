@@ -724,7 +724,7 @@ class TextGenerationLoop
         $toolInvocationId = (string) Str::uuid7();
         $parentInvocationId = $context?->invocationId;
 
-        $context?->invokingTool($tool, $arguments, $toolInvocationId);
+        $context?->invokingTool($tool, $arguments, $toolInvocationId, $toolCallId);
 
         $startedAt = hrtime(true);
 
@@ -739,7 +739,7 @@ class TextGenerationLoop
 
         $result = (string) $events->getReturn();
 
-        $context?->toolInvoked($tool, $arguments, $result, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
+        $context?->toolInvoked($tool, $arguments, $result, $toolInvocationId, $this->elapsedMilliseconds($startedAt), $toolCallId);
 
         return $result;
     }

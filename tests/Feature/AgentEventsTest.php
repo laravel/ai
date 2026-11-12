@@ -429,7 +429,42 @@ test('a throwing tool dispatches tool failed and the run continues', function ()
     $failed = Event::dispatched(ToolFailed::class)->first()[0];
 
     expect($failed->toolInvocationId)->toBe($invoking->toolInvocationId)
-        ->and($failed->invocationId)->toBe($invoking->invocationId);
+        ->and($failed->invocationId)->toBe($invoking->invocationId)
+        ->and($failed->toolCallId)->toBe('call_1')
+        ->and($invoking->toolCallId)->toBe('call_1');
+});
+
+test('tool events carry the id of the tool call the model made', function (): void {
+    Event::fake();
+
+    MultiStepToolAgent::fake([
+        new ToolCall('call_1', 'FixedNumberGenerator', []),
+        new ToolCall('call_2', 'FixedNumberGenerator', []),
+        'The numbers are 72019 and 72019.',
+    ]);
+
+    (new MultiStepToolAgent)->prompt('Generate two numbers');
+
+    expect(Event::dispatched(InvokingTool::class)->map(fn (array $dispatched): ?string => $dispatched[0]->toolCallId)->all())->toBe(['call_1', 'call_2'])
+        ->and(Event::dispatched(ToolInvoked::class)->map(fn (array $dispatched): ?string => $dispatched[0]->toolCallId)->all())->toBe(['call_1', 'call_2']);
+});
+
+test('tool events carry the tool call id of a sub agent streamed as a tool', function (): void {
+    Event::fake();
+
+    DelegatingAgent::fake([
+        new ToolCall('call_123', 'research_agent', ['task' => 'Research Laravel']),
+        'Research delegated.',
+    ]);
+
+    ResearchAgent::fake(['Research result']);
+
+    foreach ((new DelegatingAgent)->stream('Delegate research about Laravel') as $event) {
+        //
+    }
+
+    Event::assertDispatched(InvokingTool::class, fn (InvokingTool $event): bool => $event->toolCallId === 'call_123');
+    Event::assertDispatched(ToolInvoked::class, fn (ToolInvoked $event): bool => $event->toolCallId === 'call_123');
 });
 
 test('a tool that fails while resuming an approval reports the failure once and continues the run', function (): void {

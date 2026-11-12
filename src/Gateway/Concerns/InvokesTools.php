@@ -28,7 +28,7 @@ trait InvokesTools
 
         // Any agent prompted while this tool runs, however it was reached, is a child of this tool call...
         return ParentInvocation::within($context?->invocationId, $toolInvocationId, function () use ($tool, $arguments, $toolCallId, $toolInvocationId, $context): string {
-            $context?->invokingTool($tool, $arguments, $toolInvocationId);
+            $context?->invokingTool($tool, $arguments, $toolInvocationId, $toolCallId);
 
             $startedAt = hrtime(true);
 
@@ -39,12 +39,12 @@ trait InvokesTools
                 // Validation failures are returned to the model so it can correct the arguments and retry...
                 $result = implode(' ', $exception->validator->errors()->all()) ?: $exception->getMessage();
             } catch (Throwable $exception) {
-                $context?->toolFailed($tool, $arguments, $exception, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
+                $context?->toolFailed($tool, $arguments, $exception, $toolInvocationId, $this->elapsedMilliseconds($startedAt), $toolCallId);
 
                 throw new ToolExecutionException($exception);
             }
 
-            $context?->toolInvoked($tool, $arguments, $result, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
+            $context?->toolInvoked($tool, $arguments, $result, $toolInvocationId, $this->elapsedMilliseconds($startedAt), $toolCallId);
 
             return (string) $result;
         });

@@ -10,6 +10,7 @@ class ToolInvoked
     /**
      * @param  array<string, mixed>  $arguments
      * @param  float  $time  Wall time spent in the tool's handler, in milliseconds.
+     * @param  string|null  $toolCallId  The id the model gave this tool call, null when the tool runs outside a model call.
      */
     public function __construct(
         public string $invocationId,
@@ -19,5 +20,6 @@ class ToolInvoked
         public array $arguments,
         public mixed $result,
         public float $time,
+        public ?string $toolCallId = null,
     ) {}
 }

@@ -9,6 +9,7 @@ class InvokingTool
 {
     /**
      * @param  array<string, mixed>  $arguments
+     * @param  string|null  $toolCallId  The id the model gave this tool call, null when the tool runs outside a model call.
      */
     public function __construct(
         public string $invocationId,
@@ -16,5 +17,6 @@ class InvokingTool
         public Agent $agent,
         public Tool $tool,
         public array $arguments,
+        public ?string $toolCallId = null,
     ) {}
 }

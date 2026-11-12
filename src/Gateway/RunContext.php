@@ -116,10 +116,10 @@ class RunContext
      *
      * @param  array<string, mixed>  $arguments
      */
-    public function invokingTool(Tool $tool, array $arguments, string $toolInvocationId): void
+    public function invokingTool(Tool $tool, array $arguments, string $toolInvocationId, ?string $toolCallId = null): void
     {
         $this->events->dispatch(new InvokingTool(
-            $this->invocationId, $toolInvocationId, $this->agent, $tool, $arguments,
+            $this->invocationId, $toolInvocationId, $this->agent, $tool, $arguments, $toolCallId,
         ));
     }
 
@@ -128,10 +128,10 @@ class RunContext
      *
      * @param  array<string, mixed>  $arguments
      */
-    public function toolInvoked(Tool $tool, array $arguments, mixed $result, string $toolInvocationId, float $time): void
+    public function toolInvoked(Tool $tool, array $arguments, mixed $result, string $toolInvocationId, float $time, ?string $toolCallId = null): void
     {
         $this->events->dispatch(new ToolInvoked(
-            $this->invocationId, $toolInvocationId, $this->agent, $tool, $arguments, $result, $time,
+            $this->invocationId, $toolInvocationId, $this->agent, $tool, $arguments, $result, $time, $toolCallId,
         ));
     }
 
@@ -140,10 +140,10 @@ class RunContext
      *
      * @param  array<string, mixed>  $arguments
      */
-    public function toolFailed(Tool $tool, array $arguments, Throwable $exception, string $toolInvocationId, float $time): void
+    public function toolFailed(Tool $tool, array $arguments, Throwable $exception, string $toolInvocationId, float $time, ?string $toolCallId = null): void
     {
         $this->events->dispatch(new ToolFailed(
-            $this->invocationId, $toolInvocationId, $this->agent, $tool, $arguments, $exception, $time,
+            $this->invocationId, $toolInvocationId, $this->agent, $tool, $arguments, $exception, $time, $toolCallId,
         ));
     }
 }
