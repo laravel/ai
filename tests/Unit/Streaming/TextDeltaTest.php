@@ -1,6 +1,7 @@
 <?php
 
 use Laravel\Ai\Responses\Data;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
@@ -112,4 +113,17 @@ test('combine joins deltas that arrive before any step start', function () {
 
 test('combine returns an empty string when there are no text deltas', function () {
     expect(TextDelta::combine([]))->toBe('');
+});
+
+test('combineSteps joins steps the way combine joins their streamed deltas', function () {
+    $step = fn (string $text, FinishReason $finishReason, array $toolResults = []) => new Data\Step($text, [], $toolResults, $finishReason, new Data\TextUsage, new Data\Meta, '', []);
+
+    $steps = [
+        $step('Laravel 13 is current, which', FinishReason::Continue),
+        $step(' shipped in March.', FinishReason::ToolCalls, [new Data\ToolResult('call-1', 'get_weather', [], '12°C')]),
+        $step("\n", FinishReason::ToolCalls, [new Data\ToolResult('call-2', 'get_weather', [], '12°C')]),
+        $step('It is 12°C.', FinishReason::Stop),
+    ];
+
+    expect(TextDelta::combineSteps($steps))->toBe("Laravel 13 is current, which shipped in March.\n\nIt is 12°C.");
 });

@@ -591,7 +591,7 @@ test('a resume folds its steps, text and usage into the paused row', function (b
         ->and($row->usage)->json()->toMatchArray(['input_tokens' => 30, 'output_tokens' => 12])
         ->and($row->meta)->json()->toMatchArray(['provider' => 'openai', 'model' => 'gpt-5']);
 })->with([
-    'prompted' => [false, 'Done.'],
+    'prompted' => [false, "Let me check.\n\nDone."],
     'streamed' => [true, "Let me check.\n\nDone."],
 ]);
 

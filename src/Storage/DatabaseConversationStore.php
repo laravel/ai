@@ -30,7 +30,7 @@ use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
-use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Throwable;
 
@@ -222,9 +222,9 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             $steps = $this->withoutReplayBlocks($steps);
         }
 
-        $content = $response instanceof StreamedAgentResponse
-            ? TextDelta::join($steps->pluck('content'))
-            : $response->text;
+        $content = $response instanceof StructuredAgentResponse
+            ? $response->text
+            : TextDelta::join($steps->pluck('content'));
 
         if (blank($content)) {
             $content = $paused->content;

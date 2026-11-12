@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Streaming\Events;
 
 use Illuminate\Support\Collection;
+use Laravel\Ai\Responses\Data\Step;
 
 class TextDelta extends StreamEvent
 {
@@ -26,6 +27,18 @@ class TextDelta extends StreamEvent
             ->map(fn (Collection $step) => $step->whereInstanceOf(TextDelta::class)
                 ->map(fn (TextDelta $event) => $event->delta)
                 ->join('')));
+    }
+
+    /**
+     * Combine the text of the given steps, starting a new paragraph only after a step that ran tools.
+     *
+     * @param  Collection<array-key, Step>|array<array-key, Step>  $steps
+     */
+    public static function combineSteps(Collection|array $steps): string
+    {
+        return static::join(Collection::wrap($steps)
+            ->chunkWhile(fn (Step $step, $key, Collection $previous) => blank($previous->last()->toolResults))
+            ->map(fn (Collection $steps) => $steps->pluck('text')->join('')));
     }
 
     /**

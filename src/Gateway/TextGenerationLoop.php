@@ -1124,7 +1124,7 @@ class TextGenerationLoop
         }
 
         return (new TextResponse(
-            $finalStep->text,
+            TextDelta::combineSteps($steps),
             $totalUsage,
             $finalStep->meta,
         ))->withMessages($newMessages)->withSteps($steps)->withReasoning($reasoningText)->withRawResponse($lastResult?->raw);
