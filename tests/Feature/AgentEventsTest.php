@@ -512,6 +512,55 @@ test('a sub agent prompt is linked to the parent invocation and tool invocation'
         && $event->prompt->parentToolInvocationId === null);
 });
 
+test('step and tool events of a sub agent carry the parent invocation and tool invocation', function (): void {
+    Event::fake();
+
+    DelegatingAgent::fake([
+        new ToolCall('call_123', 'research_agent', ['task' => 'Research Laravel']),
+        'Research delegated.',
+    ]);
+
+    ResearchAgent::fake(['Research result']);
+
+    $response = (new DelegatingAgent)->prompt('Delegate research about Laravel');
+
+    $invoking = Event::dispatched(InvokingTool::class)->first()[0];
+
+    expect($invoking->parentInvocationId)->toBeNull()
+        ->and($invoking->parentToolInvocationId)->toBeNull();
+
+    foreach ([StartingStep::class, StepCompleted::class] as $event) {
+        Event::assertDispatched($event, fn (StartingStep|StepCompleted $event): bool => $event->agent instanceof ResearchAgent
+            && $event->parentInvocationId === $response->invocationId
+            && $event->parentToolInvocationId === $invoking->toolInvocationId);
+
+        Event::assertDispatched($event, fn (StartingStep|StepCompleted $event): bool => $event->agent instanceof DelegatingAgent
+            && $event->parentInvocationId === null
+            && $event->parentToolInvocationId === null);
+    }
+});
+
+test('step events of a sub agent streamed as a tool carry the parent invocation and tool invocation', function (): void {
+    Event::fake();
+
+    DelegatingAgent::fake([
+        new ToolCall('call_123', 'research_agent', ['task' => 'Research Laravel']),
+        'Research delegated.',
+    ]);
+
+    ResearchAgent::fake(['Research result']);
+
+    foreach ((new DelegatingAgent)->stream('Delegate research about Laravel') as $event) {
+        //
+    }
+
+    $invoking = Event::dispatched(InvokingTool::class)->first()[0];
+
+    Event::assertDispatched(StartingStep::class, fn (StartingStep $event): bool => $event->agent instanceof ResearchAgent
+        && $event->parentInvocationId === $invoking->invocationId
+        && $event->parentToolInvocationId === $invoking->toolInvocationId);
+});
+
 test('an agent prompted from a hand written tool is linked to the parent invocation', function (): void {
     Event::fake();
 

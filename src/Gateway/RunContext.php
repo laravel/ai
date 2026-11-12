@@ -31,6 +31,8 @@ class RunContext
         public readonly TextProvider $provider,
         public readonly string $model,
         protected readonly Dispatcher $events,
+        public readonly ?string $parentInvocationId = null,
+        public readonly ?string $parentToolInvocationId = null,
     ) {}
 
     /**
@@ -78,6 +80,7 @@ class RunContext
         $this->events->dispatch(new StartingStep(
             $this->invocationId, $step->stepNumber, $this->agent, $this->provider, $model ?? $this->model, $step->isFinalStep,
             $messages, $options,
+            $this->parentInvocationId, $this->parentToolInvocationId,
         ));
     }
 
@@ -93,6 +96,7 @@ class RunContext
         $this->events->dispatch(new StepCompleted(
             $this->invocationId, $step->stepNumber, $this->agent, $this->provider, $model ?? $this->model, $step->isFinalStep,
             $response, $time,
+            $this->parentInvocationId, $this->parentToolInvocationId,
         ));
     }
 
@@ -108,6 +112,7 @@ class RunContext
         $this->events->dispatch(new StepFailed(
             $this->invocationId, $step->stepNumber, $this->agent, $this->provider, $model ?? $this->model, $step->isFinalStep,
             $exception, $time,
+            $this->parentInvocationId, $this->parentToolInvocationId,
         ));
     }
 
@@ -120,6 +125,7 @@ class RunContext
     {
         $this->events->dispatch(new InvokingTool(
             $this->invocationId, $toolInvocationId, $this->agent, $tool, $arguments,
+            $this->parentInvocationId, $this->parentToolInvocationId,
         ));
     }
 
@@ -132,6 +138,7 @@ class RunContext
     {
         $this->events->dispatch(new ToolInvoked(
             $this->invocationId, $toolInvocationId, $this->agent, $tool, $arguments, $result, $time,
+            $this->parentInvocationId, $this->parentToolInvocationId,
         ));
     }
 
@@ -144,6 +151,7 @@ class RunContext
     {
         $this->events->dispatch(new ToolFailed(
             $this->invocationId, $toolInvocationId, $this->agent, $tool, $arguments, $exception, $time,
+            $this->parentInvocationId, $this->parentToolInvocationId,
         ));
     }
 }

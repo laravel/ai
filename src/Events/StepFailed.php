@@ -11,6 +11,8 @@ class StepFailed
     /**
      * @param  Throwable  $exception  A StreamErrorException carries the provider's own error event on ->error.
      * @param  float  $time  Wall time spent in the provider call before it failed, in milliseconds.
+     * @param  string|null  $parentInvocationId  The invocation that delegated this run through a tool, null for a root run.
+     * @param  string|null  $parentToolInvocationId  The tool invocation that delegated this run, null for a root run.
      */
     public function __construct(
         public string $invocationId,
@@ -21,5 +23,7 @@ class StepFailed
         public bool $isFinalStep,
         public Throwable $exception,
         public float $time,
+        public ?string $parentInvocationId = null,
+        public ?string $parentToolInvocationId = null,
     ) {}
 }

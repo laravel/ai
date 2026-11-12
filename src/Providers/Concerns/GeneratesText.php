@@ -210,7 +210,10 @@ trait GeneratesText
     protected function runContextFor(string $invocationId, AgentPrompt $prompt): RunContext
     {
         return tap(
-            new RunContext($invocationId, $prompt->agent, $this, $prompt->model, $this->events),
+            new RunContext(
+                $invocationId, $prompt->agent, $this, $prompt->model, $this->events,
+                $prompt->parentInvocationId, $prompt->parentToolInvocationId,
+            ),
             fn (RunContext $context) => $prompt->setRunContext($context),
         );
     }
