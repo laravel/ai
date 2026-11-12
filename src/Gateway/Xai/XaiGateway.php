@@ -12,7 +12,6 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
-use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
@@ -28,11 +27,11 @@ class XaiGateway implements Gateway, StepTextGateway
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesXaiClient;
     use Concerns\HandlesTextStreaming;
+    use Concerns\HandlesXaiErrors;
     use Concerns\MapsAttachments;
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
-    use HandlesFailoverErrors;
     use ParsesServerSentEvents;
 
     public function __construct(protected Dispatcher $events) {}

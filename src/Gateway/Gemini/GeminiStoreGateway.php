@@ -13,16 +13,15 @@ use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Gateway\Concerns\EncodesResourceIds;
-use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
 use Laravel\Ai\Store;
 
 class GeminiStoreGateway implements StoreGateway
 {
+    use Concerns\HandlesGeminiErrors;
     use CreatesClient;
     use EncodesResourceIds;
-    use HandlesFailoverErrors;
 
     /**
      * Get a vector store by its ID.
