@@ -31,6 +31,7 @@ use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\AgentTool;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\DelegatingAgent;
@@ -430,6 +431,61 @@ test('a throwing tool dispatches tool failed and the run continues', function ()
 
     expect($failed->toolInvocationId)->toBe($invoking->toolInvocationId)
         ->and($failed->invocationId)->toBe($invoking->invocationId);
+});
+
+test('a sub agent that throws dispatches tool failed and the run continues', function (): void {
+    Event::fake();
+
+    DelegatingAgent::fake([
+        new ToolCall('call_123', 'research_agent', ['task' => 'Research Laravel']),
+        'Research failed.',
+    ]);
+
+    ResearchAgent::fake(fn () => throw new RuntimeException('Research failed.'));
+
+    $response = (new DelegatingAgent)->prompt('Delegate research about Laravel');
+
+    $invoking = Event::dispatched(InvokingTool::class)->first()[0];
+
+    Event::assertDispatched(ToolFailed::class, fn (ToolFailed $event): bool => $event->toolInvocationId === $invoking->toolInvocationId
+        && $event->exception->getMessage() === 'Research failed.');
+
+    Event::assertNotDispatched(ToolInvoked::class);
+
+    Event::assertNotDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->prompt->agent instanceof DelegatingAgent);
+
+    $result = $response->steps->first()->toolResults[0];
+
+    expect($result->failed)->toBeTrue()
+        ->and($result->result)->toBe('The tool call failed: Research failed.')
+        ->and($response->text)->toBe('Research failed.');
+});
+
+test('a sub agent that throws while streamed as a tool dispatches tool failed and the run continues', function (): void {
+    Event::fake();
+
+    DelegatingAgent::fake([
+        new ToolCall('call_123', 'research_agent', ['task' => 'Research Laravel']),
+        'Research failed.',
+    ]);
+
+    ResearchAgent::fake(fn () => throw new RuntimeException('Research failed.'));
+
+    $events = iterator_to_array((new DelegatingAgent)->stream('Delegate research about Laravel'), false);
+
+    $invoking = Event::dispatched(InvokingTool::class)->first()[0];
+
+    Event::assertDispatched(ToolFailed::class, fn (ToolFailed $event): bool => $event->toolInvocationId === $invoking->toolInvocationId
+        && $event->exception->getMessage() === 'Research failed.');
+
+    Event::assertNotDispatched(ToolInvoked::class);
+
+    Event::assertNotDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->prompt->agent instanceof DelegatingAgent);
+
+    $result = collect($events)->first(fn ($event): bool => $event instanceof ToolResultEvent && ! $event->preliminary);
+
+    expect($result->successful)->toBeFalse()
+        ->and($result->error)->toBe('The tool call failed: Research failed.');
 });
 
 test('a tool that fails while resuming an approval reports the failure once and continues the run', function (): void {

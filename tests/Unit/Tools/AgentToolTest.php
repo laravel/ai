@@ -44,12 +44,11 @@ test('a structured sub-agent answers through a regular prompt on the streaming p
         ->and($generator->getReturn())->toBe('{"answer":42}');
 });
 
-test('a failing sub-agent surfaces its error as the tool result on the streaming path', function (): void {
+test('a failing sub-agent throws its error on the streaming path', function (): void {
     $agent = Double::for(Agent::class);
     $agent->expects('stream')->throws(new RuntimeException('provider exploded'));
 
     $generator = (new AgentTool($agent))->stream(new Request(['task' => 'Do the thing']));
 
-    expect(iterator_to_array($generator))->toBe([])
-        ->and($generator->getReturn())->toBe('Agent failed: provider exploded');
+    expect(fn (): array => iterator_to_array($generator))->toThrow(RuntimeException::class, 'provider exploded');
 });
