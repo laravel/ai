@@ -125,6 +125,30 @@ test('failed broadcasts on every channel when given an array', function (): void
         && $event->broadcastOn() === $channels);
 });
 
+test('failed broadcasts the error and runs the catch callbacks', function (): void {
+    Event::fake();
+
+    $received = null;
+
+    $job = new BroadcastAgent(
+        agent: new AssistantAgent,
+        prompt: 'Say hello',
+        channels: new Channel('test-channel'),
+    );
+
+    $job->catch(function (Throwable $e) use (&$received): void {
+        $received = $e;
+    });
+
+    $exception = new RuntimeException('boom');
+
+    $job->failed($exception);
+
+    Event::assertDispatched(AnonymousEvent::class, fn (AnonymousEvent $event): bool => $event->broadcastAs() === 'stream_failed');
+
+    expect($received)->toBe($exception);
+});
+
 test('a provider error broadcasts as error and keeps its code in the payload', function (string $code): void {
     Event::fake();
 

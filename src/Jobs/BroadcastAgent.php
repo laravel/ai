@@ -18,7 +18,9 @@ use function Laravel\Ai\ulid;
 
 class BroadcastAgent implements ShouldQueue
 {
-    use Concerns\InvokesQueuedResponseCallbacks;
+    use Concerns\InvokesQueuedResponseCallbacks {
+        failed as invokeCatchCallbacks;
+    }
     use Queueable;
 
     public int $tries = 1;
@@ -76,6 +78,8 @@ class BroadcastAgent implements ShouldQueue
             timestamp: time(),
         ))->withInvocationId($this->invocationId)
             ->broadcastNow($this->channels);
+
+        $this->invokeCatchCallbacks($exception);
     }
 
     /**
