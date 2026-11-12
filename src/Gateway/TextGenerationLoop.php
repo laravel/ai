@@ -783,10 +783,18 @@ class TextGenerationLoop
         try {
             return $this->toolResult($toolCall, $this->executeTool($tool, $toolCall->arguments, $toolCall->id, $context));
         } catch (ToolExecutionException $exception) {
-            report($exception->exception);
-
-            return $this->toolResult($toolCall, 'The tool call failed: '.$exception->exception->getMessage(), failed: true);
+            return $this->failedToolResult($toolCall, $exception);
         }
+    }
+
+    /**
+     * Report the given tool failure and turn it into a result the model can react to.
+     */
+    protected function failedToolResult(ToolCall $toolCall, ToolExecutionException $exception): ToolResult
+    {
+        report($exception->exception);
+
+        return $this->toolResult($toolCall, 'The tool call failed: '.$exception->exception->getMessage(), failed: true);
     }
 
     /**
