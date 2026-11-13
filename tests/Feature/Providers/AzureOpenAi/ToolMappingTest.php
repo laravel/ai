@@ -275,3 +275,15 @@ test('tool search emits a tool_search entry with azure options and defers its ne
             && ($tools->firstWhere('name', 'DeferredTool')['defer_loading'] ?? false) === true;
     });
 });
+
+test('code execution files are sent as container file ids', function (): void {
+    Http::fake([
+        '*' => fakeAzureResponse('result'),
+    ]);
+
+    agent(tools: [new CodeExecution(files: ['file_123'])])->prompt('Run some code', provider: 'azure');
+
+    $tool = collect(sentRequest()->data()['tools'])->firstWhere('type', 'code_interpreter');
+
+    expect($tool['container'])->toBe(['type' => 'auto', 'file_ids' => ['file_123']]);
+});

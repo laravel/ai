@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Providers\SupportsCodeExecution;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
@@ -116,6 +117,19 @@ trait MapsTools
             'name' => 'code_execution',
             ...$provider->codeExecutionToolOptions($tool),
         ];
+    }
+
+    /**
+     * Map the files of the given code execution tools to Anthropic container upload blocks.
+     */
+    protected function mapContainerUploads(array $tools): array
+    {
+        return (new Collection($tools))
+            ->whereInstanceOf(CodeExecution::class)
+            ->flatMap(fn (CodeExecution $tool): array => $tool->files)
+            ->map(fn (string $id): array => ['type' => 'container_upload', 'file_id' => $id])
+            ->values()
+            ->all();
     }
 
     /**

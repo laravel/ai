@@ -109,3 +109,12 @@ test('code execution tool is sent as code_interpreter type', function (): void {
         return data_get(json_decode($request->body(), true), 'tools') === [['type' => 'code_interpreter']];
     });
 });
+
+test('code execution files are rejected before sending', function (): void {
+    Http::fake();
+
+    expect(fn () => agent(tools: [new CodeExecution(files: ['file_123'])])->prompt('Run some code', provider: 'groq'))
+        ->toThrow(RuntimeException::class, 'does not support code execution files.');
+
+    Http::assertNothingSent();
+});
