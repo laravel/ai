@@ -86,6 +86,7 @@ trait HandlesTextStreaming
         $messageUsage = [];
         $usage = null;
         $stopReason = '';
+        $citedUrls = [];
 
         $emitTextStart = function () use (&$textStartEmitted, $messageId, $invocationId): ?StreamEvent {
             if ($textStartEmitted) {
@@ -112,6 +113,21 @@ trait HandlesTextStreaming
             return (new ReasoningStart(
                 $this->generateEventId(),
                 $reasoningId,
+                time(),
+            ))->withInvocationId($invocationId);
+        };
+
+        $emitCitation = function (UrlCitation $citation) use (&$citedUrls, $messageId, $invocationId): ?StreamEvent {
+            if (in_array($citation->url, $citedUrls, true)) {
+                return null;
+            }
+
+            $citedUrls[] = $citation->url;
+
+            return (new CitationEvent(
+                $this->generateEventId(),
+                $messageId,
+                $citation,
                 time(),
             ))->withInvocationId($invocationId);
         };
@@ -191,13 +207,9 @@ trait HandlesTextStreaming
                 } elseif ($this->isProviderToolResultBlock($blockType)) {
                     $fetchResult = $data['content_block']['content'] ?? [];
 
-                    if ($blockType === 'web_fetch_tool_result' && ($fetchResult['type'] ?? '') === 'web_fetch_result' && filled($fetchResult['url'] ?? null)) {
-                        yield (new CitationEvent(
-                            $this->generateEventId(),
-                            $messageId,
-                            new UrlCitation($fetchResult['url'], $fetchResult['content']['title'] ?? null),
-                            time(),
-                        ))->withInvocationId($invocationId);
+                    if ($blockType === 'web_fetch_tool_result' && ($fetchResult['type'] ?? '') === 'web_fetch_result' && filled($fetchResult['url'] ?? null)
+                        && ($event = $emitCitation(new UrlCitation($fetchResult['url'], $fetchResult['content']['title'] ?? null))) instanceof StreamEvent) {
+                        yield $event;
                     }
 
                     yield (new ProviderToolEvent(
@@ -265,13 +277,9 @@ trait HandlesTextStreaming
                 } elseif ($deltaType === 'citations_delta' && $currentBlockType === 'text') {
                     $citationData = $data['delta']['citation'] ?? null;
 
-                    if ($citationData && ($citationData['type'] ?? '') === 'web_search_result_location') {
-                        yield (new CitationEvent(
-                            $this->generateEventId(),
-                            $messageId,
-                            new UrlCitation($citationData['url'] ?? '', $citationData['title'] ?? null),
-                            time(),
-                        ))->withInvocationId($invocationId);
+                    if ($citationData && ($citationData['type'] ?? '') === 'web_search_result_location'
+                        && ($event = $emitCitation(new UrlCitation($citationData['url'] ?? '', $citationData['title'] ?? null))) instanceof StreamEvent) {
+                        yield $event;
                     }
                 } elseif ($deltaType === 'input_json_delta') {
                     $partial = (string) ($data['delta']['partial_json'] ?? '');

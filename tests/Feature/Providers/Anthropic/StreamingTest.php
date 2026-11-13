@@ -276,7 +276,7 @@ describe('thinking blocks', function (): void {
             'api.anthropic.com/*' => Http::response(
                 body: $this->ssePayload([
                     $this->messageStart(),
-                    $this->contentBlockStart(0, ['type' => 'web_search_tool_result', 'tool_use_id' => 'srvtoolu_1', 'search_results' => []]),
+                    $this->contentBlockStart(0, ['type' => 'web_search_tool_result', 'tool_use_id' => 'srvtoolu_1', 'content' => []]),
                     $this->contentBlockStop(0),
                     $this->contentBlockStart(1, ['type' => 'text', 'text' => '']),
                     $this->contentBlockDelta(1, ['type' => 'text_delta', 'text' => 'Found it']),
@@ -805,5 +805,44 @@ describe('provider tool citations', function (): void {
         $citations = array_filter($this->collectStreamEvents(), fn ($e): bool => $e instanceof CitationEvent);
 
         expect($citations)->toBeEmpty();
+    });
+
+    test('streaming emits one citation per cited web search source', function (): void {
+        $citation = ['type' => 'citations_delta', 'citation' => ['type' => 'web_search_result_location', 'url' => 'https://laravel-news.com/laravel-13', 'title' => 'Laravel 13', 'cited_text' => 'Laravel 13', 'encrypted_index' => 'xyz']];
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->messageStart(),
+                    $this->contentBlockStart(0, [
+                        'type' => 'web_search_tool_result',
+                        'tool_use_id' => 'srvtoolu_1',
+                        'content' => [
+                            ['type' => 'web_search_result', 'url' => 'https://laravel.com/docs/releases', 'title' => 'Release Notes', 'encrypted_content' => 'abc', 'page_age' => null],
+                            ['type' => 'web_search_result', 'url' => 'https://laravel-news.com/laravel-13', 'title' => 'Laravel 13', 'encrypted_content' => 'def', 'page_age' => null],
+                        ],
+                    ]),
+                    $this->contentBlockStop(0),
+                    $this->contentBlockStart(1, ['type' => 'text', 'text' => '', 'citations' => []]),
+                    $this->contentBlockDelta(1, $citation),
+                    $this->contentBlockDelta(1, ['type' => 'text_delta', 'text' => 'The latest version is Laravel 13.']),
+                    $this->contentBlockStop(1),
+                    $this->contentBlockStart(2, ['type' => 'text', 'text' => '', 'citations' => []]),
+                    $this->contentBlockDelta(2, $citation),
+                    $this->contentBlockDelta(2, ['type' => 'text_delta', 'text' => ' It ships with PHP 8.3 support.']),
+                    $this->contentBlockStop(2),
+                    $this->messageDelta('end_turn', 10),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $citations = array_map(
+            fn (CitationEvent $e): array => [$e->citation->url, $e->citation->title],
+            array_values(array_filter($this->collectStreamEvents(), fn ($e): bool => $e instanceof CitationEvent)),
+        );
+
+        expect($citations)->toBe([['https://laravel-news.com/laravel-13', 'Laravel 13']]);
     });
 });
