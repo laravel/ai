@@ -438,7 +438,7 @@ test('a sub agent that throws dispatches tool failed and the run continues', fun
 
     DelegatingAgent::fake([
         new ToolCall('call_123', 'research_agent', ['task' => 'Research Laravel']),
-        'Research failed.',
+        'The research could not be completed.',
     ]);
 
     ResearchAgent::fake(fn () => throw new RuntimeException('Research failed.'));
@@ -452,13 +452,12 @@ test('a sub agent that throws dispatches tool failed and the run continues', fun
 
     Event::assertNotDispatched(ToolInvoked::class);
 
-    Event::assertNotDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->prompt->agent instanceof DelegatingAgent);
+    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->prompt->agent instanceof ResearchAgent);
 
     $result = $response->steps->first()->toolResults[0];
 
     expect($result->failed)->toBeTrue()
-        ->and($result->result)->toBe('The tool call failed: Research failed.')
-        ->and($response->text)->toBe('Research failed.');
+        ->and($result->result)->toBe('The tool call failed: Research failed.');
 });
 
 test('a sub agent that throws while streamed as a tool dispatches tool failed and the run continues', function (): void {
@@ -466,7 +465,7 @@ test('a sub agent that throws while streamed as a tool dispatches tool failed an
 
     DelegatingAgent::fake([
         new ToolCall('call_123', 'research_agent', ['task' => 'Research Laravel']),
-        'Research failed.',
+        'The research could not be completed.',
     ]);
 
     ResearchAgent::fake(fn () => throw new RuntimeException('Research failed.'));
@@ -480,12 +479,42 @@ test('a sub agent that throws while streamed as a tool dispatches tool failed an
 
     Event::assertNotDispatched(ToolInvoked::class);
 
-    Event::assertNotDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->prompt->agent instanceof DelegatingAgent);
+    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->prompt->agent instanceof ResearchAgent);
 
     $result = collect($events)->first(fn ($event): bool => $event instanceof ToolResultEvent && ! $event->preliminary);
 
     expect($result->successful)->toBeFalse()
         ->and($result->error)->toBe('The tool call failed: Research failed.');
+});
+
+test('a sub agent that throws after streaming output ends its tool call with a failed result', function (): void {
+    Event::fake();
+
+    OrchestratorAgent::fake([
+        new ToolCall('call_123', 'middle_manager', ['task' => 'Research Laravel']),
+        'The research could not be completed.',
+    ]);
+
+    MiddleManagerAgent::fake([
+        new ToolCall('call_456', 'research_agent', ['task' => 'Research Laravel']),
+        fn () => throw new RuntimeException('Research failed.'),
+    ]);
+
+    ResearchAgent::fake(['Laravel is a PHP framework.']);
+
+    $results = collect(iterator_to_array((new OrchestratorAgent)->stream('Delegate research about Laravel'), false))
+        ->filter(fn ($event): bool => $event instanceof ToolResultEvent)
+        ->values();
+
+    Event::assertDispatched(ToolFailed::class, fn (ToolFailed $event): bool => $event->tool instanceof AgentTool
+        && $event->tool->name() === 'middle_manager'
+        && $event->exception->getMessage() === 'Research failed.');
+
+    expect($results->first()->preliminary)->toBeTrue()
+        ->and($results->first()->successful)->toBeTrue()
+        ->and($results->last()->preliminary)->toBeFalse()
+        ->and($results->last()->successful)->toBeFalse()
+        ->and($results->last()->error)->toBe('The tool call failed: Research failed.');
 });
 
 test('a tool that fails while resuming an approval reports the failure once and continues the run', function (): void {
