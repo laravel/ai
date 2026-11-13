@@ -75,7 +75,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, $model, filled($schema))->withRawResponse($response);
+        return $this->parseTextResponse($data, $provider, $model, filled($schema), $this->storesInteraction($body))->withRawResponse($response);
     }
 
     /**
@@ -102,7 +102,7 @@ class GeminiGateway implements Gateway, StepTextGateway
                 ->post('interactions?alt=sse', array_merge($body, ['stream' => true])),
         );
 
-        return yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody());
+        return yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody(), $this->storesInteraction($body));
     }
 
     /**
