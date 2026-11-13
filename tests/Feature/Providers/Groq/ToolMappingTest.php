@@ -109,3 +109,16 @@ test('code execution tool is sent as code_interpreter type', function (): void {
         return data_get(json_decode($request->body(), true), 'tools') === [['type' => 'code_interpreter']];
     });
 });
+
+test('tool with Strict attribute omits strict', function (): void {
+    Http::fake(['*' => fakeGroqResponse('42')]);
+
+    agent(tools: [new RandomNumberGenerator])->prompt('Give me a random number', provider: 'groq');
+
+    Http::assertSent(function (Request $request): bool {
+        $function = collect(data_get(json_decode($request->body(), true), 'tools'))
+            ->firstWhere('function.name', 'RandomNumberGenerator')['function'];
+
+        return ! array_key_exists('strict', $function);
+    });
+});
