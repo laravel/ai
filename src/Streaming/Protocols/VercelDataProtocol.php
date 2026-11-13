@@ -81,6 +81,7 @@ class VercelDataProtocol extends StreamProtocol
                         'toolCallId' => $pendingApproval->id,
                         'approvalId' => $pendingApproval->id,
                         'reason' => $pendingApproval->reason,
+                        ...array_filter(['approvalDescriptor' => array_filter(['inputSchema' => $pendingApproval->inputSchema, 'data' => $pendingApproval->data])]),
                     ]);
                 }
 
@@ -240,7 +241,7 @@ class VercelDataProtocol extends StreamProtocol
         return [
             'type' => 'tool-output-available',
             'toolCallId' => $event->toolResult->id,
-            'output' => $event->toolResult->result,
+            'output' => $event->toolResult->data ?? $event->toolResult->result,
             ...($event->preliminary ? ['preliminary' => true] : []),
         ];
     }
