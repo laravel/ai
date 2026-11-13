@@ -148,6 +148,18 @@ $conversationId = $response->conversationId;
 $response = (new SalesCoach)->continue($conversationId, as: $user)->prompt('Tell me more.');
 ```
 
+On Anthropic, add `#[RememberReasoning]` to keep each completed turn's signed thinking and replay it verbatim in follow-up turns, so they read the previous turn from the prompt cache instead of writing it again. The agent's instructions and tools must stay the same for the whole conversation: on models with preserved thinking, Anthropic rejects replayed thinking whose earlier conversation changed.
+
+```php
+use Laravel\Ai\Attributes\RememberReasoning;
+
+#[RememberReasoning]
+class SalesCoach implements Agent, Conversational
+{
+    use Promptable, RemembersConversations;
+}
+```
+
 ### Structured Output
 
 ```php

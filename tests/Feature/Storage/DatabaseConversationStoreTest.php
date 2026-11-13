@@ -44,6 +44,7 @@ use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
+use Tests\Fixtures\Agents\ReasoningRememberingAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
 use Tests\Fixtures\Agents\RememberingToolUsingAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
@@ -1865,4 +1866,114 @@ test('provider tool calls are stored per step and exposed on the stored message 
         ->and($steps[1]['provider_tool_calls'])->toBe([$execution->toArray()])
         ->and($store->paginateConversationMessages($conversationId, 1)->items()[0]->providerToolCalls())->toBe([$search->toArray(), $execution->toArray()])
         ->and(ConversationMessage::query()->where('role', 'assistant')->first()->provider_tool_calls)->toBe([$search->toArray(), $execution->toArray()]);
+});
+
+function rememberedReasoningResponse(bool $replayBlocksOutliveTurn = true): AgentResponse
+{
+    return (new AgentResponse('invocation-id', 'The number is 72019', new TextUsage, new Meta('anthropic')))->withSteps(collect([
+        new Step('', [new ToolCall('call-1', 'FixedNumberGenerator', [])], [new ToolResult('call-1', 'FixedNumberGenerator', [], '72019')], FinishReason::ToolCalls, new TextUsage, new Meta, '', [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']], replayBlocksOutliveTurn: $replayBlocksOutliveTurn),
+        new Step('The number is 72019', [], [], FinishReason::Stop, new TextUsage, new Meta, '', [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'text', 'text' => 'The number is 72019']], replayBlocksOutliveTurn: $replayBlocksOutliveTurn),
+    ]));
+}
+
+/** @return list<array<int, array<string, mixed>>> */
+function storedReplayBlocks(string $id): array
+{
+    return collect(json_decode(DB::table('agent_conversation_messages')->where('id', $id)->value('steps'), true))->pluck('replay_blocks')->all();
+}
+
+test('a turn of an agent that remembers reasoning keeps the replay blocks its provider accepts in later turns', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
+    $prompt = new AgentPrompt(new ReasoningRememberingAgent, 'Generate a number', [], Double::for(TextProvider::class), 'test-model');
+
+    $id = $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, rememberedReasoningResponse());
+
+    expect(storedReplayBlocks($id))->toBe([
+        [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
+        [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'text', 'text' => 'The number is 72019']],
+    ]);
+});
+
+test('remembering reasoning drops the replay blocks a provider only accepts within the turn', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
+    $prompt = new AgentPrompt(new ReasoningRememberingAgent, 'Generate a number', [], Double::for(TextProvider::class), 'test-model');
+
+    $id = $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, rememberedReasoningResponse(replayBlocksOutliveTurn: false));
+
+    expect(storedReplayBlocks($id))->toBe([[], []]);
+});
+
+test('a failed turn of an agent that remembers reasoning drops its replay blocks', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
+    $prompt = new AgentPrompt(new ReasoningRememberingAgent, 'Generate a number', [], Double::for(TextProvider::class), 'test-model');
+
+    $id = $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, rememberedReasoningResponse(), new RuntimeException('Overloaded.'));
+
+    expect(storedReplayBlocks($id))->toBe([[], []]);
+});
+
+test('an agent that remembers reasoning leaves the replay blocks of earlier paused rows in place', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
+
+    insertAssistantTurn($conversationId, 'message-1', 'Waiting on you.', [
+        assistantStep([['id' => 'call-0', 'name' => 'delete_file', 'arguments' => ['path' => 'b']]], replayBlocks: [['type' => 'thinking', 'signature' => 'sig-0'], ['type' => 'tool_use', 'id' => 'call-0']]),
+    ], ['call-0' => 'Destructive.'], ['provider' => 'anthropic']);
+
+    $prompt = new AgentPrompt(new ReasoningRememberingAgent, 'Generate a number', [], Double::for(TextProvider::class), 'test-model');
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, rememberedReasoningResponse());
+
+    expect(storedReplayBlocks('message-1'))->toBe([[['type' => 'thinking', 'signature' => 'sig-0'], ['type' => 'tool_use', 'id' => 'call-0']]]);
+});
+
+test('a resumed turn of an agent that remembers reasoning keeps the replay blocks of both halves', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
+
+    insertAssistantTurn($conversationId, 'message-1', '', [
+        assistantStep(
+            [['id' => 'call-1', 'name' => 'delete_file', 'arguments' => ['path' => 'b'], 'result' => 'deleted']],
+            replayBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
+        ),
+    ], [], ['provider' => 'anthropic']);
+
+    $prompt = new AgentPrompt(new ReasoningRememberingAgent, '', [], Double::for(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
+
+    $response = (new AgentResponse('invocation-id', 'Deleted b.', new TextUsage, new Meta('anthropic')))->withSteps(collect([
+        new Step('Deleted b.', [], [], FinishReason::Stop, new TextUsage, new Meta, '', [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'text', 'text' => 'Deleted b.']], replayBlocksOutliveTurn: true),
+    ]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    expect(storedReplayBlocks('message-1'))->toBe([
+        [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']],
+        [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'text', 'text' => 'Deleted b.']],
+    ])->and(DB::table('agent_conversation_messages')->where('id', 'message-1')->value('status'))->toBe('completed');
+});
+
+test('a cut history replays completed turns without their replay blocks and paused turns with them', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
+
+    insertStoredConversationMessages($conversationId, ['message-1']);
+    insertAssistantTurn($conversationId, 'message-2', 'The number is 72019', [
+        assistantStep(replayBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'text', 'text' => 'The number is 72019']]),
+    ], meta: ['provider' => 'anthropic']);
+    insertStoredConversationMessages($conversationId, ['message-3']);
+    insertAssistantTurn($conversationId, 'message-4', 'Waiting on you.', [
+        assistantStep([['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b']]], replayBlocks: [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'tool_use', 'id' => 'call-2']]),
+    ], ['call-2' => 'Destructive.'], ['provider' => 'anthropic']);
+
+    $replayBlockCounts = fn (int $limit): array => $store->getLatestConversationMessages($conversationId, $limit)
+        ->filter(fn (Message $message): bool => $message instanceof AssistantMessage)
+        ->map(fn (AssistantMessage $message): int => count($message->replayBlocks))
+        ->values()
+        ->all();
+
+    expect($replayBlockCounts(4))->toBe([2, 2])
+        ->and($replayBlockCounts(3))->toBe([0, 2]);
 });

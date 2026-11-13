@@ -104,6 +104,7 @@ trait ParsesTextResponses
             replayBlocks: $content,
             reasoning: $this->extractReasoning($content),
             providerToolCalls: $this->extractProviderToolCalls($content),
+            replayBlocksOutliveTurn: true,
         );
     }
 
