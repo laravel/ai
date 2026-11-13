@@ -7,6 +7,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Laravel\Ai\Contracts\HasProviderOptions;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\File;
@@ -126,7 +128,9 @@ trait MapsAttachments
                 $mapped['title'] = $attachment->name();
             }
 
-            return $mapped;
+            return $attachment instanceof HasProviderOptions
+                ? array_merge($attachment->providerOptions(Lab::Anthropic), $mapped)
+                : $mapped;
         })->all();
     }
 
