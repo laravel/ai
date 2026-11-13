@@ -10,7 +10,7 @@ class ToolInvoked
     /**
      * @param  array<string, mixed>  $arguments
      * @param  float  $time  Wall time spent in the tool's handler, in milliseconds.
-     * @param  string|null  $toolCallId  The id the model gave this tool call, null when the tool runs outside a model call.
+     * @param  string|null  $toolCallId  The tool call's id in the step response, as passed to the tool's `Request::toolCallId()`.
      */
     public function __construct(
         public string $invocationId,
