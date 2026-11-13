@@ -103,7 +103,7 @@ class GeminiClassificationGateway implements ClassificationGateway
     /**
      * Map an image to an inline image content block.
      *
-     * @throws InvalidArgumentException if the attachment is not a supported image with inline content.
+     * @throws InvalidArgumentException if the attachment is not a JPEG, PNG, GIF, WebP, HEIC, HEIF, BMP, or TIFF image with inline content.
      */
     protected function mapImage(File|UploadedFile $attachment): array
     {
