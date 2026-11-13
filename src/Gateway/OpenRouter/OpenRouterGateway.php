@@ -61,6 +61,14 @@ class OpenRouterGateway implements Gateway, RerankingGateway, StepTextGateway
     }
 
     /**
+     * Determine if the provider honors the "strict" flag on function definitions.
+     */
+    protected function supportsStrictTools(Provider $provider): bool
+    {
+        return true;
+    }
+
+    /**
      * Map a provider tool to an OpenRouter tool definition.
      */
     protected function mapProviderTool(ProviderTool $tool, Provider $provider): array

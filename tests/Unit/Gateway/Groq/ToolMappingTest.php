@@ -3,7 +3,19 @@
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
+use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Tools\Request;
+
+function chatCompletionToolsProvider(): Provider
+{
+    return new class extends Provider
+    {
+        public function __construct()
+        {
+            //
+        }
+    };
+}
 
 test('tool parameters are not wrapped in schema definition', function (): void {
     $mapper = new class
@@ -12,7 +24,7 @@ test('tool parameters are not wrapped in schema definition', function (): void {
 
         public function map(array $tools): array
         {
-            return array_map($this->mapTool(...), $tools);
+            return $this->mapTools($tools, chatCompletionToolsProvider());
         }
     };
 
@@ -58,7 +70,7 @@ test('tool with empty schema includes parameters', function (): void {
 
         public function map(array $tools): array
         {
-            return array_map($this->mapTool(...), $tools);
+            return $this->mapTools($tools, chatCompletionToolsProvider());
         }
     };
 
