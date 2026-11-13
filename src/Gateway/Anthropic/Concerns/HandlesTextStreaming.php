@@ -207,18 +207,9 @@ trait HandlesTextStreaming
                 } elseif ($this->isProviderToolResultBlock($blockType)) {
                     $fetchResult = $data['content_block']['content'] ?? [];
 
-                    if ($blockType === 'web_fetch_tool_result' && ($fetchResult['type'] ?? '') === 'web_fetch_result' && filled($fetchResult['url'] ?? null)) {
-                        if (($event = $emitCitation(new UrlCitation($fetchResult['url'], $fetchResult['content']['title'] ?? null))) instanceof StreamEvent) {
-                            yield $event;
-                        }
-                    }
-
-                    if ($blockType === 'web_search_tool_result') {
-                        foreach ($data['content_block']['content'] ?? [] as $result) {
-                            if (($result['type'] ?? '') === 'web_search_result' && ($event = $emitCitation(new UrlCitation($result['url'] ?? '', $result['title'] ?? null))) instanceof StreamEvent) {
-                                yield $event;
-                            }
-                        }
+                    if ($blockType === 'web_fetch_tool_result' && ($fetchResult['type'] ?? '') === 'web_fetch_result' && filled($fetchResult['url'] ?? null)
+                        && ($event = $emitCitation(new UrlCitation($fetchResult['url'], $fetchResult['content']['title'] ?? null))) instanceof StreamEvent) {
+                        yield $event;
                     }
 
                     yield (new ProviderToolEvent(

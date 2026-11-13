@@ -201,17 +201,6 @@ trait ParsesTextResponses
         foreach ($content as $block) {
             $blockType = $block['type'] ?? '';
 
-            if ($blockType === 'web_search_tool_result') {
-                foreach ($block['content'] ?? [] as $result) {
-                    if (($result['type'] ?? '') === 'web_search_result') {
-                        $citations->push(new UrlCitation(
-                            $result['url'] ?? '',
-                            $result['title'] ?? null,
-                        ));
-                    }
-                }
-            }
-
             if ($blockType === 'web_fetch_tool_result') {
                 $result = $block['content'] ?? [];
 

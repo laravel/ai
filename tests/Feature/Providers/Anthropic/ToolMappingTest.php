@@ -231,7 +231,7 @@ test('web fetch tool result skips citations for a failed fetch', function (): vo
     expect($response->meta->citations)->toBeEmpty();
 });
 
-test('web search tool result surfaces the search results as citations', function (): void {
+test('web search reports only the sources the answer cites', function (): void {
     Http::fake([
         'api.anthropic.com/*' => Http::response([
             'id' => 'msg_search_1',
@@ -253,35 +253,13 @@ test('web search tool result surfaces the search results as citations', function
                         ['type' => 'web_search_result', 'url' => 'https://laravel-news.com/laravel-13', 'title' => 'Laravel 13', 'encrypted_content' => 'def', 'page_age' => null],
                     ],
                 ],
-                ['type' => 'text', 'text' => 'The latest version is Laravel 13.'],
-            ],
-            'stop_reason' => 'end_turn',
-            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
-        ]),
-    ]);
-
-    $response = agent(tools: [new WebSearch])->prompt('Search it', provider: 'anthropic');
-
-    expect($response->meta->citations)->toHaveCount(2)
-        ->and($response->meta->citations[0]->url)->toBe('https://laravel.com/docs/releases')
-        ->and($response->meta->citations[0]->title)->toBe('Release Notes')
-        ->and($response->meta->citations[1]->url)->toBe('https://laravel-news.com/laravel-13');
-});
-
-test('web search tool result skips citations for a failed search', function (): void {
-    Http::fake([
-        'api.anthropic.com/*' => Http::response([
-            'id' => 'msg_search_2',
-            'type' => 'message',
-            'role' => 'assistant',
-            'model' => 'claude-sonnet-4-6',
-            'content' => [
                 [
-                    'type' => 'web_search_tool_result',
-                    'tool_use_id' => 'srvtoolu_1',
-                    'content' => ['type' => 'web_search_tool_result_error', 'error_code' => 'unavailable'],
+                    'type' => 'text',
+                    'text' => 'The latest version is Laravel 13.',
+                    'citations' => [
+                        ['type' => 'web_search_result_location', 'url' => 'https://laravel-news.com/laravel-13', 'title' => 'Laravel 13', 'cited_text' => 'Laravel 13', 'encrypted_index' => 'xyz'],
+                    ],
                 ],
-                ['type' => 'text', 'text' => "I couldn't search right now."],
             ],
             'stop_reason' => 'end_turn',
             'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
@@ -290,7 +268,8 @@ test('web search tool result skips citations for a failed search', function (): 
 
     $response = agent(tools: [new WebSearch])->prompt('Search it', provider: 'anthropic');
 
-    expect($response->meta->citations)->toBeEmpty();
+    expect($response->meta->citations->map(fn ($citation): array => [$citation->url, $citation->title])->all())
+        ->toBe([['https://laravel-news.com/laravel-13', 'Laravel 13']]);
 });
 
 test('web fetch tool forwards a custom max_uses', function () {
