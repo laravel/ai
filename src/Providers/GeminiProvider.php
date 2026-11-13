@@ -4,9 +4,11 @@ namespace Laravel\Ai\Providers;
 
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
+use Laravel\Ai\Contracts\Gateway\ClassificationGateway;
 use Laravel\Ai\Contracts\Gateway\FileGateway;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\AudioProvider;
+use Laravel\Ai\Contracts\Providers\ClassificationProvider;
 use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Contracts\Providers\ImageProvider;
@@ -18,6 +20,7 @@ use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Gateway\Gemini\GeminiClassificationGateway;
 use Laravel\Ai\Gateway\Gemini\GeminiFileGateway;
 use Laravel\Ai\Gateway\Gemini\GeminiStoreGateway;
 use Laravel\Ai\Providers\Tools\CodeExecution;
@@ -25,14 +28,16 @@ use Laravel\Ai\Providers\Tools\FileSearch;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
 
-class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsCodeExecution, SupportsFileSearch, SupportsWebFetch, SupportsWebSearch, TextProvider, TranscriptionProvider
+class GeminiProvider extends Provider implements AudioProvider, ClassificationProvider, EmbeddingProvider, FileProvider, ImageProvider, StoreProvider, SupportsCodeExecution, SupportsFileSearch, SupportsWebFetch, SupportsWebSearch, TextProvider, TranscriptionProvider
 {
+    use Concerns\Classifies;
     use Concerns\GeneratesAudio;
     use Concerns\GeneratesEmbeddings;
     use Concerns\GeneratesImages;
     use Concerns\GeneratesText;
     use Concerns\GeneratesTranscriptions;
     use Concerns\HasAudioGateway;
+    use Concerns\HasClassificationGateway;
     use Concerns\HasEmbeddingGateway;
     use Concerns\HasFileGateway;
     use Concerns\HasImageGateway;
@@ -176,6 +181,22 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
     }
 
     /**
+     * Get the name of the default classification model.
+     */
+    public function defaultClassificationModel(): string
+    {
+        return $this->config['models']['classification']['default'] ?? 'gemini-decision-1';
+    }
+
+    /**
+     * Determine if the provider can classify attachments alongside the state.
+     */
+    public function supportsClassificationAttachments(): bool
+    {
+        return true;
+    }
+
+    /**
      * Get the name of the default embeddings model.
      */
     public function defaultEmbeddingsModel(): string
@@ -219,6 +240,14 @@ class GeminiProvider extends Provider implements AudioProvider, EmbeddingProvide
     protected function isGeminiMultimodalEmbeddingModel(string $model): bool
     {
         return in_array($model, ['gemini-embedding-2', 'gemini-embedding-2-preview'], true);
+    }
+
+    /**
+     * Get the provider's classification gateway.
+     */
+    public function classificationGateway(): ClassificationGateway
+    {
+        return $this->classificationGateway ??= new GeminiClassificationGateway;
     }
 
     /**
