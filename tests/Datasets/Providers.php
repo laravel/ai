@@ -27,7 +27,6 @@ dataset('transcription-providers', [
 ]);
 
 dataset('diarization-providers', [
-    'openai' => ['openai', 'OPENAI_API_KEY'],
     'gemini' => ['gemini', 'GEMINI_API_KEY'],
 ]);
 
