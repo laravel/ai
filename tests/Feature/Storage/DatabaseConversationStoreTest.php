@@ -37,6 +37,7 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\Data\UrlCitation;
 use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 use Laravel\Ai\Storage\StoredMessage;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
@@ -591,9 +592,93 @@ test('a resume folds its steps, text and usage into the paused row', function (b
         ->and($row->usage)->json()->toMatchArray(['input_tokens' => 30, 'output_tokens' => 12])
         ->and($row->meta)->json()->toMatchArray(['provider' => 'openai', 'model' => 'gpt-5']);
 })->with([
-    'prompted' => [false, 'Done.'],
+    'prompted' => [false, "Let me check.\n\nDone."],
     'streamed' => [true, "Let me check.\n\nDone."],
 ]);
+
+test('a prompted turn stores the text of every step when its final step is empty', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    $response = new AgentResponse('invocation-id', '', new TextUsage, new Meta('openai', 'gpt-5'));
+    $response->steps = collect([
+        new Step('Here is the answer.', [new ToolCall('call-1', 'LogAnswer', [])], [new ToolResult('call-1', 'LogAnswer', [], 'Logged')], FinishReason::ToolCalls, new TextUsage, new Meta, '', []),
+        new Step('', [], [], FinishReason::Stop, new TextUsage, new Meta, '', []),
+    ]);
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, new AgentPrompt(new ToolUsingAgent, 'Answer', [], Double::for(TextProvider::class), 'test-model'), $response);
+
+    expect(DB::table('agent_conversation_messages')->where('role', 'assistant')->value('content'))->toBe('Here is the answer.');
+});
+
+test('a turn joins continuation steps without a paragraph break', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Tool conversation');
+
+    $response = new AgentResponse('invocation-id', 'It is 12°C.', new TextUsage, new Meta('anthropic', 'claude'));
+    $response->steps = collect([
+        new Step('Laravel 13 is current, which', [], [], FinishReason::Continue, new TextUsage, new Meta, '', []),
+        new Step(' shipped in March.', [new ToolCall('call-1', 'GetWeather', [])], [new ToolResult('call-1', 'GetWeather', [], '12°C')], FinishReason::ToolCalls, new TextUsage, new Meta, '', []),
+        new Step('It is 12°C.', [], [], FinishReason::Stop, new TextUsage, new Meta, '', []),
+    ]);
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, new AgentPrompt(new ToolUsingAgent, 'Weather?', [], Double::for(TextProvider::class), 'test-model'), $response);
+
+    expect(DB::table('agent_conversation_messages')->where('role', 'assistant')->value('content'))
+        ->toBe("Laravel 13 is current, which shipped in March.\n\nIt is 12°C.");
+});
+
+test('a resume joins its continuation steps without a paragraph break', function (bool $streamed): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Approval conversation');
+
+    insertAssistantTurn($conversationId, 'paused-1', 'Let me check.', [
+        assistantStep(
+            [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => []]],
+            [['id' => 'call-1', 'name' => 'DeleteFile', 'arguments' => [], 'result' => 'Deleted', 'result_id' => null]],
+        ),
+    ], []);
+
+    $prompt = new AgentPrompt(new ToolUsingAgent, '', [], Double::for(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => true]));
+
+    $steps = collect([
+        new Step('Revenue grew', [], [], FinishReason::Continue, new TextUsage, new Meta, '', []),
+        new Step(' 4%.', [], [], FinishReason::Stop, new TextUsage, new Meta, '', []),
+    ]);
+
+    if ($streamed) {
+        $response = new StreamedAgentResponse('invocation-id', collect([
+            new TextDelta('event-1', 'message-1', 'Revenue grew', 0),
+            new TextDelta('event-2', 'message-1', ' 4%.', 0),
+            new StreamEnd('event-3', 'stop', new TextUsage, 0, $steps),
+        ]), new Meta('anthropic', 'claude'));
+    } else {
+        $response = new AgentResponse('invocation-id', ' 4%.', new TextUsage, new Meta('anthropic', 'claude'));
+        $response->steps = $steps;
+    }
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, $response);
+
+    expect(DB::table('agent_conversation_messages')->where('role', 'assistant')->value('content'))->toBe("Let me check.\n\nRevenue grew 4%.");
+})->with([
+    'prompted' => [false],
+    'streamed' => [true],
+]);
+
+test('a structured turn stores its structured text rather than the text of every step', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Structured conversation');
+
+    $response = new StructuredAgentResponse('invocation-id', ['answer' => 42], '{"answer":42}', new TextUsage, new Meta('openai', 'gpt-5'));
+    $response->steps = collect([
+        new Step('Let me check.', [new ToolCall('call-1', 'Lookup', [])], [new ToolResult('call-1', 'Lookup', [], '42')], FinishReason::ToolCalls, new TextUsage, new Meta, '', []),
+        new Step('{"answer":42}', [], [], FinishReason::Stop, new TextUsage, new Meta, '', []),
+    ]);
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, new AgentPrompt(new ToolUsingAgent, 'Answer', [], Double::for(TextProvider::class), 'test-model'), $response);
+
+    expect(DB::table('agent_conversation_messages')->where('role', 'assistant')->value('content'))->toBe('{"answer":42}');
+});
 
 test('a streamed turn that pauses twice keeps the text of every step', function (): void {
     $store = new DatabaseConversationStore;
