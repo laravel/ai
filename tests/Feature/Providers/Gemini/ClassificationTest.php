@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Classification;
@@ -36,11 +37,11 @@ function fakeGeminiDecisionsResponse(): array
                 'type' => 'score',
                 'score' => 1.99,
                 'probabilities' => ['0' => 0.0, '1' => 0.01, '2' => 0.99],
-                'legend' => ['0' => 'Next release', '1' => 'This week', '2' => 'Blocking revenue'],
+                'legend' => ['0' => 'Next release', '1' => 'This week', '2' => '{"label":"Blocking revenue"}'],
                 'confidence' => 0.99,
             ],
         ],
-        'usage' => ['total_input_tokens' => 312, 'total_output_tokens' => 3, 'total_tokens' => 315],
+        'usage' => ['total_input_tokens' => 312, 'total_cached_tokens' => 256, 'total_output_tokens' => 3, 'total_tokens' => 315],
     ];
 }
 
@@ -130,7 +131,7 @@ test('decisions response is parsed into typed answers', function (): void {
         ->questions([
             'is_urgent' => new Boolean('Urgent?'),
             'department' => new Choice('Team?', ['account' => null, 'frontend' => null, 'payments' => null]),
-            'urgency' => new Score('How urgent?', ['Next release', 'This week', 'Blocking revenue']),
+            'urgency' => new Score('How urgent?', ['Next release', 'This week', ['label' => 'Blocking revenue']]),
         ])
         ->classify(provider: 'gemini');
 
@@ -144,8 +145,9 @@ test('decisions response is parsed into typed answers', function (): void {
         ->and($response['urgency'])->toBeInstanceOf(ScoreAnswer::class)
         ->and($response['urgency']->score)->toBe(1.99)
         ->and($response['urgency']->level())->toBe(2)
-        ->and($response['urgency']->label())->toBe('Blocking revenue')
+        ->and($response['urgency']->label())->toBe(['label' => 'Blocking revenue'])
         ->and($response->usage->inputTokens)->toBe(312)
+        ->and($response->usage->cacheReadInputTokens)->toBe(256)
         ->and($response->usage->outputTokens)->toBe(3)
         ->and($response->meta->provider)->toBe('gemini')
         ->and($response->meta->model)->toBe('gemini-decision-1');
@@ -223,18 +225,35 @@ test('image attachments are sent as inline image blocks labelled by name', funct
     ]);
 });
 
-test('attachments that are not inline supported images are rejected before any request', function (mixed $attachment, string $message): void {
+test('uploaded gemini files are sent as image blocks by uri', function (): void {
+    Http::fake(['*' => Http::response(fakeGeminiDecisionsResponse())]);
+
+    Classification::of('A product photo uploaded by a customer.', [Image::fromId('files/abc123')])
+        ->question('damaged', new Boolean('Is the product damaged?'))
+        ->classify(provider: 'gemini');
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['input'] === [
+        ['type' => 'text', 'text' => 'A product photo uploaded by a customer.'],
+        ['type' => 'image', 'uri' => 'files/abc123'],
+    ]);
+});
+
+test('images in unsupported formats are rejected before any request', function (): void {
     Http::fake();
 
-    expect(fn () => Classification::of('Inspect this.', [$attachment()])
+    expect(fn () => Classification::of('Inspect this.', [UploadedFile::fake()->createWithContent('photo.svg', '<svg/>')->mimeType('image/svg+xml')])
         ->question('damaged', new Boolean('Damaged?'))
-        ->classify(provider: 'gemini'))->toThrow(InvalidArgumentException::class, $message);
+        ->classify(provider: 'gemini'))->toThrow(InvalidArgumentException::class, 'Gemini decisions only accept JPEG, PNG, GIF, WebP, HEIC, HEIF, BMP, or TIFF images; [image/svg+xml] given.');
 
     Http::assertNothingSent();
-})->with([
-    'provider image' => [fn () => Image::fromId('files/abc123'), 'Gemini decisions only accept images with inline content; [Laravel\\Ai\\Files\\ProviderImage] given.'],
-    'svg upload' => [fn () => UploadedFile::fake()->createWithContent('photo.svg', '<svg/>')->mimeType('image/svg+xml'), 'Gemini decisions only accept JPEG, PNG, GIF, WebP, HEIC, HEIF, BMP, or TIFF images; [image/svg+xml] given.'],
-]);
+});
+
+test('a rejected decisions request throws a request exception', function (): void {
+    Http::fake(['*' => Http::response(['error' => ['code' => 400, 'message' => 'Invalid value at questions', 'status' => 'INVALID_ARGUMENT']], 400)]);
+
+    expect(fn () => Classification::of('text')->question('is_urgent', new Boolean('Urgent?'))->classify(provider: 'gemini'))
+        ->toThrow(RequestException::class);
+});
 
 test('an overloaded decisions endpoint raises a failover exception', function (): void {
     Http::fake(['*' => Http::response(['error' => ['code' => 503, 'message' => 'The model is overloaded.', 'status' => 'UNAVAILABLE']], 503)]);

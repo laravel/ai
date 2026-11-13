@@ -8,14 +8,12 @@ use Laravel\Ai\Classification\Boolean;
 use Laravel\Ai\Classification\Choice;
 use Laravel\Ai\Classification\Score;
 use Laravel\Ai\Contracts\Gateway\ClassificationGateway;
-use Laravel\Ai\Contracts\Providers\ClassificationProvider;
 use Laravel\Ai\Contracts\Question;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\File;
+use Laravel\Ai\Files\ProviderImage;
 use Laravel\Ai\Gateway\Concerns\AnswersQuestions;
 use Laravel\Ai\Gateway\Concerns\ResolvesInlineImages;
-use Laravel\Ai\Responses\ClassificationResponse;
-use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TextUsage;
 
 class GeminiClassificationGateway implements ClassificationGateway
@@ -26,51 +24,19 @@ class GeminiClassificationGateway implements ClassificationGateway
     use ResolvesInlineImages;
 
     /**
-     * Answer the given questions about the state.
+     * Build the request payload for the given questions about the state.
      *
      * @param  string|array<string, mixed>  $state
      * @param  array<string, Question>  $questions
-     * @param  array<string, mixed>  $providerOptions
      * @param  array<int|string, File|UploadedFile>  $attachments
      */
-    public function classify(
-        ClassificationProvider $provider,
-        string $model,
-        string|array $state,
-        array $questions,
-        int $timeout = 30,
-        array $providerOptions = [],
-        array $attachments = [],
-    ): ClassificationResponse {
-        $input = $this->mapInput($state, $attachments);
-
-        $response = $this->withErrorHandling(
-            $provider->name(),
-            fn () => $this->client($provider, $timeout)->post($this->classificationEndpoint(), array_merge($providerOptions, [
-                'model' => $model,
-                'input' => $input,
-                'questions' => array_map($this->mapQuestion(...), $questions),
-            ])),
-        );
-
-        $data = $response->json();
-
-        $answers = [];
-
-        foreach ($data['answers'] ?? [] as $key => $answer) {
-            if ($mapped = $this->mapAnswer($answer, $questions[$key] ?? null)) {
-                $answers[$key] = $mapped;
-            }
-        }
-
-        return (new ClassificationResponse(
-            $answers,
-            new TextUsage(
-                inputTokens: $data['usage']['total_input_tokens'] ?? 0,
-                outputTokens: $data['usage']['total_output_tokens'] ?? 0,
-            ),
-            new Meta($provider->name(), $model),
-        ))->withRawResponse($response);
+    protected function payload(string $model, string|array $state, array $questions, array $attachments): array
+    {
+        return [
+            'model' => $model,
+            'input' => $this->mapInput($state, $attachments),
+            'questions' => array_map($this->mapQuestion(...), $questions),
+        ];
     }
 
     /**
@@ -101,12 +67,19 @@ class GeminiClassificationGateway implements ClassificationGateway
     }
 
     /**
-     * Map an image to an inline image content block.
+     * Map an image to an image content block, referencing uploaded files by URI.
      *
-     * @throws InvalidArgumentException if the attachment is not a JPEG, PNG, GIF, WebP, HEIC, HEIF, BMP, or TIFF image with inline content.
+     * @throws InvalidArgumentException if the attachment is not an uploaded file or a JPEG, PNG, GIF, WebP, HEIC, HEIF, BMP, or TIFF image with inline content.
      */
     protected function mapImage(File|UploadedFile $attachment): array
     {
+        if ($attachment instanceof ProviderImage) {
+            return array_merge($attachment->providerOptions(Lab::Gemini), [
+                'type' => 'image',
+                'uri' => $attachment->id,
+            ]);
+        }
+
         [$image, $content, $mime] = $this->resolveInlineImage($attachment, 'Gemini decisions', [
             'image/jpeg' => 'JPEG', 'image/png' => 'PNG', 'image/gif' => 'GIF', 'image/webp' => 'WebP',
             'image/heic' => 'HEIC', 'image/heif' => 'HEIF', 'image/bmp' => 'BMP', 'image/tiff' => 'TIFF',
@@ -145,6 +118,18 @@ class GeminiClassificationGateway implements ClassificationGateway
             ],
             default => $question->toArray(),
         };
+    }
+
+    /**
+     * Map the response usage to text usage.
+     */
+    protected function usage(array $data): TextUsage
+    {
+        return new TextUsage(
+            inputTokens: $data['usage']['total_input_tokens'] ?? 0,
+            outputTokens: $data['usage']['total_output_tokens'] ?? 0,
+            cacheReadInputTokens: $data['usage']['total_cached_tokens'] ?? null,
+        );
     }
 
     /**
