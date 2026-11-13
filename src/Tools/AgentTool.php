@@ -13,7 +13,6 @@ use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Stringable;
-use Throwable;
 
 class AgentTool implements Approvable, Tool
 {
@@ -52,12 +51,7 @@ class AgentTool implements Approvable, Tool
      */
     public function handle(Request $request): string
     {
-        try {
-            return $this->agent->prompt((string) $request['task'])->text;
-        } catch (Throwable $throwable) {
-            // Degraded to a result so the parent run survives; the failure surfaces as the sub-agent's own AgentFailed...
-            return 'Agent failed: '.$throwable->getMessage();
-        }
+        return $this->agent->prompt((string) $request['task'])->text;
     }
 
     /**
@@ -71,15 +65,11 @@ class AgentTool implements Approvable, Tool
             return $this->handle($request);
         }
 
-        try {
-            $stream = $this->agent->stream((string) $request['task']);
+        $stream = $this->agent->stream((string) $request['task']);
 
-            yield from $stream;
+        yield from $stream;
 
-            return (string) $stream->text;
-        } catch (Throwable $throwable) {
-            return 'Agent failed: '.$throwable->getMessage();
-        }
+        return (string) $stream->text;
     }
 
     /**
