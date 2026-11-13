@@ -50,12 +50,12 @@ trait MapsTools
                 ];
 
                 foreach ($tool->tools as $deferred) {
-                    $mapped[] = $this->mapTool($deferred, defer: true);
+                    $mapped[] = $this->mapTool($deferred, $provider, defer: true);
                 }
             } elseif ($tool instanceof ProviderTool) {
                 $mapped[] = $this->mapProviderTool($tool, $provider);
             } elseif ($tool instanceof Tool) {
-                $mapped[] = $this->mapTool($tool);
+                $mapped[] = $this->mapTool($tool, $provider);
             }
         }
 
@@ -65,9 +65,9 @@ trait MapsTools
     /**
      * Map a regular tool to an Anthropic tool definition.
      */
-    protected function mapTool(Tool $tool, bool $defer = false): array
+    protected function mapTool(Tool $tool, Provider $provider, bool $defer = false): array
     {
-        $strict = Strict::isAppliedTo($tool);
+        $strict = Strict::isAppliedTo($tool) && $this->supportsNativeStructuredOutput($provider);
 
         $schema = $tool->schema(new JsonSchemaTypeFactory);
 

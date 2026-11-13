@@ -11,7 +11,6 @@ use Laravel\Ai\Tools\Request;
 use Tests\Fixtures\Agents\NamedToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 use Tests\Fixtures\Tools\NonStrictTool;
-use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
 
@@ -60,14 +59,14 @@ test('tool with Strict attribute sends strict true', function (): void {
         'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
     ]);
 
-    agent(tools: [new RandomNumberGenerator])->prompt('Give me a random number', provider: 'anthropic');
+    agent(tools: [anthropicStrictOrderTool()])->prompt('Order two', provider: 'anthropic');
 
     Http::assertSent(function ($request): bool {
-        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'RandomNumberGenerator');
+        $tool = $request->data()['tools'][0];
 
         return $tool['strict'] === true
             && $tool['input_schema']['additionalProperties'] === false
-            && $tool['input_schema']['required'] === ['min', 'max'];
+            && $tool['input_schema']['required'] === ['quantity'];
     });
 });
 
@@ -82,8 +81,7 @@ test('tool without Strict attribute omits strict', function (): void {
         $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'NonStrictTool');
 
         return ! array_key_exists('strict', $tool)
-            && ! array_key_exists('additionalProperties', $tool['input_schema'])
-            && $tool['input_schema']['required'] === ['query'];
+            && ! array_key_exists('additionalProperties', $tool['input_schema']);
     });
 });
 
@@ -92,34 +90,35 @@ test('strict tool schemas drop keywords anthropic strict mode rejects', function
         'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
     ]);
 
-    $tool = new #[Strict] class implements Tool
-    {
-        public function description(): string
-        {
-            return 'Orders a number of items.';
-        }
-
-        public function handle(Request $request): string
-        {
-            return 'ok';
-        }
-
-        public function schema(JsonSchema $schema): array
-        {
-            return [
-                'quantity' => $schema->integer()->min(1)->required(),
-            ];
-        }
-    };
-
-    agent(tools: [$tool])->prompt('Order two', provider: 'anthropic');
+    agent(tools: [anthropicStrictOrderTool()])->prompt('Order two', provider: 'anthropic');
 
     Http::assertSent(function ($request): bool {
         $quantity = ((array) $request->data()['tools'][0]['input_schema']['properties'])['quantity'];
 
-        return $request->data()['tools'][0]['strict'] === true
-            && ! array_key_exists('minimum', $quantity)
+        return ! array_key_exists('minimum', $quantity)
             && str_contains($quantity['description'] ?? '', 'Must be at least 1.');
+    });
+});
+
+test('strict tools are sent as regular tools when native structured output is disabled', function (): void {
+    config(['ai.providers.anthropic' => [
+        ...config('ai.providers.anthropic'),
+        'use_native_structured_output' => false,
+    ]]);
+
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [anthropicStrictOrderTool()])->prompt('Order two', provider: 'anthropic');
+
+    Http::assertSent(function ($request): bool {
+        $tool = $request->data()['tools'][0];
+        $quantity = ((array) $tool['input_schema']['properties'])['quantity'];
+
+        return ! array_key_exists('strict', $tool)
+            && ! array_key_exists('additionalProperties', $tool['input_schema'])
+            && $quantity['minimum'] === 1;
     });
 });
 
@@ -357,3 +356,27 @@ test('code execution tool sends dated type and name', function (): void {
         return data_get($tool, 'type') === 'code_execution_20260120';
     });
 });
+
+function anthropicStrictOrderTool(): Tool
+{
+    return new #[Strict] class implements Tool
+    {
+        public function description(): string
+        {
+            return 'Orders a number of items.';
+        }
+
+        public function handle(Request $request): string
+        {
+            return 'ok';
+        }
+
+        public function schema(JsonSchema $schema): array
+        {
+            return [
+                'quantity' => $schema->integer()->min(1)->required(),
+                'note' => $schema->string(),
+            ];
+        }
+    };
+}
