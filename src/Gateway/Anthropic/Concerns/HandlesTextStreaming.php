@@ -370,18 +370,15 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        $response = $this->buildStepResponse(
+        return $this->buildStepResponse(
             content: array_values($responseContent),
             provider: $provider,
             model: $model,
             usage: $usage ?? new TextUsage(0, 0),
             finishReason: $this->extractFinishReason(['stop_reason' => $stopReason]),
             structured: false,
+            container: $container,
         );
-
-        $response->continuationToken = $container;
-
-        return $response;
     }
 
     /**

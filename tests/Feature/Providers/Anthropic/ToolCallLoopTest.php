@@ -139,7 +139,7 @@ test('the code execution container is reused when a paused turn resumes', functi
         ->and($recorded[1][0]->data()['container'])->toBe('container_123');
 });
 
-test('the code execution container id is merged into a container set with provider options', function (): void {
+test('a container set with provider options carries over to the follow up request', function (array|string $container, array|string $followUp): void {
     Http::fake([
         'api.anthropic.com/*' => Http::sequence([
             Http::response([
@@ -158,13 +158,11 @@ test('the code execution container id is merged into a container set with provid
         ]),
     ]);
 
-    $skills = [['type' => 'anthropic', 'skill_id' => 'xlsx', 'version' => 'latest']];
-
-    $agent = new class($skills) implements Agent, HasProviderOptions, HasTools
+    $agent = new class($container) implements Agent, HasProviderOptions, HasTools
     {
         use Promptable;
 
-        public function __construct(protected array $skills) {}
+        public function __construct(protected array|string $container) {}
 
         public function instructions(): string
         {
@@ -178,7 +176,7 @@ test('the code execution container id is merged into a container set with provid
 
         public function providerOptions(Lab|string $provider): array
         {
-            return ['container' => ['skills' => $this->skills]];
+            return ['container' => $this->container];
         }
     };
 
@@ -187,9 +185,15 @@ test('the code execution container id is merged into a container set with provid
     $recorded = Http::recorded();
 
     expect($recorded)->toHaveCount(2)
-        ->and($recorded[0][0]->data()['container'])->toBe(['skills' => $skills])
-        ->and($recorded[1][0]->data()['container'])->toBe(['skills' => $skills, 'id' => 'container_123']);
-});
+        ->and($recorded[0][0]->data()['container'])->toBe($container)
+        ->and($recorded[1][0]->data()['container'])->toBe($followUp);
+})->with([
+    'skills' => [
+        ['skills' => [['type' => 'anthropic', 'skill_id' => 'xlsx', 'version' => 'latest']]],
+        ['skills' => [['type' => 'anthropic', 'skill_id' => 'xlsx', 'version' => 'latest']], 'id' => 'container_123'],
+    ],
+    'container id' => ['container_user', 'container_user'],
+]);
 
 test('tool calls do not run when the message ends with max_tokens', function (): void {
     Http::fake([
