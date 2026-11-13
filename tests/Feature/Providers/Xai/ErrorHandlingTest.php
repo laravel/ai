@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Exceptions\InvalidApiKeyException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\Fixtures\Agents\AssistantAgent;
@@ -83,3 +84,15 @@ test('failed status response throws ai exception', function (): void {
 
     (new AssistantAgent)->prompt('Hi', provider: 'xai');
 })->throws(AiException::class, 'The response failed.');
+
+test('a rejected API key hints at the key', function (int $status, array $body): void {
+    Http::fake(['*' => Http::response($body, $status)]);
+
+    (new AssistantAgent)->prompt('Hi', provider: 'xai');
+})->with([
+    'unauthenticated' => [401, ['error' => 'Missing or invalid authorization token.']],
+    'incorrect key' => [400, [
+        'code' => 'invalid-argument',
+        'error' => 'Incorrect API key provided. You can obtain an API key from https://console.x.ai.',
+    ]],
+])->throws(InvalidApiKeyException::class, 'Missing or invalid API key for AI provider [xai].');

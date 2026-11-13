@@ -5,6 +5,7 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Sleep;
 use Laravel\Ai\Exceptions\InsufficientCreditsException;
+use Laravel\Ai\Exceptions\InvalidApiKeyException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
@@ -34,6 +35,16 @@ function failoverableException(int $status, array $body = [], array $headers = [
 
     return new RequestException(new Response($psr));
 }
+
+test('401 hints at a missing or invalid API key', function (): void {
+    expect(fn () => $this->gateway->withErrorHandling(
+        'openai',
+        fn () => throw failoverableException(401, ['error' => ['message' => 'Incorrect API key provided.']]),
+    ))->toThrow(
+        InvalidApiKeyException::class,
+        "Missing or invalid API key for AI provider [openai]. HTTP request returned status code 401:\n{\"error\":{\"message\":\"Incorrect API key provided.\"}}\n",
+    );
+});
 
 test('overriding overloadedStatusCodes replaces the default 503', function (): void {
     expect(fn () => $this->gateway->withErrorHandling(

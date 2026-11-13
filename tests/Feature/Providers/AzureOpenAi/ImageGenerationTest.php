@@ -97,7 +97,7 @@ test('image request does not include size when not specified', function (): void
     });
 });
 
-test('image request always includes moderation low', function (): void {
+test('image request includes moderation low by default', function (): void {
     Http::fake([
         '*' => fakeAzureImageResponse(),
     ]);
@@ -108,6 +108,22 @@ test('image request always includes moderation low', function (): void {
         $body = json_decode($request->body(), true);
 
         return ($body['moderation'] ?? null) === 'low';
+    });
+});
+
+test('image request moderation can be set through provider options', function (): void {
+    Http::fake([
+        '*' => fakeAzureImageResponse(),
+    ]);
+
+    Image::of('A red apple')
+        ->withProviderOptions(['moderation' => 'auto'])
+        ->generate(provider: 'azure', model: 'gpt-image-1');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return ($body['moderation'] ?? null) === 'auto';
     });
 });
 

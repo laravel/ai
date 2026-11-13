@@ -121,3 +121,24 @@ test('non gpt-image models send a single image field', function (): void {
 
     Http::assertSent(fn (Request $request): bool => $request->hasFile('image', 'source-bytes', 'image.png'));
 });
+
+test('gpt-image edits send moderation low by default', function (): void {
+    Http::fake(['*' => fakeOpenAiImageEditResponse()]);
+
+    Image::of('Make it brighter')
+        ->attachments([new Base64Image(base64_encode('source-bytes'), 'image/png')])
+        ->generate(provider: 'openai', model: 'gpt-image-1');
+
+    Http::assertSent(fn (Request $request): bool => collect($request->data())->pluck('contents', 'name')->get('moderation') === 'low');
+});
+
+test('gpt-image edits moderation can be set through provider options', function (): void {
+    Http::fake(['*' => fakeOpenAiImageEditResponse()]);
+
+    Image::of('Make it brighter')
+        ->attachments([new Base64Image(base64_encode('source-bytes'), 'image/png')])
+        ->withProviderOptions(['moderation' => 'auto'])
+        ->generate(provider: 'openai', model: 'gpt-image-1');
+
+    Http::assertSent(fn (Request $request): bool => collect($request->data())->pluck('contents', 'name')->get('moderation') === 'auto');
+});

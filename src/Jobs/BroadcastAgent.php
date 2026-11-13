@@ -18,7 +18,9 @@ use function Laravel\Ai\ulid;
 
 class BroadcastAgent implements ShouldQueue
 {
-    use Concerns\InvokesQueuedResponseCallbacks;
+    use Concerns\InvokesQueuedResponseCallbacks {
+        failed as protected invokeCatchCallbacks;
+    }
     use Queueable;
 
     public int $tries = 1;
@@ -68,14 +70,18 @@ class BroadcastAgent implements ShouldQueue
      */
     public function failed(Throwable $exception): void
     {
-        (new Error(
-            id: ulid(),
-            type: 'stream_failed',
-            message: 'The stream failed.',
-            recoverable: false,
-            timestamp: time(),
-        ))->withInvocationId($this->invocationId)
-            ->broadcastNow($this->channels);
+        try {
+            (new Error(
+                id: ulid(),
+                type: 'stream_failed',
+                message: 'The stream failed.',
+                recoverable: false,
+                timestamp: time(),
+            ))->withInvocationId($this->invocationId)
+                ->broadcastNow($this->channels);
+        } finally {
+            $this->invokeCatchCallbacks($exception);
+        }
     }
 
     /**

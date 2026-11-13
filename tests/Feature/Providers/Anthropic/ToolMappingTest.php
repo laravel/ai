@@ -1,11 +1,16 @@
 <?php
 
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Attributes\Strict;
+use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Providers\Tools\CodeExecution;
 use Laravel\Ai\Providers\Tools\WebFetch;
 use Laravel\Ai\Providers\Tools\WebSearch;
+use Laravel\Ai\Tools\Request;
 use Tests\Fixtures\Agents\NamedToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+use Tests\Fixtures\Tools\NonStrictTool;
 
 use function Laravel\Ai\agent;
 
@@ -46,6 +51,74 @@ test('tool with a name() method emits the declared name', function (): void {
         $names = collect($request->data()['tools'] ?? [])->pluck('name')->all();
 
         return in_array('aliased_tool', $names, true);
+    });
+});
+
+test('tool with Strict attribute sends strict true', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [anthropicStrictOrderTool()])->prompt('Order two', provider: 'anthropic');
+
+    Http::assertSent(function ($request): bool {
+        $tool = $request->data()['tools'][0];
+
+        return $tool['strict'] === true
+            && $tool['input_schema']['additionalProperties'] === false
+            && $tool['input_schema']['required'] === ['quantity'];
+    });
+});
+
+test('tool without Strict attribute omits strict', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new NonStrictTool])->prompt('Hi', provider: 'anthropic');
+
+    Http::assertSent(function ($request): bool {
+        $tool = collect($request->data()['tools'] ?? [])->firstWhere('name', 'NonStrictTool');
+
+        return ! array_key_exists('strict', $tool)
+            && ! array_key_exists('additionalProperties', $tool['input_schema']);
+    });
+});
+
+test('strict tool schemas drop keywords anthropic strict mode rejects', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [anthropicStrictOrderTool()])->prompt('Order two', provider: 'anthropic');
+
+    Http::assertSent(function ($request): bool {
+        $quantity = ((array) $request->data()['tools'][0]['input_schema']['properties'])['quantity'];
+
+        return ! array_key_exists('minimum', $quantity)
+            && str_contains($quantity['description'] ?? '', 'Must be at least 1.');
+    });
+});
+
+test('strict tools are sent as regular tools when native structured output is disabled', function (): void {
+    config(['ai.providers.anthropic' => [
+        ...config('ai.providers.anthropic'),
+        'use_native_structured_output' => false,
+    ]]);
+
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [anthropicStrictOrderTool()])->prompt('Order two', provider: 'anthropic');
+
+    Http::assertSent(function ($request): bool {
+        $tool = $request->data()['tools'][0];
+        $quantity = ((array) $tool['input_schema']['properties'])['quantity'];
+
+        return ! array_key_exists('strict', $tool)
+            && ! array_key_exists('additionalProperties', $tool['input_schema'])
+            && $quantity['minimum'] === 1;
     });
 });
 
@@ -231,6 +304,47 @@ test('web fetch tool result skips citations for a failed fetch', function (): vo
     expect($response->meta->citations)->toBeEmpty();
 });
 
+test('web search reports only the sources the answer cites', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'id' => 'msg_search_1',
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-4-6',
+            'content' => [
+                [
+                    'type' => 'server_tool_use',
+                    'id' => 'srvtoolu_1',
+                    'name' => 'web_search',
+                    'input' => (object) ['query' => 'latest laravel version'],
+                ],
+                [
+                    'type' => 'web_search_tool_result',
+                    'tool_use_id' => 'srvtoolu_1',
+                    'content' => [
+                        ['type' => 'web_search_result', 'url' => 'https://laravel.com/docs/releases', 'title' => 'Release Notes', 'encrypted_content' => 'abc', 'page_age' => null],
+                        ['type' => 'web_search_result', 'url' => 'https://laravel-news.com/laravel-13', 'title' => 'Laravel 13', 'encrypted_content' => 'def', 'page_age' => null],
+                    ],
+                ],
+                [
+                    'type' => 'text',
+                    'text' => 'The latest version is Laravel 13.',
+                    'citations' => [
+                        ['type' => 'web_search_result_location', 'url' => 'https://laravel-news.com/laravel-13', 'title' => 'Laravel 13', 'cited_text' => 'Laravel 13', 'encrypted_index' => 'xyz'],
+                    ],
+                ],
+            ],
+            'stop_reason' => 'end_turn',
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
+    ]);
+
+    $response = agent(tools: [new WebSearch])->prompt('Search it', provider: 'anthropic');
+
+    expect($response->meta->citations->map(fn ($citation): array => [$citation->url, $citation->title])->all())
+        ->toBe([['https://laravel-news.com/laravel-13', 'Laravel 13']]);
+});
+
 test('web fetch tool forwards a custom max_uses', function () {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
@@ -283,3 +397,27 @@ test('code execution tool sends dated type and name', function (): void {
         return data_get($tool, 'type') === 'code_execution_20260120';
     });
 });
+
+function anthropicStrictOrderTool(): Tool
+{
+    return new #[Strict] class implements Tool
+    {
+        public function description(): string
+        {
+            return 'Orders a number of items.';
+        }
+
+        public function handle(Request $request): string
+        {
+            return 'ok';
+        }
+
+        public function schema(JsonSchema $schema): array
+        {
+            return [
+                'quantity' => $schema->integer()->min(1)->required(),
+                'note' => $schema->string(),
+            ];
+        }
+    };
+}

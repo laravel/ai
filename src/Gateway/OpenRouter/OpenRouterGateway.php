@@ -245,7 +245,7 @@ class OpenRouterGateway implements Gateway, RerankingGateway, StepTextGateway
     ): TranscriptionResponse {
         if ($diarize) {
             throw new LogicException(
-                'OpenRouter does not support diarized transcription. Use the OpenAI, ElevenLabs, Mistral, or Gemini provider for diarization.'
+                'OpenRouter does not support diarized transcription. Use the ElevenLabs, Mistral, or Gemini provider for diarization.'
             );
         }
 

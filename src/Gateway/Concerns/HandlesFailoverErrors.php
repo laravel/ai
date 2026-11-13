@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Laravel\Ai\Exceptions\InsufficientCreditsException;
+use Laravel\Ai\Exceptions\InvalidApiKeyException;
 use Laravel\Ai\Exceptions\ProviderConnectionException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
@@ -37,6 +38,12 @@ trait HandlesFailoverErrors
         } catch (RequestException $requestException) {
             if ($requestException->response !== null) {
                 $status = $requestException->response->status();
+
+                if ($this->isInvalidApiKey($requestException)) {
+                    throw new InvalidApiKeyException(
+                        $providerName, $requestException->response, $requestException->truncateExceptionsAt
+                    );
+                }
 
                 if ($this->isInsufficientCredits($requestException)) {
                     throw InsufficientCreditsException::forProvider(
@@ -97,6 +104,14 @@ trait HandlesFailoverErrors
         $retryAfter = $exception->response->header('Retry-After');
 
         return ctype_digit($retryAfter) && (int) $retryAfter <= 10 ? (int) $retryAfter : null;
+    }
+
+    /**
+     * Determine if the provider rejected the request for a missing or invalid API key.
+     */
+    protected function isInvalidApiKey(RequestException $exception): bool
+    {
+        return $exception->response?->status() === 401;
     }
 
     /**

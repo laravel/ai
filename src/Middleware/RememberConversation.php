@@ -4,12 +4,14 @@ namespace Laravel\Ai\Middleware;
 
 use Closure;
 use Illuminate\Support\Str;
-use Laravel\Ai\AnonymousAgent;
+use Laravel\Ai\Agents\ConversationTitleAgent;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Concerns\RemembersConversations as RemembersConversationsTrait;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\RemembersConversations;
+use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Models\Conversation;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -216,23 +218,22 @@ class RememberConversation
             return Str::limit($prompt->prompt, 50, preserveWords: true);
         }
 
-        try {
-            $response = $this->provider->prompt(new AgentPrompt(
-                new AnonymousAgent(
-                    'Generate a concise 3-5 word title for a conversation that starts with the following message. Use the same language as the message. Respond with only the title, no quotes or punctuation.',
-                    [],
-                    [],
-                ),
-                Str::limit($prompt->prompt, 500),
-                [],
-                $this->provider,
-                $this->provider->cheapestTextModel(),
-                parentInvocationId: $prompt->invocationId,
-            ));
+        $agent = resolve(ConversationTitleAgent::class);
 
-            return Str::limit($response->text, 100);
+        // A faked conversation must not reach a real provider for its title...
+        if (Ai::hasFakeGatewayFor($prompt->agent) && ! $agent::isFaked()) {
+            $agent::fake();
+        }
+
+        try {
+            $response = ParentInvocation::within($prompt->invocationId, null, fn (): AgentResponse => $agent->prompt(
+                Str::limit($prompt->prompt, 500),
+                provider: $this->provider->name(),
+            ));
         } catch (Throwable) {
             return Str::limit($prompt->prompt, 100, preserveWords: true);
         }
+
+        return Str::limit($response->text, 100);
     }
 }

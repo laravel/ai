@@ -4,6 +4,7 @@ use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\InvalidApiKeyException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Image;
@@ -152,3 +153,14 @@ test('image http error response throws request exception', function (): void {
 
     Image::of('A red apple')->generate(provider: 'xai', model: 'grok-imagine-image');
 })->throws(RequestException::class);
+
+test('image rejected API key hints at the key', function (): void {
+    Http::fake([
+        'api.x.ai/*' => Http::response([
+            'code' => 'invalid-argument',
+            'error' => 'Incorrect API key provided. You can obtain an API key from https://console.x.ai.',
+        ], 400),
+    ]);
+
+    Image::of('A red apple')->generate(provider: 'xai', model: 'grok-imagine-image');
+})->throws(InvalidApiKeyException::class, 'Missing or invalid API key for AI provider [xai].');

@@ -34,6 +34,7 @@ trait HandlesTextStreaming
         Provider $provider,
         string $model,
         $streamBody,
+        bool $stored,
     ): Generator {
         $messageId = $this->generateEventId();
         $reasoningId = '';
@@ -221,6 +222,7 @@ trait HandlesTextStreaming
             finishReason: $this->extractFinishReason($final, $functionCallSteps),
             usage: filled($final) ? $this->extractUsage($final) : new TextUsage(0, 0),
             meta: new Meta($provider->name(), $model),
+            continuationToken: $this->continuationToken($final, $stored),
             replayBlocks: $this->replayableSteps($steps),
             reasoning: $this->extractReasoning($steps),
             providerToolCalls: $this->extractProviderToolCalls($steps),
