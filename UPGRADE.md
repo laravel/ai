@@ -2,20 +2,6 @@
 
 ## Upgrading To 1.4 From 1.3
 
-### OpenAI Transcription And Image Defaults
-
-**Likelihood Of Impact: High**
-
-Transcription now defaults to `gpt-transcribe`. Calling `diarize()` with this model throws a `LogicException` before uploading audio because the model does not support speaker labels. Select another provider with diarization support if your application needs speaker labels. OpenAI has not announced a replacement for its diarization model.
-
-The `language()` method now sends a single-element `languages[]` array with `gpt-transcribe`. For multilingual recordings, pass `['languages' => ['en', 'fr']]` through `withProviderOptions()`. An explicit `language()` takes precedence over provider options. The gateway converts the legacy `language` provider option when no `languages` array is given and never sends both fields.
-
-Explicitly selected legacy transcription models retain their existing request formats until OpenAI shuts them down on February 26, 2027. Pinning these models is only a temporary migration option.
-
-The default image model is now `gpt-image-2.6-flare`. Text, classification, and embedding defaults are unchanged.
-
-OpenAI speech generation is unchanged. OpenAI shuts down `gpt-4o-mini-tts`, `tts-1`, and `tts-1-hd` on January 6, 2027. The documented replacement requires the Realtime API, which this package does not support. Use another audio provider before that date. See [OpenAI's deprecation notice](https://developers.openai.com/api/docs/deprecations).
-
 ### OpenAI Billing And Quota Errors Throw `InsufficientCreditsException`
 
 **Likelihood Of Impact: Low**
