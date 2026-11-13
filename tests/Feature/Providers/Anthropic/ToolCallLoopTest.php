@@ -1,7 +1,13 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasProviderOptions;
+use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Promptable;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 test('tool calls trigger follow up request', function (): void {
     Http::fake([
@@ -104,6 +110,85 @@ test('the code execution container is reused by the follow up request', function
     expect($recorded)->toHaveCount(2)
         ->and($recorded[0][0]->data())->not->toHaveKey('container')
         ->and($recorded[1][0]->data()['container'])->toBe('container_123');
+});
+
+test('the code execution container is reused when a paused turn resumes', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_pause',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [
+                    ['type' => 'server_tool_use', 'id' => 'srvtoolu_1', 'name' => 'bash_code_execution', 'input' => (object) ['command' => 'ls']],
+                ],
+                'container' => ['id' => 'container_123', 'expires_at' => '2026-11-08T11:00:00Z'],
+                'stop_reason' => 'pause_turn',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            $this->fakeTextResponse('Done'),
+        ]),
+    ]);
+
+    (new ToolUsingAgent(fixed: true))->prompt('Ask', provider: 'anthropic');
+
+    $recorded = Http::recorded();
+
+    expect($recorded)->toHaveCount(2)
+        ->and($recorded[1][0]->data()['container'])->toBe('container_123');
+});
+
+test('the code execution container id is merged into a container set with provider options', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            Http::response([
+                'id' => 'msg_tool_123',
+                'type' => 'message',
+                'role' => 'assistant',
+                'model' => 'claude-sonnet-4-6',
+                'content' => [
+                    ['type' => 'tool_use', 'id' => 'toolu_123', 'name' => 'FixedNumberGenerator', 'input' => (object) []],
+                ],
+                'container' => ['id' => 'container_123', 'expires_at' => '2026-11-08T11:00:00Z'],
+                'stop_reason' => 'tool_use',
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+            $this->fakeTextResponse('The number is 72019'),
+        ]),
+    ]);
+
+    $skills = [['type' => 'anthropic', 'skill_id' => 'xlsx', 'version' => 'latest']];
+
+    $agent = new class($skills) implements Agent, HasProviderOptions, HasTools
+    {
+        use Promptable;
+
+        public function __construct(protected array $skills) {}
+
+        public function instructions(): string
+        {
+            return 'You are a helpful assistant.';
+        }
+
+        public function tools(): iterable
+        {
+            return [new FixedNumberGenerator];
+        }
+
+        public function providerOptions(Lab|string $provider): array
+        {
+            return ['container' => ['skills' => $this->skills]];
+        }
+    };
+
+    $agent->prompt('Generate a random number', provider: 'anthropic');
+
+    $recorded = Http::recorded();
+
+    expect($recorded)->toHaveCount(2)
+        ->and($recorded[0][0]->data()['container'])->toBe(['skills' => $skills])
+        ->and($recorded[1][0]->data()['container'])->toBe(['skills' => $skills, 'id' => 'container_123']);
 });
 
 test('tool calls do not run when the message ends with max_tokens', function (): void {

@@ -386,6 +386,46 @@ describe('pause_turn', function (): void {
             ->and($textDeltas[0]->delta)->toBe('Resumed');
     });
 
+    test('streaming reuses the code execution container when a paused turn resumes', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->messageStart(),
+                        $this->contentBlockStart(0, ['type' => 'server_tool_use', 'id' => 'srvtoolu_pause', 'name' => 'bash_code_execution']),
+                        $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => '{"command":"ls"}']),
+                        $this->contentBlockStop(0),
+                        [
+                            'type' => 'message_delta',
+                            'delta' => ['stop_reason' => 'pause_turn', 'container' => ['id' => 'container_123', 'expires_at' => '2026-11-08T11:00:00Z']],
+                            'usage' => ['output_tokens' => 5],
+                        ],
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->messageStart(),
+                        $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                        $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'Resumed']),
+                        $this->contentBlockStop(0),
+                        $this->messageDelta('end_turn', 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+            ]),
+        ]);
+
+        $this->collectStreamEvents();
+
+        $recorded = Http::recorded();
+
+        expect($recorded)->toHaveCount(2)
+            ->and($recorded[1][0]->data()['container'])->toBe('container_123');
+    });
+
     test('streaming replays text blocks around a server tool without the separator', function (): void {
         Http::fake([
             'api.anthropic.com/*' => Http::sequence([

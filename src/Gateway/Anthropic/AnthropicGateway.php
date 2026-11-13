@@ -61,9 +61,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
             $options,
         );
 
-        if (filled($stepContext->continuationToken)) {
-            $body['container'] ??= $stepContext->continuationToken;
-        }
+        $body = $this->withContainer($body, $stepContext);
 
         $response = $this->withErrorHandling(
             $provider->name(),
@@ -102,9 +100,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
             $options,
         );
 
-        if (filled($stepContext->continuationToken)) {
-            $body['container'] ??= $stepContext->continuationToken;
-        }
+        $body = $this->withContainer($body, $stepContext);
 
         $body['stream'] = true;
 
