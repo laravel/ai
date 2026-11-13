@@ -43,4 +43,19 @@ interface RemembersConversations extends Conversational
      * Get the user having the current conversation.
      */
     public function conversationParticipant(): ?object;
+
+    /**
+     * Get the ID of the user message opened for the current turn.
+     */
+    public function conversationTurnMessageId(): ?string;
+
+    /**
+     * Mark the current turn's user message as stored.
+     */
+    public function rememberConversationTurn(?string $messageId): static;
+
+    /**
+     * Forget the current turn's stored user message.
+     */
+    public function forgetConversationTurn(): static;
 }

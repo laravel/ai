@@ -15,6 +15,7 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\PaginatesConversations;
 use Laravel\Ai\Contracts\ResolvesPendingApprovals;
+use Laravel\Ai\Contracts\StoresUserMessages;
 use Laravel\Ai\Contracts\VerifiesConversationOwnership;
 use Laravel\Ai\Enums\MessageStatus;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
@@ -34,7 +35,7 @@ use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Throwable;
 
-class DatabaseConversationStore implements ConversationStore, PaginatesConversations, ResolvesPendingApprovals, VerifiesConversationOwnership
+class DatabaseConversationStore implements ConversationStore, PaginatesConversations, ResolvesPendingApprovals, StoresUserMessages, VerifiesConversationOwnership
 {
     /**
      * Create a new conversation store instance.
