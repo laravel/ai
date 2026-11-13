@@ -141,7 +141,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
         $this->table($this->messagesTable())->insert($this->messageAttributes($messageId, $conversationId, $participantType, $participantId, $now, [
             'agent' => $prompt->agent::class,
             'role' => 'assistant',
-            'content' => $response->text,
+            'content' => $this->contentFor($response, $steps),
             'attachments' => '[]',
             'steps' => $steps->toJson(),
             'usage' => json_encode($response->usage),
@@ -222,9 +222,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             $steps = $this->withoutReplayBlocks($steps);
         }
 
-        $content = $response instanceof StructuredAgentResponse
-            ? $response->text
-            : TextDelta::join($steps->pluck('content'));
+        $content = $this->contentFor($response, $steps);
 
         if (blank($content)) {
             $content = $paused->content;
@@ -323,6 +321,22 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 ...$result === null ? [] : Arr::only($result->toArray(), ['result', 'denied', 'failed']),
             ];
         })->values()->all();
+    }
+
+    /**
+     * Join the text of the turn's steps the way TextDelta::combine() joins a stream.
+     *
+     * @param  Collection<int, array{content: string, tool_calls: array}>  $steps
+     */
+    protected function contentFor(AgentResponse $response, Collection $steps): string
+    {
+        if ($response instanceof StructuredAgentResponse) {
+            return $response->text;
+        }
+
+        return TextDelta::join($steps
+            ->chunkWhile(fn (array $step, $key, Collection $previous): bool => $previous->last()['tool_calls'] === [])
+            ->map(fn (Collection $steps): string => $steps->pluck('content')->join('')));
     }
 
     /**

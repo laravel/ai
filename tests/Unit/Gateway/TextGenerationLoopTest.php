@@ -584,27 +584,6 @@ test('it does not execute tool calls on the final generation step', function ():
         ->and($response->steps->first()->toolResults)->toHaveCount(1);
 });
 
-test('it keeps the text of every step when the final step is empty', function (): void {
-    $gateway = new TextGenerationLoopFakeGateway([
-        new StepResponse('Here is the answer.', [new ToolCall('call-1', TextGenerationLoopCountingTool::class, [], 'call-1')], FinishReason::ToolCalls, new TextUsage, new Meta('fake', 'model')),
-        new StepResponse('', [], FinishReason::Stop, new TextUsage, new Meta('fake', 'model')),
-    ]);
-
-    $response = (new TextGenerationLoop($gateway))->generate(
-        textGenerationLoopProvider(),
-        'model',
-        null,
-        [],
-        [new TextGenerationLoopCountingTool],
-        null,
-        new TextGenerationOptions(maxSteps: 2),
-        null,
-    );
-
-    expect($response->text)->toBe('Here is the answer.')
-        ->and($response->steps)->toHaveCount(2);
-});
-
 test('it preserves the exhausted result for unknown tools without the repair attribute', function (): void {
     $gateway = new TextGenerationLoopFakeGateway([
         new StepResponse('', [new ToolCall('call-1', 'MissingTool', [], 'call-1')], FinishReason::ToolCalls, new TextUsage, new Meta('fake', 'model')),
