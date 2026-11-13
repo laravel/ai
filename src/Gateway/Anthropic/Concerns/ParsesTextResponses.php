@@ -104,7 +104,8 @@ trait ParsesTextResponses
             replayBlocks: $content,
             reasoning: $this->extractReasoning($content),
             providerToolCalls: $this->extractProviderToolCalls($content),
-            replayBlocksOutliveTurn: true,
+            // The synthetic structured output call never gets a result, so a later turn can't replay it...
+            replayBlocksOutliveTurn: ! $hasStructuredToolCall,
         );
     }
 

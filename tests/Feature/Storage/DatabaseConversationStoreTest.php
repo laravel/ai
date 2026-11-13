@@ -1955,7 +1955,25 @@ test('a resumed turn of an agent that remembers reasoning keeps the replay block
     ])->and(DB::table('agent_conversation_messages')->where('id', 'message-1')->value('status'))->toBe('completed');
 });
 
-test('a cut history replays completed turns without their replay blocks and paused turns with them', function (): void {
+test('a completed turn of an agent that no longer remembers reasoning replays without its replay blocks', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
+
+    insertStoredConversationMessages($conversationId, ['message-1']);
+    insertAssistantTurn($conversationId, 'message-2', 'The number is 72019', [
+        assistantStep(replayBlocks: [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'text', 'text' => 'The number is 72019']]),
+    ], meta: ['provider' => 'anthropic']);
+
+    $replayBlocks = fn (): array => $store->getLatestConversationMessages($conversationId, 10)->last()->replayBlocks;
+
+    expect($replayBlocks())->toBe([]);
+
+    DB::table('agent_conversation_messages')->where('id', 'message-2')->update(['agent' => ReasoningRememberingAgent::class]);
+
+    expect($replayBlocks())->toHaveCount(2);
+});
+
+test('a cut history replays only the latest paused turn with its replay blocks', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
 
@@ -1965,8 +1983,14 @@ test('a cut history replays completed turns without their replay blocks and paus
     ], meta: ['provider' => 'anthropic']);
     insertStoredConversationMessages($conversationId, ['message-3']);
     insertAssistantTurn($conversationId, 'message-4', 'Waiting on you.', [
-        assistantStep([['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'b']]], replayBlocks: [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'tool_use', 'id' => 'call-2']]),
+        assistantStep([['id' => 'call-2', 'name' => 'delete_file', 'arguments' => ['path' => 'a']]], replayBlocks: [['type' => 'thinking', 'signature' => 'sig-2'], ['type' => 'tool_use', 'id' => 'call-2']]),
     ], ['call-2' => 'Destructive.'], ['provider' => 'anthropic']);
+    insertStoredConversationMessages($conversationId, ['message-5']);
+    insertAssistantTurn($conversationId, 'message-6', 'Waiting on you.', [
+        assistantStep([['id' => 'call-3', 'name' => 'delete_file', 'arguments' => ['path' => 'b']]], replayBlocks: [['type' => 'thinking', 'signature' => 'sig-3'], ['type' => 'tool_use', 'id' => 'call-3']]),
+    ], ['call-3' => 'Destructive.'], ['provider' => 'anthropic']);
+
+    DB::table('agent_conversation_messages')->where('conversation_id', $conversationId)->update(['agent' => ReasoningRememberingAgent::class]);
 
     $replayBlockCounts = fn (int $limit): array => $store->getLatestConversationMessages($conversationId, $limit)
         ->filter(fn (Message $message): bool => $message instanceof AssistantMessage)
@@ -1974,6 +1998,6 @@ test('a cut history replays completed turns without their replay blocks and paus
         ->values()
         ->all();
 
-    expect($replayBlockCounts(4))->toBe([2, 2])
-        ->and($replayBlockCounts(3))->toBe([0, 2]);
+    expect($replayBlockCounts(6))->toBe([2, 2, 2])
+        ->and($replayBlockCounts(5))->toBe([0, 0, 2]);
 });

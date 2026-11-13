@@ -14,9 +14,12 @@ use ReflectionClass;
 #[Attribute(Attribute::TARGET_CLASS)]
 final class RememberReasoning
 {
-    public static function isAppliedTo(?object $target): bool
+    /**
+     * @param  object|class-string|null  $target
+     */
+    public static function isAppliedTo(object|string|null $target): bool
     {
-        return $target !== null
+        return (is_object($target) || (is_string($target) && class_exists($target)))
             && (new ReflectionClass($target))->getAttributes(self::class) !== [];
     }
 }

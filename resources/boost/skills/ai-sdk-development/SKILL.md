@@ -148,15 +148,22 @@ $conversationId = $response->conversationId;
 $response = (new SalesCoach)->continue($conversationId, as: $user)->prompt('Tell me more.');
 ```
 
-On Anthropic, add `#[RememberReasoning]` to keep each completed turn's signed thinking and replay it verbatim in follow-up turns, so they read the previous turn from the prompt cache instead of writing it again. The agent's instructions and tools must stay the same for the whole conversation: on models with preserved thinking, Anthropic rejects replayed thinking whose earlier conversation changed.
+On Anthropic, add `#[RememberReasoning]` to keep each completed turn's signed thinking and replay it verbatim in follow-up turns, so they read the previous turn from the prompt cache instead of writing it again. It stops once the conversation outgrows `maxConversationMessages()`, and removing the attribute stops replaying what earlier turns kept.
+
+On models with preserved thinking, Anthropic rejects (400) replayed thinking whose system prompt, tools or earlier messages changed, so the agent's instructions and tools must stay the same for the whole conversation (no per-request values such as the current time). Unless they always do, have Anthropic drop such thinking instead: add `thinking-binding-controls-2026-08-01` to the provider's `anthropic_beta` config (comma-separated, keeping `web-fetch-2025-09-10`) and send `block_binding` with the agent's thinking options.
 
 ```php
 use Laravel\Ai\Attributes\RememberReasoning;
 
 #[RememberReasoning]
-class SalesCoach implements Agent, Conversational
+class SalesCoach implements Agent, Conversational, HasProviderOptions
 {
     use Promptable, RemembersConversations;
+
+    public function providerOptions(Lab|string $provider): array
+    {
+        return ['thinking' => ['type' => 'adaptive', 'block_binding' => ['prefix_mismatch_behavior' => 'drop_block']]];
+    }
 }
 ```
 

@@ -4,6 +4,7 @@ use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Agents\ReasoningRememberingAgent;
+use Tests\Fixtures\Agents\ReasoningRememberingStructuredAgent;
 use Tests\Fixtures\Agents\RememberingToolUsingAgent;
 
 function anthropicReasoningResponse(array $content, string $stopReason): PromiseInterface
@@ -84,6 +85,35 @@ test('without the attribute a follow-up replays the previous turn without its th
     $lastStepOfFirstTurn = anthropicSentMessages(1);
     $followUp = anthropicSentMessages(2);
 
-    expect(array_slice($followUp, 0, count($lastStepOfFirstTurn)))->not->toBe($lastStepOfFirstTurn)
+    expect($followUp[1])->toBe(json_encode(['role' => 'assistant', 'content' => [
+        ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'FixedNumberGenerator', 'input' => (object) []],
+    ]]))
+        ->and(array_slice($followUp, 0, count($lastStepOfFirstTurn)))->not->toBe($lastStepOfFirstTurn)
         ->and(implode('', $followUp))->not->toContain('"thinking"');
+});
+
+test('a follow-up of a structured agent never replays the synthetic structured output call', function (): void {
+    config(['ai.providers.anthropic.use_native_structured_output' => false]);
+
+    Http::fake(['api.anthropic.com/*' => Http::sequence([
+        anthropicReasoningResponse([
+            ['type' => 'thinking', 'thinking' => '', 'signature' => 'sig-1'],
+            ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'FixedNumberGenerator', 'input' => (object) []],
+        ], 'tool_use'),
+        anthropicReasoningResponse([
+            ['type' => 'thinking', 'thinking' => '', 'signature' => 'sig-2'],
+            ['type' => 'tool_use', 'id' => 'toolu_2', 'name' => 'output_structured_data', 'input' => ['number' => 72019]],
+        ], 'tool_use'),
+        anthropicReasoningResponse([
+            ['type' => 'tool_use', 'id' => 'toolu_3', 'name' => 'output_structured_data', 'input' => ['number' => 72019]],
+        ], 'tool_use'),
+    ])]);
+
+    $agent = (new ReasoningRememberingStructuredAgent)->forUser((object) ['id' => 1]);
+
+    $agent->prompt('Generate a number', provider: 'anthropic');
+    $agent->prompt('Again', provider: 'anthropic');
+
+    expect(implode('', anthropicSentMessages(2)))->not->toContain('toolu_2')
+        ->not->toContain('"thinking"');
 });

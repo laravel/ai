@@ -133,7 +133,9 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         $now = now();
 
-        $steps = $this->stepsFor($prompt, $response, $this->remembersReasoning($prompt, $exception));
+        $remembersReasoning = RememberReasoning::isAppliedTo($prompt->agent);
+
+        $steps = $this->stepsFor($prompt, $response, $remembersReasoning && $exception === null);
 
         if ($prompt->hasApprovalDecisions() && blank($response->text) && $steps->every(fn (array $step) => $step['tool_calls'] === [])) {
             return null;
@@ -150,7 +152,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'status' => $this->statusFor($response, $exception),
         ]));
 
-        if (! $response->hasPendingApprovals() && ! RememberReasoning::isAppliedTo($prompt->agent)) {
+        if (! $response->hasPendingApprovals() && ! $remembersReasoning) {
             $this->forgetReplayBlocks($conversationId);
         }
 
@@ -215,14 +217,16 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             $steps = $this->withoutReplayBlocks($steps);
         }
 
-        $remembersReasoning = $this->remembersReasoning($prompt, $exception);
+        $remembersReasoning = RememberReasoning::isAppliedTo($prompt->agent);
+
+        $keepsReasoning = $remembersReasoning && $exception === null;
 
         if ($response->steps->isNotEmpty()) {
-            $steps = $steps->concat($this->stepsFor($prompt, $response, $remembersReasoning));
+            $steps = $steps->concat($this->stepsFor($prompt, $response, $keepsReasoning));
         }
 
         // The paused half shares the resumed steps' provider, so their blocks outlive the turn alike...
-        if (! $response->hasPendingApprovals() && ! ($remembersReasoning && $this->replayBlocksOutliveTurn($response))) {
+        if (! $response->hasPendingApprovals() && ! ($keepsReasoning && $this->replayBlocksOutliveTurn($response))) {
             $steps = $this->withoutReplayBlocks($steps);
         }
 
@@ -243,7 +247,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'updated_at' => $now,
         ]);
 
-        if (! $response->hasPendingApprovals() && ! RememberReasoning::isAppliedTo($prompt->agent)) {
+        if (! $response->hasPendingApprovals() && ! $remembersReasoning) {
             $this->forgetReplayBlocks($conversationId);
         }
 
@@ -298,14 +302,6 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'replay_blocks' => [],
             'provider_tool_calls' => [],
         ]]);
-    }
-
-    /**
-     * Determine if the turn keeps its provider reasoning for later turns, as the agent's RememberReasoning attribute asks.
-     */
-    protected function remembersReasoning(AgentPrompt $prompt, ?Throwable $exception): bool
-    {
-        return $exception === null && RememberReasoning::isAppliedTo($prompt->agent);
     }
 
     /**
@@ -496,12 +492,31 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             ->limit($limit + 1)
             ->get();
 
-        // Reasoning replayed after its earlier turns were cut is rejected, so a cut history replays completed turns generically...
         $truncated = $records->count() > $limit;
 
-        return $records->take($limit)->reverse()->values()->flatMap(fn (object $record): array => $record->role === 'user'
+        $records = $records->take($limit);
+
+        $latestId = $records->first()?->id;
+
+        return $records->reverse()->values()->flatMap(fn (object $record): array => $record->role === 'user'
             ? [$this->userMessageFrom($record)]
-            : $this->assistantTurnFrom($record, $truncated));
+            : $this->assistantTurnFrom($record, $this->replaysBlocksOf($record, $record->id === $latestId, $truncated)));
+    }
+
+    /**
+     * Determine if a stored assistant turn replays its raw provider blocks.
+     */
+    protected function replaysBlocksOf(object $record, bool $latest, bool $truncated): bool
+    {
+        $status = MessageStatus::from($record->status);
+
+        // Only the latest turn can still resume, and any other turn's reasoning is rejected once the turns before it were cut...
+        return match (true) {
+            $latest && $status === MessageStatus::Paused => true,
+            $truncated => false,
+            $status === MessageStatus::Paused => true,
+            default => RememberReasoning::isAppliedTo($record->agent),
+        };
     }
 
     /**
@@ -521,16 +536,13 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      *
      * @return array<int, Message>
      */
-    protected function assistantTurnFrom(object $record, bool $truncated = false): array
+    protected function assistantTurnFrom(object $record, bool $replaysBlocks = true): array
     {
         $pending = $this->pausedCallIds($record);
         $provider = $this->decoded($record->meta)['provider'] ?? null;
-        $status = MessageStatus::from($record->status);
-        $failed = $status === MessageStatus::Failed;
+        $failed = MessageStatus::from($record->status) === MessageStatus::Failed;
 
-        $steps = $truncated && $status !== MessageStatus::Paused
-            ? $this->withoutReplayBlocks($this->decodedSteps($record))
-            : $this->decodedSteps($record);
+        $steps = $replaysBlocks ? $this->decodedSteps($record) : $this->withoutReplayBlocks($this->decodedSteps($record));
 
         return $steps->flatMap(function (array $step) use ($pending, $provider, $failed): array {
             $content = $step['content'];
