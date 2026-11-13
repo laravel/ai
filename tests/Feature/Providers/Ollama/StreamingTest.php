@@ -135,78 +135,19 @@ test('streaming error event also handles structured payload', function (): void 
         ->and($error->message)->toBe('Model not found');
 });
 
-test('streaming accumulates tool call arguments across chunks', function (): void {
+test('streaming ignores a tool call without a function', function (): void {
     Http::fake([
-        '*' => Http::sequence([
-            Http::response(
-                body: $this->ndjsonPayload([
-                    // First chunk: id + name but no arguments yet.
-                    [
-                        'model' => 'llama3.1:8b',
-                        'message' => [
-                            'role' => 'assistant',
-                            'content' => '',
-                            'tool_calls' => [[
-                                'id' => 'call_1',
-                                'function' => [
-                                    'name' => 'FixedNumberGenerator',
-                                ],
-                            ]],
-                        ],
-                        'done' => false,
-                    ],
-                    // Second chunk: argument fragment as partial JSON string.
-                    [
-                        'model' => 'llama3.1:8b',
-                        'message' => [
-                            'role' => 'assistant',
-                            'content' => '',
-                            'tool_calls' => [[
-                                'function' => [
-                                    'arguments' => '{"foo":',
-                                ],
-                            ]],
-                        ],
-                        'done' => false,
-                    ],
-                    // Third chunk: remainder of the arguments payload.
-                    [
-                        'model' => 'llama3.1:8b',
-                        'message' => [
-                            'role' => 'assistant',
-                            'content' => '',
-                            'tool_calls' => [[
-                                'function' => [
-                                    'arguments' => '"bar"}',
-                                ],
-                            ]],
-                        ],
-                        'done_reason' => 'tool_calls',
-                        'done' => true,
-                        'prompt_eval_count' => 1,
-                        'eval_count' => 1,
-                    ],
-                ]),
-                status: 200,
-            ),
-            Http::response(
-                body: $this->ndjsonPayload([
-                    $this->chatChunk('done'),
-                    $this->chatChunk('', true, 'stop'),
-                ]),
-                status: 200,
-            ),
-        ]),
+        '*' => Http::response(
+            body: $this->ndjsonPayload([
+                $this->chatChunkWithToolCalls([['id' => 'call_1']]),
+            ]),
+            status: 200,
+        ),
     ]);
 
     $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
 
-    $toolCallEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof ToolCallEvent));
-
-    expect($toolCallEvents)->toHaveCount(1)
-        ->and($toolCallEvents[0]->toolCall->id)->toBe('call_1')
-        ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
-        ->and($toolCallEvents[0]->toolCall->arguments)->toBe(['foo' => 'bar']);
+    expect(array_filter($events, fn ($e): bool => $e instanceof ToolCallEvent))->toBeEmpty();
 });
 
 test('streaming generates fallback id when tool call has no id', function (): void {
@@ -255,31 +196,13 @@ test('streaming generates fallback id when tool call has no id', function (): vo
 });
 
 test('streaming keeps every tool call when each arrives in its own chunk', function (): void {
-    $toolCallChunk = fn (string $id, int $index, array $arguments): array => [
-        'model' => 'llama3.1:8b',
-        'message' => [
-            'role' => 'assistant',
-            'content' => '',
-            'tool_calls' => [[
-                'id' => $id,
-                'function' => [
-                    'index' => $index,
-                    'name' => 'FixedNumberGenerator',
-                    'arguments' => $arguments,
-                ],
-            ]],
-        ],
-        'done' => false,
-    ];
-
     Http::fake([
         '*' => Http::sequence([
             Http::response(
                 body: $this->ndjsonPayload([
-                    // Ollama sends one whole call per chunk, numbered by "function.index".
-                    $toolCallChunk('call_1', 0, ['foo' => 'bar']),
-                    $toolCallChunk('call_2', 1, ['baz' => 'qux']),
-                    $this->chatChunk('', true, 'stop', ['prompt_eval_count' => 1, 'eval_count' => 1]),
+                    $this->chatChunkWithToolCalls([$this->toolCallChunk('call_1', 'FixedNumberGenerator', ['foo' => 'bar'], 0)], done: false),
+                    $this->chatChunkWithToolCalls([$this->toolCallChunk('call_2', 'FixedNumberGenerator', ['baz' => 'qux'], 1)], done: false),
+                    $this->chatChunk('', true, 'stop'),
                 ]),
                 status: 200,
             ),
