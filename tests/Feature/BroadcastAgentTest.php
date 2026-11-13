@@ -125,7 +125,7 @@ test('failed broadcasts on every channel when given an array', function (): void
         && $event->broadcastOn() === $channels);
 });
 
-test('failed broadcasts the error and runs the catch callbacks', function (): void {
+test('failed runs the catch callbacks with the exception', function (): void {
     Event::fake();
 
     $received = null;
@@ -144,9 +144,28 @@ test('failed broadcasts the error and runs the catch callbacks', function (): vo
 
     $job->failed($exception);
 
-    Event::assertDispatched(AnonymousEvent::class, fn (AnonymousEvent $event): bool => $event->broadcastAs() === 'stream_failed');
-
     expect($received)->toBe($exception);
+});
+
+test('failed runs the catch callbacks when the error broadcast throws', function (): void {
+    Broadcast::shouldReceive('on')->andThrow(new InvalidArgumentException('Broadcast connection [x] is not defined.'));
+
+    $received = null;
+
+    $job = new BroadcastAgent(
+        agent: new AssistantAgent,
+        prompt: 'Say hello',
+        channels: new Channel('test-channel'),
+    );
+
+    $job->catch(function (Throwable $e) use (&$received): void {
+        $received = $e;
+    });
+
+    $exception = new RuntimeException('boom');
+
+    expect(fn () => $job->failed($exception))->toThrow(InvalidArgumentException::class)
+        ->and($received)->toBe($exception);
 });
 
 test('a provider error broadcasts as error and keeps its code in the payload', function (string $code): void {
