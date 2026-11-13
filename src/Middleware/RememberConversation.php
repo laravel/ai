@@ -5,6 +5,7 @@ namespace Laravel\Ai\Middleware;
 use Closure;
 use Illuminate\Support\Str;
 use Laravel\Ai\Agents\ConversationTitleAgent;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Concerns\RemembersConversations as RemembersConversationsTrait;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
@@ -212,6 +213,10 @@ class RememberConversation
      */
     protected function generateTitle(AgentPrompt $prompt): string
     {
+        if (Ai::hasFakeGatewayFor($prompt->agent) && ! ConversationTitleAgent::isFaked()) {
+            return ConversationTitleAgent::fallbackTitleFor($prompt->prompt);
+        }
+
         return ConversationTitleAgent::titleFor($prompt->prompt, $this->provider, $prompt->invocationId);
     }
 }
