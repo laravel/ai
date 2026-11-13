@@ -5,11 +5,12 @@ namespace Laravel\Ai\Files;
 use Illuminate\Contracts\Support\Arrayable;
 use InvalidArgumentException;
 use JsonSerializable;
+use Laravel\Ai\Contracts\Files\HasStream;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
 use Laravel\Ai\Files\Concerns\HasStoredContent;
 
-class StoredVideo extends Video implements Arrayable, JsonSerializable, StorableFile
+class StoredVideo extends Video implements Arrayable, HasStream, JsonSerializable, StorableFile
 {
     use CanBeUploadedToProvider;
     use HasStoredContent;
