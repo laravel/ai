@@ -52,7 +52,7 @@ test('transcription uses gpt-transcribe by default', function (): void {
     Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->generate(provider: 'openai');
 
-    Http::assertSent(fn (Request $request): bool => str_contains($request->body(), 'gpt-transcribe'));
+    Http::assertSent(fn (Request $request): bool => str_contains($request->body(), "\r\n\r\ngpt-transcribe\r\n"));
 });
 
 test('transcription strips diarize suffix from model when diarize is off', function (): void {
@@ -127,6 +127,27 @@ test('transcription sends languages as a multipart array', function (): void {
     Http::assertSent(fn (Request $request): bool => substr_count($request->body(), 'name="languages[]"') === 2
         && str_contains($request->body(), "\r\n\r\nen\r\n")
         && str_contains($request->body(), "\r\n\r\nfr\r\n")
+        && ! str_contains($request->body(), 'name="language"'));
+});
+
+test('transcription wraps a single languages provider option', function (): void {
+    Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->withProviderOptions(['languages' => 'en'])
+        ->generate(provider: 'openai');
+
+    Http::assertSent(fn (Request $request): bool => substr_count($request->body(), 'name="languages[]"') === 1
+        && str_contains($request->body(), "\r\n\r\nen\r\n"));
+});
+
+test('transcription sends no language fields when none are given', function (): void {
+    Http::fake(['*' => fakeOpenAiTranscriptionResponse()]);
+
+    Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
+        ->generate(provider: 'openai');
+
+    Http::assertSent(fn (Request $request): bool => ! str_contains($request->body(), 'name="languages[]"')
         && ! str_contains($request->body(), 'name="language"'));
 });
 

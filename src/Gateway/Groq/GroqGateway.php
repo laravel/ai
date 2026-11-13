@@ -111,7 +111,7 @@ class GroqGateway implements StepTextGateway, TranscriptionGateway
     ): TranscriptionResponse {
         if ($diarize) {
             throw new LogicException(
-                'Groq does not support diarized transcription. Use the OpenAI, ElevenLabs, Mistral, or Gemini provider for diarization.'
+                'Groq does not support diarized transcription. Use the ElevenLabs, Mistral, or Gemini provider for diarization.'
             );
         }
 

@@ -130,7 +130,7 @@ class OpenAiProvider extends Provider implements AudioProvider, ClassificationPr
      */
     public function defaultImageModel(): string
     {
-        return $this->config['models']['image']['default'] ?? 'gpt-image-2.6-flare';
+        return $this->config['models']['image']['default'] ?? 'gpt-image-2.5-flare';
     }
 
     /**

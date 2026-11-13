@@ -222,17 +222,13 @@ class OpenAiGateway implements Gateway, StepTextGateway
         }
 
         if ($usesLanguages) {
-            $providerOptions['languages'] = $language !== null
-                ? [$language]
-                : ($providerOptions['languages'] ?? (isset($providerOptions['language']) ? [$providerOptions['language']] : []));
+            $languages = Arr::wrap($language ?? $providerOptions['languages'] ?? $providerOptions['language'] ?? []);
 
-            unset($providerOptions['language']);
+            unset($providerOptions['language'], $providerOptions['languages']);
 
-            foreach ($providerOptions['languages'] as $value) {
+            foreach ($languages as $value) {
                 $providerOptions[] = ['name' => 'languages[]', 'contents' => $value];
             }
-
-            unset($providerOptions['languages']);
         }
 
         $response = $this->withErrorHandling(
