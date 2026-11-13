@@ -45,7 +45,7 @@ trait DecodesStructuredOutput
             $unfenced = substr($unfenced, 4);
         }
 
-        foreach ([$unfenced, Str::before($unfenced, '``'), Str::beforeLast($unfenced, '``')] as $candidate) {
+        foreach (array_unique([$unfenced, Str::before($unfenced, '``'), Str::beforeLast($unfenced, '``')]) as $candidate) {
             if (is_array($decoded = json_decode($candidate, true))) {
                 return $decoded;
             }
