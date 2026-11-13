@@ -4,6 +4,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Exceptions\InvalidApiKeyException;
 use Laravel\Ai\Exceptions\ProviderConnectionException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
@@ -153,4 +154,44 @@ test('connection failure fails over to the next provider', function () {
     $response = (new AssistantAgent)->prompt('Hi', provider: ['primary', 'backup']);
 
     expect($response->text)->toBe('Recovered on the backup provider');
+});
+
+test('a rejected API key hints at the key', function (int $status, array $body): void {
+    Http::fake(['generativelanguage.googleapis.com/*' => Http::response($body, $status)]);
+
+    (new AssistantAgent)->prompt('Hi', provider: 'gemini');
+})->with([
+    'unauthenticated' => [401, ['error' => [
+        'code' => 'authentication',
+        'message' => 'Request had invalid authentication credentials.',
+    ]]],
+    'invalid key' => [400, [['error' => [
+        'code' => 400,
+        'message' => 'API key not valid. Please pass a valid API key.',
+        'status' => 'INVALID_ARGUMENT',
+        'details' => [['@type' => 'type.googleapis.com/google.rpc.ErrorInfo', 'reason' => 'API_KEY_INVALID']],
+    ]]]],
+    'missing key' => [403, [['error' => [
+        'code' => 403,
+        'message' => "Method doesn't allow unregistered callers (callers without established identity). Please use API Key or other form of API consumer identity to call this API.",
+        'status' => 'PERMISSION_DENIED',
+    ]]]],
+    'leaked key' => [403, [['error' => [
+        'code' => 403,
+        'message' => 'Your API key was reported as leaked. Please use another API key.',
+        'status' => 'PERMISSION_DENIED',
+    ]]]],
+])->throws(InvalidApiKeyException::class, 'Missing or invalid API key for AI provider [gemini].');
+
+test('a permission error unrelated to the API key stays a request exception', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([['error' => [
+            'code' => 403,
+            'message' => 'Your project has been denied access. Please contact support.',
+            'status' => 'PERMISSION_DENIED',
+        ]]], 403),
+    ]);
+
+    expect(fn () => (new AssistantAgent)->prompt('Hi', provider: 'gemini'))
+        ->toThrow(fn (RequestException $e) => expect($e)->not->toBeInstanceOf(InvalidApiKeyException::class));
 });

@@ -45,16 +45,7 @@ trait ParsesTextResponses
         $text = $message['content'] ?? '';
         $rawToolCalls = $message['tool_calls'] ?? [];
 
-        $mappedToolCalls = array_map(function (array $toolCall): ToolCall {
-            $id = $toolCall['id'] ?? (string) Str::uuid7();
-
-            return new ToolCall(
-                id: $id,
-                name: $toolCall['function']['name'] ?? '',
-                arguments: $this->parseToolArguments($toolCall['function']['arguments'] ?? []),
-                resultId: $toolCall['id'] ?? null,
-            );
-        }, $rawToolCalls);
+        $mappedToolCalls = array_map($this->mapToolCall(...), $rawToolCalls);
 
         return new StepResponse(
             text: $text,
@@ -77,6 +68,21 @@ trait ParsesTextResponses
         }
 
         return json_decode($arguments ?? '{}', true) ?? [];
+    }
+
+    /**
+     * Map an Ollama tool call to a tool call.
+     */
+    protected function mapToolCall(array $toolCall): ToolCall
+    {
+        $id = $toolCall['id'] ?? (string) Str::uuid7();
+
+        return new ToolCall(
+            id: $id,
+            name: $toolCall['function']['name'] ?? '',
+            arguments: $this->parseToolArguments($toolCall['function']['arguments'] ?? []),
+            resultId: $toolCall['id'] ?? null,
+        );
     }
 
     /**

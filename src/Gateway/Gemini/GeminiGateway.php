@@ -15,7 +15,6 @@ use Laravel\Ai\Contracts\Providers\ImageProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Providers\TranscriptionProvider;
 use Laravel\Ai\Files\Image as ImageFile;
-use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
 use Laravel\Ai\Gateway\Concerns\WrapsPcmAudio;
 use Laravel\Ai\Gateway\StepContext;
@@ -36,13 +35,13 @@ class GeminiGateway implements Gateway, StepTextGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesGeminiClient;
+    use Concerns\HandlesGeminiErrors;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;
     use Concerns\MapsEmbeddingInputs;
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
-    use HandlesFailoverErrors;
     use ParsesServerSentEvents;
     use WrapsPcmAudio;
 
@@ -76,7 +75,7 @@ class GeminiGateway implements Gateway, StepTextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, $model, filled($schema))->withRawResponse($response);
+        return $this->parseTextResponse($data, $provider, $model, filled($schema), $this->storesInteraction($body))->withRawResponse($response);
     }
 
     /**
@@ -103,7 +102,7 @@ class GeminiGateway implements Gateway, StepTextGateway
                 ->post('interactions?alt=sse', array_merge($body, ['stream' => true])),
         );
 
-        return yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody());
+        return yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody(), $this->storesInteraction($body));
     }
 
     /**

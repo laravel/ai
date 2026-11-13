@@ -10,7 +10,6 @@ use Laravel\Ai\Contracts\Providers\FileProvider;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Gateway\Concerns\EncodesResourceIds;
-use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Gateway\Concerns\PreparesStorableFiles;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\FileResponse;
@@ -18,9 +17,9 @@ use Laravel\Ai\Responses\StoredFileResponse;
 
 class GeminiFileGateway implements FileGateway
 {
+    use Concerns\HandlesGeminiErrors;
     use CreatesClient;
     use EncodesResourceIds;
-    use HandlesFailoverErrors;
     use PreparesStorableFiles;
 
     /**

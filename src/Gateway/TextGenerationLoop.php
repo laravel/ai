@@ -676,9 +676,13 @@ class TextGenerationLoop
 
             $events = $this->executeAgentToolStreaming($tool, $toolCall->arguments, $toolCall->id, $context);
 
-            yield from $this->preliminaryToolResults($events, $toolCall, $invocationId);
+            try {
+                yield from $this->preliminaryToolResults($events, $toolCall, $invocationId);
 
-            $toolResults[] = $this->recordedToolResult($this->toolResult($toolCall, $events->getReturn()), $context);
+                $toolResults[] = $this->recordedToolResult($this->toolResult($toolCall, $events->getReturn()), $context);
+            } catch (ToolExecutionException $exception) {
+                $toolResults[] = $this->recordedToolResult($this->failedToolResult($toolCall, $exception), $context);
+            }
         }
 
         return [$toolResults, $pendingApprovals];
@@ -736,16 +740,23 @@ class TextGenerationLoop
 
         $startedAt = hrtime(true);
 
-        $events = $tool->stream(new Request($arguments, $toolCallId, $toolInvocationId));
+        // Only the sub-agent itself may fail the tool call, so a listener that throws is never reported as a tool failure...
+        try {
+            $events = $tool->stream(new Request($arguments, $toolCallId, $toolInvocationId));
 
-        // Advanced by hand so every resumption of the child run, not only the first, sees this tool call as its parent...
-        while (ParentInvocation::within($parentInvocationId, $toolInvocationId, fn (): bool => $events->valid())) {
-            yield $events->current();
+            // Advanced by hand so every resumption of the child run, not only the first, sees this tool call as its parent...
+            while (ParentInvocation::within($parentInvocationId, $toolInvocationId, fn (): bool => $events->valid())) {
+                yield $events->current();
 
-            ParentInvocation::within($parentInvocationId, $toolInvocationId, fn () => $events->next());
+                ParentInvocation::within($parentInvocationId, $toolInvocationId, fn () => $events->next());
+            }
+
+            $result = (string) $events->getReturn();
+        } catch (Throwable $exception) {
+            $context?->toolFailed($tool, $arguments, $exception, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
+
+            throw new ToolExecutionException($exception);
         }
-
-        $result = (string) $events->getReturn();
 
         $context?->toolInvoked($tool, $arguments, $result, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
 
@@ -791,12 +802,20 @@ class TextGenerationLoop
         try {
             $response = $this->invokeTool($tool, $toolCall->arguments, $toolCall->id, $context);
         } catch (ToolExecutionException $exception) {
-            report($exception->exception);
-
-            return $this->toolResult($toolCall, 'The tool call failed: '.$exception->exception->getMessage(), failed: true);
+            return $this->failedToolResult($toolCall, $exception);
         }
 
         return $this->toolResult($toolCall, (string) $response, data: $response->data);
+    }
+
+    /**
+     * Report the given tool failure and turn it into a result the model can react to.
+     */
+    protected function failedToolResult(ToolCall $toolCall, ToolExecutionException $exception): ToolResult
+    {
+        report($exception->exception);
+
+        return $this->toolResult($toolCall, 'The tool call failed: '.$exception->exception->getMessage(), failed: true);
     }
 
     /**

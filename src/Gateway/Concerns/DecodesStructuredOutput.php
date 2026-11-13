@@ -2,6 +2,8 @@
 
 namespace Laravel\Ai\Gateway\Concerns;
 
+use Illuminate\Support\Str;
+
 trait DecodesStructuredOutput
 {
     /**
@@ -25,7 +27,31 @@ trait DecodesStructuredOutput
             $decoded = json_decode($this->escapeQuotesInObjectKeys($this->extractJsonCodeFence($trimmed) ?? $trimmed), true);
         }
 
+        if (! is_array($decoded)) {
+            $decoded = $this->decodeUnpairedFence($trimmed);
+        }
+
         return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * Decode a payload whose code fence lost some of its backticks, as a whole or up to its first or last stray run.
+     */
+    private function decodeUnpairedFence(string $text): ?array
+    {
+        $unfenced = ltrim($text, '`');
+
+        if ($unfenced !== $text && strncasecmp($unfenced, 'json', 4) === 0) {
+            $unfenced = substr($unfenced, 4);
+        }
+
+        foreach (array_unique([$unfenced, Str::before($unfenced, '``'), Str::beforeLast($unfenced, '``')]) as $candidate) {
+            if (is_array($decoded = json_decode($candidate, true))) {
+                return $decoded;
+            }
+        }
+
+        return null;
     }
 
     /**

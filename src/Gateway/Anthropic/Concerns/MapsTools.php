@@ -3,11 +3,13 @@
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Providers\SupportsCodeExecution;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Gateway\Anthropic\AnthropicSchemaSanitizer;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\CodeExecution;
@@ -48,12 +50,12 @@ trait MapsTools
                 ];
 
                 foreach ($tool->tools as $deferred) {
-                    $mapped[] = $this->mapTool($deferred, defer: true);
+                    $mapped[] = $this->mapTool($deferred, $provider, defer: true);
                 }
             } elseif ($tool instanceof ProviderTool) {
                 $mapped[] = $this->mapProviderTool($tool, $provider);
             } elseif ($tool instanceof Tool) {
-                $mapped[] = $this->mapTool($tool);
+                $mapped[] = $this->mapTool($tool, $provider);
             }
         }
 
@@ -63,14 +65,20 @@ trait MapsTools
     /**
      * Map a regular tool to an Anthropic tool definition.
      */
-    protected function mapTool(Tool $tool, bool $defer = false): array
+    protected function mapTool(Tool $tool, Provider $provider, bool $defer = false): array
     {
+        $strict = Strict::isAppliedTo($tool) && $this->supportsNativeStructuredOutput($provider);
+
         $schema = $tool->schema(new JsonSchemaTypeFactory);
 
         $inputSchema = ['type' => 'object', 'properties' => (object) []];
 
         if (filled($schema)) {
             $schemaArray = (new ObjectSchema($schema))->toSchema();
+
+            if ($strict) {
+                $schemaArray = AnthropicSchemaSanitizer::sanitize($schemaArray);
+            }
 
             $inputSchema['properties'] = (object) ($schemaArray['properties'] ?? []);
             $inputSchema['required'] = $schemaArray['required'] ?? [];
@@ -81,6 +89,11 @@ trait MapsTools
             'description' => (string) $tool->description(),
             'input_schema' => $inputSchema,
         ];
+
+        if ($strict) {
+            $definition['strict'] = true;
+            $definition['input_schema']['additionalProperties'] = false;
+        }
 
         if ($defer) {
             $definition['defer_loading'] = true;

@@ -107,6 +107,20 @@ test('classification posts questions to the decisions endpoint in the openai wir
     });
 });
 
+test('boolean criteria given as arrays are sent as json text', function (): void {
+    Http::fake(['*' => Http::response(fakeOpenAiDecisionsResponse())]);
+
+    Classification::of('I was charged twice for my order.')
+        ->question('is_urgent', new Boolean('Is this urgent?', [
+            'true' => ['Money was lost.', 'The customer is blocked.'],
+            'false' => 'A question only.',
+        ]))
+        ->classify(provider: 'openai');
+
+    Http::assertSent(fn (Request $request): bool => json_decode($request->body(), true)['questions'][0]['instructions']
+        === "Is this urgent?\n\nTrue: [\"Money was lost.\",\"The customer is blocked.\"]\n\nFalse: A question only.");
+});
+
 test('the raw decisions response is exposed on the classification response', function (): void {
     Http::fake(['*' => Http::response(fakeOpenAiDecisionsResponse())]);
 

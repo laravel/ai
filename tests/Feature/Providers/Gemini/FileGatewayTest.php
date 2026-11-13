@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Exceptions\InvalidApiKeyException;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
 
@@ -164,3 +165,16 @@ test('delete file rejects a prefixed dot segment id', function (): void {
 
     Http::assertNothingSent();
 });
+
+test('a rejected API key hints at the key', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response(['error' => [
+            'code' => 400,
+            'message' => 'API key not valid. Please pass a valid API key.',
+            'status' => 'INVALID_ARGUMENT',
+            'details' => [['@type' => 'type.googleapis.com/google.rpc.ErrorInfo', 'reason' => 'API_KEY_INVALID']],
+        ]], 400),
+    ]);
+
+    Files::get('abc123', provider: 'gemini');
+})->throws(InvalidApiKeyException::class, 'Missing or invalid API key for AI provider [gemini].');

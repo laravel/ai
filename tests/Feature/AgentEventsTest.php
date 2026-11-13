@@ -1,9 +1,11 @@
 <?php
 
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Agents\ConversationTitleAgent;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Events\AgentFailed;
@@ -29,6 +31,7 @@ use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\AgentTool;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\DelegatingAgent;
@@ -39,8 +42,10 @@ use Tests\Fixtures\Agents\OrchestratorAgent;
 use Tests\Fixtures\Agents\RateLimitedToolAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
 use Tests\Fixtures\Agents\RememberingThrowingApprovableAgent;
+use Tests\Fixtures\Agents\RememberingToolUsingAgent;
 use Tests\Fixtures\Agents\ResearchAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+use Tests\Fixtures\ConversationStores\InMemoryConversationStore;
 use Tests\Fixtures\FakeConversationStore;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
@@ -225,12 +230,101 @@ test('conversation title generation does not report steps against the run that t
 
     $response = (new RememberingAssistantAgent)->forUser($user)->prompt('Test prompt');
 
-    // Title generation runs its own loop on the same provider, and must not be attributed to this run...
-    Event::assertDispatchedTimes(StartingStep::class, 1);
-    Event::assertDispatchedTimes(StepCompleted::class, 1);
+    expect(Event::dispatched(StartingStep::class, fn (StartingStep $event): bool => $event->invocationId === $response->invocationId))->toHaveCount(1)
+        ->and(Event::dispatched(StepCompleted::class, fn (StepCompleted $event): bool => $event->invocationId === $response->invocationId))->toHaveCount(1);
+});
 
-    Event::assertDispatched(StartingStep::class, fn (StartingStep $event): bool => $event->invocationId === $response->invocationId
-        && $event->stepNumber === 0);
+describe('conversation title events', function (): void {
+    beforeEach(function (): void {
+        app()->instance(ConversationStore::class, $this->store = new InMemoryConversationStore);
+
+        config(['ai.providers.groq' => [...config('ai.providers.groq'), 'key' => 'test-key']]);
+
+        Http::preventStrayRequests();
+    });
+
+    test('conversation title generation is reported as its own agent run', function (): void {
+        Event::fake();
+
+        Http::fakeSequence()
+            ->pushResponse(fakeGroqResponse('Hello there.'))
+            ->pushResponse(fakeGroqResponse('Greeting Conversation'));
+
+        $response = (new RememberingAssistantAgent)->forUser((object) ['id' => 1])->prompt('Hello', provider: 'groq');
+
+        $title = Event::dispatched(AgentPrompted::class, fn (AgentPrompted $event): bool => $event->prompt->parentInvocationId === $response->invocationId)->sole()[0];
+
+        expect($title->invocationId)->not->toBe($response->invocationId)
+            ->and($title->prompt->provider->name())->toBe('groq')
+            ->and($title->prompt->model)->toBe('openai/gpt-oss-20b')
+            ->and($title->prompt->prompt)->toBe('Hello')
+            ->and($title->response->text)->toBe('Greeting Conversation');
+
+        Event::assertDispatched(StepCompleted::class, fn (StepCompleted $event): bool => $event->invocationId === $title->invocationId);
+    });
+
+    test('a failed conversation title run falls back to the prompt without failing the turn', function (): void {
+        Event::fake();
+
+        Http::fakeSequence()
+            ->pushResponse(fakeGroqResponse('Hello there.'))
+            ->push(status: 500);
+
+        $response = (new RememberingAssistantAgent)->forUser((object) ['id' => 1])->prompt('Hello', provider: 'groq');
+
+        expect($response->text)->toBe('Hello there.')
+            ->and($this->store->conversations[$response->conversationId]['title'])->toBe('Hello');
+
+        $failed = Event::dispatched(AgentFailed::class)->sole()[0];
+
+        expect($failed->prompt->agent)->toBeInstanceOf(ConversationTitleAgent::class)
+            ->and($failed->prompt->parentInvocationId)->toBe($response->invocationId)
+            ->and($failed->exception)->toBeInstanceOf(RequestException::class);
+    });
+
+    test('a turn that fails after a step reports its title run against the failed run', function (): void {
+        Event::fake();
+
+        Http::fakeSequence()
+            ->pushResponse(fakeGroqToolCallResponse())
+            ->push(status: 500)
+            ->pushResponse(fakeGroqResponse('Number Report'));
+
+        expect(fn () => (new RememberingToolUsingAgent)->forUser((object) ['id' => 1])->prompt('Generate a number', provider: 'groq'))
+            ->toThrow(RequestException::class);
+
+        $failedRun = Event::dispatched(AgentFailed::class)->sole()[0];
+
+        Event::assertDispatched(AgentPrompted::class, fn (AgentPrompted $event): bool => $event->prompt->parentInvocationId === $failedRun->invocationId
+            && $event->response->text === 'Number Report');
+    });
+
+    test('a throwing listener on the title run does not fail the turn', function (): void {
+        Http::fakeSequence()
+            ->pushResponse(fakeGroqResponse('Hello there.'))
+            ->pushResponse(fakeGroqResponse('Greeting Conversation'));
+
+        Event::listen(AgentPrompted::class, function (AgentPrompted $event): void {
+            if ($event->prompt->parentInvocationId !== null) {
+                throw new RuntimeException('observability backend is down');
+            }
+        });
+
+        $response = (new RememberingAssistantAgent)->forUser((object) ['id' => 1])->prompt('Hello', provider: 'groq');
+
+        expect($response->text)->toBe('Hello there.')
+            ->and($this->store->conversations[$response->conversationId]['title'])->toBe('Hello');
+    });
+
+    test('disabled conversation title generation makes no title call', function (): void {
+        config(['ai.conversations.generate_title' => false]);
+
+        Http::fakeSequence()->pushResponse(fakeGroqResponse('Hello there.'));
+
+        (new RememberingAssistantAgent)->forUser((object) ['id' => 1])->prompt('Hello', provider: 'groq');
+
+        Http::assertSentCount(1);
+    });
 });
 
 test('step events are dispatched on the streaming path', function (): void {
@@ -337,6 +431,90 @@ test('a throwing tool dispatches tool failed and the run continues', function ()
 
     expect($failed->toolInvocationId)->toBe($invoking->toolInvocationId)
         ->and($failed->invocationId)->toBe($invoking->invocationId);
+});
+
+test('a sub agent that throws dispatches tool failed and the run continues', function (): void {
+    Event::fake();
+
+    DelegatingAgent::fake([
+        new ToolCall('call_123', 'research_agent', ['task' => 'Research Laravel']),
+        'The research could not be completed.',
+    ]);
+
+    ResearchAgent::fake(fn () => throw new RuntimeException('Research failed.'));
+
+    $response = (new DelegatingAgent)->prompt('Delegate research about Laravel');
+
+    $invoking = Event::dispatched(InvokingTool::class)->first()[0];
+
+    Event::assertDispatched(ToolFailed::class, fn (ToolFailed $event): bool => $event->toolInvocationId === $invoking->toolInvocationId
+        && $event->exception->getMessage() === 'Research failed.');
+
+    Event::assertNotDispatched(ToolInvoked::class);
+
+    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->prompt->agent instanceof ResearchAgent);
+
+    $result = $response->steps->first()->toolResults[0];
+
+    expect($result->failed)->toBeTrue()
+        ->and($result->result)->toBe('The tool call failed: Research failed.');
+});
+
+test('a sub agent that throws while streamed as a tool dispatches tool failed and the run continues', function (): void {
+    Event::fake();
+
+    DelegatingAgent::fake([
+        new ToolCall('call_123', 'research_agent', ['task' => 'Research Laravel']),
+        'The research could not be completed.',
+    ]);
+
+    ResearchAgent::fake(fn () => throw new RuntimeException('Research failed.'));
+
+    $events = iterator_to_array((new DelegatingAgent)->stream('Delegate research about Laravel'), false);
+
+    $invoking = Event::dispatched(InvokingTool::class)->first()[0];
+
+    Event::assertDispatched(ToolFailed::class, fn (ToolFailed $event): bool => $event->toolInvocationId === $invoking->toolInvocationId
+        && $event->exception->getMessage() === 'Research failed.');
+
+    Event::assertNotDispatched(ToolInvoked::class);
+
+    Event::assertDispatched(AgentFailed::class, fn (AgentFailed $event): bool => $event->prompt->agent instanceof ResearchAgent);
+
+    $result = collect($events)->first(fn ($event): bool => $event instanceof ToolResultEvent && ! $event->preliminary);
+
+    expect($result->successful)->toBeFalse()
+        ->and($result->error)->toBe('The tool call failed: Research failed.');
+});
+
+test('a sub agent that throws after streaming output ends its tool call with a failed result', function (): void {
+    Event::fake();
+
+    OrchestratorAgent::fake([
+        new ToolCall('call_123', 'middle_manager', ['task' => 'Research Laravel']),
+        'The research could not be completed.',
+    ]);
+
+    MiddleManagerAgent::fake([
+        new ToolCall('call_456', 'research_agent', ['task' => 'Research Laravel']),
+        fn () => throw new RuntimeException('Research failed.'),
+    ]);
+
+    ResearchAgent::fake(['Laravel is a PHP framework.']);
+
+    $results = collect(iterator_to_array((new OrchestratorAgent)->stream('Delegate research about Laravel'), false))
+        ->filter(fn ($event): bool => $event instanceof ToolResultEvent)
+        ->values();
+
+    Event::assertDispatched(ToolFailed::class, fn (ToolFailed $event): bool => $event->tool instanceof AgentTool
+        && $event->tool->name() === 'middle_manager'
+        && $event->exception->getMessage() === 'Research failed.');
+
+    expect($results->first()->preliminary)->toBeTrue()
+        ->and($results->first()->successful)->toBeTrue()
+        ->and($results->last()->preliminary)->toBeFalse()
+        ->and($results->last()->successful)->toBeFalse()
+        ->and($results->last()->error)->toBe('The tool call failed: Research failed.');
 });
 
 test('a tool that fails while resuming an approval reports the failure once and continues the run', function (): void {

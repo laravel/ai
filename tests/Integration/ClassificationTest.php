@@ -38,6 +38,21 @@ test('states can be classified', function (string $provider, string $apiKey): vo
     Event::assertDispatched(Classified::class);
 })->with('classification-providers');
 
+test('boolean criteria may be given as arrays', function (string $provider, string $apiKey, string $state, bool $urgent): void {
+    requiresApiKey($apiKey);
+
+    $response = Classification::of($state)
+        ->question('is_urgent', new Boolean('Is this urgent?', [
+            'true' => ['Money was lost.', 'The customer is blocked.'],
+            'false' => ['A question only.', 'Nothing is broken.'],
+        ]))->classify(provider: $provider);
+
+    expect($response['is_urgent']->isTrue())->toBe($urgent);
+})->with('classification-providers')->with([
+    'urgent' => ['I was charged twice for my order and now I cannot check out at all.', true],
+    'not urgent' => ['Out of curiosity, do you offer gift wrapping?', false],
+]);
+
 test('images can be classified alongside the state', function (string $provider, string $apiKey, string $file, string $color): void {
     requiresApiKey($apiKey);
 

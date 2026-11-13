@@ -58,7 +58,7 @@ test('transcription diarize throws logic exception without sending request', fun
     expect(fn (): TranscriptionResponse => Transcription::fromBase64(base64_encode('fake-audio'), 'audio/mp3')
         ->diarize()
         ->generate(provider: 'openrouter'))
-        ->toThrow(LogicException::class, 'OpenRouter does not support diarized transcription');
+        ->toThrow(LogicException::class, 'OpenRouter does not support diarized transcription. Use the ElevenLabs, Mistral, or Gemini provider for diarization.');
 
     Http::assertNothingSent();
 });

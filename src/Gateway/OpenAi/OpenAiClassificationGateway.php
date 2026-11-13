@@ -177,7 +177,7 @@ class OpenAiClassificationGateway implements ClassificationGateway
         $instructions = $this->toText($question->instructions);
 
         foreach ($question->criteria ?? [] as $case => $description) {
-            $instructions .= "\n\n".ucfirst($case).": {$description}";
+            $instructions .= "\n\n".ucfirst($case).': '.$this->toText($description);
         }
 
         return $instructions;

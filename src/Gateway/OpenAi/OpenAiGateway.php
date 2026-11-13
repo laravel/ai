@@ -107,7 +107,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
             ...(str_starts_with($model, 'gpt-image')
-                ? ['moderation' => 'low']
+                ? ['moderation' => $providerOptions['moderation'] ?? 'low']
                 : ['response_format' => 'b64_json']),
         ]);
     }
@@ -147,7 +147,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
             ...($isGptImage
-                ? ['moderation' => 'low']
+                ? ['moderation' => $providerOptions['moderation'] ?? 'low']
                 : ['response_format' => 'b64_json']),
         ])));
     }
@@ -169,7 +169,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
         $voice = match ($voice) {
             'default-male' => 'ash',
             'default-female' => 'alloy',
-            default => $voice,
+            default => str_starts_with($voice, 'voice_') ? ['id' => $voice] : $voice,
         };
 
         $response = $this->withErrorHandling(
@@ -196,7 +196,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
      *
      * @param  array<string, mixed>  $providerOptions
      *
-     * @throws LogicException if diarization is requested together with the `prompt` provider option.
+     * @throws LogicException if the model does not support the requested diarization options.
      */
     public function generateTranscription(
         TranscriptionProvider $provider,
@@ -207,6 +207,12 @@ class OpenAiGateway implements Gateway, StepTextGateway
         int $timeout = 30,
         array $providerOptions = [],
     ): TranscriptionResponse {
+        $usesLanguages = str_starts_with($model, 'gpt-transcribe');
+
+        if ($usesLanguages && $diarize) {
+            throw new LogicException('OpenAI model ['.$model.'] does not support diarization.');
+        }
+
         if ($diarize && filled($providerOptions['prompt'] ?? null)) {
             throw new LogicException('OpenAI does not support the `prompt` option for diarized transcriptions.');
         }
@@ -215,13 +221,23 @@ class OpenAiGateway implements Gateway, StepTextGateway
             $model = str_replace('-diarize', '', $model);
         }
 
+        if ($usesLanguages) {
+            $languages = Arr::wrap($language ?? $providerOptions['languages'] ?? $providerOptions['language'] ?? []);
+
+            unset($providerOptions['language'], $providerOptions['languages']);
+
+            foreach ($languages as $value) {
+                $providerOptions[] = ['name' => 'languages[]', 'contents' => $value];
+            }
+        }
+
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->attach('file', $audio->content(), $this->audioFilename($audio), array_filter(['Content-Type' => $audio->mimeType()]))
                 ->post('audio/transcriptions', array_merge($providerOptions, array_filter([
                     'model' => $model,
-                    'language' => $language,
+                    'language' => $usesLanguages ? null : $language,
                     'response_format' => $diarize ? 'diarized_json' : 'json',
                 ]))),
         );

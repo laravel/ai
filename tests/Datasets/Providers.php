@@ -27,7 +27,6 @@ dataset('transcription-providers', [
 ]);
 
 dataset('diarization-providers', [
-    'openai' => ['openai', 'OPENAI_API_KEY'],
     'gemini' => ['gemini', 'GEMINI_API_KEY'],
 ]);
 
@@ -69,12 +68,14 @@ dataset('reranking-providers', [
 ]);
 
 dataset('classification-providers', [
+    'gemini' => ['gemini', 'GEMINI_API_KEY'],
     'openai' => ['openai', 'OPENAI_API_KEY'],
     'openrouter' => ['openrouter', 'OPENROUTER_API_KEY'],
     'typesafe' => ['typesafe', 'TYPESAFE_API_KEY'],
 ]);
 
 dataset('classification-image-providers', [
+    'gemini' => ['gemini', 'GEMINI_API_KEY'],
     'openai' => ['openai', 'OPENAI_API_KEY'],
     'openrouter' => ['openrouter', 'OPENROUTER_API_KEY'],
     'typesafe' => ['typesafe', 'TYPESAFE_API_KEY'],

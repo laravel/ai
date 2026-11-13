@@ -10,6 +10,7 @@ use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Jobs\BroadcastAgent;
 use Laravel\Ai\Responses\StreamedAgentResponse;
+use Laravel\Ai\Streaming\Events\Error;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ConversationalAgent;
 
@@ -123,6 +124,58 @@ test('failed broadcasts on every channel when given an array', function (): void
     Event::assertDispatched(AnonymousEvent::class, fn (AnonymousEvent $event): bool => $event->broadcastAs() === 'stream_failed'
         && $event->broadcastOn() === $channels);
 });
+
+test('failed runs the catch callbacks with the exception', function (): void {
+    Event::fake();
+
+    $received = null;
+
+    $job = new BroadcastAgent(
+        agent: new AssistantAgent,
+        prompt: 'Say hello',
+        channels: new Channel('test-channel'),
+    );
+
+    $job->catch(function (Throwable $e) use (&$received): void {
+        $received = $e;
+    });
+
+    $exception = new RuntimeException('boom');
+
+    $job->failed($exception);
+
+    expect($received)->toBe($exception);
+});
+
+test('failed runs the catch callbacks when the error broadcast throws', function (): void {
+    Broadcast::shouldReceive('on')->andThrow(new InvalidArgumentException('Broadcast connection [x] is not defined.'));
+
+    $received = null;
+
+    $job = new BroadcastAgent(
+        agent: new AssistantAgent,
+        prompt: 'Say hello',
+        channels: new Channel('test-channel'),
+    );
+
+    $job->catch(function (Throwable $e) use (&$received): void {
+        $received = $e;
+    });
+
+    $exception = new RuntimeException('boom');
+
+    expect(fn () => $job->failed($exception))->toThrow(InvalidArgumentException::class)
+        ->and($received)->toBe($exception);
+});
+
+test('a provider error broadcasts as error and keeps its code in the payload', function (string $code): void {
+    Event::fake();
+
+    (new Error('error-1', $code, 'Overloaded', false, time()))->broadcastNow(new Channel('test-channel'));
+
+    Event::assertDispatched(AnonymousEvent::class, fn (AnonymousEvent $event): bool => $event->broadcastAs() === 'error'
+        && $event->broadcastWith()['type'] === $code);
+})->with(['overloaded_error', 'not_found', 'unknown_error']);
 
 test('failed event shares the invocation id with broadcasts from handle', function (): void {
     Event::fake();
