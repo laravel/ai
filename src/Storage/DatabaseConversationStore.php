@@ -133,9 +133,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
         $now = now();
 
-        $remembersReasoning = RememberReasoning::isAppliedTo($prompt->agent);
-
-        $steps = $this->stepsFor($prompt, $response, $remembersReasoning && $exception === null);
+        $steps = $this->stepsFor($prompt, $response, $exception);
 
         if ($prompt->hasApprovalDecisions() && blank($response->text) && $steps->every(fn (array $step) => $step['tool_calls'] === [])) {
             return null;
@@ -152,7 +150,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'status' => $this->statusFor($response, $exception),
         ]));
 
-        if (! $response->hasPendingApprovals() && ! $remembersReasoning) {
+        if (! $response->hasPendingApprovals() && ! $this->remembersReasoning($prompt, $response)) {
             $this->forgetReplayBlocks($conversationId);
         }
 
@@ -217,16 +215,12 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             $steps = $this->withoutReplayBlocks($steps);
         }
 
-        $remembersReasoning = RememberReasoning::isAppliedTo($prompt->agent);
-
-        $keepsReasoning = $remembersReasoning && $exception === null;
-
         if ($response->steps->isNotEmpty()) {
-            $steps = $steps->concat($this->stepsFor($prompt, $response, $keepsReasoning));
+            $steps = $steps->concat($this->stepsFor($prompt, $response, $exception));
         }
 
-        // The paused half shares the resumed steps' provider, so their blocks outlive the turn alike...
-        if (! $response->hasPendingApprovals() && ! ($keepsReasoning && $this->replayBlocksOutliveTurn($response))) {
+        // The paused half shares the resumed steps' provider, so the resumed steps decide for it too...
+        if (! $this->keepsReplayBlocks($prompt, $response, $exception)) {
             $steps = $this->withoutReplayBlocks($steps);
         }
 
@@ -247,7 +241,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'updated_at' => $now,
         ]);
 
-        if (! $response->hasPendingApprovals() && ! $remembersReasoning) {
+        if (! $response->hasPendingApprovals() && ! $this->remembersReasoning($prompt, $response)) {
             $this->forgetReplayBlocks($conversationId);
         }
 
@@ -274,12 +268,12 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      *
      * @return Collection<int, array{content: string, tool_calls: array, reasoning: string, replay_blocks: array, provider_tool_calls: array}>
      */
-    protected function stepsFor(AgentPrompt $prompt, AgentResponse $response, bool $remembersReasoning = false): Collection
+    protected function stepsFor(AgentPrompt $prompt, AgentResponse $response, ?Throwable $exception = null): Collection
     {
         $reasons = $this->pendingReasonsFor($response);
 
         if ($response->steps->isNotEmpty()) {
-            $keepsReplayBlocks = $response->hasPendingApprovals() || ($remembersReasoning && $this->replayBlocksOutliveTurn($response));
+            $keepsReplayBlocks = $this->keepsReplayBlocks($prompt, $response, $exception);
 
             return $response->steps->values()->map(fn (Step $step): array => [
                 'content' => $step->text,
@@ -305,11 +299,21 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Determine if the provider accepts every step's replay blocks verbatim in later turns.
+     * Determine if the turn's replay blocks are stored: while it waits for approval, or for later turns when it remembers reasoning.
      */
-    protected function replayBlocksOutliveTurn(AgentResponse $response): bool
+    protected function keepsReplayBlocks(AgentPrompt $prompt, AgentResponse $response, ?Throwable $exception): bool
     {
-        return $response->steps->isNotEmpty()
+        return $response->hasPendingApprovals()
+            || ($exception === null && $response->steps->isNotEmpty() && $this->remembersReasoning($prompt, $response));
+    }
+
+    /**
+     * Determine if the agent remembers reasoning and the provider accepts every step's replay blocks verbatim in later turns.
+     */
+    protected function remembersReasoning(AgentPrompt $prompt, AgentResponse $response): bool
+    {
+        // A turn without steps can't tell, so earlier paused rows stay until a turn that ran a step decides...
+        return RememberReasoning::isAppliedTo($prompt->agent)
             && $response->steps->every(fn (Step $step): bool => $step->replayBlocksOutliveTurn);
     }
 
@@ -508,15 +512,12 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     protected function replaysBlocksOf(object $record, bool $latest, bool $truncated): bool
     {
-        $status = MessageStatus::from($record->status);
-
         // Only the latest turn can still resume, and any other turn's reasoning is rejected once the turns before it were cut...
-        return match (true) {
-            $latest && $status === MessageStatus::Paused => true,
-            $truncated => false,
-            $status === MessageStatus::Paused => true,
-            default => RememberReasoning::isAppliedTo($record->agent),
-        };
+        if (MessageStatus::from($record->status) === MessageStatus::Paused) {
+            return $latest || ! $truncated;
+        }
+
+        return ! $truncated && RememberReasoning::isAppliedTo($record->agent);
     }
 
     /**

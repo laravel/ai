@@ -1930,6 +1930,21 @@ test('an agent that remembers reasoning leaves the replay blocks of earlier paus
     expect(storedReplayBlocks('message-1'))->toBe([[['type' => 'thinking', 'signature' => 'sig-0'], ['type' => 'tool_use', 'id' => 'call-0']]]);
 });
 
+test('an agent that remembers reasoning still clears earlier paused rows on a provider that only accepts the blocks within the turn', function (): void {
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
+
+    insertAssistantTurn($conversationId, 'message-1', 'Waiting on you.', [
+        assistantStep([['id' => 'call-0', 'name' => 'delete_file', 'arguments' => ['path' => 'b']]], replayBlocks: [['type' => 'reasoning', 'id' => 'rs-0'], ['type' => 'function_call', 'call_id' => 'call-0']]),
+    ], ['call-0' => 'Destructive.'], ['provider' => 'openai']);
+
+    $prompt = new AgentPrompt(new ReasoningRememberingAgent, 'Generate a number', [], Double::for(TextProvider::class), 'test-model');
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, rememberedReasoningResponse(replayBlocksOutliveTurn: false));
+
+    expect(storedReplayBlocks('message-1'))->toBe([[]]);
+});
+
 test('a resumed turn of an agent that remembers reasoning keeps the replay blocks of both halves', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
