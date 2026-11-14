@@ -503,15 +503,17 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             ->where('conversation_id', $conversationId)
             ->orderByDesc('id')
             ->limit($limit + 1)
-            ->get();
+            ->get()
+            ->reverse()
+            ->values();
 
         $truncated = $records->count() > $limit;
 
-        $records = $records->take($limit);
+        $records = $records->take(-$limit);
 
-        $latestId = $records->first()?->id;
+        $latestId = $records->last()?->id;
 
-        return $records->reverse()->values()->flatMap(fn (object $record): array => $record->role === 'user'
+        return $records->flatMap(fn (object $record): array => $record->role === 'user'
             ? [$this->userMessageFrom($record)]
             : $this->assistantTurnFrom($record, $this->replaysBlocksOf($record, $record->id === $latestId, $truncated)));
     }
