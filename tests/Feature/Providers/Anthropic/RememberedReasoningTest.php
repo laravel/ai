@@ -74,6 +74,52 @@ test('a follow-up replays the previous turn exactly as that turn sent it, signed
         ]);
 });
 
+test('a follow-up replays a streamed turn exactly as that turn sent it, signed thinking included', function (): void {
+    // Thinking with omitted display streams no text, only its signature, here in two fragments...
+    $stream = fn (array $events): PromiseInterface => Http::response($this->ssePayload([$this->messageStart(), ...$events]), 200, ['Content-Type' => 'text/event-stream']);
+
+    Http::fake(['api.anthropic.com/*' => Http::sequence([
+        $stream([
+            $this->contentBlockStart(0, ['type' => 'thinking', 'thinking' => '']),
+            $this->contentBlockDelta(0, ['type' => 'signature_delta', 'signature' => 'sig-']),
+            $this->contentBlockDelta(0, ['type' => 'signature_delta', 'signature' => '1']),
+            $this->contentBlockStop(0),
+            $this->contentBlockStart(1, ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'FixedNumberGenerator', 'input' => (object) []]),
+            $this->contentBlockDelta(1, ['type' => 'input_json_delta', 'partial_json' => '{}']),
+            $this->contentBlockStop(1),
+            $this->messageDelta('tool_use', 5),
+        ]),
+        $stream([
+            $this->contentBlockStart(0, ['type' => 'thinking', 'thinking' => '']),
+            $this->contentBlockDelta(0, ['type' => 'signature_delta', 'signature' => 'sig-2']),
+            $this->contentBlockStop(0),
+            $this->contentBlockStart(1, ['type' => 'text', 'text' => '']),
+            $this->contentBlockDelta(1, ['type' => 'text_delta', 'text' => 'The number is 72019']),
+            $this->contentBlockStop(1),
+            $this->messageDelta('end_turn', 5),
+        ]),
+        anthropicReasoningResponse([['type' => 'text', 'text' => 'Still 72019']], 'end_turn'),
+    ])]);
+
+    $agent = (new ReasoningRememberingAgent)->forUser((object) ['id' => 1]);
+
+    $agent->stream('Generate a number', provider: 'anthropic')->each(fn () => null);
+    $agent->prompt('Again', provider: 'anthropic');
+
+    $lastStepOfFirstTurn = anthropicSentMessages(1);
+    $followUp = anthropicSentMessages(2);
+
+    expect($lastStepOfFirstTurn[1])->toContain('"signature":"sig-1"')
+        ->and(array_slice($followUp, 0, count($lastStepOfFirstTurn)))->toBe($lastStepOfFirstTurn)
+        ->and(array_slice($followUp, count($lastStepOfFirstTurn)))->toBe([
+            json_encode(['role' => 'assistant', 'content' => [
+                ['type' => 'thinking', 'thinking' => '', 'signature' => 'sig-2'],
+                ['type' => 'text', 'text' => 'The number is 72019'],
+            ]]),
+            json_encode(['role' => 'user', 'content' => [['type' => 'text', 'text' => 'Again']]]),
+        ]);
+});
+
 test('without the attribute a follow-up replays the previous turn without its thinking', function (): void {
     fakeAnthropicReasoningTurns();
 

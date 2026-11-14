@@ -1970,6 +1970,47 @@ test('a resumed turn of an agent that remembers reasoning keeps the replay block
     ])->and(DB::table('agent_conversation_messages')->where('id', 'message-1')->value('status'))->toBe('completed');
 });
 
+/**
+ * Pause a turn of an agent that remembers reasoning, then resume it with a decision that runs no step, as a bare rejection does.
+ */
+function resumeWithoutAStep(string $provider, bool $replayBlocksOutliveTurn): DatabaseConversationStore
+{
+    $store = new DatabaseConversationStore;
+    $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');
+
+    $paused = (new AgentResponse('invocation-id', '', new TextUsage, new Meta($provider)))
+        ->withSteps(collect([
+            new Step('', [new ToolCall('call-1', 'DeleteFile', ['path' => 'b'])], [], FinishReason::ToolCalls, new TextUsage, new Meta, '', [['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']], replayBlocksOutliveTurn: $replayBlocksOutliveTurn),
+        ]))
+        ->withPendingApprovals(collect([new PendingApproval('call-1', 'DeleteFile', ['path' => 'b'], 'Deletes a file')]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, new AgentPrompt(new ReasoningRememberingAgent, 'Delete b', [], Double::for(TextProvider::class), 'test-model'), $paused);
+
+    $prompt = new AgentPrompt(new ReasoningRememberingAgent, '', [], Double::for(TextProvider::class), 'test-model', approvalDecisions: Decisions::from(['call-1' => false]));
+
+    $store->storeAssistantMessage($conversationId, 'user', 1, $prompt, new AgentResponse('invocation-id', '', new TextUsage, new Meta($provider)));
+
+    return $store;
+}
+
+test('a resume that runs no step keeps the paused half\'s replay blocks when its provider accepts them in later turns', function (): void {
+    resumeWithoutAStep('anthropic', replayBlocksOutliveTurn: true);
+
+    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+
+    expect($record->status)->toBe('completed')
+        ->and(array_column(json_decode($record->steps, true), 'replay_blocks'))->toBe([[['type' => 'thinking', 'signature' => 'sig-1'], ['type' => 'tool_use', 'id' => 'call-1']]]);
+});
+
+test('a resume that runs no step drops the paused half\'s replay blocks when its provider only accepts them within the turn', function (): void {
+    resumeWithoutAStep('openai', replayBlocksOutliveTurn: false);
+
+    $record = DB::table('agent_conversation_messages')->where('role', 'assistant')->first();
+
+    expect($record->status)->toBe('completed')
+        ->and(array_column(json_decode($record->steps, true), 'replay_blocks'))->toBe([[]]);
+});
+
 test('a completed turn of an agent that no longer remembers reasoning replays without its replay blocks', function (): void {
     $store = new DatabaseConversationStore;
     $conversationId = $store->storeConversation('user', 1, 'Reasoning conversation');

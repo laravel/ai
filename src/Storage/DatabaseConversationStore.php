@@ -219,8 +219,15 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             $steps = $steps->concat($this->stepsFor($prompt, $response, $exception));
         }
 
-        // The paused half shares the resumed steps' provider, so the resumed steps decide for it too...
-        if (! $this->keepsReplayBlocks($prompt, $response, $exception)) {
+        // The paused half shares the resumed steps' provider, so the resumed steps decide for it too. A resume that
+        // ran no step, e.g. after a bare rejection, falls back on the flags the paused half recorded...
+        $keepsReplayBlocks = $this->keepsReplayBlocks($prompt, $response, $exception)
+            || ($response->steps->isEmpty()
+                && $exception === null
+                && RememberReasoning::isAppliedTo($prompt->agent)
+                && $steps->every(fn (array $step): bool => $step['replay_blocks_outlive_turn'] ?? false));
+
+        if (! $keepsReplayBlocks) {
             $steps = $this->withoutReplayBlocks($steps);
         }
 
@@ -266,7 +273,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     /**
      * Serialize the turn's steps, one entry per model round-trip.
      *
-     * @return Collection<int, array{content: string, tool_calls: array, reasoning: string, replay_blocks: array, provider_tool_calls: array}>
+     * @return Collection<int, array{content: string, tool_calls: array, reasoning: string, replay_blocks: array, provider_tool_calls: array, replay_blocks_outlive_turn?: bool}>
      */
     protected function stepsFor(AgentPrompt $prompt, AgentResponse $response, ?Throwable $exception = null): Collection
     {
@@ -281,6 +288,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 'reasoning' => $step->reasoning,
                 'replay_blocks' => $keepsReplayBlocks ? $step->replayBlocks : [],
                 'provider_tool_calls' => array_map(fn (ProviderToolCall $call): array => $call->toArray(), $step->providerToolCalls),
+                // Read by a resume that runs no step, which can't ask the provider itself...
+                ...$response->hasPendingApprovals() ? ['replay_blocks_outlive_turn' => $step->replayBlocksOutliveTurn] : [],
             ]);
         }
 
@@ -594,7 +603,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     /**
      * Decode a stored row's steps.
      *
-     * @return Collection<int, array{content: string, tool_calls: array, reasoning: string, replay_blocks: array, provider_tool_calls: array}>
+     * @return Collection<int, array{content: string, tool_calls: array, reasoning: string, replay_blocks: array, provider_tool_calls: array, replay_blocks_outlive_turn?: bool}>
      */
     protected function decodedSteps(object $record): Collection
     {
@@ -604,6 +613,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'reasoning' => (string) ($step['reasoning'] ?? ''),
             'replay_blocks' => $step['replay_blocks'] ?? [],
             'provider_tool_calls' => array_values($step['provider_tool_calls'] ?? []),
+            ...isset($step['replay_blocks_outlive_turn']) ? ['replay_blocks_outlive_turn' => (bool) $step['replay_blocks_outlive_turn']] : [],
         ])->values();
     }
 
