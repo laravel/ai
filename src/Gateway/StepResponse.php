@@ -22,6 +22,7 @@ class StepResponse implements Arrayable, JsonSerializable
      * @param  array<array-key, mixed>  $replayBlocks
      * @param  PendingApproval[]  $pendingApprovals
      * @param  ProviderToolCall[]  $providerToolCalls
+     * @param  bool  $replayBlocksOutliveTurn  Whether the provider accepts the replay blocks verbatim in later turns of the conversation
      */
     public function __construct(
         public string $text,
@@ -35,6 +36,7 @@ class StepResponse implements Arrayable, JsonSerializable
         public array $pendingApprovals = [],
         public string $reasoning = '',
         public array $providerToolCalls = [],
+        public bool $replayBlocksOutliveTurn = false,
     ) {}
 
     /**

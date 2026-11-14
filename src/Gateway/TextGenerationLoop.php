@@ -1097,6 +1097,7 @@ class TextGenerationLoop
             $result->reasoning,
             $result->replayBlocks,
             $result->providerToolCalls,
+            $result->replayBlocksOutliveTurn,
         ))->withRawResponse($result->raw);
     }
 
