@@ -283,10 +283,14 @@ class AgentUserInteractionProtocol extends StreamProtocol
     {
         // A call whose input streamed only needs ending, plus its arguments if none streamed...
         if (array_key_exists($call->id, $this->streamingToolCalls)) {
-            return [
-                ...(Arr::pull($this->streamingToolCalls, $call->id) ? [] : [['type' => 'TOOL_CALL_ARGS', 'toolCallId' => $call->id, 'delta' => $this->json((object) $call->arguments)]]),
-                ['type' => 'TOOL_CALL_END', 'toolCallId' => $call->id],
-            ];
+            $streamedArguments = Arr::pull($this->streamingToolCalls, $call->id);
+
+            return $streamedArguments
+                ? [['type' => 'TOOL_CALL_END', 'toolCallId' => $call->id]]
+                : [
+                    ['type' => 'TOOL_CALL_ARGS', 'toolCallId' => $call->id, 'delta' => $this->json((object) $call->arguments)],
+                    ['type' => 'TOOL_CALL_END', 'toolCallId' => $call->id],
+                ];
         }
 
         return [
