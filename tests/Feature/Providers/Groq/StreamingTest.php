@@ -11,8 +11,6 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
-use Laravel\Ai\Streaming\Events\ToolInputDelta;
-use Laravel\Ai\Streaming\Events\ToolInputStart;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
 beforeEach(function (): void {
@@ -149,8 +147,8 @@ test('streaming emits the tool input as it arrives, before the tool call', funct
             Http::response(
                 body: $this->ssePayload([
                     $this->chatChunkToolCallStart(0, 'call_1', 'FixedNumberGenerator'),
-                    $this->chatChunkToolCallDelta(0, '{"sta'),
                     $this->chatChunkToolCallDelta(0, ''),
+                    $this->chatChunkToolCallDelta(0, '{"sta'),
                     $this->chatChunkToolCallDelta(0, 'rt":1}'),
                     $this->chatChunkFinish('tool_calls', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
                     '[DONE]',
@@ -170,20 +168,14 @@ test('streaming emits the tool input as it arrives, before the tool call', funct
         ]),
     ]);
 
-    $events = array_values(array_filter(
-        $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent),
-        fn ($event): bool => $event instanceof ToolInputStart || $event instanceof ToolInputDelta || $event instanceof ToolCallEvent,
-    ));
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
 
-    expect($events)->toHaveCount(4)
-        ->and($events[0])->toBeInstanceOf(ToolInputStart::class)
-        ->and($events[0])->toolId->toBe('call_1')->toolName->toBe('FixedNumberGenerator')
-        ->and($events[1])->toBeInstanceOf(ToolInputDelta::class)
-        ->and($events[1])->toolId->toBe('call_1')->delta->toBe('{"sta')
-        ->and($events[2])->toBeInstanceOf(ToolInputDelta::class)
-        ->and($events[2])->toolId->toBe('call_1')->delta->toBe('rt":1}')
-        ->and($events[3])->toBeInstanceOf(ToolCallEvent::class)
-        ->and($events[3]->toolCall)->id->toBe('call_1')->arguments->toBe(['start' => 1]);
+    expect(toolInputEvents($events))->toBe([
+        ['start', 'call_1', 'FixedNumberGenerator'],
+        ['delta', 'call_1', '{"sta'],
+        ['delta', 'call_1', 'rt":1}'],
+        ['call', 'call_1', ['start' => 1]],
+    ]);
 });
 
 test('streaming error event stops stream', function (): void {

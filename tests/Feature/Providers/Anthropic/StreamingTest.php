@@ -15,8 +15,6 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
-use Laravel\Ai\Streaming\Events\ToolInputDelta;
-use Laravel\Ai\Streaming\Events\ToolInputStart;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
@@ -195,20 +193,14 @@ describe('tool calls', function (): void {
             ]),
         ]);
 
-        $events = array_values(array_filter(
-            $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent),
-            fn ($event): bool => $event instanceof ToolInputStart || $event instanceof ToolInputDelta || $event instanceof ToolCallEvent,
-        ));
+        $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
 
-        expect($events)->toHaveCount(4)
-            ->and($events[0])->toBeInstanceOf(ToolInputStart::class)
-            ->and($events[0])->toolId->toBe('toolu_1')->toolName->toBe('FixedNumberGenerator')
-            ->and($events[1])->toBeInstanceOf(ToolInputDelta::class)
-            ->and($events[1])->toolId->toBe('toolu_1')->delta->toBe('{"sta')
-            ->and($events[2])->toBeInstanceOf(ToolInputDelta::class)
-            ->and($events[2])->toolId->toBe('toolu_1')->delta->toBe('rt":1}')
-            ->and($events[3])->toBeInstanceOf(ToolCallEvent::class)
-            ->and($events[3]->toolCall->arguments)->toBe(['start' => 1]);
+        expect(toolInputEvents($events))->toBe([
+            ['start', 'toolu_1', 'FixedNumberGenerator'],
+            ['delta', 'toolu_1', '{"sta'],
+            ['delta', 'toolu_1', 'rt":1}'],
+            ['call', 'toolu_1', ['start' => 1]],
+        ]);
     });
 
     test('streaming reuses the code execution container on the follow up request', function (): void {

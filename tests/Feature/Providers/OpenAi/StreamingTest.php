@@ -15,8 +15,6 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
-use Laravel\Ai\Streaming\Events\ToolInputDelta;
-use Laravel\Ai\Streaming\Events\ToolInputStart;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
 beforeEach(function (): void {
@@ -172,12 +170,20 @@ test('streaming emits the tool input as it arrives, before the tool call', funct
                     $this->responseCreated(),
                     $this->outputItemAdded('fc_1', 'call_1', 'FixedNumberGenerator'),
                     $this->functionCallArgumentsDelta('fc_1', ''),
+                    // A fragment event without a delta is skipped rather than ending the stream...
                     ['type' => 'response.function_call_arguments.delta', 'item_id' => 'fc_1', 'output_index' => 0],
                     $this->functionCallArgumentsDelta('fc_1', '{"sta'),
                     $this->functionCallArgumentsDelta('fc_1', 'rt":1}'),
                     $this->functionCallArgumentsDone('fc_1', '{"start":1}'),
                     $this->responseCompleted(10, 5, output: [
-                        ['type' => 'function_call', 'status' => 'completed', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'FixedNumberGenerator', 'arguments' => '{"start":1}'],
+                        [
+                            'type' => 'function_call',
+                            'status' => 'completed',
+                            'id' => 'fc_1',
+                            'call_id' => 'call_1',
+                            'name' => 'FixedNumberGenerator',
+                            'arguments' => '{"start":1}',
+                        ],
                     ]),
                 ]),
                 status: 200,
@@ -199,21 +205,14 @@ test('streaming emits the tool input as it arrives, before the tool call', funct
         ]),
     ]);
 
-    $events = array_values(array_filter(
-        $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent),
-        fn ($event): bool => $event instanceof ToolInputStart || $event instanceof ToolInputDelta || $event instanceof ToolCallEvent,
-    ));
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
 
-    expect($events)->toHaveCount(4)
-        ->and($events[0])->toBeInstanceOf(ToolInputStart::class)
-        ->and($events[0])->toolId->toBe('fc_1')->toolName->toBe('FixedNumberGenerator')
-        ->and($events[1])->toBeInstanceOf(ToolInputDelta::class)
-        ->and($events[1])->toolId->toBe('fc_1')->delta->toBe('{"sta')
-        ->and($events[2])->toBeInstanceOf(ToolInputDelta::class)
-        ->and($events[2])->toolId->toBe('fc_1')->delta->toBe('rt":1}')
-        ->and($events[3])->toBeInstanceOf(ToolCallEvent::class)
-        ->and($events[3]->toolCall->id)->toBe('fc_1')
-        ->and($events[3]->toolCall->arguments)->toBe(['start' => 1]);
+    expect(toolInputEvents($events))->toBe([
+        ['start', 'fc_1', 'FixedNumberGenerator'],
+        ['delta', 'fc_1', '{"sta'],
+        ['delta', 'fc_1', 'rt":1}'],
+        ['call', 'fc_1', ['start' => 1]],
+    ]);
 });
 
 test('streaming handles reasoning events', function (string $eventType): void {

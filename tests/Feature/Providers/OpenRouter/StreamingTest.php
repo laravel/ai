@@ -11,8 +11,6 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
-use Laravel\Ai\Streaming\Events\ToolInputDelta;
-use Laravel\Ai\Streaming\Events\ToolInputStart;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
@@ -88,36 +86,27 @@ test('streaming emits the tool input as it arrives, before the tool call', funct
     Http::fake([
         '*' => Http::sequence([
             Http::response($this->ssePayload([
-                // The opening chunk carries an empty arguments fragment, which carries no delta...
-                ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'tool_calls' => [['index' => 0, 'id' => 'call_123', 'type' => 'function', 'function' => ['name' => 'FixedNumberGenerator', 'arguments' => '']]]], 'finish_reason' => null]]],
-                ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => ['tool_calls' => [['index' => 0, 'function' => ['arguments' => '{"sta']]]], 'finish_reason' => null]]],
-                ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => ['tool_calls' => [['index' => 0, 'function' => ['arguments' => 'rt":1}']]]], 'finish_reason' => null]]],
-                ['id' => 'chatcmpl-1', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'tool_calls']], 'usage' => ['prompt_tokens' => 5, 'completion_tokens' => 10]],
+                $this->chatChunkToolCallStart(0, 'call_123', 'FixedNumberGenerator'),
+                $this->chatChunkToolCallDelta(0, ''),
+                $this->chatChunkToolCallDelta(0, '{"sta'),
+                $this->chatChunkToolCallDelta(0, 'rt":1}'),
+                $this->chatChunkFinish('tool_calls', ['prompt_tokens' => 5, 'completion_tokens' => 10]),
             ])),
             Http::response($this->ssePayload([
-                ['id' => 'chatcmpl-2', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant', 'content' => 'The number is 72019'], 'finish_reason' => null]]],
-                ['id' => 'chatcmpl-2', 'object' => 'chat.completion.chunk', 'model' => 'anthropic/claude-sonnet-4.6', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'stop']], 'usage' => ['prompt_tokens' => 20, 'completion_tokens' => 5]],
+                $this->chatChunk(['role' => 'assistant', 'content' => 'The number is 72019']),
+                $this->chatChunkFinish('stop', ['prompt_tokens' => 20, 'completion_tokens' => 5]),
             ])),
         ]),
     ]);
 
-    $events = [];
+    $events = $this->collectStreamEvents(agent(tools: [new FixedNumberGenerator]));
 
-    foreach (agent(tools: [new FixedNumberGenerator])->stream('Give me a number', provider: 'openrouter') as $event) {
-        if ($event instanceof ToolInputStart || $event instanceof ToolInputDelta || $event instanceof ToolCallEvent) {
-            $events[] = $event;
-        }
-    }
-
-    expect($events)->toHaveCount(4)
-        ->and($events[0])->toBeInstanceOf(ToolInputStart::class)
-        ->and($events[0])->toolId->toBe('call_123')->toolName->toBe('FixedNumberGenerator')
-        ->and($events[1])->toBeInstanceOf(ToolInputDelta::class)
-        ->and($events[1])->toolId->toBe('call_123')->delta->toBe('{"sta')
-        ->and($events[2])->toBeInstanceOf(ToolInputDelta::class)
-        ->and($events[2])->toolId->toBe('call_123')->delta->toBe('rt":1}')
-        ->and($events[3])->toBeInstanceOf(ToolCallEvent::class)
-        ->and($events[3]->toolCall)->id->toBe('call_123')->arguments->toBe(['start' => 1]);
+    expect(toolInputEvents($events))->toBe([
+        ['start', 'call_123', 'FixedNumberGenerator'],
+        ['delta', 'call_123', '{"sta'],
+        ['delta', 'call_123', 'rt":1}'],
+        ['call', 'call_123', ['start' => 1]],
+    ]);
 });
 
 test('streaming tool loop emits a single stream end with accumulated usage', function (): void {

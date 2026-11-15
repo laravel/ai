@@ -15,8 +15,6 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
-use Laravel\Ai\Streaming\Events\ToolInputDelta;
-use Laravel\Ai\Streaming\Events\ToolInputStart;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
@@ -181,17 +179,36 @@ test('streaming handles tool calls', function (): void {
 });
 
 test('streaming emits the tool input as it arrives, before the tool call', function (): void {
+    $usage = fn (int $input, int $output): array => [
+        'input_tokens' => $input,
+        'output_tokens' => $output,
+        'input_tokens_details' => ['cached_tokens' => 0],
+        'output_tokens_details' => ['reasoning_tokens' => 0],
+    ];
+
+    $functionCall = [
+        'type' => 'function_call',
+        'id' => 'fc_1',
+        'call_id' => 'call_1',
+        'name' => 'FixedNumberGenerator',
+    ];
+
     Http::fake([
         '*' => Http::sequence([
             Http::response(
                 body: $this->ssePayload([
                     ['type' => 'response.created', 'response' => ['id' => 'resp_123', 'model' => 'grok-4-1-fast-reasoning']],
-                    ['type' => 'response.output_item.added', 'output_index' => 0, 'item' => ['type' => 'function_call', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'FixedNumberGenerator']],
+                    ['type' => 'response.output_item.added', 'output_index' => 0, 'item' => $functionCall],
                     ['type' => 'response.function_call_arguments.delta', 'item_id' => 'fc_1', 'delta' => ''],
                     ['type' => 'response.function_call_arguments.delta', 'item_id' => 'fc_1', 'delta' => '{"sta'],
                     ['type' => 'response.function_call_arguments.delta', 'item_id' => 'fc_1', 'delta' => 'rt":1}'],
                     ['type' => 'response.function_call_arguments.done', 'item_id' => 'fc_1', 'arguments' => '{"start":1}'],
-                    ['type' => 'response.completed', 'response' => ['id' => 'resp_123', 'status' => 'completed', 'output' => [['type' => 'function_call', 'status' => 'completed', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'FixedNumberGenerator', 'arguments' => '{"start":1}']], 'usage' => ['input_tokens' => 10, 'output_tokens' => 5, 'input_tokens_details' => ['cached_tokens' => 0], 'output_tokens_details' => ['reasoning_tokens' => 0]]]],
+                    ['type' => 'response.completed', 'response' => [
+                        'id' => 'resp_123',
+                        'status' => 'completed',
+                        'output' => [[...$functionCall, 'status' => 'completed', 'arguments' => '{"start":1}']],
+                        'usage' => $usage(10, 5),
+                    ]],
                 ]),
                 status: 200,
                 headers: ['Content-Type' => 'text/event-stream'],
@@ -201,7 +218,17 @@ test('streaming emits the tool input as it arrives, before the tool call', funct
                     ['type' => 'response.created', 'response' => ['id' => 'resp_456', 'model' => 'grok-4-1-fast-reasoning']],
                     ['type' => 'response.output_text.delta', 'delta' => 'The number is 72019'],
                     ['type' => 'response.output_text.done'],
-                    ['type' => 'response.completed', 'response' => ['id' => 'resp_456', 'status' => 'completed', 'output' => [['type' => 'message', 'status' => 'completed', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => '']]]], 'usage' => ['input_tokens' => 20, 'output_tokens' => 10, 'input_tokens_details' => ['cached_tokens' => 0], 'output_tokens_details' => ['reasoning_tokens' => 0]]]],
+                    ['type' => 'response.completed', 'response' => [
+                        'id' => 'resp_456',
+                        'status' => 'completed',
+                        'output' => [[
+                            'type' => 'message',
+                            'status' => 'completed',
+                            'role' => 'assistant',
+                            'content' => [['type' => 'output_text', 'text' => '']],
+                        ]],
+                        'usage' => $usage(20, 10),
+                    ]],
                 ]),
                 status: 200,
                 headers: ['Content-Type' => 'text/event-stream'],
@@ -209,21 +236,14 @@ test('streaming emits the tool input as it arrives, before the tool call', funct
         ]),
     ]);
 
-    $events = array_values(array_filter(
-        $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent),
-        fn ($event): bool => $event instanceof ToolInputStart || $event instanceof ToolInputDelta || $event instanceof ToolCallEvent,
-    ));
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
 
-    expect($events)->toHaveCount(4)
-        ->and($events[0])->toBeInstanceOf(ToolInputStart::class)
-        ->and($events[0])->toolId->toBe('fc_1')->toolName->toBe('FixedNumberGenerator')
-        ->and($events[1])->toBeInstanceOf(ToolInputDelta::class)
-        ->and($events[1])->toolId->toBe('fc_1')->delta->toBe('{"sta')
-        ->and($events[2])->toBeInstanceOf(ToolInputDelta::class)
-        ->and($events[2])->toolId->toBe('fc_1')->delta->toBe('rt":1}')
-        ->and($events[3])->toBeInstanceOf(ToolCallEvent::class)
-        ->and($events[3]->toolCall->id)->toBe('fc_1')
-        ->and($events[3]->toolCall->arguments)->toBe(['start' => 1]);
+    expect(toolInputEvents($events))->toBe([
+        ['start', 'fc_1', 'FixedNumberGenerator'],
+        ['delta', 'fc_1', '{"sta'],
+        ['delta', 'fc_1', 'rt":1}'],
+        ['call', 'fc_1', ['start' => 1]],
+    ]);
 });
 
 test('streaming tool loop emits a single stream end with accumulated usage', function (): void {

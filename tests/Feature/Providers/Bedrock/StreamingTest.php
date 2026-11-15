@@ -12,9 +12,6 @@ use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
-use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
-use Laravel\Ai\Streaming\Events\ToolInputDelta;
-use Laravel\Ai\Streaming\Events\ToolInputStart;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 describe('text streaming', function (): void {
@@ -79,8 +76,8 @@ describe('text streaming', function (): void {
         $mock = new MockHandler([
             new Result(['stream' => [
                 $this->contentBlockStart(0, ['toolUse' => ['toolUseId' => 't1', 'name' => 'FixedNumberGenerator']]),
-                $this->contentBlockDelta(0, ['toolUse' => ['input' => '{"sta']]),
                 $this->contentBlockDelta(0, ['toolUse' => ['input' => '']]),
+                $this->contentBlockDelta(0, ['toolUse' => ['input' => '{"sta']]),
                 $this->contentBlockDelta(0, ['toolUse' => ['input' => 'rt":1}']]),
                 $this->contentBlockStop(0),
                 $this->messageStop('tool_use'),
@@ -95,43 +92,35 @@ describe('text streaming', function (): void {
 
         $gateway = $this->gatewayWithClient($this->bedrockClient($mock));
 
-        $events = array_values(array_filter(
-            iterator_to_array(
-                (new TextGenerationLoop($gateway))->stream(
-                    'inv-1',
-                    $this->bedrockProvider(),
-                    'anthropic.claude-opus-4-7-v1:0',
-                    null,
-                    tools: [new FixedNumberGenerator],
-                ),
-                preserve_keys: false,
+        $events = iterator_to_array(
+            (new TextGenerationLoop($gateway))->stream(
+                'inv-1',
+                $this->bedrockProvider(),
+                'anthropic.claude-opus-4-7-v1:0',
+                null,
+                tools: [new FixedNumberGenerator],
             ),
-            fn ($event): bool => $event instanceof ToolInputStart || $event instanceof ToolInputDelta || $event instanceof ToolCallEvent,
-        ));
+            preserve_keys: false,
+        );
 
-        expect($events)->toHaveCount(4)
-            ->and($events[0])->toBeInstanceOf(ToolInputStart::class)
-            ->and($events[0])->toolId->toBe('t1')->toolName->toBe('FixedNumberGenerator')
-            ->and($events[1])->toBeInstanceOf(ToolInputDelta::class)
-            ->and($events[1])->toolId->toBe('t1')->delta->toBe('{"sta')
-            ->and($events[2])->toBeInstanceOf(ToolInputDelta::class)
-            ->and($events[2])->toolId->toBe('t1')->delta->toBe('rt":1}')
-            ->and($events[3])->toBeInstanceOf(ToolCallEvent::class)
-            ->and($events[3]->toolCall)->id->toBe('t1')->arguments->toBe(['start' => 1]);
+        expect(toolInputEvents($events))->toBe([
+            ['start', 't1', 'FixedNumberGenerator'],
+            ['delta', 't1', '{"sta'],
+            ['delta', 't1', 'rt":1}'],
+            ['call', 't1', ['start' => 1]],
+        ]);
     });
 
     test('streaming keeps the structured output tool input to itself', function (): void {
-        $mock = new MockHandler([
-            new Result(['stream' => [
-                $this->contentBlockStart(0, ['toolUse' => ['toolUseId' => 's1', 'name' => 'structured_output']]),
-                $this->contentBlockDelta(0, ['toolUse' => ['input' => '{"symbol":"Fe"}']]),
-                $this->contentBlockStop(0),
-                $this->messageStop('tool_use'),
-            ]]),
+        $client = $this->fakeBedrockStream([
+            $this->contentBlockStart(0, ['toolUse' => ['toolUseId' => 's1', 'name' => 'structured_output']]),
+            $this->contentBlockDelta(0, ['toolUse' => ['input' => '{"symbol":"Fe"}']]),
+            $this->contentBlockStop(0),
+            $this->messageStop('tool_use'),
         ]);
 
         $events = iterator_to_array(
-            (new TextGenerationLoop($this->gatewayWithClient($this->bedrockClient($mock))))->stream(
+            (new TextGenerationLoop($this->gatewayWithClient($client)))->stream(
                 'inv-1',
                 $this->bedrockProvider(),
                 'anthropic.claude-opus-4-7-v1:0',
@@ -141,7 +130,7 @@ describe('text streaming', function (): void {
             preserve_keys: false,
         );
 
-        expect(array_filter($events, fn ($event): bool => $event instanceof ToolInputStart || $event instanceof ToolInputDelta))->toBeEmpty();
+        expect(toolInputEvents($events))->toBe([]);
     });
 
     test('streaming round-trips reasoning block on follow-up tool step', function (): void {
