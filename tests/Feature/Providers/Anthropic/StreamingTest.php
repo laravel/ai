@@ -164,6 +164,47 @@ describe('tool calls', function (): void {
             ->and($toolCallEvents[0]->toolCall)->name->toBe('FixedNumberGenerator')->id->toBe('toolu_1');
     });
 
+    test('streaming reuses the code execution container on the follow up request', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->messageStart(),
+                        $this->contentBlockStart(0, ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'FixedNumberGenerator', 'input' => '']),
+                        $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => '{}']),
+                        $this->contentBlockStop(0),
+                        [
+                            'type' => 'message_delta',
+                            'delta' => ['stop_reason' => 'tool_use', 'container' => ['id' => 'container_123', 'expires_at' => '2026-11-08T11:00:00Z']],
+                            'usage' => ['output_tokens' => 5],
+                        ],
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->messageStart(),
+                        $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                        $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'The number is 72019']),
+                        $this->contentBlockStop(0),
+                        $this->messageDelta('end_turn', 10),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+            ]),
+        ]);
+
+        $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        $recorded = Http::recorded();
+
+        expect($recorded)->toHaveCount(2)
+            ->and($recorded[0][0]->data())->not->toHaveKey('container')
+            ->and($recorded[1][0]->data()['container'])->toBe('container_123');
+    });
+
     test('streaming runs tool calls when the message ends with end_turn', function (): void {
         Http::fake([
             'api.anthropic.com/*' => Http::sequence([

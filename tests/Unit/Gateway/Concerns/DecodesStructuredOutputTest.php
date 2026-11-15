@@ -128,3 +128,40 @@ test('escapes unescaped key quotes inside arrays and fences without touching val
         ],
     ]);
 });
+
+test('strips backticks that do not pair into a fence', function (): void {
+    $host = decoderHost();
+
+    expect($host->decode('``{"ok":true}'))->toBe(['ok' => true])
+        ->and($host->decode('{"ok":true}``'))->toBe(['ok' => true])
+        ->and($host->decode('``{"ok":true}``'))->toBe(['ok' => true]);
+});
+
+test('ignores a comment after the stray closing backticks', function (): void {
+    $host = decoderHost();
+
+    $payload = "{\"ok\":true}\n``{/* asked for the rest */}";
+
+    expect($host->decode($payload))->toBe(['ok' => true]);
+});
+
+test('decodes a json fence that is never closed', function (): void {
+    $host = decoderHost();
+
+    expect($host->decode("```json\n{\"ok\":true}"))->toBe(['ok' => true]);
+});
+
+test('returns empty array rather than picking an object out of surrounding text', function (): void {
+    $host = decoderHost();
+
+    expect($host->decode('{"a":1}{"b":2}'))->toBe([])
+        ->and($host->decode('{"ok":true} hope this helps'))->toBe([])
+        ->and($host->decode('Example: {"name":"x"} Answer: ``{"real":1}``'))->toBe([]);
+});
+
+test('keeps backticks inside string values when the fence lost its delimiters', function (): void {
+    $host = decoderHost();
+
+    expect($host->decode('``{"reply":"type ``x`` here"}``'))->toBe(['reply' => 'type ``x`` here'])
+        ->and($host->decode('``{"code":"```php\necho 1;\n```"}``'))->toBe(['code' => "```php\necho 1;\n```"]);
+});

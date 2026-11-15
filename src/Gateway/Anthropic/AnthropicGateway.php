@@ -61,6 +61,8 @@ class AnthropicGateway implements Gateway, StepTextGateway
             $options,
         );
 
+        $body = $this->withContainer($body, $stepContext);
+
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $this->client($provider, $timeout)->post('messages', $body),
@@ -97,6 +99,8 @@ class AnthropicGateway implements Gateway, StepTextGateway
             $schema,
             $options,
         );
+
+        $body = $this->withContainer($body, $stepContext);
 
         $body['stream'] = true;
 

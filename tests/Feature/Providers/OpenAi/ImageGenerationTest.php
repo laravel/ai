@@ -79,6 +79,23 @@ test('image request includes moderation low for gpt-image models', function (): 
     });
 });
 
+test('image request moderation can be set through provider options for gpt-image models', function (): void {
+    Http::fake([
+        '*' => fakeOpenAiImageResponse(),
+    ]);
+
+    Image::of('A red apple')
+        ->withProviderOptions(['moderation' => 'auto'])
+        ->generate(provider: 'openai', model: 'gpt-image-1');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return $body['model'] === 'gpt-image-1'
+            && $body['moderation'] === 'auto';
+    });
+});
+
 test('image request includes quality when explicitly specified', function (): void {
     Http::fake([
         '*' => fakeOpenAiImageResponse(),

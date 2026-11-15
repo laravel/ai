@@ -119,14 +119,15 @@ trait OllamaHelpers
         ];
     }
 
-    protected function toolCallChunk(string $id, string $name, array $arguments = []): array
+    protected function toolCallChunk(string $id, string $name, array $arguments = [], ?int $index = null): array
     {
         return [
             'id' => $id,
-            'function' => [
+            'function' => array_filter([
+                'index' => $index,
                 'name' => $name,
                 'arguments' => (object) $arguments,
-            ],
+            ], fn ($value): bool => $value !== null),
         ];
     }
 }

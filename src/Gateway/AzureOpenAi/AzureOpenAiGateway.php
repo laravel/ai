@@ -101,7 +101,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
                 ...$providerOptions,
                 'model' => $model,
                 'prompt' => $prompt,
-                'moderation' => 'low',
+                'moderation' => $providerOptions['moderation'] ?? 'low',
                 ...$provider->defaultImageOptions($size, $quality),
             ]),
         );

@@ -50,6 +50,7 @@ trait ParsesTextResponses
             $this->extractUsage($data),
             $this->extractFinishReason($data),
             $structured,
+            $data['container']['id'] ?? null,
         );
     }
 
@@ -63,6 +64,7 @@ trait ParsesTextResponses
         TextUsage $usage,
         FinishReason $finishReason,
         bool $structured,
+        ?string $container = null,
     ): StepResponse {
         $text = $this->extractText($content);
         $toolCalls = $this->extractToolCalls($content);
@@ -98,6 +100,7 @@ trait ParsesTextResponses
             usage: $usage,
             meta: new Meta($provider->name(), $model, $citations),
             structured: $structuredData,
+            continuationToken: $container,
             replayBlocks: $content,
             reasoning: $this->extractReasoning($content),
             providerToolCalls: $this->extractProviderToolCalls($content),

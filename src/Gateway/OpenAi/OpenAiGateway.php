@@ -107,7 +107,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
             ...(str_starts_with($model, 'gpt-image')
-                ? ['moderation' => 'low']
+                ? ['moderation' => $providerOptions['moderation'] ?? 'low']
                 : ['response_format' => 'b64_json']),
         ]);
     }
@@ -147,7 +147,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
             ...($isGptImage
-                ? ['moderation' => 'low']
+                ? ['moderation' => $providerOptions['moderation'] ?? 'low']
                 : ['response_format' => 'b64_json']),
         ])));
     }

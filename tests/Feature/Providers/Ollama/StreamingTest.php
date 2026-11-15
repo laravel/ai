@@ -135,78 +135,19 @@ test('streaming error event also handles structured payload', function (): void 
         ->and($error->message)->toBe('Model not found');
 });
 
-test('streaming accumulates tool call arguments across chunks', function (): void {
+test('streaming ignores a tool call without a function', function (): void {
     Http::fake([
-        '*' => Http::sequence([
-            Http::response(
-                body: $this->ndjsonPayload([
-                    // First chunk: id + name but no arguments yet.
-                    [
-                        'model' => 'llama3.1:8b',
-                        'message' => [
-                            'role' => 'assistant',
-                            'content' => '',
-                            'tool_calls' => [[
-                                'id' => 'call_1',
-                                'function' => [
-                                    'name' => 'FixedNumberGenerator',
-                                ],
-                            ]],
-                        ],
-                        'done' => false,
-                    ],
-                    // Second chunk: argument fragment as partial JSON string.
-                    [
-                        'model' => 'llama3.1:8b',
-                        'message' => [
-                            'role' => 'assistant',
-                            'content' => '',
-                            'tool_calls' => [[
-                                'function' => [
-                                    'arguments' => '{"foo":',
-                                ],
-                            ]],
-                        ],
-                        'done' => false,
-                    ],
-                    // Third chunk: remainder of the arguments payload.
-                    [
-                        'model' => 'llama3.1:8b',
-                        'message' => [
-                            'role' => 'assistant',
-                            'content' => '',
-                            'tool_calls' => [[
-                                'function' => [
-                                    'arguments' => '"bar"}',
-                                ],
-                            ]],
-                        ],
-                        'done_reason' => 'tool_calls',
-                        'done' => true,
-                        'prompt_eval_count' => 1,
-                        'eval_count' => 1,
-                    ],
-                ]),
-                status: 200,
-            ),
-            Http::response(
-                body: $this->ndjsonPayload([
-                    $this->chatChunk('done'),
-                    $this->chatChunk('', true, 'stop'),
-                ]),
-                status: 200,
-            ),
-        ]),
+        '*' => Http::response(
+            body: $this->ndjsonPayload([
+                $this->chatChunkWithToolCalls([['id' => 'call_1']]),
+            ]),
+            status: 200,
+        ),
     ]);
 
     $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
 
-    $toolCallEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof ToolCallEvent));
-
-    expect($toolCallEvents)->toHaveCount(1)
-        ->and($toolCallEvents[0]->toolCall->id)->toBe('call_1')
-        ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
-        ->and($toolCallEvents[0]->toolCall->arguments)->toBe(['foo' => 'bar']);
+    expect(array_filter($events, fn ($e): bool => $e instanceof ToolCallEvent))->toBeEmpty();
 });
 
 test('streaming generates fallback id when tool call has no id', function (): void {
@@ -252,6 +193,69 @@ test('streaming generates fallback id when tool call has no id', function (): vo
     expect($toolCallEvents)->toHaveCount(1)
         ->and($toolCallEvents[0]->toolCall->name)->toBe('FixedNumberGenerator')
         ->and($toolCallEvents[0]->toolCall->id)->not->toBeEmpty();
+});
+
+test('streaming keeps every tool call when each arrives in its own chunk', function (): void {
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response(
+                body: $this->ndjsonPayload([
+                    $this->chatChunkWithToolCalls([$this->toolCallChunk('call_1', 'FixedNumberGenerator', ['foo' => 'bar'], 0)], done: false),
+                    $this->chatChunkWithToolCalls([$this->toolCallChunk('call_2', 'FixedNumberGenerator', ['baz' => 'qux'], 1)], done: false),
+                    $this->chatChunk('', true, 'stop'),
+                ]),
+                status: 200,
+            ),
+            Http::response(
+                body: $this->ndjsonPayload([
+                    $this->chatChunk('done'),
+                    $this->chatChunk('', true, 'stop'),
+                ]),
+                status: 200,
+            ),
+        ]),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    $toolCallEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof ToolCallEvent));
+
+    expect($toolCallEvents)->toHaveCount(2)
+        ->and($toolCallEvents[0]->toolCall->id)->toBe('call_1')
+        ->and($toolCallEvents[0]->toolCall->arguments)->toBe(['foo' => 'bar'])
+        ->and($toolCallEvents[1]->toolCall->id)->toBe('call_2')
+        ->and($toolCallEvents[1]->toolCall->arguments)->toBe(['baz' => 'qux']);
+});
+
+test('streaming keeps tool calls sent together in one chunk', function (): void {
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response(
+                body: $this->ndjsonPayload([
+                    $this->chatChunkWithToolCalls([
+                        $this->toolCallChunk('call_1', 'FixedNumberGenerator', ['foo' => 'bar']),
+                        $this->toolCallChunk('call_2', 'FixedNumberGenerator', ['baz' => 'qux']),
+                    ]),
+                ]),
+                status: 200,
+            ),
+            Http::response(
+                body: $this->ndjsonPayload([
+                    $this->chatChunk('done'),
+                    $this->chatChunk('', true, 'stop'),
+                ]),
+                status: 200,
+            ),
+        ]),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    $toolCallEvents = array_values(array_filter($events, fn ($e): bool => $e instanceof ToolCallEvent));
+
+    expect($toolCallEvents)->toHaveCount(2)
+        ->and($toolCallEvents[0]->toolCall->id)->toBe('call_1')
+        ->and($toolCallEvents[1]->toolCall->id)->toBe('call_2');
 });
 
 test('streaming captures usage from final chunk', function (): void {
