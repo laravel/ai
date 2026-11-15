@@ -19,6 +19,9 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolCall;
+use Laravel\Ai\Streaming\Events\ToolInputDelta;
+use Laravel\Ai\Streaming\Events\ToolInputError;
+use Laravel\Ai\Streaming\Events\ToolInputStart;
 use Laravel\Ai\Streaming\Events\ToolResult;
 use Laravel\Ai\Streaming\Protocols\VercelDataProtocol;
 use Laravel\Ai\Vercel\Vercel;
@@ -466,6 +469,52 @@ test('a tool executed within the stream emits its input and output parts', funct
         ['type' => 'tool-output-available', 'toolCallId' => 'call-1', 'output' => 'sunny'],
         ['type' => 'finish-step'],
         vercelFinishPart(),
+        ['type' => 'done'],
+    ]);
+});
+
+test('a tool input streamed by the provider emits start and delta parts before the input is available', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new ToolInputStart('event-1', 'call-1', 'GetWeather', time()),
+        new ToolInputDelta('event-2', 'call-1', '{"city":', time()),
+        new ToolInputDelta('event-3', 'call-1', '"Lisbon"}', time()),
+        new ToolCall('event-4', new Data\ToolCall('call-1', 'GetWeather', ['city' => 'Lisbon']), time()),
+        new ToolResult('event-5', new Data\ToolResult('call-1', 'GetWeather', ['city' => 'Lisbon'], 'sunny'), true, null, time()),
+        new StreamEnd('event-6', 'stop', new TextUsage, time()),
+    ]);
+
+    expect($parts)->toBe([
+        ['type' => 'start', 'messageId' => 'msg-1'],
+        ['type' => 'start-step'],
+        ['type' => 'tool-input-start', 'toolCallId' => 'call-1', 'toolName' => 'GetWeather'],
+        ['type' => 'tool-input-delta', 'toolCallId' => 'call-1', 'inputTextDelta' => '{"city":'],
+        ['type' => 'tool-input-delta', 'toolCallId' => 'call-1', 'inputTextDelta' => '"Lisbon"}'],
+        ['type' => 'tool-input-available', 'toolCallId' => 'call-1', 'toolName' => 'GetWeather', 'input' => ['city' => 'Lisbon']],
+        ['type' => 'tool-output-available', 'toolCallId' => 'call-1', 'output' => 'sunny'],
+        ['type' => 'finish-step'],
+        vercelFinishPart(),
+        ['type' => 'done'],
+    ]);
+});
+
+test('a tool input that never completed emits an input error part', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new ToolInputStart('event-1', 'call-1', 'GetWeather', time()),
+        new ToolInputDelta('event-2', 'call-1', '{"city":', time()),
+        new ToolInputError('event-3', 'call-1', 'GetWeather', '{"city":', 'The tool call was not completed.', time()),
+        new StreamEnd('event-4', 'length', new TextUsage, time()),
+    ]);
+
+    expect($parts)->toBe([
+        ['type' => 'start', 'messageId' => 'msg-1'],
+        ['type' => 'start-step'],
+        ['type' => 'tool-input-start', 'toolCallId' => 'call-1', 'toolName' => 'GetWeather'],
+        ['type' => 'tool-input-delta', 'toolCallId' => 'call-1', 'inputTextDelta' => '{"city":'],
+        ['type' => 'tool-input-error', 'toolCallId' => 'call-1', 'toolName' => 'GetWeather', 'input' => '{"city":', 'errorText' => 'The tool call was not completed.'],
+        ['type' => 'finish-step'],
+        vercelFinishPart('length'),
         ['type' => 'done'],
     ]);
 });
