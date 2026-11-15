@@ -393,7 +393,7 @@ test('a tool input streamed by the provider emits its arguments as they arrive a
     ]);
 });
 
-test('a streamed tool input with no arguments still sends an empty json object', function () {
+test('a tool input that streamed no arguments sends an empty json object with its tool call', function () {
     $events = agUiProtocolEvents([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new ToolInputStart('event-1', 'call-1', 'GetTime', time()),
@@ -413,7 +413,7 @@ test('a tool input that never completed ends the call and reports it as failed',
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new ToolInputStart('event-1', 'call-1', 'GetWeather', time()),
         new ToolInputDelta('event-2', 'call-1', '{"city":', time()),
-        new ToolInputError('event-3', 'call-1', 'GetWeather', '{"city":', 'The tool call was not completed.', time()),
+        new ToolInputError('event-3', 'call-1', 'GetWeather', '{"city":', 'This tool call was not executed because its input did not complete.', time()),
         new StreamEnd('event-4', 'length', new TextUsage, time()),
     ]);
 
@@ -425,9 +425,9 @@ test('a tool input that never completed ends the call and reports it as failed',
             'type' => 'TOOL_CALL_RESULT',
             'messageId' => 'event-3',
             'toolCallId' => 'call-1',
-            'content' => 'The tool call was not completed.',
+            'content' => 'This tool call was not executed because its input did not complete.',
             'role' => 'tool',
-            'metadata' => ['error' => 'The tool call was not completed.'],
+            'metadata' => ['error' => 'This tool call was not executed because its input did not complete.'],
         ],
         ['type' => 'STEP_FINISHED', 'stepName' => '1'],
     ]);
@@ -440,7 +440,12 @@ test('a tool input error for a call that never started emits nothing', function 
         new StreamEnd('event-2', 'stop', new TextUsage, time()),
     ]);
 
-    expect(collect($events)->pluck('type')->intersect(['TOOL_CALL_END', 'TOOL_CALL_RESULT']))->toBeEmpty();
+    expect($events)->toBe([
+        ['type' => 'RUN_STARTED', 'threadId' => 'thread-1', 'runId' => 'run-1'],
+        ['type' => 'STEP_STARTED', 'stepName' => '1'],
+        ['type' => 'STEP_FINISHED', 'stepName' => '1'],
+        agUiRunFinished(),
+    ]);
 });
 
 test('a tool call without arguments streams an empty json object', function () {

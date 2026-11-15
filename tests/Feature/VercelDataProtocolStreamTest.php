@@ -503,7 +503,7 @@ test('a tool input that never completed emits an input error part', function () 
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new ToolInputStart('event-1', 'call-1', 'GetWeather', time()),
         new ToolInputDelta('event-2', 'call-1', '{"city":', time()),
-        new ToolInputError('event-3', 'call-1', 'GetWeather', '{"city":', 'The tool call was not completed.', time()),
+        new ToolInputError('event-3', 'call-1', 'GetWeather', '{"city":', 'This tool call was not executed because its input did not complete.', time()),
         new StreamEnd('event-4', 'length', new TextUsage, time()),
     ]);
 
@@ -512,11 +512,22 @@ test('a tool input that never completed emits an input error part', function () 
         ['type' => 'start-step'],
         ['type' => 'tool-input-start', 'toolCallId' => 'call-1', 'toolName' => 'GetWeather'],
         ['type' => 'tool-input-delta', 'toolCallId' => 'call-1', 'inputTextDelta' => '{"city":'],
-        ['type' => 'tool-input-error', 'toolCallId' => 'call-1', 'toolName' => 'GetWeather', 'input' => '{"city":', 'errorText' => 'The tool call was not completed.'],
+        ['type' => 'tool-input-error', 'toolCallId' => 'call-1', 'toolName' => 'GetWeather', 'input' => '{"city":', 'errorText' => 'This tool call was not executed because its input did not complete.'],
         ['type' => 'finish-step'],
         vercelFinishPart('length'),
         ['type' => 'done'],
     ]);
+});
+
+test('a tool input error for a call that never started still emits an input error part', function () {
+    $parts = vercelProtocolParts([
+        new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
+        new ToolInputError('event-1', 'call-1', 'GetWeather', '', 'This tool call was not executed because its input did not complete.', time()),
+        new StreamEnd('event-2', 'stop', new TextUsage, time()),
+    ]);
+
+    // The SDK creates the tool part from the error itself, so nothing needs to have started it...
+    expect($parts[2])->toBe(['type' => 'tool-input-error', 'toolCallId' => 'call-1', 'toolName' => 'GetWeather', 'input' => '', 'errorText' => 'This tool call was not executed because its input did not complete.']);
 });
 
 test('a tool still producing its output emits preliminary parts without changing the run lifecycle', function () {
