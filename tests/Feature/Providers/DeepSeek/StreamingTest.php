@@ -10,6 +10,8 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Laravel\Ai\Streaming\Events\ToolInputDelta;
+use Laravel\Ai\Streaming\Events\ToolInputStart;
 use Tests\Feature\Providers\DeepSeek\DeepSeekHelpers;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
@@ -113,6 +115,49 @@ test('streaming tool loop emits a single stream end with accumulated usage', fun
         ->and($streamEnds[0]->reason)->toBe(FinishReason::Stop->value)
         ->and($streamEnds[0]->usage->inputTokens)->toBe(30)
         ->and($streamEnds[0]->usage->outputTokens)->toBe(15);
+});
+
+test('streaming emits the tool input as it arrives, before the tool call', function (): void {
+    Http::fake([
+        'api.deepseek.com/*' => Http::sequence([
+            Http::response(
+                body: $this->ssePayload([
+                    $this->chatChunkToolCallStart(0, 'call_1', 'FixedNumberGenerator'),
+                    $this->chatChunkToolCallDelta(0, '{"sta'),
+                    $this->chatChunkToolCallDelta(0, ''),
+                    $this->chatChunkToolCallDelta(0, 'rt":1}'),
+                    $this->chatChunkFinish('tool_calls', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+                    '[DONE]',
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+            Http::response(
+                body: $this->ssePayload([
+                    $this->chatChunk(['role' => 'assistant', 'content' => 'The number is 72019']),
+                    $this->chatChunkFinish('stop', ['prompt_tokens' => 20, 'completion_tokens' => 10]),
+                    '[DONE]',
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]),
+    ]);
+
+    $events = array_values(array_filter(
+        $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent),
+        fn ($event): bool => $event instanceof ToolInputStart || $event instanceof ToolInputDelta || $event instanceof ToolCallEvent,
+    ));
+
+    expect($events)->toHaveCount(4)
+        ->and($events[0])->toBeInstanceOf(ToolInputStart::class)
+        ->and($events[0])->toolId->toBe('call_1')->toolName->toBe('FixedNumberGenerator')
+        ->and($events[1])->toBeInstanceOf(ToolInputDelta::class)
+        ->and($events[1])->toolId->toBe('call_1')->delta->toBe('{"sta')
+        ->and($events[2])->toBeInstanceOf(ToolInputDelta::class)
+        ->and($events[2])->toolId->toBe('call_1')->delta->toBe('rt":1}')
+        ->and($events[3])->toBeInstanceOf(ToolCallEvent::class)
+        ->and($events[3]->toolCall)->id->toBe('call_1')->arguments->toBe(['start' => 1]);
 });
 
 test('streaming error event stops stream', function (): void {
