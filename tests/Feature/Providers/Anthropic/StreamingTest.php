@@ -15,6 +15,8 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Laravel\Ai\Streaming\Events\ToolInputDelta;
+use Laravel\Ai\Streaming\Events\ToolInputStart;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
 
@@ -162,6 +164,51 @@ describe('tool calls', function (): void {
 
         expect($toolCallEvents)->not->toBeEmpty()
             ->and($toolCallEvents[0]->toolCall)->name->toBe('FixedNumberGenerator')->id->toBe('toolu_1');
+    });
+
+    test('streaming emits the tool input as it arrives, before the tool call', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->messageStart(),
+                        $this->contentBlockStart(0, ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'FixedNumberGenerator', 'input' => '']),
+                        // Anthropic opens a tool input with an empty fragment, which carries no delta...
+                        $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => '']),
+                        $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => '{"sta']),
+                        $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => 'rt":1}']),
+                        $this->contentBlockStop(0),
+                        $this->messageDelta('tool_use', 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response([
+                    'id' => 'msg_2',
+                    'type' => 'message',
+                    'role' => 'assistant',
+                    'model' => 'claude-sonnet-4-6',
+                    'content' => [['type' => 'text', 'text' => 'The number is 72019']],
+                    'stop_reason' => 'end_turn',
+                    'usage' => ['input_tokens' => 20, 'output_tokens' => 10],
+                ]),
+            ]),
+        ]);
+
+        $events = array_values(array_filter(
+            $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent),
+            fn ($event): bool => $event instanceof ToolInputStart || $event instanceof ToolInputDelta || $event instanceof ToolCallEvent,
+        ));
+
+        expect($events)->toHaveCount(4)
+            ->and($events[0])->toBeInstanceOf(ToolInputStart::class)
+            ->and($events[0])->toolId->toBe('toolu_1')->toolName->toBe('FixedNumberGenerator')
+            ->and($events[1])->toBeInstanceOf(ToolInputDelta::class)
+            ->and($events[1])->toolId->toBe('toolu_1')->delta->toBe('{"sta')
+            ->and($events[2])->toBeInstanceOf(ToolInputDelta::class)
+            ->and($events[2])->toolId->toBe('toolu_1')->delta->toBe('rt":1}')
+            ->and($events[3])->toBeInstanceOf(ToolCallEvent::class)
+            ->and($events[3]->toolCall->arguments)->toBe(['start' => 1]);
     });
 
     test('streaming reuses the code execution container on the follow up request', function (): void {

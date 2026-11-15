@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
+use Laravel\Ai\Gateway\Concerns\StreamsToolInput;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Providers\Provider;
@@ -25,6 +26,8 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 
 trait HandlesTextStreaming
 {
+    use StreamsToolInput;
+
     /**
      * Get the content of the paused steps the turn being continued is made of.
      *
@@ -193,6 +196,8 @@ trait HandlesTextStreaming
                         'name' => $data['content_block']['name'] ?? '',
                         'arguments' => '',
                     ];
+
+                    yield from $this->toolInputStart($invocationId, $pendingToolCalls[$currentToolIndex]['id'], $pendingToolCalls[$currentToolIndex]['name']);
                 } elseif ($blockType === 'server_tool_use') {
                     $currentServerToolInput = '';
 
@@ -287,6 +292,8 @@ trait HandlesTextStreaming
 
                     if ($currentBlockType === 'tool_use' && isset($pendingToolCalls[$currentToolIndex])) {
                         $pendingToolCalls[$currentToolIndex]['arguments'] .= $partial;
+
+                        yield from $this->toolInputDelta($invocationId, $pendingToolCalls[$currentToolIndex]['id'], $pendingToolCalls[$currentToolIndex]['name'], $partial);
                     } elseif ($currentBlockType === 'server_tool_use') {
                         $currentServerToolInput .= $partial;
                     }
