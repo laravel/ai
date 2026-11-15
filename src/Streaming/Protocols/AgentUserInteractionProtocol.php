@@ -44,18 +44,11 @@ class AgentUserInteractionProtocol extends StreamProtocol
     protected bool $finished = false;
 
     /**
-     * The tool calls whose input has started streaming, keyed by ID.
+     * Whether each tool call whose input is streaming has streamed any arguments, keyed by ID.
      *
-     * @var array<string, true>
+     * @var array<string, bool>
      */
-    protected array $openToolCalls = [];
-
-    /**
-     * The open tool calls that have streamed arguments, keyed by ID.
-     *
-     * @var array<string, true>
-     */
-    protected array $toolCallsWithArguments = [];
+    protected array $streamingToolCalls = [];
 
     protected ?StreamableAgentResponse $response = null;
 
@@ -74,8 +67,7 @@ class AgentUserInteractionProtocol extends StreamProtocol
         $this->started = false;
         $this->errored = false;
         $this->finished = false;
-        $this->openToolCalls = [];
-        $this->toolCallsWithArguments = [];
+        $this->streamingToolCalls = [];
         $this->step = 0;
         $this->response = $response;
 
@@ -289,21 +281,19 @@ class AgentUserInteractionProtocol extends StreamProtocol
      */
     protected function toolCallParts(Data\ToolCall $call): array
     {
-        $parts = [];
-
-        if (! isset($this->openToolCalls[$call->id])) {
-            $parts[] = ['type' => 'TOOL_CALL_START', 'toolCallId' => $call->id, 'toolCallName' => $call->name];
+        // A call whose input streamed only needs ending, plus its arguments if none streamed...
+        if (array_key_exists($call->id, $this->streamingToolCalls)) {
+            return [
+                ...(Arr::pull($this->streamingToolCalls, $call->id) ? [] : [['type' => 'TOOL_CALL_ARGS', 'toolCallId' => $call->id, 'delta' => $this->json((object) $call->arguments)]]),
+                ['type' => 'TOOL_CALL_END', 'toolCallId' => $call->id],
+            ];
         }
 
-        if (! isset($this->toolCallsWithArguments[$call->id])) {
-            $parts[] = ['type' => 'TOOL_CALL_ARGS', 'toolCallId' => $call->id, 'delta' => $this->json((object) $call->arguments)];
-        }
-
-        $parts[] = ['type' => 'TOOL_CALL_END', 'toolCallId' => $call->id];
-
-        unset($this->openToolCalls[$call->id], $this->toolCallsWithArguments[$call->id]);
-
-        return $parts;
+        return [
+            ['type' => 'TOOL_CALL_START', 'toolCallId' => $call->id, 'toolCallName' => $call->name],
+            ['type' => 'TOOL_CALL_ARGS', 'toolCallId' => $call->id, 'delta' => $this->json((object) $call->arguments)],
+            ['type' => 'TOOL_CALL_END', 'toolCallId' => $call->id],
+        ];
     }
 
     /**
@@ -313,7 +303,7 @@ class AgentUserInteractionProtocol extends StreamProtocol
      */
     protected function toolInputStartParts(ToolInputStart $event): array
     {
-        $this->openToolCalls[$event->toolId] = true;
+        $this->streamingToolCalls[$event->toolId] = false;
 
         return [['type' => 'TOOL_CALL_START', 'toolCallId' => $event->toolId, 'toolCallName' => $event->toolName]];
     }
@@ -325,7 +315,7 @@ class AgentUserInteractionProtocol extends StreamProtocol
      */
     protected function toolInputDeltaParts(ToolInputDelta $event): array
     {
-        $this->toolCallsWithArguments[$event->toolId] = true;
+        $this->streamingToolCalls[$event->toolId] = true;
 
         return [['type' => 'TOOL_CALL_ARGS', 'toolCallId' => $event->toolId, 'delta' => $event->delta]];
     }
@@ -337,11 +327,11 @@ class AgentUserInteractionProtocol extends StreamProtocol
      */
     protected function toolInputErrorParts(ToolInputError $event): array
     {
-        if (! isset($this->openToolCalls[$event->toolId])) {
+        if (! array_key_exists($event->toolId, $this->streamingToolCalls)) {
             return [];
         }
 
-        unset($this->openToolCalls[$event->toolId], $this->toolCallsWithArguments[$event->toolId]);
+        unset($this->streamingToolCalls[$event->toolId]);
 
         // The result keeps a client from running a call whose arguments were cut off...
         return [
