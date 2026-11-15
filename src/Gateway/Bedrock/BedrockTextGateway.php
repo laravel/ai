@@ -17,11 +17,16 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\ProviderDocument;
+use Laravel\Ai\Files\RemoteDocument;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Gateway\Bedrock\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\Cohere\Concerns\ParsesEmbeddings;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
+use Laravel\Ai\Gateway\Concerns\MapsToolResultAttachments;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -58,6 +63,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
     use HandlesFailoverErrors;
     use JoinsReasoning;
     use MapsAttachments;
+    use MapsToolResultAttachments;
     use ParsesEmbeddings;
 
     protected const STRUCTURED_OUTPUT_TOOL = 'structured_output';
@@ -151,7 +157,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
         ?TextGenerationOptions $options,
         StepContext $stepContext,
     ): array {
-        $conversationMessages = $this->formatMessages($messages);
+        $conversationMessages = $this->formatMessages($messages, $model);
         $jsonSchema = $schema && $this->rejectsForcedToolChoice($model) ? $schema : null;
         $schemaTools = $schema && $jsonSchema === null ? $this->buildSchemaTools($schema, $tools) : null;
         $formattedTools = $schemaTools === null && $tools !== [] ? $this->formatTools($tools) : null;
@@ -794,16 +800,14 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
      *
      * @param  array<ToolResult>  $toolResults
      */
-    protected function buildToolResultConversationMessage(array $toolResults): array
+    protected function buildToolResultConversationMessage(array $toolResults, ?string $model = null): array
     {
         return [
             'role' => 'user',
             'content' => array_map(fn (ToolResult $toolResult): array => [
                 'toolResult' => [
                     'toolUseId' => $toolResult->id,
-                    'content' => [
-                        ['text' => $toolResult->text()],
-                    ],
+                    'content' => $this->mapToolResultContent($toolResult, $model),
                 ],
             ], $toolResults),
         ];
@@ -873,11 +877,11 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
     /**
      * Format Laravel AI messages for Bedrock's Converse API.
      */
-    protected function formatMessages(array $messages): array
+    protected function formatMessages(array $messages, ?string $model = null): array
     {
         return (new Collection($messages))->map(fn (\Laravel\Ai\Messages\AssistantMessage|\Laravel\Ai\Messages\ToolResultMessage|\Laravel\Ai\Messages\UserMessage|\Laravel\Ai\Messages\Message|array $message): array => match (true) {
             $message instanceof AssistantMessage => $this->formatAssistantMessage($message),
-            $message instanceof ToolResultMessage => $this->formatToolResultMessage($message),
+            $message instanceof ToolResultMessage => $this->formatToolResultMessage($message, $model),
             $message instanceof UserMessage => $this->formatUserMessage($message),
             $message instanceof Message => $this->formatGenericMessage($message),
             default => $this->formatArrayMessage($message),
@@ -916,9 +920,48 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
     }
 
     /**
+     * Map a tool result to Converse tool result content blocks, with the files the tool returned.
+     */
+    protected function mapToolResultContent(ToolResult $toolResult, ?string $model = null): array
+    {
+        if ($toolResult->attachments === []) {
+            return [['text' => $toolResult->text()]];
+        }
+
+        return $this->mapToolResultParts(
+            $toolResult,
+            fn (string $text): array => ['text' => $text],
+            function ($file) use ($model): array {
+                if ($file instanceof Image && ! $this->takesToolResultImages($model)) {
+                    throw new InvalidArgumentException("Bedrock only takes images in tool results for Anthropic Claude and Amazon Nova models, not [{$model}].");
+                }
+
+                // Bedrock doesn't take remote or provider documents, which mapping rejects, so they aren't fetched to find their format...
+                if ($file instanceof Document && ! $file instanceof RemoteDocument && ! $file instanceof ProviderDocument && $this->getDocumentFormat($file) === null) {
+                    throw new InvalidArgumentException('Bedrock can\'t take ['.($file->mimeType() ?? 'unknown').'] documents.');
+                }
+
+                return $this->mapAttachments(new Collection([$file]))[0];
+            },
+        );
+    }
+
+    /**
+     * Determine whether the given model takes images in tool results, which Bedrock limits to Claude and Nova models.
+     *
+     * An unknown model is assumed to, as before images were checked for.
+     */
+    protected function takesToolResultImages(?string $model): bool
+    {
+        return $model === null
+            || str_contains($model, 'anthropic.claude')
+            || str_contains($model, 'amazon.nova');
+    }
+
+    /**
      * Format a ToolResultMessage for the Converse API.
      */
-    protected function formatToolResultMessage(ToolResultMessage $message): array
+    protected function formatToolResultMessage(ToolResultMessage $message, ?string $model = null): array
     {
         $content = [];
 
@@ -926,9 +969,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             $content[] = [
                 'toolResult' => [
                     'toolUseId' => $toolResult->id,
-                    'content' => [
-                        ['text' => $toolResult->text()],
-                    ],
+                    'content' => $this->mapToolResultContent($toolResult, $model),
                 ],
             ];
         }
