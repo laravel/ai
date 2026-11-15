@@ -2,6 +2,7 @@
 
 use Aws\MockHandler;
 use Aws\Result;
+use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
@@ -11,6 +12,9 @@ use Laravel\Ai\Streaming\Events\StreamStart;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
+use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Laravel\Ai\Streaming\Events\ToolInputDelta;
+use Laravel\Ai\Streaming\Events\ToolInputStart;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 describe('text streaming', function (): void {
@@ -69,6 +73,75 @@ describe('text streaming', function (): void {
 
         expect($textStarts)->toHaveCount(2)
             ->and($textStarts[0]->messageId)->not->toBe($textStarts[1]->messageId);
+    });
+
+    test('streaming emits the tool input as it arrives, before the tool call', function (): void {
+        $mock = new MockHandler([
+            new Result(['stream' => [
+                $this->contentBlockStart(0, ['toolUse' => ['toolUseId' => 't1', 'name' => 'FixedNumberGenerator']]),
+                $this->contentBlockDelta(0, ['toolUse' => ['input' => '{"sta']]),
+                $this->contentBlockDelta(0, ['toolUse' => ['input' => '']]),
+                $this->contentBlockDelta(0, ['toolUse' => ['input' => 'rt":1}']]),
+                $this->contentBlockStop(0),
+                $this->messageStop('tool_use'),
+            ]]),
+            new Result(['stream' => [
+                $this->contentBlockStart(0),
+                $this->contentBlockDelta(0, ['text' => 'Done']),
+                $this->contentBlockStop(0),
+                $this->messageStop('end_turn'),
+            ]]),
+        ]);
+
+        $gateway = $this->gatewayWithClient($this->bedrockClient($mock));
+
+        $events = array_values(array_filter(
+            iterator_to_array(
+                (new TextGenerationLoop($gateway))->stream(
+                    'inv-1',
+                    $this->bedrockProvider(),
+                    'anthropic.claude-opus-4-7-v1:0',
+                    null,
+                    tools: [new FixedNumberGenerator],
+                ),
+                preserve_keys: false,
+            ),
+            fn ($event): bool => $event instanceof ToolInputStart || $event instanceof ToolInputDelta || $event instanceof ToolCallEvent,
+        ));
+
+        expect($events)->toHaveCount(4)
+            ->and($events[0])->toBeInstanceOf(ToolInputStart::class)
+            ->and($events[0])->toolId->toBe('t1')->toolName->toBe('FixedNumberGenerator')
+            ->and($events[1])->toBeInstanceOf(ToolInputDelta::class)
+            ->and($events[1])->toolId->toBe('t1')->delta->toBe('{"sta')
+            ->and($events[2])->toBeInstanceOf(ToolInputDelta::class)
+            ->and($events[2])->toolId->toBe('t1')->delta->toBe('rt":1}')
+            ->and($events[3])->toBeInstanceOf(ToolCallEvent::class)
+            ->and($events[3]->toolCall)->id->toBe('t1')->arguments->toBe(['start' => 1]);
+    });
+
+    test('streaming keeps the structured output tool input to itself', function (): void {
+        $mock = new MockHandler([
+            new Result(['stream' => [
+                $this->contentBlockStart(0, ['toolUse' => ['toolUseId' => 's1', 'name' => 'structured_output']]),
+                $this->contentBlockDelta(0, ['toolUse' => ['input' => '{"symbol":"Fe"}']]),
+                $this->contentBlockStop(0),
+                $this->messageStop('tool_use'),
+            ]]),
+        ]);
+
+        $events = iterator_to_array(
+            (new TextGenerationLoop($this->gatewayWithClient($this->bedrockClient($mock))))->stream(
+                'inv-1',
+                $this->bedrockProvider(),
+                'anthropic.claude-opus-4-7-v1:0',
+                null,
+                schema: ['symbol' => (new JsonSchemaTypeFactory)->string()],
+            ),
+            preserve_keys: false,
+        );
+
+        expect(array_filter($events, fn ($event): bool => $event instanceof ToolInputStart || $event instanceof ToolInputDelta))->toBeEmpty();
     });
 
     test('streaming round-trips reasoning block on follow-up tool step', function (): void {

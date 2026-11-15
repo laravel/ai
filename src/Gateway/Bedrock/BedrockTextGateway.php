@@ -22,6 +22,7 @@ use Laravel\Ai\Gateway\Bedrock\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\Cohere\Concerns\ParsesEmbeddings;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
+use Laravel\Ai\Gateway\Concerns\StreamsToolInput;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -59,6 +60,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
     use JoinsReasoning;
     use MapsAttachments;
     use ParsesEmbeddings;
+    use StreamsToolInput;
 
     protected const STRUCTURED_OUTPUT_TOOL = 'structured_output';
 
@@ -335,7 +337,12 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                         'id' => $start['toolUse']['toolUseId'] ?? '',
                         'name' => $start['toolUse']['name'] ?? '',
                         'input' => '',
+                        'isStructuredOutput' => $structured && ($start['toolUse']['name'] ?? '') === self::STRUCTURED_OUTPUT_TOOL,
                     ];
+
+                    if (! $pendingToolCalls[$currentBlockIndex]['isStructuredOutput']) {
+                        yield from $this->toolInputStart($invocationId, $pendingToolCalls[$currentBlockIndex]['id'], $pendingToolCalls[$currentBlockIndex]['name']);
+                    }
                 }
 
                 continue;
@@ -399,6 +406,10 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                     $currentReasoningRedacted .= $delta['reasoningContent']['redactedContent'];
                 } elseif (isset($delta['toolUse']['input'], $pendingToolCalls[$index])) {
                     $pendingToolCalls[$index]['input'] .= $delta['toolUse']['input'];
+
+                    if (! $pendingToolCalls[$index]['isStructuredOutput']) {
+                        yield from $this->toolInputDelta($invocationId, $pendingToolCalls[$index]['id'], $pendingToolCalls[$index]['name'], $delta['toolUse']['input']);
+                    }
                 }
 
                 continue;
@@ -455,7 +466,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                     $pending = $pendingToolCalls[$index];
                     $arguments = json_decode($pending['input'] !== '' ? $pending['input'] : '{}', true) ?? [];
 
-                    if ($structured && $pending['name'] === self::STRUCTURED_OUTPUT_TOOL) {
+                    if ($pending['isStructuredOutput']) {
                         $structuredOutput = json_encode($arguments);
                     } else {
                         $toolCall = new ToolCall($pending['id'], $pending['name'], $arguments);
@@ -994,5 +1005,13 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * Generate a unique ID for a stream event.
+     */
+    protected function generateEventId(): string
+    {
+        return (string) Str::uuid();
     }
 }
