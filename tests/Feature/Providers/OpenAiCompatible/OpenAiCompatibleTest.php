@@ -8,6 +8,9 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Laravel\Ai\Streaming\Events\ToolInputDelta;
+use Laravel\Ai\Streaming\Events\ToolInputError;
+use Laravel\Ai\Streaming\Events\ToolInputStart;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
@@ -406,15 +409,60 @@ test('streaming runs two whole tool calls that arrive without an index', functio
         ->and($events->filter(fn ($event): bool => $event instanceof ToolResultEvent))->toHaveCount(2);
 });
 
-test('streaming discards tool calls cut off by the length limit', function (): void {
+test('streaming emits the tool input as it arrives, before the tool call', function (): void {
+    Http::fakeSequence()
+        ->pushResponse(fakeOpenAiCompatibleToolCallStream([
+            [fakeOpenAiCompatibleToolCall('call_123', '')],
+            [['function' => ['arguments' => '{"min":1,']]],
+            [['function' => ['arguments' => '']]],
+            [['function' => ['arguments' => '"max":1}']]],
+        ], 'tool_calls'))
+        ->pushResponse(fakeOpenAiCompatibleStream());
+
+    $events = collect((new MultiStepToolAgent)->stream('Generate', provider: 'openai-compatible'))
+        ->filter(fn ($event): bool => $event instanceof ToolInputStart || $event instanceof ToolInputDelta || $event instanceof ToolCallEvent)
+        ->values();
+
+    expect($events)->toHaveCount(4)
+        ->and($events[0])->toBeInstanceOf(ToolInputStart::class)
+        ->and($events[0])->toolId->toBe('call_123')->toolName->toBe('FixedNumberGenerator')
+        ->and($events[1])->toBeInstanceOf(ToolInputDelta::class)
+        ->and($events[1])->toolId->toBe('call_123')->delta->toBe('{"min":1,')
+        ->and($events[2])->toBeInstanceOf(ToolInputDelta::class)
+        ->and($events[2])->toolId->toBe('call_123')->delta->toBe('"max":1}')
+        ->and($events[3])->toBeInstanceOf(ToolCallEvent::class)
+        ->and($events[3]->toolCall)->id->toBe('call_123')->arguments->toBe(['min' => 1, 'max' => 1]);
+});
+
+test('streaming emits no tool input for a call whose id arrives after it starts', function (): void {
+    Http::fakeSequence()
+        ->pushResponse(fakeOpenAiCompatibleToolCallStream([
+            [['index' => 0, 'function' => ['name' => 'FixedNumberGenerator', 'arguments' => '{"min":1,']]],
+            [['index' => 0, 'id' => 'call_123', 'function' => ['arguments' => '"max":1}']]],
+        ], 'tool_calls'))
+        ->pushResponse(fakeOpenAiCompatibleStream());
+
+    $events = collect((new MultiStepToolAgent)->stream('Generate', provider: 'openai-compatible'))
+        ->filter(fn ($event): bool => $event instanceof ToolInputStart || $event instanceof ToolInputDelta || $event instanceof ToolCallEvent)
+        ->values();
+
+    expect($events)->toHaveCount(1)
+        ->and($events[0])->toBeInstanceOf(ToolCallEvent::class)
+        ->and($events[0]->toolCall)->id->toBe('')->arguments->toBe(['min' => 1, 'max' => 1]);
+});
+
+test('streaming fails tool calls cut off by the length limit instead of running them', function (): void {
     Http::fake(['*' => fakeOpenAiCompatibleToolCallStream([
         [['index' => 0] + fakeOpenAiCompatibleToolCall('call_123', '{"min":')],
     ], 'length')]);
 
     $events = collect((new MultiStepToolAgent)->stream('Generate', provider: 'openai-compatible'));
+    $errors = $events->whereInstanceOf(ToolInputError::class)->values();
 
     expect($events->filter(fn ($event): bool => $event instanceof ToolCallEvent))->toBeEmpty()
-        ->and($events->filter(fn ($event): bool => $event instanceof ToolResultEvent))->toBeEmpty();
+        ->and($events->filter(fn ($event): bool => $event instanceof ToolResultEvent))->toBeEmpty()
+        ->and($errors)->toHaveCount(1)
+        ->and($errors[0])->toolId->toBe('call_123')->input->toBe('{"min":');
 });
 
 function fakeOpenAiCompatibleToolCall(string $id, string $arguments): array

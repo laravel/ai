@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\OpenAiCompatible\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
+use Laravel\Ai\Gateway\Concerns\StreamsToolInput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -22,6 +23,8 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 
 trait HandlesTextStreaming
 {
+    use StreamsToolInput;
+
     /**
      * Process a Chat Completions streaming response for a single turn and yield Laravel stream events.
      */
@@ -141,10 +144,14 @@ trait HandlesTextStreaming
                             'name' => $tcDelta['function']['name'] ?? '',
                             'arguments' => '',
                         ];
+
+                        yield from $this->toolInputStart($invocationId, $pendingToolCalls[$idx]['id'], $pendingToolCalls[$idx]['name']);
                     }
 
                     if (isset($tcDelta['function']['arguments'])) {
                         $pendingToolCalls[$idx]['arguments'] .= $tcDelta['function']['arguments'];
+
+                        yield from $this->toolInputDelta($invocationId, $pendingToolCalls[$idx]['id'], $pendingToolCalls[$idx]['name'], $tcDelta['function']['arguments']);
                     }
                 }
             }
