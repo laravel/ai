@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use JMac\Testing\Double;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
@@ -19,6 +20,7 @@ use Laravel\Ai\Contracts\ResolvesPendingApprovals;
 use Laravel\Ai\Contracts\VerifiesConversationOwnership;
 use Laravel\Ai\Enums\MessageStatus;
 use Laravel\Ai\Exceptions\ApprovalMismatchException;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Files\RemoteImage;
 use Laravel\Ai\Files\StoredDocument;
 use Laravel\Ai\Messages\AssistantMessage;
@@ -44,7 +46,9 @@ use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
+use Laravel\Ai\Tools\ToolResponse;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
+use Tests\Fixtures\Agents\RememberingFileReturningAgent;
 use Tests\Fixtures\Agents\RememberingToolUsingAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
@@ -1865,4 +1869,55 @@ test('provider tool calls are stored per step and exposed on the stored message 
         ->and($steps[1]['provider_tool_calls'])->toBe([$execution->toArray()])
         ->and($store->paginateConversationMessages($conversationId, 1)->items()[0]->providerToolCalls())->toBe([$search->toArray(), $execution->toArray()])
         ->and(ConversationMessage::query()->where('role', 'assistant')->first()->provider_tool_calls)->toBe([$search->toArray(), $execution->toArray()]);
+});
+
+test('files a tool returned are stored by reference and sent again on the next turn', function (): void {
+    Storage::fake('local');
+    Storage::disk('local')->put('charts/red.png', file_get_contents(__DIR__.'/../../Fixtures/Images/red.png'));
+
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response(storeTestGeminiInteraction([[
+                'type' => 'function_call',
+                'id' => 'call_chart',
+                'name' => 'FileReturningTool',
+                'arguments' => (object) [],
+            ]])),
+            Http::response(storeTestGeminiInteraction([[
+                'type' => 'model_output',
+                'content' => [['type' => 'text', 'text' => 'The chart is red.']],
+            ]])),
+            Http::response(storeTestGeminiInteraction([[
+                'type' => 'model_output',
+                'content' => [['type' => 'text', 'text' => 'Still red.']],
+            ]])),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+    $conversationId = (new DatabaseConversationStore)->storeConversation('user', $user->id, 'Chart conversation');
+    $agent = new RememberingFileReturningAgent(ToolResponse::make('Here is the chart.', [Image::fromStorage('charts/red.png', 'local')]));
+
+    $agent->continue($conversationId, $user)->prompt('Describe the sales chart', provider: 'gemini');
+
+    $toolCall = json_decode((string) DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps'), true)[0]['tool_calls'][0];
+
+    expect($toolCall['result'])->toBe('Here is the chart.')
+        ->and($toolCall['attachments'])->toBe([[
+            'type' => 'stored-image',
+            'name' => 'red.png',
+            'path' => 'charts/red.png',
+            'disk' => 'local',
+        ]]);
+
+    $agent->continue($conversationId, $user)->prompt('Is it still red?', provider: 'gemini');
+
+    $recorded = Http::recorded();
+    $result = collect($recorded[count($recorded) - 1][0]->data()['input'])->firstWhere('type', 'function_result')['result'];
+
+    expect($result[0])->toBe(['type' => 'text', 'text' => 'Here is the chart.'])
+        ->and($result[1])->toMatchArray([
+            'type' => 'image',
+            'data' => base64_encode(file_get_contents(__DIR__.'/../../Fixtures/Images/red.png')),
+        ]);
 });
