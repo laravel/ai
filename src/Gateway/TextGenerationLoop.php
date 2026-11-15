@@ -356,7 +356,9 @@ class TextGenerationLoop
                 $result = $stepResult->response();
 
                 if ($result instanceof StepResponse) {
-                    yield from $this->unfinishedToolInputErrors($unfinishedToolInputs, $invocationId);
+                    foreach ($this->unfinishedToolInputErrors($unfinishedToolInputs, $invocationId) as $error) {
+                        yield $error;
+                    }
                 }
 
                 if (! $stepResult->streamed() && $result instanceof StepResponse) {

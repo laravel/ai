@@ -221,18 +221,21 @@ test('it fails a streamed tool input that the step never called', function (): v
         ),
     ]);
 
-    $events = collect(iterator_to_array((new TextGenerationLoop($gateway))->stream('invocation-1', textGenerationLoopProvider(), 'model', null), preserve_keys: false));
+    $events = array_values(iterator_to_array((new TextGenerationLoop($gateway))->stream('invocation-1', textGenerationLoopProvider(), 'model', null)));
 
-    $errors = $events->whereInstanceOf(ToolInputError::class)->values();
-
-    expect($errors)->toHaveCount(1)
-        ->and($errors[0])
+    expect(array_map(fn (StreamEvent $event): string => $event::class, $events))->toBe([
+        ToolInputStart::class,
+        ToolInputDelta::class,
+        ToolCallEvent::class,
+        ToolInputStart::class,
+        ToolInputDelta::class,
+        ToolInputError::class,
+        StreamEnd::class,
+    ])->and($events[5])
         ->toolId->toBe('call-cut')
         ->toolName->toBe('search')
         ->input->toBe('{"q":')
-        ->error->toBe('This tool call was not executed because its input did not complete.')
-        ->invocationId->toBe('invocation-1')
-        ->and($events->search($errors[0]))->toBeLessThan($events->search($events->whereInstanceOf(StreamEnd::class)->first()));
+        ->error->toBe('This tool call was not executed because its input did not complete.');
 });
 
 test('it fails an unfinished tool input once, in the step that started it', function (): void {
@@ -252,15 +255,18 @@ test('it fails an unfinished tool input once, in the step that started it', func
         ),
     ]);
 
-    $events = collect(iterator_to_array((new TextGenerationLoop($gateway))->stream(
+    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
         'invocation-1', textGenerationLoopProvider(), 'model', null, [], [$tool], null, new TextGenerationOptions(maxSteps: 2),
-    ), preserve_keys: false));
+    ));
 
-    $errors = $events->whereInstanceOf(ToolInputError::class);
-
-    expect($tool->calls)->toBe(1)
-        ->and($errors)->toHaveCount(1)
-        ->and($errors->keys()->first())->toBeLessThan($events->search($events->whereInstanceOf(TextDelta::class)->first()));
+    expect(array_map(fn (StreamEvent $event): string => $event::class, array_values($events)))->toBe([
+        ToolInputStart::class,
+        ToolCallEvent::class,
+        ToolInputError::class,
+        ToolResultEvent::class,
+        TextDelta::class,
+        StreamEnd::class,
+    ]);
 });
 
 test('it does not fail a streamed tool input when the step errors', function (): void {
