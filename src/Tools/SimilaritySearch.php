@@ -24,6 +24,11 @@ class SimilaritySearch implements Approvable, Tool
 
     protected ?int $rerankLimit = null;
 
+    /**
+     * Create a new similarity search tool instance.
+     *
+     * The closure receives the query string and the tool request, so it can read any argument the tool's schema adds.
+     */
     public function __construct(
         public Closure $using,
     ) {}
@@ -78,7 +83,7 @@ class SimilaritySearch implements Approvable, Tool
      */
     public function handle(Request $request): string
     {
-        $results = call_user_func($this->using, $request->string('query'));
+        $results = call_user_func($this->using, $request->string('query'), $request);
 
         $results = match (true) {
             is_array($results) => new Collection($results),
