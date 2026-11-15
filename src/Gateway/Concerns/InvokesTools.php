@@ -6,11 +6,14 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\ToolExecutionException;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\ToolNameResolver;
+use Laravel\Ai\Tools\ToolResponse;
 use Throwable;
 
 trait InvokesTools
@@ -22,12 +25,12 @@ trait InvokesTools
      *
      * @param  array<string, mixed>  $arguments
      */
-    protected function executeTool(Tool $tool, array $arguments, ?string $toolCallId = null, ?RunContext $context = null): string
+    protected function executeTool(Tool $tool, array $arguments, ?string $toolCallId = null, ?RunContext $context = null): string|ToolResponse
     {
         $toolInvocationId = (string) Str::uuid7();
 
         // Any agent prompted while this tool runs, however it was reached, is a child of this tool call...
-        return ParentInvocation::within($context?->invocationId, $toolInvocationId, function () use ($tool, $arguments, $toolCallId, $toolInvocationId, $context): string {
+        return ParentInvocation::within($context?->invocationId, $toolInvocationId, function () use ($tool, $arguments, $toolCallId, $toolInvocationId, $context): string|ToolResponse {
             $context?->invokingTool($tool, $arguments, $toolInvocationId);
 
             $startedAt = hrtime(true);
@@ -46,7 +49,12 @@ trait InvokesTools
 
             $context?->toolInvoked($tool, $arguments, $result, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
 
-            return (string) $result;
+            return match (true) {
+                $result instanceof ToolResponse => $result,
+                // A file's string form is its raw content, so it is attached rather than sent as text...
+                $result instanceof Image, $result instanceof Document => new ToolResponse(attachments: [$result]),
+                default => (string) $result,
+            };
         });
     }
 

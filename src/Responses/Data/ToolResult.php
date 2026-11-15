@@ -4,9 +4,15 @@ namespace Laravel\Ai\Responses\Data;
 
 use Illuminate\Contracts\Support\Arrayable;
 use JsonSerializable;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\File;
+use Laravel\Ai\Files\Image;
 
 class ToolResult implements Arrayable, JsonSerializable
 {
+    /**
+     * @param  array<int, Image|Document>  $attachments  The files the tool returned for the model to see.
+     */
     public function __construct(
         public string $id,
         public string $name,
@@ -15,6 +21,7 @@ class ToolResult implements Arrayable, JsonSerializable
         public ?string $resultId = null,
         public bool $denied = false,
         public bool $failed = false,
+        public array $attachments = [],
     ) {}
 
     /**
@@ -30,6 +37,10 @@ class ToolResult implements Arrayable, JsonSerializable
             resultId: $data['result_id'] ?? null,
             denied: $data['denied'] ?? false,
             failed: $data['failed'] ?? false,
+            attachments: array_values(array_filter(array_map(
+                fn (mixed $attachment) => is_array($attachment) ? File::fromArray($attachment) : null,
+                $data['attachments'] ?? [],
+            ), fn (?File $file) => $file instanceof Image || $file instanceof Document)),
         );
     }
 
@@ -50,9 +61,31 @@ class ToolResult implements Arrayable, JsonSerializable
     }
 
     /**
-     * Get the result as a string suitable for sending back to a provider.
+     * Get the result as a string suitable for sending back to a provider, noting each attached file it isn't sent.
      */
     public function text(): string
+    {
+        return implode("\n", array_filter([
+            $this->resultText(),
+            ...array_map($this->attachmentNote(...), $this->attachments),
+        ], fn (string $text) => $text !== ''));
+    }
+
+    /**
+     * Get the note sent in place of an attached file that a provider can't receive.
+     */
+    public function attachmentNote(Image|Document $attachment): string
+    {
+        $kind = $attachment instanceof Image ? 'image' : 'document';
+        $name = filled($attachment->name()) ? " [{$attachment->name()}]" : '';
+
+        return "(The tool returned the {$kind}{$name}, but it could not be sent to this model.)";
+    }
+
+    /**
+     * Get the result as a string, without notes about its attached files.
+     */
+    public function resultText(): string
     {
         return match (true) {
             is_string($this->result) => $this->result,
@@ -62,7 +95,7 @@ class ToolResult implements Arrayable, JsonSerializable
     }
 
     /**
-     * Get the instance as an array, only including the denied and failed keys when they apply.
+     * Get the instance as an array, only including the denied, failed and attachments keys when they apply.
      */
     public function toArray(): array
     {
@@ -74,6 +107,10 @@ class ToolResult implements Arrayable, JsonSerializable
             'result_id' => $this->resultId,
             ...($this->denied ? ['denied' => true] : []),
             ...($this->failed ? ['failed' => true] : []),
+            ...($this->attachments === [] ? [] : ['attachments' => array_values(array_filter(array_map(
+                fn (File $file) => $file instanceof Arrayable ? $file->toArray() : null,
+                $this->attachments,
+            )))]),
         ];
     }
 

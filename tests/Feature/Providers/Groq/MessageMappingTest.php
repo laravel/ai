@@ -7,6 +7,7 @@ use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\LocalImage;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+use Tests\Fixtures\Tools\FileReturningTool;
 
 use function Laravel\Ai\agent;
 
@@ -142,3 +143,19 @@ test('document attachments throw exception', function (): void {
         provider: 'groq',
     );
 })->throws(InvalidArgumentException::class);
+
+test('files a tool returned are noted in its tool message, since chat completions only take text there', function (): void {
+    Http::fake([
+        'api.groq.com/*' => fakeGroqResponse(),
+    ]);
+
+    agent('Hi.', toolResultWithFilesHistory(), [new FileReturningTool('')])->prompt('Thanks', provider: 'groq');
+
+    $toolMessage = collect(Http::recorded()->first()[0]->data()['messages'])->firstWhere('role', 'tool');
+
+    expect($toolMessage['content'])->toBe(implode("\n", [
+        'Here is the chart.',
+        '(The tool returned the image [red.png], but it could not be sent to this model.)',
+        '(The tool returned the document [report.pdf], but it could not be sent to this model.)',
+    ]));
+});
