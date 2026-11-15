@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
+use Laravel\Ai\Gateway\Concerns\StreamsToolInput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
@@ -25,6 +26,8 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 
 trait HandlesTextGeneration
 {
+    use StreamsToolInput;
+
     /** @return Generator<int, StreamEvent, mixed, StepResponse|null> */
     protected function processTextStream(
         string $invocationId,
@@ -231,6 +234,8 @@ trait HandlesTextGeneration
 
                 $pendingToolCalls[$index] = $toolCall;
 
+                yield from $this->toolInputStart($invocationId, $toolCall['id'], $toolCall['name']);
+
                 continue;
             }
 
@@ -239,7 +244,11 @@ trait HandlesTextGeneration
 
                 foreach ($pendingToolCalls as &$call) {
                     if (($call['id'] ?? null) === $callId) {
-                        $call['arguments'] .= $data['delta'] ?? '';
+                        $delta = $data['delta'] ?? '';
+                        $call['arguments'] .= $delta;
+
+                        yield from $this->toolInputDelta($invocationId, $callId, $call['name'], $delta);
+
                         break;
                     }
                 }
