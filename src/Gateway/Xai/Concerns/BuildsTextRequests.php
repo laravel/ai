@@ -139,11 +139,7 @@ trait BuildsTextRequests
 
         if ($lastMessage instanceof ToolResultMessage) {
             foreach ($lastMessage->toolResults as $toolResult) {
-                $input[] = [
-                    'type' => 'function_call_output',
-                    'call_id' => $toolResult->resultId,
-                    'output' => $toolResult->text(),
-                ];
+                $input[] = $this->mapFunctionCallOutput($toolResult);
             }
         }
 

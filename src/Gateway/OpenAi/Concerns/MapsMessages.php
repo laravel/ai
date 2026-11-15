@@ -3,6 +3,12 @@
 namespace Laravel\Ai\Gateway\OpenAi\Concerns;
 
 use Illuminate\Support\Arr;
+use InvalidArgumentException;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\ProviderDocument;
+use Laravel\Ai\Files\RemoteDocument;
+use Laravel\Ai\Gateway\Concerns\MapsToolResultAttachments;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\MessageRole;
@@ -10,9 +16,12 @@ use Laravel\Ai\Messages\ToolResultMessage;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\ToolResult;
 
 trait MapsMessages
 {
+    use MapsToolResultAttachments;
+
     /**
      * Map the given Laravel messages to OpenAI Responses API input format.
      */
@@ -33,7 +42,7 @@ trait MapsMessages
             match ($message->role) {
                 MessageRole::User => $this->mapUserMessage($message, $input, $provider),
                 MessageRole::Assistant => $this->mapAssistantMessage($message, $input, $provider),
-                MessageRole::ToolResult => $this->mapToolResultMessage($message, $input),
+                MessageRole::ToolResult => $this->mapToolResultMessage($message, $input, $provider),
             };
         }
 
@@ -149,18 +158,79 @@ trait MapsMessages
     /**
      * Map a tool result message to OpenAI format.
      */
-    protected function mapToolResultMessage(ToolResultMessage|Message $message, array &$input): void
+    protected function mapToolResultMessage(ToolResultMessage|Message $message, array &$input, ?Provider $provider = null): void
     {
         if (! $message instanceof ToolResultMessage) {
             return;
         }
 
         foreach ($message->toolResults as $toolResult) {
-            $input[] = [
-                'type' => 'function_call_output',
-                'call_id' => $toolResult->resultId,
-                'output' => $toolResult->text(),
-            ];
+            $input[] = $this->mapFunctionCallOutput($toolResult, $provider);
         }
+    }
+
+    /**
+     * Throw for a document OpenAI can't take as a file input, so it's noted instead: PDFs, text and code, and office
+     * documents. A file OpenAI has stored, or one sent by URL without a declared type, is left to OpenAI.
+     */
+    protected function ensureToolResultDocumentType(Image|Document $file): void
+    {
+        if (! $file instanceof Document) {
+            return;
+        }
+
+        // A file sent by ID or URL carries no type, so only one it declares is checked...
+        if ($file instanceof RemoteDocument || $file instanceof ProviderDocument) {
+            $mime = $file->mime === null ? null : strtolower(trim((string) strtok($file->mime, ';')));
+
+            if ($mime === null) {
+                return;
+            }
+        } else {
+            // An inline file is sent with its type as it is, so that's what's checked...
+            $mime = $file->mimeType();
+        }
+
+        $accepted = in_array($mime, [
+            'application/pdf',
+            'application/json',
+            'application/xml',
+            'application/javascript',
+            'application/rtf',
+            'application/msword',
+            'application/vnd.ms-excel',
+            'application/vnd.ms-powerpoint',
+            'application/vnd.oasis.opendocument.text',
+        ], true) || (is_string($mime) && ! str_contains($mime, ';') && (
+            str_starts_with($mime, 'text/')
+            || str_starts_with($mime, 'application/vnd.openxmlformats-officedocument.')
+        ));
+
+        if (! $accepted) {
+            throw new InvalidArgumentException('OpenAI can\'t take ['.($mime ?? 'unknown').'] documents.');
+        }
+    }
+
+    /**
+     * Map a tool result to an OpenAI function call output, with the files the tool returned.
+     */
+    protected function mapFunctionCallOutput(ToolResult $toolResult, ?Provider $provider = null): array
+    {
+        return [
+            'type' => 'function_call_output',
+            'call_id' => $toolResult->resultId,
+            'output' => $toolResult->attachments === [] || $provider === null
+                ? $toolResult->text()
+                : $this->mapToolResultParts(
+                    $toolResult,
+                    fn (string $text): array => ['type' => 'input_text', 'text' => $text],
+                    function ($file) use ($provider): array {
+                        $this->ensureToolResultImageType($file, ['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+                        $this->ensureToolResultDocumentType($file);
+
+                        return $this->mapAttachments(collect([$file]), $provider)[0];
+                    },
+                ),
+        ];
     }
 }

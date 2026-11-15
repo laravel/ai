@@ -2,9 +2,14 @@
 
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Files\Image;
+use Laravel\Ai\Tools\ToolResponse;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
 use Tests\Fixtures\Agents\ToolChoiceAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+use Tests\Fixtures\Tools\FileReturningTool;
+
+use function Laravel\Ai\agent;
 
 beforeEach(function (): void {
     config(['ai.providers.openai' => [
@@ -150,3 +155,23 @@ function fakeUniqueOpenAiToolCallResponse(): PromiseInterface
         ],
     ]);
 }
+
+test('files a tool returns are sent with its output when continuing a stored response', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::sequence([
+            fakeUniqueOpenAiToolCallResponse(),
+            fakeOpenAiResponse('The chart is red.'),
+        ]),
+    ]);
+
+    agent('Hi.', [], [
+        new FileReturningTool(ToolResponse::make('Here is the chart.', [Image::fromPath(__DIR__.'/../../../Fixtures/Images/red.png')]), 'FixedNumberGenerator'),
+    ])->prompt('Describe the sales chart', provider: 'openai');
+
+    $followUp = Http::recorded()[1][0]->data();
+    $output = collect($followUp['input'])->firstWhere('type', 'function_call_output')['output'];
+
+    expect($followUp)->toHaveKey('previous_response_id')
+        ->and($output[0])->toBe(['type' => 'input_text', 'text' => 'Here is the chart.'])
+        ->and($output[1]['image_url'])->toStartWith('data:image/png;base64,');
+});

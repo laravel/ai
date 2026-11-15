@@ -47,7 +47,7 @@ trait BuildsTextRequests
         $body = [
             'model' => $model,
             'previous_response_id' => $continuationToken,
-            'input' => $this->extractToolResultsInput($messages),
+            'input' => $this->extractToolResultsInput($messages, $provider),
         ];
 
         return $this->mergeSharedResponsesRequestOptions($body, $tools, $schema, $options, $provider);
@@ -56,7 +56,7 @@ trait BuildsTextRequests
     /**
      * Extract the latest tool results for a stateful continuation request.
      */
-    protected function extractToolResultsInput(array $messages): array
+    protected function extractToolResultsInput(array $messages, ?Provider $provider = null): array
     {
         $lastMessage = end($messages);
 
@@ -65,11 +65,7 @@ trait BuildsTextRequests
         }
 
         return collect($lastMessage->toolResults)
-            ->map(fn ($toolResult): array => [
-                'type' => 'function_call_output',
-                'call_id' => $toolResult->resultId,
-                'output' => $toolResult->text(),
-            ])
+            ->map(fn ($toolResult): array => $this->mapFunctionCallOutput($toolResult, $provider))
             ->all();
     }
 
