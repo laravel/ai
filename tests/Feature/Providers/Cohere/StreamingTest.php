@@ -13,6 +13,8 @@ use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Laravel\Ai\Streaming\Events\ToolInputDelta;
+use Laravel\Ai\Streaming\Events\ToolInputStart;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ProviderOptionsWithToolsAgent;
@@ -76,6 +78,30 @@ test('streaming accumulates tool call arguments and runs the tool', function ():
     $followUp = json_decode((string) Http::recorded()[1][0]->body(), true);
 
     expect(collect($followUp['messages'])->firstWhere('role', 'tool')['tool_call_id'])->toBe('get_number_ejj5xe67w3e1');
+});
+
+test('streaming emits the tool input as it arrives, before the tool call', function (): void {
+    Http::fake([
+        '*' => Http::sequence([
+            $this->fakeStreamResponse($this->streamToolCallEvents('FixedNumberGenerator', 'get_number_ejj5xe67w3e1', ['{"sta', '', 'rt":1}'])),
+            $this->fakeStreamResponse($this->streamTextEvents('The number is 72019')),
+        ]),
+    ]);
+
+    $events = array_values(array_filter(
+        $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent),
+        fn ($event): bool => $event instanceof ToolInputStart || $event instanceof ToolInputDelta || $event instanceof ToolCallEvent,
+    ));
+
+    expect($events)->toHaveCount(4)
+        ->and($events[0])->toBeInstanceOf(ToolInputStart::class)
+        ->and($events[0])->toolId->toBe('get_number_ejj5xe67w3e1')->toolName->toBe('FixedNumberGenerator')
+        ->and($events[1])->toBeInstanceOf(ToolInputDelta::class)
+        ->and($events[1])->toolId->toBe('get_number_ejj5xe67w3e1')->delta->toBe('{"sta')
+        ->and($events[2])->toBeInstanceOf(ToolInputDelta::class)
+        ->and($events[2])->toolId->toBe('get_number_ejj5xe67w3e1')->delta->toBe('rt":1}')
+        ->and($events[3])->toBeInstanceOf(ToolCallEvent::class)
+        ->and($events[3]->toolCall)->id->toBe('get_number_ejj5xe67w3e1')->arguments->toBe(['start' => 1]);
 });
 
 test('streaming ignores tool plan deltas', function (): void {
