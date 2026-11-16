@@ -2,123 +2,20 @@
 
 namespace Laravel\Ai\Gateway\DeepSeek\Concerns;
 
+use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionMessages;
 use Laravel\Ai\Messages\AssistantMessage;
-use Laravel\Ai\Messages\Message;
-use Laravel\Ai\Messages\MessageRole;
-use Laravel\Ai\Messages\ToolResultMessage;
-use Laravel\Ai\Messages\UserMessage;
-use Laravel\Ai\Responses\Data\ToolCall;
 
 trait MapsMessages
 {
-    /**
-     * Map the given Laravel messages to Chat Completions messages format.
-     */
-    protected function mapMessagesToChat(array $messages, ?string $instructions = null): array
-    {
-        $chatMessages = [];
-
-        if (filled($instructions)) {
-            $chatMessages[] = [
-                'role' => 'system',
-                'content' => $instructions,
-            ];
-        }
-
-        foreach ($messages as $message) {
-            $message = Message::tryFrom($message);
-
-            match ($message->role) {
-                MessageRole::User => $this->mapUserMessage($message, $chatMessages),
-                MessageRole::Assistant => $this->mapAssistantMessage($message, $chatMessages),
-                MessageRole::ToolResult => $this->mapToolResultMessage($message, $chatMessages),
-            };
-        }
-
-        return $chatMessages;
+    use MapsChatCompletionMessages {
+        mapReasoningReplay as mapChatCompletionReasoningReplay;
     }
 
     /**
-     * Map a user message to Chat Completions format.
+     * Map the reasoning of a tool call turn, which DeepSeek's thinking mode requires even when empty.
      */
-    protected function mapUserMessage(UserMessage|Message $message, array &$chatMessages): void
+    protected function mapReasoningReplay(AssistantMessage $message): array
     {
-        if (! $message instanceof UserMessage || $message->attachments->isEmpty()) {
-            $chatMessages[] = [
-                'role' => 'user',
-                'content' => $message->content,
-            ];
-
-            return;
-        }
-
-        $chatMessages[] = [
-            'role' => 'user',
-            'content' => [
-                ['type' => 'text', 'text' => $message->content],
-                ...$this->mapAttachments($message->attachments),
-            ],
-        ];
-    }
-
-    /**
-     * Map an assistant message to Chat Completions format.
-     */
-    protected function mapAssistantMessage(AssistantMessage|Message $message, array &$chatMessages): void
-    {
-        $msg = ['role' => 'assistant'];
-
-        if (filled($message->content)) {
-            $msg['content'] = $message->content;
-        }
-
-        if (! $message instanceof AssistantMessage) {
-            $chatMessages[] = $msg;
-
-            return;
-        }
-
-        if ($message->toolCalls->isNotEmpty()) {
-            $msg['tool_calls'] = $message->toolCalls->map(
-                fn (ToolCall $toolCall) => $this->serializeToolCallToChat($toolCall)
-            )->all();
-
-            $msg['reasoning_content'] = collect($message->replayBlocks)->firstWhere('type', 'reasoning')['reasoning_content'] ?? '';
-        }
-
-        $chatMessages[] = $msg;
-    }
-
-    /**
-     * Map a tool result message to Chat Completions format.
-     */
-    protected function mapToolResultMessage(ToolResultMessage|Message $message, array &$chatMessages): void
-    {
-        if (! $message instanceof ToolResultMessage) {
-            return;
-        }
-
-        foreach ($message->toolResults as $toolResult) {
-            $chatMessages[] = [
-                'role' => 'tool',
-                'tool_call_id' => $toolResult->resultId ?? $toolResult->id,
-                'content' => $toolResult->text(),
-            ];
-        }
-    }
-
-    /**
-     * Serialize a tool call DTO to Chat Completions array format.
-     */
-    protected function serializeToolCallToChat(ToolCall $toolCall): array
-    {
-        return [
-            'id' => $toolCall->resultId ?? $toolCall->id,
-            'type' => 'function',
-            'function' => [
-                'name' => $toolCall->name,
-                'arguments' => json_encode($toolCall->arguments ?: (object) []),
-            ],
-        ];
+        return $this->mapChatCompletionReasoningReplay($message) ?: ['reasoning_content' => ''];
     }
 }

@@ -36,6 +36,8 @@ trait HandlesTextStreaming
         $streamStartEmitted = false;
         $textStartEmitted = false;
         $currentText = '';
+        $currentReasoning = '';
+        $reasoningField = 'reasoning';
         $toolCalls = [];
         $pendingToolCalls = [];
         $usage = null;
@@ -82,6 +84,9 @@ trait HandlesTextStreaming
             $reasoning = $delta['reasoning_content'] ?? $delta['reasoning'] ?? '';
 
             if ($reasoning !== '') {
+                $reasoningField = isset($delta['reasoning_content']) ? 'reasoning_content' : 'reasoning';
+                $currentReasoning .= $reasoning;
+
                 if ($reasoningId === null) {
                     $reasoningId = $this->generateEventId();
 
@@ -195,6 +200,7 @@ trait HandlesTextStreaming
                 : $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
             usage: $usage ?? new TextUsage(0, 0),
             meta: new Meta($provider->name(), $responseModel),
+            replayBlocks: $currentReasoning === '' ? [] : [['type' => 'reasoning', $reasoningField => $currentReasoning]],
         );
     }
 
