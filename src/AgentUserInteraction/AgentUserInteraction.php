@@ -68,6 +68,9 @@ class AgentUserInteraction
 
             // Tool results are buffered so parallel calls settle within a single tool result message...
             if ($role === 'tool') {
+                // The call is rebuilt from its item id. The id its result was sent under lives on the tool message...
+                static::restoreToolCallResultId($message, $calls);
+
                 if (($toolResult = static::toolResultFrom($message, $calls)) !== null) {
                     $toolResults[] = $toolResult;
                 }
@@ -408,6 +411,24 @@ class AgentUserInteraction
         return $toolResults === []
             ? $messages
             : [...$messages, new ToolResultMessage(new Collection($toolResults))];
+    }
+
+    /**
+     * Copy a tool message's id onto the call it settles when that call has no result id.
+     *
+     * @param  array<string, mixed>  $message
+     * @param  array<string, ToolCall>  $calls
+     */
+    protected static function restoreToolCallResultId(array $message, array $calls): void
+    {
+        $toolCallId = $message['toolCallId'] ?? null;
+        $messageId = $message['id'] ?? null;
+
+        if (! is_string($toolCallId) || ! isset($calls[$toolCallId]) || ! is_string($messageId) || blank($messageId)) {
+            return;
+        }
+
+        $calls[$toolCallId]->resultId ??= $messageId;
     }
 
     /**

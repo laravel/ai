@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\AgentUserInteraction\AgentUserInteraction;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Base64Document;
@@ -78,6 +79,36 @@ test('tool result follow up uses previous response id', function (): void {
     }
 
     expect($hasFunctionCallOutput)->toBeTrue();
+});
+
+test('replaying an ag-ui tool result keeps the call id on the function call', function (): void {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('Yes, that account is in the list.'),
+    ]);
+
+    $chat = AgentUserInteraction::chat([
+        'threadId' => 'thread-1',
+        'runId' => 'run-1',
+        'messages' => [
+            ['id' => 'u1', 'role' => 'user', 'content' => 'Which accounts can I see?'],
+            ['id' => 'fc_1', 'role' => 'assistant', 'toolCalls' => [
+                ['id' => 'fc_1', 'type' => 'function', 'function' => ['name' => 'list_accounts', 'arguments' => '{}']],
+            ]],
+            ['id' => 'call_1', 'role' => 'tool', 'toolCallId' => 'fc_1', 'content' => 'Carloans365'],
+            ['id' => 'u2', 'role' => 'user', 'content' => 'Is Carloans365 one of them?'],
+        ],
+    ]);
+
+    (new AssistantAgent)->withMessages($chat->history())->prompt($chat, provider: 'openai');
+
+    Http::assertSent(function (Request $request): bool {
+        $input = json_decode($request->body(), true)['input'] ?? [];
+        $functionCall = collect($input)->firstWhere('type', 'function_call');
+        $output = collect($input)->firstWhere('type', 'function_call_output');
+
+        return ($functionCall['call_id'] ?? null) === 'call_1'
+            && ($output['call_id'] ?? null) === 'call_1';
+    });
 });
 
 test('base64 pdf document maps to input file', function (): void {
