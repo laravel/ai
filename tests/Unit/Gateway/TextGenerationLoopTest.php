@@ -806,6 +806,45 @@ test('it repairs missing generation tool calls for agents with the repair attrib
         ->and($response->toolResults[0]->result)->toBe("Tool 'MissingTool' does not exist. Available tools: TextGenerationLoopCountingTool.");
 });
 
+test('it repairs missing tool calls for agents whose parent opts in through the repair method', function (): void {
+    $gateway = new TextGenerationLoopFakeGateway([
+        new StepResponse('', [new ToolCall('call-1', 'MissingTool', [], 'call-1')], FinishReason::ToolCalls, new TextUsage, new Meta('fake', 'model')),
+        new StepResponse('Done', [], FinishReason::Stop, new TextUsage, new Meta('fake', 'model')),
+    ]);
+
+    $response = (new TextGenerationLoop($gateway))->generate(
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [new TextGenerationLoopCountingTool],
+        null,
+        new TextGenerationOptions(maxSteps: 2, agent: new TextGenerationLoopInheritedRepairAgent),
+        null,
+    );
+
+    expect($gateway->generateCalls)->toBe(2)
+        ->and($response->text)->toBe('Done')
+        ->and($response->toolResults[0]->result)->toBe("Tool 'MissingTool' does not exist. Available tools: TextGenerationLoopCountingTool.");
+});
+
+test('the repair method takes precedence over the repair attribute', function (): void {
+    $gateway = new TextGenerationLoopFakeGateway([
+        new StepResponse('', [new ToolCall('call-1', 'MissingTool', [], 'call-1')], FinishReason::ToolCalls, new TextUsage, new Meta('fake', 'model')),
+    ]);
+
+    expect(fn () => (new TextGenerationLoop($gateway))->generate(
+        textGenerationLoopProvider(),
+        'model',
+        null,
+        [],
+        [new TextGenerationLoopCountingTool],
+        null,
+        new TextGenerationOptions(maxSteps: 2, agent: new TextGenerationLoopRepairDisabledAgent),
+        null,
+    ))->toThrow(NoSuchToolException::class);
+});
+
 test('it budgets an implicit step for a repaired tool call', function (): void {
     $tool = new TextGenerationLoopCountingTool;
     $toolCall = new ToolCall('call-2', TextGenerationLoopCountingTool::class, [], 'call-2');
@@ -1240,6 +1279,39 @@ class TextGenerationLoopRepairingAgent implements Agent
     public function instructions(): string
     {
         return 'You are a helpful assistant.';
+    }
+}
+
+abstract class TextGenerationLoopRepairMethodAgent implements Agent
+{
+    use Promptable;
+
+    public function instructions(): string
+    {
+        return 'You are a helpful assistant.';
+    }
+
+    public function repairToolCalls(): bool
+    {
+        return true;
+    }
+}
+
+class TextGenerationLoopInheritedRepairAgent extends TextGenerationLoopRepairMethodAgent {}
+
+#[RepairToolCalls]
+class TextGenerationLoopRepairDisabledAgent implements Agent
+{
+    use Promptable;
+
+    public function instructions(): string
+    {
+        return 'You are a helpful assistant.';
+    }
+
+    public function repairToolCalls(): bool
+    {
+        return false;
     }
 }
 
