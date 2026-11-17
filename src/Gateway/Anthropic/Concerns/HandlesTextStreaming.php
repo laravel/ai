@@ -143,6 +143,7 @@ trait HandlesTextStreaming
                     $data['error']['message'] ?? 'Unknown error',
                     false,
                     time(),
+                    usage: $usage ?? ($messageUsage === [] ? null : $this->extractUsage(['usage' => $messageUsage])),
                 ))->withInvocationId($invocationId);
 
                 return;

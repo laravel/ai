@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
@@ -221,6 +222,37 @@ test('streaming error event stops stream', function (array $event): void {
     'nested error event' => [['type' => 'error', 'error' => ['code' => 'server_error', 'message' => 'Server overloaded']]],
     'failed response' => [['type' => 'response.failed', 'response' => ['id' => 'resp_1', 'status' => 'failed', 'error' => ['code' => 'server_error', 'message' => 'Server overloaded']]]],
 ]);
+
+test('streaming failed response keeps its usage', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->responseCreated(),
+                $this->outputTextDelta('Partial'),
+                ['type' => 'response.failed', 'response' => [
+                    'id' => 'resp_1',
+                    'status' => 'failed',
+                    'error' => ['code' => 'server_error', 'message' => 'Server overloaded'],
+                    'usage' => ['input_tokens' => 42, 'output_tokens' => 7, 'input_tokens_details' => ['cached_tokens' => 0], 'output_tokens_details' => ['reasoning_tokens' => 0]],
+                ]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $error = null;
+
+    try {
+        $this->collectStreamEvents();
+    } catch (StreamErrorException $exception) {
+        $error = $exception->error;
+    }
+
+    expect($error->usage)->toBeInstanceOf(TextUsage::class)
+        ->and($error->usage->inputTokens)->toBe(42)
+        ->and($error->usage->outputTokens)->toBe(7);
+});
 
 test('streaming without a terminal response throws', function (): void {
     Http::fake([
