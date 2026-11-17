@@ -59,6 +59,7 @@ use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\AgentTool;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\ToolNameResolver;
+use Laravel\Ai\Tools\ToolResponse;
 use LogicException;
 use Throwable;
 
@@ -821,15 +822,16 @@ class TextGenerationLoop
     /**
      * Create a tool result for the given tool call.
      */
-    protected function toolResult(ToolCall $toolCall, mixed $result, bool $failed = false): ToolResult
+    protected function toolResult(ToolCall $toolCall, mixed $result, bool $failed = false, ?array $arguments = null): ToolResult
     {
         return new ToolResult(
             $toolCall->id,
             $toolCall->name,
-            $toolCall->arguments,
-            $result,
+            $arguments ?? $toolCall->arguments,
+            $result instanceof ToolResponse ? $result->text : $result,
             $toolCall->resultId,
             failed: $failed,
+            attachments: $result instanceof ToolResponse ? $result->attachments : [],
         );
     }
 
@@ -963,14 +965,7 @@ class TextGenerationLoop
                 $result = 'The tool call failed: '.$exception->getMessage();
             }
 
-            $toolResults[] = new ToolResult(
-                $toolCall->id,
-                $toolCall->name,
-                $arguments,
-                $result,
-                $toolCall->resultId,
-                failed: $failed,
-            );
+            $toolResults[] = $this->toolResult($toolCall, $result, $failed, $arguments);
         }
 
         return [$toolResults, ! $hasBareRejection];

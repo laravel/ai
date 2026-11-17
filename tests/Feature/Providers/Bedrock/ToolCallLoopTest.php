@@ -1,7 +1,10 @@
 <?php
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\NoSuchToolException;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
@@ -9,7 +12,9 @@ use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
 use Laravel\Ai\Streaming\Events\StreamEnd;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
+use Laravel\Ai\Tools\ToolResponse;
 use Tests\Fixtures\Tools\ApprovableNumberGenerator;
+use Tests\Fixtures\Tools\FileReturningTool;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 
 function bedrockToolCallResponse(string $toolUseId): array
@@ -246,4 +251,105 @@ describe('tool call loop', function (): void {
             ->and($toolResults)->toHaveCount(1)
             ->and($events[count($events) - 1])->toBeInstanceOf(StreamEnd::class);
     });
+});
+
+test('files a tool returns are sent inside its tool result', function (): void {
+    $requests = [];
+    $client = $this->fakeBedrockConverseSequence([
+        bedrockToolCallResponse('t1'),
+        bedrockTextResponse('The chart is red.'),
+    ], $requests);
+
+    (new TextGenerationLoop($this->gatewayWithClient($client)))->generate(
+        $this->bedrockProvider(),
+        'anthropic.claude-opus-4-7-v1:0',
+        null,
+        messages: [new UserMessage('Describe the sales chart')],
+        tools: [new FileReturningTool(ToolResponse::make('Here is the chart.', [
+            Image::fromPath(__DIR__.'/../../../Fixtures/Images/red.png'),
+            Document::fromString('%PDF-1.4 sales', 'application/pdf')->as('report.pdf'),
+        ]), 'FixedNumberGenerator')],
+        options: new TextGenerationOptions(maxSteps: 5),
+    );
+
+    $content = $requests[1]['messages'][2]['content'][0]['toolResult']['content'];
+
+    expect($content)->toHaveCount(3)
+        ->and($content[0])->toBe(['text' => 'Here is the chart.'])
+        ->and($content[1]['image']['format'])->toBe('png')
+        ->and($content[2]['document'])->toMatchArray(['format' => 'pdf']);
+});
+
+test('image tool results are noted for models that cannot take them', function (): void {
+    $requests = [];
+    $client = $this->fakeBedrockConverseSequence([
+        bedrockToolCallResponse('t1'),
+        bedrockTextResponse('Done.'),
+    ], $requests);
+
+    (new TextGenerationLoop($this->gatewayWithClient($client)))->generate(
+        $this->bedrockProvider(),
+        'meta.llama4-maverick-17b-instruct-v1:0',
+        null,
+        messages: [new UserMessage('Describe the sales chart')],
+        tools: [new FileReturningTool(ToolResponse::make('Here is the chart.', [
+            Image::fromPath(__DIR__.'/../../../Fixtures/Images/red.png'),
+            Document::fromString('%PDF-1.4 sales', 'application/pdf')->as('report.pdf'),
+        ]), 'FixedNumberGenerator')],
+        options: new TextGenerationOptions(maxSteps: 5),
+    );
+
+    $content = $requests[1]['messages'][2]['content'][0]['toolResult']['content'];
+
+    expect($content)->toHaveCount(2)
+        ->and($content[0])->toBe(['text' => "Here is the chart.\n(The tool returned the image [red.png], but it could not be sent to this model.)"])
+        ->and($content[1]['document'])->toMatchArray(['format' => 'pdf']);
+});
+
+test('a document format bedrock cannot take is noted in its tool result', function (): void {
+    $requests = [];
+    $client = $this->fakeBedrockConverseSequence([
+        bedrockToolCallResponse('t1'),
+        bedrockTextResponse('Done.'),
+    ], $requests);
+
+    (new TextGenerationLoop($this->gatewayWithClient($client)))->generate(
+        $this->bedrockProvider(),
+        'anthropic.claude-opus-4-7-v1:0',
+        null,
+        messages: [new UserMessage('Unpack the archive')],
+        tools: [new FileReturningTool(ToolResponse::make('Here is the archive.', [
+            Document::fromString("PK\0\0", 'application/zip')->as('archive.zip'),
+        ]), 'FixedNumberGenerator')],
+        options: new TextGenerationOptions(maxSteps: 5),
+    );
+
+    expect($requests[1]['messages'][2]['content'][0]['toolResult']['content'])->toBe([
+        ['text' => "Here is the archive.\n(The tool returned the document [archive.zip], but it could not be sent to this model.)"],
+    ]);
+});
+
+test('a remote document is noted in its tool result without being fetched', function (): void {
+    Http::fake(['example.com/*' => Http::response('Not found', 404)]);
+    $requests = [];
+    $client = $this->fakeBedrockConverseSequence([
+        bedrockToolCallResponse('t1'),
+        bedrockTextResponse('Done.'),
+    ], $requests);
+
+    (new TextGenerationLoop($this->gatewayWithClient($client)))->generate(
+        $this->bedrockProvider(),
+        'anthropic.claude-opus-4-7-v1:0',
+        null,
+        messages: [new UserMessage('Read the report')],
+        tools: [new FileReturningTool(ToolResponse::make('Here is the report.', [
+            Document::fromUrl('https://example.com/report')->as('report'),
+        ]), 'FixedNumberGenerator')],
+        options: new TextGenerationOptions(maxSteps: 5),
+    );
+
+    expect($requests[1]['messages'][2]['content'][0]['toolResult']['content'])->toBe([
+        ['text' => "Here is the report.\n(The tool returned the document [report], but it could not be sent to this model.)"],
+    ]);
+    Http::assertNothingSent();
 });

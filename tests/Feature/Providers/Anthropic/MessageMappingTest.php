@@ -12,6 +12,7 @@ use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+use Tests\Fixtures\Tools\FileReturningTool;
 
 use function Laravel\Ai\agent;
 
@@ -780,4 +781,80 @@ test('another provider reasoning on a replayed tool call is dropped rather than 
     $mapped = $method->invoke($gateway, [$assistant]);
 
     expect(array_column($mapped[0]['content'], 'type'))->toBe(['text', 'tool_use']);
+});
+
+test('files a tool returned are sent inside its tool result', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    agent('Hi.', toolResultWithFilesHistory(), [new FileReturningTool('')])->prompt('Thanks', provider: 'anthropic');
+
+    $toolResult = Http::recorded()->first()[0]->data()['messages'][2]['content'][0];
+
+    expect($toolResult['type'])->toBe('tool_result')
+        ->and($toolResult['content'])->toHaveCount(3)
+        ->and($toolResult['content'][0])->toBe(['type' => 'text', 'text' => 'Here is the chart.'])
+        ->and($toolResult['content'][1])->toMatchArray(['type' => 'image'])
+        ->and($toolResult['content'][1]['source'])->toMatchArray(['type' => 'base64', 'media_type' => 'image/png'])
+        ->and($toolResult['content'][2])->toMatchArray(['type' => 'document'])
+        ->and($toolResult['content'][2]['source'])->toMatchArray(['type' => 'base64', 'media_type' => 'application/pdf']);
+});
+
+test('a file anthropic cannot receive is noted in its tool result', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    $history = toolResultWithFilesHistory();
+    $history[2]->toolResults[0]->attachments = [Files\Document::fromString("PK\0\0", 'application/zip')->as('archive.zip')];
+
+    agent('Hi.', $history, [new FileReturningTool('')])->prompt('Thanks', provider: 'anthropic');
+
+    expect(Http::recorded()->first()[0]->data()['messages'][2]['content'][0]['content'])->toBe([[
+        'type' => 'text',
+        'text' => "Here is the chart.\n(The tool returned the document [archive.zip], but it could not be sent to this model.)",
+    ]]);
+});
+
+test('an image in a format anthropic cannot take is noted in its tool result', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    $history = toolResultWithFilesHistory();
+    $history[2]->toolResults[0]->attachments = [Files\Image::fromBase64(base64_encode('<svg xmlns="http://www.w3.org/2000/svg"/>'), 'image/svg+xml')->as('logo.svg')];
+
+    agent('Hi.', $history, [new FileReturningTool('')])->prompt('Thanks', provider: 'anthropic');
+
+    expect(Http::recorded()->first()[0]->data()['messages'][2]['content'][0]['content'])->toBe([[
+        'type' => 'text',
+        'text' => "Here is the chart.\n(The tool returned the image [logo.svg], but it could not be sent to this model.)",
+    ]]);
+});
+
+test('an image is only sent to anthropic with the exact type anthropic takes, unless it is sent by url', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse(),
+    ]);
+
+    $history = toolResultWithFilesHistory();
+    $history[2]->toolResults[0]->attachments = [
+        Files\Image::fromBase64(base64_encode('jpeg'), 'image/jpg')->as('a.jpg'),
+        Files\Image::fromBase64(base64_encode('png'), 'image/png; charset=binary')->as('b.png'),
+        Files\Image::fromBase64(base64_encode('png'))->as('c.png'),
+        Files\Image::fromUrl('https://example.com/chart.png'),
+    ];
+
+    agent('Hi.', $history, [new FileReturningTool('')])->prompt('Thanks', provider: 'anthropic');
+
+    expect(Http::recorded()->first()[0]->data()['messages'][2]['content'][0]['content'])->toBe([
+        ['type' => 'text', 'text' => implode("\n", [
+            'Here is the chart.',
+            '(The tool returned the image [a.jpg], but it could not be sent to this model.)',
+            '(The tool returned the image [b.png], but it could not be sent to this model.)',
+            '(The tool returned the image [c.png], but it could not be sent to this model.)',
+        ])],
+        ['type' => 'image', 'source' => ['type' => 'url', 'url' => 'https://example.com/chart.png']],
+    ]);
 });

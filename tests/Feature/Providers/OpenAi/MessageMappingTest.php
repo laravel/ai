@@ -14,6 +14,7 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+use Tests\Fixtures\Tools\FileReturningTool;
 
 use function Laravel\Ai\agent;
 
@@ -485,4 +486,62 @@ test('system instructions are in input array as system role', function (): void 
         return $systemMsg !== null
             && str_contains((string) $systemMsg['content'], 'helpful assistant');
     });
+});
+
+test('files a tool returned are sent inside its function call output', function (): void {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('ok'),
+    ]);
+
+    agent('Hi.', toolResultWithFilesHistory(), [new FileReturningTool('')])->prompt('Thanks', provider: 'openai');
+
+    $output = collect(Http::recorded()->first()[0]->data()['input'])->firstWhere('type', 'function_call_output')['output'];
+
+    expect($output)->toHaveCount(3)
+        ->and($output[0])->toBe(['type' => 'input_text', 'text' => 'Here is the chart.'])
+        ->and($output[1]['type'])->toBe('input_image')
+        ->and($output[1]['image_url'])->toStartWith('data:image/png;base64,')
+        ->and($output[2])->toMatchArray(['type' => 'input_file', 'filename' => 'report.pdf'])
+        ->and($output[2]['file_data'])->toStartWith('data:application/pdf;base64,');
+});
+
+test('an image in a format openai cannot take is noted in its function call output', function (): void {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('ok'),
+    ]);
+
+    $history = toolResultWithFilesHistory();
+    $history[2]->toolResults[0]->attachments = [Files\Image::fromBase64(base64_encode('<svg xmlns="http://www.w3.org/2000/svg"/>'), 'image/svg+xml')->as('logo.svg')];
+
+    agent('Hi.', $history, [new FileReturningTool('')])->prompt('Thanks', provider: 'openai');
+
+    expect(collect(Http::recorded()->first()[0]->data()['input'])->firstWhere('type', 'function_call_output')['output'])->toBe([[
+        'type' => 'input_text',
+        'text' => "Here is the chart.\n(The tool returned the image [logo.svg], but it could not be sent to this model.)",
+    ]]);
+});
+
+test('a document openai cannot take, or without the exact type openai takes, is noted in its function call output', function (): void {
+    Http::fake([
+        'api.openai.com/*' => fakeOpenAiResponse('ok'),
+    ]);
+
+    $history = toolResultWithFilesHistory();
+    $history[2]->toolResults[0]->attachments = [
+        Files\Document::fromString("PK\0\0", 'application/zip')->as('archive.zip'),
+        Files\Document::fromString('%PDF-1.4', 'application/pdf; version=1.4')->as('report.pdf'),
+        new Base64Document(base64_encode('%PDF-1.4'))->as('untyped.pdf'),
+    ];
+
+    agent('Hi.', $history, [new FileReturningTool('')])->prompt('Thanks', provider: 'openai');
+
+    expect(collect(Http::recorded()->first()[0]->data()['input'])->firstWhere('type', 'function_call_output')['output'])->toBe([[
+        'type' => 'input_text',
+        'text' => implode("\n", [
+            'Here is the chart.',
+            '(The tool returned the document [archive.zip], but it could not be sent to this model.)',
+            '(The tool returned the document [report.pdf], but it could not be sent to this model.)',
+            '(The tool returned the document [untyped.pdf], but it could not be sent to this model.)',
+        ]),
+    ]]);
 });

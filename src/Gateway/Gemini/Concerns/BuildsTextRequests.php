@@ -4,6 +4,12 @@ namespace Laravel\Ai\Gateway\Gemini\Concerns;
 
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
+use Laravel\Ai\Files\ProviderDocument;
+use Laravel\Ai\Files\ProviderImage;
+use Laravel\Ai\Gateway\Concerns\MapsToolResultAttachments;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\ToolResultMessage;
@@ -14,6 +20,8 @@ use Laravel\Ai\ToolChoice;
 
 trait BuildsTextRequests
 {
+    use MapsToolResultAttachments;
+
     /**
      * The request keys Gemini expects beside the generation config rather than within it.
      *
@@ -170,8 +178,72 @@ trait BuildsTextRequests
             'type' => 'function_result',
             'name' => $result->name,
             'call_id' => $result->id,
-            'result' => [['type' => 'text', 'text' => $result->text()]],
+            'result' => $result->attachments === []
+                ? [['type' => 'text', 'text' => $result->text()]]
+                : $this->mapToolResultParts(
+                    $result,
+                    fn (string $text): array => ['type' => 'text', 'text' => $text],
+                    $this->mapFunctionResultAttachment(...),
+                ),
         ], fn ($value): bool => $value !== null), $toolResults));
+    }
+
+    /**
+     * Map a file a tool returned to a Gemini function result content block.
+     *
+     * Function results take PNG, JPEG and WebP images, and PDF, CSV and office documents. Plain text is sent as text, and
+     * other files are noted...
+     */
+    protected function mapFunctionResultAttachment(Image|Document $file): array
+    {
+        // A file Gemini has stored is referenced by its URI, without a type...
+        if ($file instanceof ProviderImage || $file instanceof ProviderDocument) {
+            return $this->mapAttachment($file);
+        }
+
+        // Other files are sent with their type as it is, so that's what's checked...
+        $mime = $file->mimeType();
+        $type = strtolower(trim((string) strtok((string) $mime, ';')));
+
+        if ($file instanceof Document && str_starts_with($type, 'text/') && $type !== 'text/csv') {
+            $content = $file->content();
+
+            if (! mb_check_encoding($content, 'UTF-8')) {
+                throw new InvalidArgumentException('Gemini function results only take text documents encoded as UTF-8.');
+            }
+
+            return ['type' => 'text', 'text' => $content];
+        }
+
+        if ($file instanceof Image && ! in_array($mime, ['image/png', 'image/jpeg', 'image/webp'], true)) {
+            throw new InvalidArgumentException('Gemini function results can\'t include ['.($mime ?? 'unknown').'] images.');
+        }
+
+        if ($file instanceof Document && ! $this->isFunctionResultDocumentType($mime)) {
+            throw new InvalidArgumentException('Gemini function results can\'t include ['.($mime ?? 'unknown').'] documents.');
+        }
+
+        return $this->mapAttachment($file);
+    }
+
+    /**
+     * Determine whether Gemini function results take documents of the given type: PDFs, CSV, and office documents.
+     */
+    protected function isFunctionResultDocumentType(?string $mime): bool
+    {
+        if ($mime === null || str_contains($mime, ';')) {
+            return false;
+        }
+
+        return in_array($mime, [
+            'application/pdf',
+            'text/csv',
+            'application/msword',
+            'application/vnd.ms-excel',
+            'application/vnd.ms-powerpoint',
+        ], true)
+            || str_starts_with($mime, 'application/vnd.openxmlformats-officedocument.')
+            || str_starts_with($mime, 'application/vnd.oasis.opendocument.');
     }
 
     /**

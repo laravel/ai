@@ -5,7 +5,14 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\LocalImage;
+use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Providers\TypeSafeProvider;
+use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\ToolResult;
 
 function requiresApiKey(string ...$keys): void
 {
@@ -412,4 +419,23 @@ function fakeDeepSeekToolCallResponse(): PromiseInterface
             'completion_tokens' => 5,
         ],
     ]);
+}
+
+/**
+ * A conversation whose tool call returned text, an image and a PDF.
+ */
+function toolResultWithFilesHistory(): array
+{
+    return [
+        new UserMessage('Describe the sales chart'),
+        new AssistantMessage('Let me get it.', collect([
+            new ToolCall('call_chart', 'FileReturningTool', [], 'call_chart'),
+        ])),
+        new ToolResultMessage(collect([
+            new ToolResult('call_chart', 'FileReturningTool', [], 'Here is the chart.', 'call_chart', attachments: [
+                new LocalImage(__DIR__.'/Fixtures/Images/red.png'),
+                Document::fromString('%PDF-1.4 sales', 'application/pdf')->as('report.pdf'),
+            ]),
+        ])),
+    ];
 }

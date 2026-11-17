@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
+use Laravel\Ai\Gateway\Concerns\MapsToolResultAttachments;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\MessageRole;
@@ -10,6 +11,8 @@ use Laravel\Ai\Messages\UserMessage;
 
 trait MapsMessages
 {
+    use MapsToolResultAttachments;
+
     /**
      * Map the given Laravel messages to Anthropic Messages API format.
      */
@@ -108,7 +111,17 @@ trait MapsMessages
             $content[] = [
                 'type' => 'tool_result',
                 'tool_use_id' => $toolResult->id,
-                'content' => $toolResult->text(),
+                'content' => $toolResult->attachments === []
+                    ? $toolResult->text()
+                    : $this->mapToolResultParts(
+                        $toolResult,
+                        fn (string $text): array => ['type' => 'text', 'text' => $text],
+                        function ($file): array {
+                            $this->ensureToolResultImageType($file, ['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+
+                            return $this->mapAttachments(collect([$file]))[0];
+                        },
+                    ),
             ];
         }
 

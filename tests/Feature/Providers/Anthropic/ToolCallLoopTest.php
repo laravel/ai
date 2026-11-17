@@ -5,9 +5,14 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Promptable;
+use Laravel\Ai\Tools\ToolResponse;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+use Tests\Fixtures\Tools\FileReturningTool;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
+
+use function Laravel\Ai\agent;
 
 test('tool calls trigger follow up request', function (): void {
     Http::fake([
@@ -358,4 +363,44 @@ test('max steps limits tool call depth', function (): void {
     $recorded = Http::recorded();
 
     expect(count($recorded))->toBeLessThanOrEqual(3);
+});
+
+test('files a tool returns are sent to the model with its result', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            $this->fakeToolCallResponse('FileReturningTool'),
+            $this->fakeTextResponse('The chart is red.'),
+        ]),
+    ]);
+
+    $response = agent('Hi.', [], [
+        new FileReturningTool(ToolResponse::make('Here is the chart.', [Image::fromPath(__DIR__.'/../../../Fixtures/Images/red.png')])),
+    ])->prompt('Describe the sales chart', provider: 'anthropic');
+
+    $toolResult = Http::recorded()[1][0]->data()['messages'][2]['content'][0];
+
+    expect($toolResult['content'])->toHaveCount(2)
+        ->and($toolResult['content'][0])->toBe(['type' => 'text', 'text' => 'Here is the chart.'])
+        ->and($toolResult['content'][1]['type'])->toBe('image')
+        ->and($response->toolResults[0]->result)->toBe('Here is the chart.')
+        ->and($response->toolResults[0]->attachments)->toHaveCount(1);
+});
+
+test('a file a tool returns on its own is attached rather than sent as its raw content', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            $this->fakeToolCallResponse('FileReturningTool'),
+            $this->fakeTextResponse('The chart is red.'),
+        ]),
+    ]);
+
+    agent('Hi.', [], [
+        new FileReturningTool(Image::fromPath(__DIR__.'/../../../Fixtures/Images/red.png')),
+    ])->prompt('Describe the sales chart', provider: 'anthropic');
+
+    $content = Http::recorded()[1][0]->data()['messages'][2]['content'][0]['content'];
+
+    expect($content)->toHaveCount(1)
+        ->and($content[0]['type'])->toBe('image')
+        ->and($content[0]['source']['media_type'])->toBe('image/png');
 });
