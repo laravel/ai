@@ -1,8 +1,10 @@
 <?php
 
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Attributes\TopP;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\AgentResponse;
 use Tests\Fixtures\Agents\AssistantAgent;
@@ -512,6 +514,28 @@ describe('tool choice', function (): void {
 
         Http::assertSent(fn ($request): bool => $request->data()['tool_choice'] === ['type' => 'none']);
     });
+
+    test('native structured output honors the tool choice', function (string|array|null $toolChoice, array $expected): void {
+        Http::fake([
+            'api.anthropic.com/*' => $this->fakeStructuredResponse(['number' => 42]),
+        ]);
+
+        (new class($toolChoice) extends ToolChoiceAgent implements HasStructuredOutput
+        {
+            public function schema(JsonSchema $schema): array
+            {
+                return ['number' => $schema->integer()->required()];
+            }
+        })->prompt('Generate a number', provider: 'anthropic');
+
+        Http::assertSent(fn ($request): bool => isset($request->data()['output_config'])
+            && $request->data()['tool_choice'] === $expected);
+    })->with([
+        'default' => [null, ['type' => 'auto']],
+        'required' => ['required', ['type' => 'any']],
+        'named tool' => [['tool' => 'custom_named_tool'], ['type' => 'tool', 'name' => 'custom_named_tool']],
+        'none' => ['none', ['type' => 'none']],
+    ]);
 
     test('forcing a tool while thinking is enabled throws', function (): void {
         Http::fake([
