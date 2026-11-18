@@ -109,6 +109,7 @@ trait MapsMessages
                 'type' => 'tool_result',
                 'tool_use_id' => $toolResult->id,
                 'content' => $toolResult->text(),
+                ...($toolResult->failed ? ['is_error' => true] : []),
             ];
         }
 
