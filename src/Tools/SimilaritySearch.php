@@ -27,7 +27,7 @@ class SimilaritySearch implements Approvable, Tool
     /**
      * Create a new similarity search tool instance.
      *
-     * The closure receives the query string and the tool request, so it can read any argument the tool's schema adds.
+     * @param  Closure(string, Request): mixed  $using
      */
     public function __construct(
         public Closure $using,
