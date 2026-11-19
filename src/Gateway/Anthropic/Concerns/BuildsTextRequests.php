@@ -116,7 +116,9 @@ trait BuildsTextRequests
         }
 
         if (isset($body['tools']) && $options?->cacheToolDefinitions instanceof CacheToolDefinitions) {
-            $body['tools'][array_key_last($body['tools'])]['cache_control'] = $this->cacheControl($options->cacheToolDefinitions->ttl);
+            $index = array_key_last(array_filter($body['tools'], fn (array $tool): bool => ! ($tool['defer_loading'] ?? false)));
+
+            $body['tools'][$index]['cache_control'] = $this->cacheControl($options->cacheToolDefinitions->ttl);
         }
 
         return $body;
