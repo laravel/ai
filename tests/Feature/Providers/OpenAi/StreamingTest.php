@@ -215,6 +215,33 @@ test('streaming emits the tool input as it arrives, before the tool call', funct
     ]);
 });
 
+test('streaming fails a tool call the output limit cut off instead of calling it', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->responseCreated(),
+                $this->outputItemAdded('fc_1', 'call_1', 'FixedNumberGenerator'),
+                $this->functionCallArgumentsDelta('fc_1', '{"sta'),
+                $this->responseIncomplete('max_output_tokens', 10, 5, output: [
+                    ['type' => 'function_call', 'status' => 'incomplete', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'FixedNumberGenerator', 'arguments' => '{"sta'],
+                ]),
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    expect(toolInputEvents($events))->toBe([
+        ['start', 'fc_1', 'FixedNumberGenerator'],
+        ['delta', 'fc_1', '{"sta'],
+        ['error', 'fc_1', '{"sta'],
+    ]);
+
+    Http::assertSentCount(1);
+});
+
 test('streaming handles reasoning events', function (string $eventType): void {
     Http::fake([
         'api.openai.com/*' => Http::response(
