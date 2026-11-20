@@ -183,6 +183,7 @@ test('agents stream tool input as it arrives', function (string $provider, strin
     'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001'],
     'cohere' => ['cohere', 'COHERE_API_KEY', 'command-a-03-2025'],
     'deepseek' => ['deepseek', 'DEEPSEEK_API_KEY', 'deepseek-v4-pro'],
+    'gemini' => ['gemini', 'GEMINI_API_KEY', 'gemini-3.8-flash'],
     'groq' => ['groq', 'GROQ_API_KEY', 'openai/gpt-oss-20b'],
     'mistral' => ['mistral', 'MISTRAL_API_KEY', 'mistral-small-latest'],
     'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-6-luna'],
