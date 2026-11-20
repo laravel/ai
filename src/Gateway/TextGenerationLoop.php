@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway;
 use Closure;
 use Generator;
 use Illuminate\Contracts\Validation\Validator as ValidatorContract;
+use Illuminate\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
@@ -51,7 +52,6 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Responses\TextResponse;
-use Laravel\Ai\Schema\SchemaRules;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\StreamEnd;
@@ -1167,7 +1167,7 @@ class TextGenerationLoop
      */
     protected function inputValidator(array $inputSchema, array $arguments): ValidatorContract
     {
-        return Validator::make(array_intersect_key($arguments, $inputSchema['properties'] ?? []), SchemaRules::for($inputSchema));
+        return Validator::make(array_intersect_key($arguments, $inputSchema['properties'] ?? []), JsonSchema::rules($inputSchema));
     }
 
     /**
