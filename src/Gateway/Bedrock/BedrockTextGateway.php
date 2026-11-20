@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Attributes\CacheInstructions;
 use Laravel\Ai\Attributes\CacheToolDefinitions;
+use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
@@ -17,6 +18,7 @@ use Laravel\Ai\Contracts\Providers\EmbeddingProvider;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Gateway\Anthropic\AnthropicSchemaSanitizer;
 use Laravel\Ai\Gateway\Bedrock\Concerns\CreatesBedrockClient;
 use Laravel\Ai\Gateway\Bedrock\Concerns\MapsAttachments;
 use Laravel\Ai\Gateway\Cohere\Concerns\ParsesEmbeddings;
@@ -983,16 +985,32 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
     {
         return (new Collection($tools))
             ->filter(fn ($tool): bool => $tool instanceof Tool)
-            ->map(fn (Tool $tool): array => [
-                'toolSpec' => [
-                    'name' => ToolNameResolver::resolve($tool),
-                    'description' => (string) $tool->description(),
-                    'inputSchema' => [
-                        'json' => (new ObjectSchema($tool->schema(new JsonSchemaTypeFactory)))->toArray(),
-                    ],
-                ],
-            ])
+            ->map(fn (Tool $tool): array => $this->formatTool($tool))
             ->values()
             ->all();
+    }
+
+    /**
+     * Format a single tool for the Converse API.
+     */
+    protected function formatTool(Tool $tool): array
+    {
+        $strict = Strict::isAppliedTo($tool);
+
+        $schema = (new ObjectSchema($tool->schema(new JsonSchemaTypeFactory)))->toArray();
+
+        $toolSpec = [
+            'name' => ToolNameResolver::resolve($tool),
+            'description' => (string) $tool->description(),
+            'inputSchema' => [
+                'json' => $strict ? AnthropicSchemaSanitizer::sanitize($schema) : $schema,
+            ],
+        ];
+
+        if ($strict) {
+            $toolSpec['strict'] = true;
+        }
+
+        return ['toolSpec' => $toolSpec];
     }
 }
