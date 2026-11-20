@@ -49,6 +49,9 @@ use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Laravel\Ai\Streaming\Events\ToolInputDelta;
+use Laravel\Ai\Streaming\Events\ToolInputError;
+use Laravel\Ai\Streaming\Events\ToolInputStart;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\AgentTool;
 use Laravel\Ai\Tools\Request;
@@ -201,6 +204,87 @@ test('it emits streamed approval requests without executing gated tools', functi
         ->and($approvalEvents->first()->pendingApprovals[0]->id)->toBe('call-1')
         ->and(collect($events)->whereInstanceOf(ToolResultEvent::class))->toHaveCount(0)
         ->and(collect($events)->whereInstanceOf(StreamEnd::class))->toHaveCount(1);
+});
+
+test('it fails a streamed tool input that the step never called', function (): void {
+    $toolCall = new ToolCall('call-done', 'search', ['q' => 'a'], 'call-done');
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        textGenerationLoopStreamStep(
+            events: [
+                new ToolInputStart('input-start-1', 'call-done', 'search', time()),
+                new ToolInputDelta('input-delta-1', 'call-done', '{"q":"a"}', time()),
+                new ToolCallEvent('tool-call-event', $toolCall, time()),
+                new ToolInputStart('input-start-2', 'call-cut', 'search', time()),
+                new ToolInputDelta('input-delta-2', 'call-cut', '{"q":', time()),
+            ],
+            returns: new StepResponse('', [], FinishReason::Length, new TextUsage, new Meta('fake', 'model')),
+        ),
+    ]);
+
+    $events = array_values(iterator_to_array((new TextGenerationLoop($gateway))->stream('invocation-1', textGenerationLoopProvider(), 'model', null)));
+
+    expect(array_map(fn (StreamEvent $event): string => $event::class, $events))->toBe([
+        ToolInputStart::class,
+        ToolInputDelta::class,
+        ToolCallEvent::class,
+        ToolInputStart::class,
+        ToolInputDelta::class,
+        ToolInputError::class,
+        StreamEnd::class,
+    ])->and($events[5])
+        ->toolId->toBe('call-cut')
+        ->toolName->toBe('search')
+        ->input->toBe('{"q":')
+        ->error->toBe('This tool call was not executed because its input did not complete.');
+});
+
+test('it fails an unfinished tool input once, in the step that started it', function (): void {
+    $tool = new TextGenerationLoopCountingTool;
+    $toolCall = new ToolCall('call-done', TextGenerationLoopCountingTool::class, [], 'call-done');
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        textGenerationLoopStreamStep(
+            events: [
+                new ToolInputStart('input-start-1', 'call-cut', 'search', time()),
+                new ToolCallEvent('tool-call-event', $toolCall, time()),
+            ],
+            returns: new StepResponse('', [$toolCall], FinishReason::ToolCalls, new TextUsage, new Meta('fake', 'model')),
+        ),
+        textGenerationLoopStreamStep(
+            events: [new TextDelta('text-delta', 'message-2', 'done', time())],
+            returns: new StepResponse('done', [], FinishReason::Stop, new TextUsage, new Meta('fake', 'model')),
+        ),
+    ]);
+
+    $events = iterator_to_array((new TextGenerationLoop($gateway))->stream(
+        'invocation-1', textGenerationLoopProvider(), 'model', null, [], [$tool], null, new TextGenerationOptions(maxSteps: 2),
+    ));
+
+    expect(array_map(fn (StreamEvent $event): string => $event::class, array_values($events)))->toBe([
+        ToolInputStart::class,
+        ToolCallEvent::class,
+        ToolInputError::class,
+        ToolResultEvent::class,
+        TextDelta::class,
+        StreamEnd::class,
+    ]);
+});
+
+test('it does not fail a streamed tool input when the step errors', function (): void {
+    $gateway = new TextGenerationLoopFakeGateway(streams: [
+        textGenerationLoopStreamStep(events: [
+            new ToolInputStart('input-start-1', 'call-cut', 'search', time()),
+            new Error('error-1', 'server_error', 'Server overloaded', false, time()),
+        ]),
+    ]);
+
+    $events = [];
+
+    expect(function () use ($gateway, &$events): void {
+        foreach ((new TextGenerationLoop($gateway))->stream('invocation-1', textGenerationLoopProvider(), 'model', null) as $event) {
+            $events[] = $event;
+        }
+    })->toThrow(StreamErrorException::class)
+        ->and(collect($events)->whereInstanceOf(ToolInputError::class))->toBeEmpty();
 });
 
 test('it resumes a paused step running only the still-pending gated call', function (): void {
@@ -1445,6 +1529,25 @@ test('a sub-agent reports its output again once it has written enough of it', fu
     // Six 100 character deltas cross the 240 byte threshold twice, at 300 and at 600...
     expect($preliminary->map(fn (ToolResultEvent $event): int => strlen($event->toolResult->result))->values()->all())
         ->toBe([300, 600]);
+});
+
+test('a sub-agent writing a tool input does not report its unchanged output again', function (): void {
+    $tool = textGenerationLoopAgentTool(fn (): Generator => yield from [
+        new TextDelta('sub-delta', 'sub-message', 'Looking it up.', time()),
+        new ToolInputStart('sub-input-start', 'sub-call', 'search', time()),
+        ...array_map(
+            fn (int $index): ToolInputDelta => new ToolInputDelta("sub-input-{$index}", 'sub-call', '"a",', time()),
+            range(1, 20),
+        ),
+        new StreamEnd('sub-end', FinishReason::Stop->value, new TextUsage, time()),
+    ]);
+    $toolCall = new ToolCall('call-sub-agent', 'research_agent', ['task' => 'Research'], 'call-sub-agent');
+
+    $preliminary = collect(textGenerationLoopSubAgentStream([$tool], [$toolCall]))
+        ->whereInstanceOf(ToolResultEvent::class)
+        ->filter(fn (ToolResultEvent $event): bool => $event->preliminary);
+
+    expect($preliminary)->toHaveCount(1);
 });
 
 test('preliminary output joins the text of separate sub-agent steps the way the final result does', function (): void {

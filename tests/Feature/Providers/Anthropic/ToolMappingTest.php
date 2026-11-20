@@ -54,6 +54,24 @@ test('tool with a name() method emits the declared name', function (): void {
     });
 });
 
+test('streamed requests stream function tool input eagerly but leave provider tools alone', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(
+            body: $this->ssePayload([$this->messageStart(), $this->messageDelta('end_turn', 1)]),
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    agent(tools: [new NonStrictTool, new WebSearch])->stream('Hi', provider: 'anthropic')->each(fn () => null);
+
+    Http::assertSent(function ($request): bool {
+        $tools = collect($request->data()['tools'])->keyBy('name');
+
+        return $tools['NonStrictTool']['eager_input_streaming'] === true
+            && ! array_key_exists('eager_input_streaming', $tools['web_search']);
+    });
+});
+
 test('tool with Strict attribute sends strict true', function (): void {
     Http::fake([
         'api.anthropic.com/*' => $this->fakeTextResponse('ok'),

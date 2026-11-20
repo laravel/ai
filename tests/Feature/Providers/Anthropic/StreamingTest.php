@@ -164,6 +164,69 @@ describe('tool calls', function (): void {
             ->and($toolCallEvents[0]->toolCall)->name->toBe('FixedNumberGenerator')->id->toBe('toolu_1');
     });
 
+    test('streaming emits the tool input as it arrives, before the tool call', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->messageStart(),
+                        $this->contentBlockStart(0, ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'FixedNumberGenerator', 'input' => '']),
+                        // Anthropic opens a tool input with an empty fragment, which carries no delta...
+                        $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => '']),
+                        $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => '{"sta']),
+                        $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => 'rt":1}']),
+                        $this->contentBlockStop(0),
+                        $this->messageDelta('tool_use', 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response([
+                    'id' => 'msg_2',
+                    'type' => 'message',
+                    'role' => 'assistant',
+                    'model' => 'claude-sonnet-4-6',
+                    'content' => [['type' => 'text', 'text' => 'The number is 72019']],
+                    'stop_reason' => 'end_turn',
+                    'usage' => ['input_tokens' => 20, 'output_tokens' => 10],
+                ]),
+            ]),
+        ]);
+
+        $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        expect(toolInputEvents($events))->toBe([
+            ['start', 'toolu_1', 'FixedNumberGenerator'],
+            ['delta', 'toolu_1', '{"sta'],
+            ['delta', 'toolu_1', 'rt":1}'],
+            ['call', 'toolu_1', ['start' => 1]],
+        ]);
+    });
+
+    test('streaming fails a tool call the length limit cut off instead of calling it', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->messageStart(),
+                    $this->contentBlockStart(0, ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'FixedNumberGenerator', 'input' => '']),
+                    $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => '{"sta']),
+                    $this->contentBlockStop(0),
+                    $this->messageDelta('max_tokens', 5),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        expect(toolInputEvents($events))->toBe([
+            ['start', 'toolu_1', 'FixedNumberGenerator'],
+            ['delta', 'toolu_1', '{"sta'],
+            ['error', 'toolu_1', '{"sta'],
+        ]);
+    });
+
     test('streaming reuses the code execution container on the follow up request', function (): void {
         Http::fake([
             'api.anthropic.com/*' => Http::sequence([

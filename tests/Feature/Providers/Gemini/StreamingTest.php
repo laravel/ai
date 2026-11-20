@@ -229,6 +229,50 @@ describe('tool calls', function (): void {
         expect($toolCall->toolCall->arguments)->toBe(['seed' => 7]);
     });
 
+    test('streaming emits the tool input as it arrives, before the tool call', function (): void {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence()
+                ->push(...geminiStream([
+                    $this->stepStart(0, ['type' => 'function_call', 'id' => 'call_1', 'name' => 'FixedNumberGenerator']),
+                    $this->argumentsDelta(0, '{"see'),
+                    $this->argumentsDelta(0, 'd": 7}'),
+                    $this->stepStop(0),
+                    $this->interactionCompleted([], 'requires_action'),
+                ]))
+                ->push(...geminiStream([
+                    $this->stepDelta(0, 'text', 'Done'),
+                    $this->interactionCompleted(),
+                ])),
+        ]);
+
+        $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        expect(toolInputEvents($events))->toBe([
+            ['start', 'call_1', 'FixedNumberGenerator'],
+            ['delta', 'call_1', '{"see'],
+            ['delta', 'call_1', 'd": 7}'],
+            ['call', 'call_1', ['seed' => 7]],
+        ]);
+    });
+
+    test('streaming fails a tool call the length limit cut off instead of calling it', function (): void {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => geminiStreamResponse([
+                $this->stepStart(0, ['type' => 'function_call', 'id' => 'call_1', 'name' => 'FixedNumberGenerator']),
+                $this->argumentsDelta(0, '{"see'),
+                $this->interactionCompleted([], 'incomplete'),
+            ]),
+        ]);
+
+        $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        expect(toolInputEvents($events))->toBe([
+            ['start', 'call_1', 'FixedNumberGenerator'],
+            ['delta', 'call_1', '{"see'],
+            ['error', 'call_1', '{"see'],
+        ]);
+    });
+
     test('streamed argument deltas are replayed to gemini as an object', function (): void {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::sequence()

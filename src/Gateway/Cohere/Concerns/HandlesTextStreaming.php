@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Cohere\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
+use Laravel\Ai\Gateway\Concerns\StreamsToolInput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
@@ -22,6 +23,8 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 
 trait HandlesTextStreaming
 {
+    use StreamsToolInput;
+
     /**
      * Process a Cohere Chat API event stream.
      *
@@ -112,11 +115,19 @@ trait HandlesTextStreaming
                         'arguments' => (string) ($toolCall['function']['arguments'] ?? ''),
                     ];
 
+                    yield from $this->toolInputStart($invocationId, $pendingToolCalls[$data['index']]['id'], $pendingToolCalls[$data['index']]['name']);
+
+                    yield from $this->toolInputDelta($invocationId, $pendingToolCalls[$data['index']]['id'], $pendingToolCalls[$data['index']]['name'], $pendingToolCalls[$data['index']]['arguments']);
+
                     break;
 
                 case 'tool-call-delta':
                     if (isset($pendingToolCalls[$data['index']])) {
-                        $pendingToolCalls[$data['index']]['arguments'] .= (string) ($delta['message']['tool_calls']['function']['arguments'] ?? '');
+                        $argumentsDelta = (string) ($delta['message']['tool_calls']['function']['arguments'] ?? '');
+
+                        $pendingToolCalls[$data['index']]['arguments'] .= $argumentsDelta;
+
+                        yield from $this->toolInputDelta($invocationId, $pendingToolCalls[$data['index']]['id'], $pendingToolCalls[$data['index']]['name'], $argumentsDelta);
                     }
 
                     break;
@@ -160,6 +171,10 @@ trait HandlesTextStreaming
             );
 
             $toolCalls[] = $toolCall;
+
+            if ($this->wasCutOff($pending['arguments'], $this->extractFinishReason($finishReason))) {
+                continue;
+            }
 
             yield (new ToolCallEvent(
                 $this->generateEventId(),

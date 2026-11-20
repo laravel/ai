@@ -82,6 +82,33 @@ test('streaming handles tool calls', function (): void {
         ->and($streamEndEvents[0]->reason)->toBe(FinishReason::Stop->value);
 });
 
+test('streaming emits the tool input as it arrives, before the tool call', function (): void {
+    Http::fake([
+        '*' => Http::sequence([
+            Http::response($this->ssePayload([
+                $this->chatChunkToolCallStart(0, 'call_123', 'FixedNumberGenerator'),
+                $this->chatChunkToolCallDelta(0, ''),
+                $this->chatChunkToolCallDelta(0, '{"sta'),
+                $this->chatChunkToolCallDelta(0, 'rt":1}'),
+                $this->chatChunkFinish('tool_calls', ['prompt_tokens' => 5, 'completion_tokens' => 10]),
+            ])),
+            Http::response($this->ssePayload([
+                $this->chatChunk(['role' => 'assistant', 'content' => 'The number is 72019']),
+                $this->chatChunkFinish('stop', ['prompt_tokens' => 20, 'completion_tokens' => 5]),
+            ])),
+        ]),
+    ]);
+
+    $events = $this->collectStreamEvents(agent(tools: [new FixedNumberGenerator]));
+
+    expect(toolInputEvents($events))->toBe([
+        ['start', 'call_123', 'FixedNumberGenerator'],
+        ['delta', 'call_123', '{"sta'],
+        ['delta', 'call_123', 'rt":1}'],
+        ['call', 'call_123', ['start' => 1]],
+    ]);
+});
+
 test('streaming tool loop emits a single stream end with accumulated usage', function (): void {
     Http::fake([
         '*' => Http::sequence([
