@@ -15,6 +15,7 @@ class Step implements Arrayable, JsonSerializable
      * @param  array<int, ToolResult>  $toolResults
      * @param  array<int, array<string, mixed>>  $replayBlocks
      * @param  array<int, ProviderToolCall>  $providerToolCalls
+     * @param  bool  $replayBlocksOutliveTurn  Whether the provider accepts the replay blocks verbatim in later turns of the conversation
      */
     public function __construct(
         public string $text,
@@ -26,6 +27,7 @@ class Step implements Arrayable, JsonSerializable
         public string $reasoning,
         public array $replayBlocks,
         public array $providerToolCalls = [],
+        public bool $replayBlocksOutliveTurn = false,
     ) {}
 
     /**
