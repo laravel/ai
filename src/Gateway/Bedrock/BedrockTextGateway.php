@@ -284,7 +284,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
 
         $assistantText = '';
         $pendingToolCalls = [];
-        $incompleteToolCallEvents = [];
+        $incompleteToolCalls = [];
         $toolCalls = [];
         $structuredOutput = null;
         $currentBlockIndex = null;
@@ -484,7 +484,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                         if ($this->isCompleteToolInput($pending['input'])) {
                             yield $toolCallEvent;
                         } else {
-                            $incompleteToolCallEvents[] = $toolCallEvent;
+                            $incompleteToolCalls[] = [$toolCallEvent, $pending['input']];
                         }
                     }
 
@@ -522,9 +522,8 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             $finishReason = FinishReason::Stop;
         }
 
-        // A call the length limit cut off never runs, so it is left for the loop to report as failed...
-        if ($finishReason !== FinishReason::Length) {
-            foreach ($incompleteToolCallEvents as $toolCallEvent) {
+        foreach ($incompleteToolCalls as [$toolCallEvent, $input]) {
+            if (! $this->wasCutOff($input, $finishReason)) {
                 yield $toolCallEvent;
             }
         }

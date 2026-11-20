@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Concerns;
 
 use Generator;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\ToolInputDelta;
 use Laravel\Ai\Streaming\Events\ToolInputStart;
 
@@ -21,7 +22,7 @@ trait StreamsToolInput
     }
 
     /**
-     * Get the event that carries a fragment of a tool call's input, under the same ID and name rule that started it.
+     * Get the event that carries a fragment of a tool call's input.
      *
      * @return Generator<int, ToolInputDelta>
      */
@@ -38,6 +39,14 @@ trait StreamsToolInput
     protected function isCompleteToolInput(string $input): bool
     {
         return $input === '' || json_validate($input);
+    }
+
+    /**
+     * Determine if the length limit cut off a tool call's input, leaving the call for the loop to report as failed.
+     */
+    protected function wasCutOff(string $input, FinishReason $finishReason): bool
+    {
+        return $finishReason === FinishReason::Length && ! $this->isCompleteToolInput($input);
     }
 
     /**

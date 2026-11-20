@@ -7,7 +7,6 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Gateway\Concerns\StreamsToolInput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
-use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
@@ -173,8 +172,7 @@ trait HandlesTextStreaming
 
             $toolCalls[] = $toolCall;
 
-            // A call the length limit cut off never runs, so it is left for the loop to report as failed...
-            if ($this->extractFinishReason($finishReason) === FinishReason::Length && ! $this->isCompleteToolInput($pending['arguments'])) {
+            if ($this->wasCutOff($pending['arguments'], $this->extractFinishReason($finishReason))) {
                 continue;
             }
 

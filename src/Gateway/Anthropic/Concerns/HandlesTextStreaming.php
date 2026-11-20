@@ -8,7 +8,6 @@ use Laravel\Ai\Gateway\Concerns\StreamsToolInput;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Providers\Provider;
-use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
@@ -71,7 +70,7 @@ trait HandlesTextStreaming
         $currentToolIndex = -1;
         $currentServerToolInput = '';
         $pendingToolCalls = [];
-        $incompleteToolCallEvents = [];
+        $incompleteToolCalls = [];
         $responseContent = [];
         $afterTool = false;
         $lastTextDelta = '';
@@ -350,7 +349,7 @@ trait HandlesTextStreaming
                     if ($this->isCompleteToolInput($call['arguments'])) {
                         yield $toolCallEvent;
                     } else {
-                        $incompleteToolCallEvents[] = $toolCallEvent;
+                        $incompleteToolCalls[] = [$toolCallEvent, $call['arguments']];
                     }
                 } elseif ($currentBlockType === 'server_tool_use') {
                     $index = $data['index'] ?? count($responseContent) - 1;
@@ -395,9 +394,8 @@ trait HandlesTextStreaming
 
         $finishReason = $this->extractFinishReason(['stop_reason' => $stopReason]);
 
-        // A call the length limit cut off never runs, so it is left for the loop to report as failed...
-        if ($finishReason !== FinishReason::Length) {
-            foreach ($incompleteToolCallEvents as $toolCallEvent) {
+        foreach ($incompleteToolCalls as [$toolCallEvent, $input]) {
+            if (! $this->wasCutOff($input, $finishReason)) {
                 yield $toolCallEvent;
             }
         }
