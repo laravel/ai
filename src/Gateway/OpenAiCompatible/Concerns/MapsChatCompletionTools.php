@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\OpenAiCompatible\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Str;
+use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
@@ -25,7 +26,7 @@ trait MapsChatCompletionTools
             if ($tool instanceof ProviderTool) {
                 $mapped[] = $this->mapProviderTool($tool, $provider);
             } elseif ($tool instanceof Tool) {
-                $mapped[] = $this->mapTool($tool);
+                $mapped[] = $this->mapTool($tool, $provider);
             }
         }
 
@@ -43,15 +44,17 @@ trait MapsChatCompletionTools
     /**
      * Map a regular tool to a Chat Completions function definition.
      */
-    protected function mapTool(Tool $tool): array
+    protected function mapTool(Tool $tool, Provider $provider): array
     {
+        $strict = Strict::isAppliedTo($tool) && $this->supportsStrictTools($provider);
+
         $schema = $tool->schema(new JsonSchemaTypeFactory);
 
         $schemaArray = filled($schema)
-            ? (new ObjectSchema($schema))->toSchema()
+            ? (new ObjectSchema($schema, strict: $strict))->toSchema()
             : [];
 
-        return [
+        $definition = [
             'type' => 'function',
             'function' => [
                 'name' => ToolNameResolver::resolve($tool),
@@ -64,6 +67,20 @@ trait MapsChatCompletionTools
                 ],
             ],
         ];
+
+        if ($strict) {
+            $definition['function']['strict'] = true;
+        }
+
+        return $definition;
+    }
+
+    /**
+     * Determine if the provider honors the "strict" flag on function definitions.
+     */
+    protected function supportsStrictTools(Provider $provider): bool
+    {
+        return false;
     }
 
     /**
