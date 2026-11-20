@@ -82,7 +82,7 @@ test('tool result follow up maps assistant and tool result messages', function (
         ->and($toolMsg['content'])->not->toBeEmpty();
 });
 
-test('replaying an ag-ui tool result keeps the tool call id on both messages', function (): void {
+test('replaying an openai-issued ag-ui tool result pairs the call and the result', function (): void {
     Http::fake([
         'api.groq.com/*' => fakeGroqResponse('Yes, that account is in the list.'),
     ]);

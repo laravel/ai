@@ -173,17 +173,17 @@ describe('creating messages from AG-UI messages', function () {
             ->and($messages[1]->toolResults[0]->resultId)->toBe('call_1');
     });
 
-    test('a tool message without an id leaves the call result id empty', function () {
+    test('a tool message with a blank or non-string id leaves both result ids empty', function (mixed $id) {
         $messages = AgentUserInteraction::fromMessages([
             ['id' => 'fc_1', 'role' => 'assistant', 'toolCalls' => [
                 ['id' => 'fc_1', 'type' => 'function', 'function' => ['name' => 'list_accounts', 'arguments' => '{}']],
             ]],
-            ['role' => 'tool', 'toolCallId' => 'fc_1', 'content' => 'ok'],
+            ['id' => $id, 'role' => 'tool', 'toolCallId' => 'fc_1', 'content' => 'ok'],
         ]);
 
         expect($messages[0]->toolCalls[0]->resultId)->toBeNull()
             ->and($messages[1]->toolResults[0]->resultId)->toBeNull();
-    });
+    })->with(['empty string' => '', 'integer' => 42]);
 
     test('system and developer messages are skipped and malformed tool messages are dropped', function () {
         $messages = AgentUserInteraction::fromMessages([

@@ -68,9 +68,6 @@ class AgentUserInteraction
 
             // Tool results are buffered so parallel calls settle within a single tool result message...
             if ($role === 'tool') {
-                // The call is rebuilt from its item id. The id its result was sent under lives on the tool message...
-                static::restoreToolCallResultId($message, $calls);
-
                 if (($toolResult = static::toolResultFrom($message, $calls)) !== null) {
                     $toolResults[] = $toolResult;
                 }
@@ -414,24 +411,6 @@ class AgentUserInteraction
     }
 
     /**
-     * Copy a tool message's id onto the call it settles when that call has no result id.
-     *
-     * @param  array<string, mixed>  $message
-     * @param  array<string, ToolCall>  $calls
-     */
-    protected static function restoreToolCallResultId(array $message, array $calls): void
-    {
-        $toolCallId = $message['toolCallId'] ?? null;
-        $messageId = $message['id'] ?? null;
-
-        if (! is_string($toolCallId) || ! isset($calls[$toolCallId]) || ! is_string($messageId) || blank($messageId)) {
-            return;
-        }
-
-        $calls[$toolCallId]->resultId ??= $messageId;
-    }
-
-    /**
      * Create a tool result from an AG-UI tool message, naming it from the tool call it settles.
      *
      * @param  array<string, mixed>  $message
@@ -444,6 +423,12 @@ class AgentUserInteraction
         }
 
         $call = $calls[$id] ?? null;
+        $resultId = is_string($message['id'] ?? null) && filled($message['id']) ? $message['id'] : null;
+
+        // The stream sends the provider call id as the tool message id...
+        if ($call !== null) {
+            $call->resultId ??= $resultId;
+        }
 
         $content = $message['content'] ?? null;
         $error = $message['error'] ?? null;
@@ -453,7 +438,7 @@ class AgentUserInteraction
             name: $call?->name ?? '',
             arguments: $call?->arguments ?? [],
             result: filled($error) ? $error : $content,
-            resultId: is_string($message['id'] ?? null) ? $message['id'] : null,
+            resultId: $resultId,
         );
     }
 
