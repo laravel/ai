@@ -11,7 +11,7 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\RemembersConversations;
-use Laravel\Ai\Gateway\ParentInvocation;
+use Laravel\Ai\Contracts\StoresUserMessages;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Models\Conversation;
 use Laravel\Ai\Prompts\AgentPrompt;
@@ -50,6 +50,10 @@ class RememberConversation
             ? (string) Str::uuid7()
             : null;
 
+        if ($this->store instanceof StoresUserMessages && $this->shouldRememberTurn($agent, $prompt)) {
+            $this->openTurn($agent, $prompt, $pendingConversationId);
+        }
+
         try {
             $response = $next($prompt);
         } catch (Throwable $exception) {
@@ -72,6 +76,8 @@ class RememberConversation
 
         return $response->then(function (AgentResponse $completedResponse) use ($prompt, $agent, $pendingConversationId): void {
             if (! $this->shouldRemember($agent, $prompt, $completedResponse)) {
+                $agent->forgetConversationTurn();
+
                 if ($pendingConversationId !== null) {
                     $completedResponse->conversationId = null;
                     $completedResponse->conversationUser = null;
@@ -99,6 +105,8 @@ class RememberConversation
                 $agent->currentConversation(),
                 $participant,
             )->withStoredMessages($userMessageId, $assistantMessageId);
+
+            $agent->forgetConversationTurn();
         });
     }
 
@@ -120,6 +128,8 @@ class RememberConversation
         $prompt->setRunContext(null);
 
         if ($context === null || ! $this->shouldRememberTurn($agent, $prompt)) {
+            $agent->forgetConversationTurn();
+
             return;
         }
 
@@ -127,6 +137,8 @@ class RememberConversation
 
         // A resume that died before its first step still has to fail the row its approvals were written to...
         if ($response->steps->isEmpty() && ! $prompt->hasApprovalDecisions()) {
+            $agent->forgetConversationTurn();
+
             return;
         }
 
@@ -142,6 +154,8 @@ class RememberConversation
             $response,
             $exception,
         );
+
+        $agent->forgetConversationTurn();
     }
 
     /**
@@ -151,6 +165,10 @@ class RememberConversation
      */
     protected function openTurn(Agent $agent, AgentPrompt $prompt, ?string $pendingConversationId): ?string
     {
+        if ($agent->conversationTurnMessageId() !== null) {
+            return $agent->conversationTurnMessageId();
+        }
+
         $participant = $agent->conversationParticipant();
 
         [$participantType, $participantId] = $this->participantKeys($participant);
@@ -165,13 +183,17 @@ class RememberConversation
         }
 
         // A resume continues the turn its decisions answer, so it adds no message of its own...
-        return $prompt->hasApprovalDecisions() ? null : $this->store->storeUserMessage(
+        $messageId = $prompt->hasApprovalDecisions() ? null : $this->store->storeUserMessage(
             $agent->currentConversation(),
             $participantType,
             $participantId,
             $agent::class,
             new UserMessage($prompt->prompt, $prompt->attachments),
         );
+
+        $agent->rememberConversationTurn($messageId);
+
+        return $messageId;
     }
 
     /**

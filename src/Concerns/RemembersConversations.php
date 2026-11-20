@@ -11,6 +11,8 @@ trait RemembersConversations
 
     protected ?object $conversationUser = null;
 
+    protected ?string $conversationTurnMessageId = null;
+
     /**
      * Start a new conversation for the given participant.
      */
@@ -73,11 +75,17 @@ trait RemembersConversations
             return [];
         }
 
-        return resolve(ConversationStore::class)
+        $messages = resolve(ConversationStore::class)
             ->getLatestConversationMessages(
                 $this->conversationId,
-                $this->maxConversationMessages()
-            )->all();
+                $this->maxConversationMessages() + ($this->conversationTurnMessageId === null ? 0 : 1)
+            );
+
+        if ($this->conversationTurnMessageId !== null) {
+            $messages->pop();
+        }
+
+        return $messages->all();
     }
 
     /**
@@ -110,5 +118,33 @@ trait RemembersConversations
     public function conversationParticipant(): ?object
     {
         return $this->conversationUser;
+    }
+
+    /**
+     * Get the ID of the user message opened for the current turn.
+     */
+    public function conversationTurnMessageId(): ?string
+    {
+        return $this->conversationTurnMessageId;
+    }
+
+    /**
+     * Mark the current turn's user message as stored.
+     */
+    public function rememberConversationTurn(?string $messageId): static
+    {
+        $this->conversationTurnMessageId = $messageId;
+
+        return $this;
+    }
+
+    /**
+     * Forget the current turn's stored user message.
+     */
+    public function forgetConversationTurn(): static
+    {
+        $this->conversationTurnMessageId = null;
+
+        return $this;
     }
 }

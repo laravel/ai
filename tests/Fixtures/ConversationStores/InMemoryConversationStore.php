@@ -5,12 +5,13 @@ namespace Tests\Fixtures\ConversationStores;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Contracts\StoresUserMessages;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
 use Throwable;
 
-class InMemoryConversationStore implements ConversationStore
+class InMemoryConversationStore implements ConversationStore, StoresUserMessages
 {
     public array $conversations = [];
 

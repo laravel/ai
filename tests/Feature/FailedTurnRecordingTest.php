@@ -90,14 +90,15 @@ test('a failed turn replays its answered call and flags the one it never answere
         ->toolCalls->toHaveCount(1)->each->toMatchObject(['id' => 'toolu_1']);
 });
 
-test('a turn that dies before any step records nothing', function (): void {
+test('a turn that dies before any step still records the user message', function (): void {
     Http::fake(['api.anthropic.com/*' => Http::response(['error' => 'boom'], 500)]);
 
     expect(fn () => (new RememberingAssistantAgent)->forUser((object) ['id' => 1])->prompt('Go', provider: 'anthropic'))
         ->toThrow(RequestException::class);
 
-    expect(DB::table('agent_conversation_messages')->count())->toBe(0)
-        ->and(DB::table('agent_conversations')->count())->toBe(0);
+    expect(DB::table('agent_conversation_messages')->count())->toBe(1)
+        ->and(DB::table('agent_conversation_messages')->value('content'))->toBe('Go')
+        ->and(DB::table('agent_conversations')->count())->toBe(1);
 });
 
 test('an agent with nothing to remember records nothing when it dies', function (): void {
@@ -131,7 +132,8 @@ test('an attempt that fails over to another provider leaves no failed turn behin
 
     (new RememberingAssistantAgent)->forUser((object) ['id' => 1])->prompt('Go', provider: ['primary', 'backup']);
 
-    expect(DB::table('agent_conversation_messages')->where('role', 'assistant')->pluck('status')->all())->toBe(['completed']);
+    expect(DB::table('agent_conversation_messages')->where('role', 'user')->count())->toBe(1)
+        ->and(DB::table('agent_conversation_messages')->where('role', 'assistant')->pluck('status')->all())->toBe(['completed']);
 });
 
 test('a stream that dies mid-flight keeps the steps it completed', function (): void {

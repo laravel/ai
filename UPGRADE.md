@@ -2,6 +2,12 @@
 
 ## Upgrading To 1.4 From 1.3
 
+### Remembered Conversation Prompts Are Stored Before Generation
+
+**Likelihood Of Impact: Low**
+
+Remembered conversations now store the user's message before the agent starts generating a response. This preserves the prompt when a request fails before its first step, is interrupted, or times out. Conversation stores that want to opt into this behavior should implement `Laravel\Ai\Contracts\StoresUserMessages`; the built-in database store does so automatically.
+
 ### OpenAI Billing And Quota Errors Throw `InsufficientCreditsException`
 
 **Likelihood Of Impact: Low**
