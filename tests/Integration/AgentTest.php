@@ -9,6 +9,7 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\AgentStreamed;
@@ -27,9 +28,13 @@ use Laravel\Ai\Responses\StreamedAgentResponse;
 use Laravel\Ai\Skills\Skill;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Laravel\Ai\Streaming\Events\ToolInputDelta;
+use Laravel\Ai\Streaming\Events\ToolInputError;
+use Laravel\Ai\Streaming\Events\ToolInputStart;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\ToolChoice;
 use Laravel\Ai\Tools\LoadSkill;
+use Laravel\Ai\Tools\Request;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ConversationalAgent;
 use Tests\Fixtures\Agents\MultiStepToolAgent;
@@ -133,6 +138,57 @@ test('agents can stream a response', function (string $provider, string $apiKey,
     unset($_SERVER['__testing.response']);
     unset($_SERVER['__testing.invoked']);
 })->with('agent-providers');
+
+test('agents stream tool input as it arrives', function (string $provider, string $apiKey, string $model): void {
+    requiresApiKey($apiKey);
+
+    $tool = new class implements Tool
+    {
+        public function name(): string
+        {
+            return 'SaveNote';
+        }
+
+        public function description(): string
+        {
+            return 'Save a note for the user.';
+        }
+
+        public function handle(Request $request): string
+        {
+            return 'Saved.';
+        }
+
+        public function schema(JsonSchema $schema): array
+        {
+            return ['content' => $schema->string()->required()];
+        }
+    };
+
+    $events = collect(agent(tools: [$tool])->stream(
+        'Save a note with a three sentence summary of what Laravel is. Then reply "Done".',
+        provider: $provider,
+        model: $model,
+    ));
+
+    $call = $events->whereInstanceOf(ToolCallEvent::class)->first()->toolCall;
+
+    $inputEvents = $events->filter(fn ($event): bool => ($event instanceof ToolInputStart || $event instanceof ToolInputDelta) && $event->toolId === $call->id)->values();
+
+    expect($inputEvents->first())->toBeInstanceOf(ToolInputStart::class)
+        ->and(json_decode($inputEvents->whereInstanceOf(ToolInputDelta::class)->pluck('delta')->implode(''), true))->toBe($call->arguments)
+        ->and($events->search(fn ($event): bool => $event instanceof ToolInputStart))->toBeLessThan($events->search(fn ($event): bool => $event instanceof ToolCallEvent))
+        ->and($events->whereInstanceOf(ToolInputError::class))->toBeEmpty();
+})->with([
+    'anthropic' => ['anthropic', 'ANTHROPIC_API_KEY', 'claude-haiku-4-5-20251001'],
+    'cohere' => ['cohere', 'COHERE_API_KEY', 'command-a-03-2025'],
+    'deepseek' => ['deepseek', 'DEEPSEEK_API_KEY', 'deepseek-v4-pro'],
+    'groq' => ['groq', 'GROQ_API_KEY', 'openai/gpt-oss-20b'],
+    'mistral' => ['mistral', 'MISTRAL_API_KEY', 'mistral-small-latest'],
+    'openai' => ['openai', 'OPENAI_API_KEY', 'gpt-6-luna'],
+    'openrouter' => ['openrouter', 'OPENROUTER_API_KEY', 'anthropic/claude-haiku-4.5'],
+    'xai' => ['xai', 'XAI_API_KEY', 'grok-4.20-non-reasoning'],
+]);
 
 test('agents can queue a response', function (string $provider, string $apiKey, string $model): void {
     requiresApiKey($apiKey);
