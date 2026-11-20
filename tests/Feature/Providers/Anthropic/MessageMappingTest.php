@@ -9,7 +9,10 @@ use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\LocalImage;
 use Laravel\Ai\Gateway\Anthropic\AnthropicGateway;
 use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\ToolResult;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 
@@ -84,7 +87,54 @@ test('tool result follow up maps assistant and tool result messages', function (
 
     $toolResultBlock = collect($toolResultMsg['content'])->firstWhere('type', 'tool_result');
     expect($toolResultBlock['tool_use_id'])->toBe($toolUseBlock['id'])
-        ->and($toolResultBlock['content'])->not->toBeEmpty();
+        ->and($toolResultBlock['content'])->not->toBeEmpty()
+        ->and($toolResultBlock)->not->toHaveKey('is_error');
+});
+
+test('failed tool result is flagged as an error', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            $this->fakeToolCallResponse(),
+            $this->fakeTextResponse('The tool failed'),
+        ]),
+    ]);
+
+    (new ToolUsingAgent(fixed: true, toolThrowsException: true))->prompt(
+        'Generate a number',
+        provider: 'anthropic',
+    );
+
+    $toolResultBlock = collect(Http::recorded()[1][0]->data()['messages'])
+        ->flatMap(fn (array $message): array => is_array($message['content']) ? $message['content'] : [])
+        ->firstWhere('type', 'tool_result');
+
+    expect($toolResultBlock['content'])->toBe('The tool call failed: Forced to throw exception.')
+        ->and($toolResultBlock['is_error'] ?? null)->toBeTrue();
+});
+
+test('failed tool result from a stored conversation is flagged as an error', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(messages: [
+        new UserMessage('Generate a number'),
+        new AssistantMessage('', collect([new ToolCall('toolu_123', 'FixedNumberGenerator', [])])),
+        new ToolResultMessage(collect([ToolResult::fromArray([
+            'id' => 'toolu_123',
+            'name' => 'FixedNumberGenerator',
+            'result' => 'The tool call failed: boom.',
+            'failed' => true,
+        ])])),
+    ])->prompt('Try again', provider: 'anthropic');
+
+    Http::assertSent(function ($request): bool {
+        $toolResultBlock = collect($request->data()['messages'])
+            ->flatMap(fn (array $message): array => is_array($message['content']) ? $message['content'] : [])
+            ->firstWhere('type', 'tool_result');
+
+        return ($toolResultBlock['is_error'] ?? null) === true;
+    });
 });
 
 test('local image attachment without explicit mime type detects mime from file', function (): void {
