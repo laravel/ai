@@ -423,6 +423,12 @@ class AgentUserInteraction
         }
 
         $call = $calls[$id] ?? null;
+        $resultId = is_string($message['id'] ?? null) && filled($message['id']) ? $message['id'] : null;
+
+        // The stream sends the provider call id as the tool message id...
+        if ($call !== null) {
+            $call->resultId ??= $resultId;
+        }
 
         $content = $message['content'] ?? null;
         $error = $message['error'] ?? null;
@@ -432,7 +438,7 @@ class AgentUserInteraction
             name: $call?->name ?? '',
             arguments: $call?->arguments ?? [],
             result: filled($error) ? $error : $content,
-            resultId: is_string($message['id'] ?? null) ? $message['id'] : null,
+            resultId: $resultId,
         );
     }
 
