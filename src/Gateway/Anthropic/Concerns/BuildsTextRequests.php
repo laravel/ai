@@ -105,7 +105,7 @@ trait BuildsTextRequests
     {
         foreach ($body['tools'] ?? [] as $index => $tool) {
             if (! isset($tool['type'])) {
-                $body['tools'][$index]['eager_input_streaming'] ??= true;
+                $body['tools'][$index]['eager_input_streaming'] = true;
             }
         }
 
