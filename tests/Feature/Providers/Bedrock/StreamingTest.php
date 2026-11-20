@@ -2,7 +2,6 @@
 
 use Aws\MockHandler;
 use Aws\Result;
-use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Streaming\Events\ReasoningDelta;
 use Laravel\Ai\Streaming\Events\ReasoningEnd;
@@ -111,12 +110,12 @@ describe('text streaming', function (): void {
         ]);
     });
 
-    test('streaming keeps the structured output tool input to itself', function (): void {
+    test('streaming fails a tool call the length limit cut off instead of calling it', function (): void {
         $client = $this->fakeBedrockStream([
-            $this->contentBlockStart(0, ['toolUse' => ['toolUseId' => 's1', 'name' => 'structured_output']]),
-            $this->contentBlockDelta(0, ['toolUse' => ['input' => '{"symbol":"Fe"}']]),
+            $this->contentBlockStart(0, ['toolUse' => ['toolUseId' => 't1', 'name' => 'FixedNumberGenerator']]),
+            $this->contentBlockDelta(0, ['toolUse' => ['input' => '{"sta']]),
             $this->contentBlockStop(0),
-            $this->messageStop('tool_use'),
+            $this->messageStop('max_tokens'),
         ]);
 
         $events = iterator_to_array(
@@ -125,12 +124,16 @@ describe('text streaming', function (): void {
                 $this->bedrockProvider(),
                 'anthropic.claude-opus-4-7-v1:0',
                 null,
-                schema: ['symbol' => (new JsonSchemaTypeFactory)->string()],
+                tools: [new FixedNumberGenerator],
             ),
             preserve_keys: false,
         );
 
-        expect(toolInputEvents($events))->toBe([]);
+        expect(toolInputEvents($events))->toBe([
+            ['start', 't1', 'FixedNumberGenerator'],
+            ['delta', 't1', '{"sta'],
+            ['error', 't1', '{"sta'],
+        ]);
     });
 
     test('streaming round-trips reasoning block on follow-up tool step', function (): void {

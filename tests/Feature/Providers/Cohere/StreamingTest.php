@@ -96,6 +96,23 @@ test('streaming emits the tool input as it arrives, before the tool call', funct
     ]);
 });
 
+test('streaming fails a tool call the length limit cut off instead of calling it', function (): void {
+    Http::fake([
+        '*' => $this->fakeStreamResponse([
+            ...array_slice($this->streamToolCallEvents('FixedNumberGenerator', 'call_1', ['{"sta']), 0, -1),
+            ['type' => 'message-end', 'delta' => ['finish_reason' => 'MAX_TOKENS', 'usage' => ['tokens' => ['input_tokens' => 10, 'output_tokens' => 5]]]],
+        ]),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    expect(toolInputEvents($events))->toBe([
+        ['start', 'call_1', 'FixedNumberGenerator'],
+        ['delta', 'call_1', '{"sta'],
+        ['error', 'call_1', '{"sta'],
+    ]);
+});
+
 test('streaming ignores tool plan deltas', function (): void {
     Http::fake([
         '*' => Http::sequence([

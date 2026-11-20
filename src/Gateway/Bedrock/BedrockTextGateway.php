@@ -284,6 +284,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
 
         $assistantText = '';
         $pendingToolCalls = [];
+        $incompleteToolCallEvents = [];
         $toolCalls = [];
         $structuredOutput = null;
         $currentBlockIndex = null;
@@ -337,12 +338,9 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                         'id' => $start['toolUse']['toolUseId'] ?? '',
                         'name' => $start['toolUse']['name'] ?? '',
                         'input' => '',
-                        'isStructuredOutput' => $structured && ($start['toolUse']['name'] ?? '') === self::STRUCTURED_OUTPUT_TOOL,
                     ];
 
-                    if (! $pendingToolCalls[$currentBlockIndex]['isStructuredOutput']) {
-                        yield from $this->toolInputStart($invocationId, $pendingToolCalls[$currentBlockIndex]['id'], $pendingToolCalls[$currentBlockIndex]['name']);
-                    }
+                    yield from $this->toolInputStart($invocationId, $pendingToolCalls[$currentBlockIndex]['id'], $pendingToolCalls[$currentBlockIndex]['name']);
                 }
 
                 continue;
@@ -407,9 +405,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                 } elseif (isset($delta['toolUse']['input'], $pendingToolCalls[$index])) {
                     $pendingToolCalls[$index]['input'] .= $delta['toolUse']['input'];
 
-                    if (! $pendingToolCalls[$index]['isStructuredOutput']) {
-                        yield from $this->toolInputDelta($invocationId, $pendingToolCalls[$index]['id'], $pendingToolCalls[$index]['name'], $delta['toolUse']['input']);
-                    }
+                    yield from $this->toolInputDelta($invocationId, $pendingToolCalls[$index]['id'], $pendingToolCalls[$index]['name'], $delta['toolUse']['input']);
                 }
 
                 continue;
@@ -466,7 +462,7 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                     $pending = $pendingToolCalls[$index];
                     $arguments = json_decode($pending['input'] !== '' ? $pending['input'] : '{}', true) ?? [];
 
-                    if ($pending['isStructuredOutput']) {
+                    if ($structured && $pending['name'] === self::STRUCTURED_OUTPUT_TOOL) {
                         $structuredOutput = json_encode($arguments);
                     } else {
                         $toolCall = new ToolCall($pending['id'], $pending['name'], $arguments);
@@ -479,11 +475,17 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
                             ],
                         ];
 
-                        yield (new ToolCallEvent(
+                        $toolCallEvent = (new ToolCallEvent(
                             (string) Str::uuid(),
                             $toolCall,
                             $timestamp,
                         ))->withInvocationId($invocationId);
+
+                        if ($this->isCompleteToolInput($pending['input'])) {
+                            yield $toolCallEvent;
+                        } else {
+                            $incompleteToolCallEvents[] = $toolCallEvent;
+                        }
                     }
 
                     unset($pendingToolCalls[$index]);
@@ -518,6 +520,13 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
 
         if ($toolCalls === [] && $structured && $finishReason === FinishReason::ToolCalls) {
             $finishReason = FinishReason::Stop;
+        }
+
+        // A call the length limit cut off never runs, so it is left for the loop to report as failed...
+        if ($finishReason !== FinishReason::Length) {
+            foreach ($incompleteToolCallEvents as $toolCallEvent) {
+                yield $toolCallEvent;
+            }
         }
 
         $replayBlocks = array_values($responseContent);

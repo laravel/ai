@@ -8,6 +8,7 @@ use Laravel\Ai\Gateway\Concerns\StreamsToolInput;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\UrlCitation;
@@ -70,6 +71,7 @@ trait HandlesTextStreaming
         $currentToolIndex = -1;
         $currentServerToolInput = '';
         $pendingToolCalls = [];
+        $incompleteToolCallEvents = [];
         $responseContent = [];
         $afterTool = false;
         $lastTextDelta = '';
@@ -334,7 +336,7 @@ trait HandlesTextStreaming
                         $responseContent[$index]['input'] = $parsedArguments;
                     }
 
-                    yield (new ToolCallEvent(
+                    $toolCallEvent = (new ToolCallEvent(
                         $this->generateEventId(),
                         new ToolCall(
                             $call['id'],
@@ -344,6 +346,12 @@ trait HandlesTextStreaming
                         ),
                         time(),
                     ))->withInvocationId($invocationId);
+
+                    if ($this->isCompleteToolInput($call['arguments'])) {
+                        yield $toolCallEvent;
+                    } else {
+                        $incompleteToolCallEvents[] = $toolCallEvent;
+                    }
                 } elseif ($currentBlockType === 'server_tool_use') {
                     $index = $data['index'] ?? count($responseContent) - 1;
 
@@ -385,12 +393,21 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
+        $finishReason = $this->extractFinishReason(['stop_reason' => $stopReason]);
+
+        // A call the length limit cut off never runs, so it is left for the loop to report as failed...
+        if ($finishReason !== FinishReason::Length) {
+            foreach ($incompleteToolCallEvents as $toolCallEvent) {
+                yield $toolCallEvent;
+            }
+        }
+
         return $this->buildStepResponse(
             content: array_values($responseContent),
             provider: $provider,
             model: $model,
             usage: $usage ?? new TextUsage(0, 0),
-            finishReason: $this->extractFinishReason(['stop_reason' => $stopReason]),
+            finishReason: $finishReason,
             structured: false,
             container: $container,
         );

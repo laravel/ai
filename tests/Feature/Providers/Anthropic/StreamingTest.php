@@ -203,6 +203,30 @@ describe('tool calls', function (): void {
         ]);
     });
 
+    test('streaming fails a tool call the length limit cut off instead of calling it', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->messageStart(),
+                    $this->contentBlockStart(0, ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'FixedNumberGenerator', 'input' => '']),
+                    $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => '{"sta']),
+                    $this->contentBlockStop(0),
+                    $this->messageDelta('max_tokens', 5),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        expect(toolInputEvents($events))->toBe([
+            ['start', 'toolu_1', 'FixedNumberGenerator'],
+            ['delta', 'toolu_1', '{"sta'],
+            ['error', 'toolu_1', '{"sta'],
+        ]);
+    });
+
     test('streaming reuses the code execution container on the follow up request', function (): void {
         Http::fake([
             'api.anthropic.com/*' => Http::sequence([

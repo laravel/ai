@@ -33,6 +33,14 @@ trait StreamsToolInput
     }
 
     /**
+     * Determine if a streamed tool input arrived whole rather than cut off partway.
+     */
+    protected function isCompleteToolInput(string $input): bool
+    {
+        return $input === '' || json_validate($input);
+    }
+
+    /**
      * Generate a unique ID for a stream event.
      */
     abstract protected function generateEventId(): string;
