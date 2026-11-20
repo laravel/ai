@@ -1040,6 +1040,37 @@ class TextGenerationLoop
     }
 
     /**
+     * Read a submission carrying a boolean "approved" to a pause that waits only on approval as that approval, the way AG-UI clients resolve an approval interrupt.
+     *
+     * @param  array<string, Decision>  $approval
+     * @param  Message[]  $messages
+     * @param  array<Tool|ProviderTool>  $tools
+     * @return array<string, Decision>
+     */
+    public function approvalDecisionsFor(array $approval, array $messages, array $tools): array
+    {
+        [$pendingToolCalls] = $this->pendingToolCalls($messages);
+
+        $pendingTools = $this->toolsForPendingCalls($pendingToolCalls, $tools);
+
+        foreach ($pendingToolCalls as $toolCall) {
+            $decision = $approval[$toolCall->id] ?? null;
+
+            if (! $decision?->isSubmitted() || ! is_bool($approved = $decision->arguments['approved'] ?? null)) {
+                continue;
+            }
+
+            $tool = $pendingTools[$toolCall->id];
+
+            if ($this->approvalForTool($tool, $this->withModelArguments($toolCall, $tool))?->inputSchema === null) {
+                $approval[$toolCall->id] = $approved ? Decision::approve() : Decision::reject();
+            }
+        }
+
+        return $approval;
+    }
+
+    /**
      * Find the tool each pending call is for, keyed by the call's id.
      *
      * @param  Collection<int, ToolCall>  $pendingToolCalls
@@ -1148,12 +1179,9 @@ class TextGenerationLoop
                 ->mapWithKeys(fn (array $messages, string $key) => ["{$toolCall->id}.{$key}" => $messages]);
         });
 
+        // A retry must answer every pause again, so the error carries all of them rather than only the invalid ones...
         if ($errors->isNotEmpty()) {
-            $invalid = $gated->filter(fn (ToolCall $toolCall) => $errors->keys()->contains(
-                fn (string $key) => str_starts_with($key, "{$toolCall->id}."),
-            ));
-
-            throw InvalidToolInputException::withPendingApprovals($errors->all(), $this->pendingApprovalsFor($invalid, $approvals));
+            throw InvalidToolInputException::withPendingApprovals($errors->all(), $this->pendingApprovalsFor($gated, $approvals));
         }
 
         return $arguments;

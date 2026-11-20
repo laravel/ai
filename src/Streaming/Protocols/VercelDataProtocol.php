@@ -22,6 +22,7 @@ use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolResult;
+use Laravel\Ai\Vercel\Vercel;
 
 /**
  * The Vercel AI SDK data stream protocol.
@@ -101,6 +102,11 @@ class VercelDataProtocol extends StreamProtocol
             }
 
             yield from $this->yieldPart($part);
+
+            // The model reads the tool output, so the data a tool returns for the client travels in its own part...
+            if ($part['type'] === 'tool-output-available' && $event instanceof ToolResult && $event->toolResult->data !== null) {
+                yield from $this->yieldPart(Vercel::toolDataPart($event->toolResult->id, $event->toolResult->data));
+            }
         }
 
         if ($this->started && ! $this->errored) {
@@ -241,7 +247,7 @@ class VercelDataProtocol extends StreamProtocol
         return [
             'type' => 'tool-output-available',
             'toolCallId' => $event->toolResult->id,
-            'output' => $event->toolResult->data ?? $event->toolResult->result,
+            'output' => $event->toolResult->result,
             ...($event->preliminary ? ['preliminary' => true] : []),
         ];
     }

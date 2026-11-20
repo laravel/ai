@@ -82,7 +82,11 @@ class Vercel
 
             if ($message instanceof ConversationMessage) {
                 foreach ($message->tool_results ?? [] as $toolResult) {
-                    static::applyUiToolOutput($result, $partRefs, $toolResult['id'], $toolResult['data'] ?? $toolResult['result'] ?? null, $toolResult['denied'] ?? false);
+                    static::applyUiToolOutput($result, $partRefs, $toolResult['id'], $toolResult['result'] ?? null, $toolResult['denied'] ?? false);
+
+                    if (isset($toolResult['data']) && ! ($toolResult['denied'] ?? false) && isset($partRefs[$toolResult['id']])) {
+                        $result[$partRefs[$toolResult['id']][0]]['parts'][] = static::toolDataPart($toolResult['id'], $toolResult['data']);
+                    }
                 }
             }
         }
@@ -171,6 +175,16 @@ class Vercel
         if (! $denied) {
             $result[$message]['parts'][$part]['output'] = $output;
         }
+    }
+
+    /**
+     * Get the data part that carries what a tool returned for the client, keyed by its tool call id.
+     *
+     * @return array{type: string, id: string, data: mixed}
+     */
+    public static function toolDataPart(string $toolCallId, mixed $data): array
+    {
+        return ['type' => 'data-tool-output', 'id' => $toolCallId, 'data' => $data];
     }
 
     /**

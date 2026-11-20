@@ -11,9 +11,9 @@ use Symfony\Component\HttpFoundation\Response;
 class InvalidToolInputException extends ValidationException
 {
     /**
-     * @var Collection<int, PendingApproval>
+     * @var Collection<int, PendingApproval>|null
      */
-    public Collection $pendingApprovals;
+    public ?Collection $pendingApprovals = null;
 
     /**
      * Create an exception for the given errors, carrying the pauses the caller must answer again.
@@ -42,7 +42,7 @@ class InvalidToolInputException extends ValidationException
         return response()->json([
             'message' => $this->getMessage(),
             'errors' => $this->errors(),
-            'approvals' => $this->pendingApprovals->values()->toArray(),
+            'approvals' => $this->pendingApprovals?->values()->toArray() ?? [],
         ], $this->status);
     }
 }

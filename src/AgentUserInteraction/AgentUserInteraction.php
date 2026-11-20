@@ -141,7 +141,7 @@ class AgentUserInteraction
 
             if (array_keys($payload) === ['approved'] && is_bool($payload['approved'])) {
                 $decisions[$id] = $payload['approved'];
-            } elseif ($payload !== []) {
+            } else {
                 $decisions[$id] = Decision::submit($payload);
             }
         }

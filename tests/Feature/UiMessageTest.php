@@ -519,7 +519,9 @@ describe('hydrating useChat from stored messages', function () {
             ]),
         ]);
 
-        expect($ui[0]['parts'][0]['output'])->toBe(['total' => '$41.00']);
+        expect($ui[0]['parts'][0]['output'])->toBe('Total: $41.00')
+            ->and($ui[0]['parts'][1])->toBe(['type' => 'data-tool-output', 'id' => 'call-1', 'data' => ['total' => '$41.00']])
+            ->and(Vercel::fromUiMessages($ui)[1]->toolResults->sole()->result)->toBe('Total: $41.00');
     });
 
     test('a denied tool call hydrates as output-denied', function () {

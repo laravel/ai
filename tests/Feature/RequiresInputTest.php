@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
+use Laravel\Ai\AgentUserInteraction\AgentUserInteraction;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Contracts\ConversationStore;
@@ -132,6 +133,34 @@ test('an invalid submission renders the pause again for JSON clients', function 
             ->and($json->getData(true)['errors'])->toBe(['toolu_1.answer' => ['The selected answer is invalid.']])
             ->and($json->getData(true)['approvals'][0]['input_schema']['properties']['answer']['enum'])->toBe(['Basic', 'Pro'])
             ->and($exception->render(Request::create('/', 'POST')))->toBeNull();
+    }
+});
+
+test('an invalid submission in a batch renders every pause the retry must answer', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            ...requiresInputToolCall('ChoiceTool', []),
+            'content' => [
+                ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'ChoiceTool', 'input' => ['question' => 'Which plan?', 'options' => ['Basic', 'Pro']]],
+                ['type' => 'tool_use', 'id' => 'toolu_2', 'name' => 'ChoiceTool', 'input' => ['question' => 'Which color?', 'options' => ['Red', 'Blue']]],
+            ],
+        ]),
+    ]);
+
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Ask me two things.', provider: 'anthropic');
+
+    try {
+        (new RememberingAskingAgent)
+            ->continue($paused->conversationId, (object) ['id' => 1])
+            ->prompt(Decisions::from([
+                'toolu_1' => Decision::submit(['answer' => 'Pro']),
+                'toolu_2' => Decision::submit(['answer' => 'Green']),
+            ]), provider: 'anthropic');
+
+        $this->fail('The submission should have been refused.');
+    } catch (InvalidToolInputException $exception) {
+        expect(array_keys($exception->errors()))->toBe(['toolu_2.answer'])
+            ->and($exception->pendingApprovals->pluck('id')->all())->toBe(['toolu_1', 'toolu_2']);
     }
 });
 
@@ -366,6 +395,24 @@ test('a pause waiting only on approval refuses submitted values', function () {
         ->continue($paused->conversationId, (object) ['id' => 1])
         ->prompt(Decisions::from(['toolu_1' => Decision::submit(['confirm' => true])]), provider: 'anthropic');
 })->throws(ApprovalMismatchException::class, 'Values may only be submitted to a pause waiting on input.');
+
+test('an AG-UI rejection carrying a reason rejects a pause waiting only on approval', function () {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence()
+            ->push(requiresInputToolCall('DescribedApprovalTool', []))
+            ->push(requiresInputText('Okay, I will not.')),
+    ]);
+
+    $paused = (new RememberingAskingAgent)->forUser((object) ['id' => 1])->prompt('Delete my account.', provider: 'anthropic');
+
+    $resumed = (new RememberingAskingAgent)
+        ->continue($paused->conversationId, (object) ['id' => 1])
+        ->prompt(AgentUserInteraction::decisionsFrom([
+            ['interruptId' => 'toolu_1', 'status' => 'resolved', 'payload' => ['approved' => false, 'reason' => 'Not today.']],
+        ]), provider: 'anthropic');
+
+    expect($resumed->toolResults->sole()->denied)->toBeTrue();
+});
 
 test('a tool that needs both values and approval asks for approval once it has them', function () {
     Http::fake([

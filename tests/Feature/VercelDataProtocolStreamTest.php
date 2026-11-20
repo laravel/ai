@@ -240,7 +240,7 @@ test('a pause waiting on values emits its schema within the approval descriptor'
     ]);
 });
 
-test('a tool result carrying data streams the data as the tool output', function () {
+test('a tool result carrying data streams the text as the tool output and the data in its own part', function () {
     $parts = vercelProtocolParts([
         new StreamStart('msg-1', 'anthropic', 'claude-sonnet-4-6', time()),
         new ToolCall('event-1', new Data\ToolCall('call-1', 'Receipt', []), time()),
@@ -248,7 +248,8 @@ test('a tool result carrying data streams the data as the tool output', function
         new StreamEnd('event-3', 'stop', new TextUsage, time()),
     ]);
 
-    expect($parts[3])->toBe(['type' => 'tool-output-available', 'toolCallId' => 'call-1', 'output' => ['total' => '$41.00']]);
+    expect($parts[3])->toBe(['type' => 'tool-output-available', 'toolCallId' => 'call-1', 'output' => 'Total: $41.00'])
+        ->and($parts[4])->toBe(['type' => 'data-tool-output', 'id' => 'call-1', 'data' => ['total' => '$41.00']]);
 });
 
 test('a resumed stream emits the approved tool output for the prior turn tool call', function () {

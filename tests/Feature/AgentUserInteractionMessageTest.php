@@ -274,7 +274,8 @@ describe('resuming an interrupted run', function () {
         ]);
 
         expect($decisions->get('call-1')->isSubmitted())->toBeTrue()
-            ->and($decisions->get('call-1')->arguments)->toBe(['answer' => 'Pro']);
+            ->and($decisions->get('call-1')->arguments)->toBe(['answer' => 'Pro'])
+            ->and(AgentUserInteraction::decisionsFrom([['interruptId' => 'call-1', 'status' => 'resolved', 'payload' => []]])->get('call-1')->arguments)->toBe([]);
     });
 
     test('a resolved resume entry with an approved value among other values submits them all', function () {
@@ -328,7 +329,6 @@ describe('resuming an interrupted run', function () {
 
     test('malformed resume entries are skipped rather than rejected', function () {
         expect(AgentUserInteraction::decisionsFrom([['status' => 'cancelled']]))->toBeNull()
-            ->and(AgentUserInteraction::decisionsFrom([['interruptId' => 'call-1', 'status' => 'resolved', 'payload' => []]]))->toBeNull()
             ->and(AgentUserInteraction::decisionsFrom([['interruptId' => 'call-1', 'status' => 'ignored', 'payload' => ['approved' => true]]]))->toBeNull();
     });
 
