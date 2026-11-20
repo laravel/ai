@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Approvals\ApprovalSignature;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Contracts\ConversationStore;
@@ -453,7 +454,7 @@ test('a paused run finishes with an interrupt outcome for each pending approval'
         'outcome' => [
             'type' => 'interrupt',
             'interrupts' => [[
-                'id' => 'call-1',
+                'id' => 'call-1.'.ApprovalSignature::sign('call-1', 'DeleteFile', ['path' => 'a.txt']),
                 'reason' => 'approval_required',
                 'message' => 'Destructive operation.',
                 'toolCallId' => 'call-1',
@@ -486,7 +487,7 @@ test('a paused run reports its interrupt outcome even when the stream later thro
 
     expect(collect($events)->pluck('type')->all())->toBe([
         'RUN_STARTED', 'STEP_STARTED', 'STEP_FINISHED', 'RUN_FINISHED',
-    ])->and($events[3]['outcome']['interrupts'][0]['id'])->toBe('call-1');
+    ])->and($events[3]['outcome']['interrupts'][0]['id'])->toBe('call-1.'.ApprovalSignature::sign('call-1', 'DeleteFile', ['path' => 'a.txt']));
 
     Exceptions::assertReported(RuntimeException::class);
 });

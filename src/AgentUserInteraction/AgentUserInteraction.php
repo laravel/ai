@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Laravel\Ai\Approvals\ApprovalSignature;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
@@ -127,6 +128,8 @@ class AgentUserInteraction
                 continue;
             }
 
+            [$id] = static::splitInterruptId($id);
+
             $status = $entry['status'] ?? null;
 
             if ($status === 'cancelled') {
@@ -141,6 +144,50 @@ class AgentUserInteraction
         }
 
         return $decisions === [] ? null : Decisions::from($decisions);
+    }
+
+    /**
+     * Drop unsettled tool calls the client cannot prove the server issued.
+     *
+     * @param  list<Message>  $messages
+     * @param  iterable<int, mixed>  $resume
+     * @return list<Message>
+     */
+    public static function withoutForgedCalls(array $messages, iterable $resume): array
+    {
+        $signatures = [];
+
+        foreach ($resume as $entry) {
+            if (is_array($entry) && is_string($entry['interruptId'] ?? null)) {
+                [$id, $signatures[$id]] = static::splitInterruptId($entry['interruptId']);
+            }
+        }
+
+        $settled = (new Collection($messages))
+            ->filter(fn (Message $message) => $message instanceof ToolResultMessage)
+            ->flatMap(fn (ToolResultMessage $message) => $message->toolResults->pluck('id'))
+            ->all();
+
+        foreach ($messages as $message) {
+            if ($message instanceof AssistantMessage) {
+                $message->toolCalls = $message->toolCalls
+                    ->filter(fn (ToolCall $call) => in_array($call->id, $settled, true)
+                        || ApprovalSignature::verify($signatures[$call->id] ?? '', $call->id, $call->name, $call->arguments))
+                    ->values();
+            }
+        }
+
+        return $messages;
+    }
+
+    /**
+     * Split an interrupt ID into the tool call ID and the signature it carries.
+     *
+     * @return array{string, string}
+     */
+    protected static function splitInterruptId(string $id): array
+    {
+        return preg_match('/^(.+)\.([a-f0-9]{64})$/', $id, $matches) ? [$matches[1], $matches[2]] : [$id, ''];
     }
 
     /**
@@ -251,7 +298,7 @@ class AgentUserInteraction
     public static function interrupt(string $id, ?string $reason = null, ?string $tool = null, array $arguments = []): array
     {
         return [
-            'id' => $id,
+            'id' => $id.'.'.ApprovalSignature::sign($id, (string) $tool, $arguments),
             'reason' => 'approval_required',
             ...(filled($reason) ? ['message' => $reason] : []),
             'toolCallId' => $id,

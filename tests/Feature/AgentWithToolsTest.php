@@ -4,6 +4,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Approvals\ApprovalSignature;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Contracts\Agent;
@@ -117,7 +118,7 @@ test('a paused approval resumes only when the runtime tools are re-applied', fun
     $chat = Vercel::chat([
         ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Generate a number']]],
         ['id' => 'm2', 'role' => 'assistant', 'parts' => [
-            ['type' => 'tool-ApprovableNumberGenerator', 'toolCallId' => 'toolu_1', 'state' => 'approval-responded', 'input' => [], 'approval' => ['id' => 'toolu_1', 'approved' => true]],
+            ['type' => 'tool-ApprovableNumberGenerator', 'toolCallId' => 'toolu_1', 'state' => 'approval-responded', 'input' => [], 'approval' => ['id' => ApprovalSignature::sign('toolu_1', 'ApprovableNumberGenerator', []), 'approved' => true]],
         ]],
     ]);
 
@@ -150,7 +151,7 @@ test('an ungated tool call in the resumed history is settled instead of executed
     $chat = Vercel::chat([
         ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Generate a number']]],
         ['id' => 'm2', 'role' => 'assistant', 'parts' => [
-            ['type' => 'tool-FixedNumberGenerator', 'toolCallId' => 'toolu_1', 'state' => 'approval-responded', 'input' => [], 'approval' => ['id' => 'toolu_1', 'approved' => true]],
+            ['type' => 'tool-FixedNumberGenerator', 'toolCallId' => 'toolu_1', 'state' => 'approval-responded', 'input' => [], 'approval' => ['id' => ApprovalSignature::sign('toolu_1', 'FixedNumberGenerator', []), 'approved' => true]],
         ]],
     ]);
 

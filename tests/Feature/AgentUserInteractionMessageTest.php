@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\AgentUserInteraction\AgentUserInteraction;
+use Laravel\Ai\Approvals\ApprovalSignature;
 use Laravel\Ai\Files\Base64Audio;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
@@ -442,7 +443,7 @@ describe('hydrating AG-UI from stored messages', function () {
 
         expect($interrupts)->toEqual([
             [
-                'id' => 'call-1',
+                'id' => 'call-1.'.ApprovalSignature::sign('call-1', 'DeleteFile', ['path' => 'a.txt']),
                 'reason' => 'approval_required',
                 'message' => 'Deletes a file.',
                 'toolCallId' => 'call-1',
@@ -458,7 +459,7 @@ describe('hydrating AG-UI from stored messages', function () {
                 ],
             ],
             [
-                'id' => 'call-2',
+                'id' => 'call-2.'.ApprovalSignature::sign('call-2', 'DeleteFile', ['path' => 'b.txt']),
                 'reason' => 'approval_required',
                 'toolCallId' => 'call-2',
                 'metadata' => [
