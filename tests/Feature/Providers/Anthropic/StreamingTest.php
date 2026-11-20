@@ -1,8 +1,11 @@
 <?php
 
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
@@ -598,6 +601,59 @@ describe('error handling', function (): void {
         }
 
         expect($error)->toBeInstanceOf(Error::class)->type->toBe('overloaded_error')->message->toBe('Server overloaded');
+    });
+
+    test('streaming error keeps the usage reported before it', function (): void {
+        Event::fake([StepFailed::class]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->messageStart(),
+                    $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                    $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'Partial']),
+                    ['type' => 'error', 'error' => ['type' => 'overloaded_error', 'message' => 'Server overloaded']],
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $error = null;
+
+        try {
+            $this->collectStreamEvents();
+        } catch (StreamErrorException $exception) {
+            $error = $exception->error;
+        }
+
+        $failed = Event::dispatched(StepFailed::class)->first()[0];
+
+        expect($error->usage)->toBeInstanceOf(TextUsage::class)
+            ->and($error->usage->inputTokens)->toBe(10)
+            ->and($failed->usage)->toBe($error->usage);
+    });
+
+    test('streaming error before any usage reports none', function (): void {
+        Event::fake([StepFailed::class]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    ['type' => 'error', 'error' => ['type' => 'overloaded_error', 'message' => 'Server overloaded']],
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        try {
+            $this->collectStreamEvents();
+        } catch (StreamErrorException) {
+            //
+        }
+
+        expect(Event::dispatched(StepFailed::class)->first()[0]->usage)->toBeNull();
     });
 });
 

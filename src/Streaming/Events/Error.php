@@ -2,8 +2,13 @@
 
 namespace Laravel\Ai\Streaming\Events;
 
+use Laravel\Ai\Responses\Data\TextUsage;
+
 class Error extends StreamEvent
 {
+    /**
+     * @param  TextUsage|null  $usage  The usage the provider reported before the stream failed, if any.
+     */
     public function __construct(
         public string $id,
         public string $type,
@@ -11,6 +16,7 @@ class Error extends StreamEvent
         public bool $recoverable,
         public int $timestamp,
         public ?array $metadata = null,
+        public ?TextUsage $usage = null,
     ) {
         //
     }
