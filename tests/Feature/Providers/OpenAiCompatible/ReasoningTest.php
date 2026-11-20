@@ -114,10 +114,15 @@ test('tool loops send reasoning back under the field the server used', function 
 
     (new ProviderOptionsWithToolsAgent)->prompt('Generate a number', provider: 'openai-compatible');
 
-    $assistant = openAiCompatibleReplayedToolCallMessage();
-
-    expect($assistant[$field])->toBe('I need a number.')
-        ->and($assistant)->toHaveCount(3);
+    expect(openAiCompatibleReplayedToolCallMessage())->toBe([
+        'role' => 'assistant',
+        'tool_calls' => [[
+            'id' => 'call_1',
+            'type' => 'function',
+            'function' => ['name' => 'FixedNumberGenerator', 'arguments' => '{}'],
+        ]],
+        $field => 'I need a number.',
+    ]);
 })->with(['reasoning_content', 'reasoning']);
 
 test('streamed tool loops send reasoning back under the field the server used', function (string $field): void {
@@ -129,31 +134,21 @@ test('streamed tool loops send reasoning back under the field the server used', 
     ]);
 
     Http::fake(['*' => Http::sequence([
-        Http::response(implode('
-
-', [
+        Http::response(implode("\n\n", [
             $chunk(['role' => 'assistant', $field => 'I need ']),
             $chunk([$field => 'a number.']),
             $chunk(['tool_calls' => [['index' => 0, 'id' => 'call_1', 'type' => 'function', 'function' => ['name' => 'FixedNumberGenerator', 'arguments' => '{}']]]]),
             $chunk([], 'tool_calls'),
             'data: [DONE]',
-        ]).'
-
-', 200, ['Content-Type' => 'text/event-stream']),
-        Http::response(implode('
-
-', [
+        ])."\n\n", 200, ['Content-Type' => 'text/event-stream']),
+        Http::response(implode("\n\n", [
             $chunk(['role' => 'assistant', 'content' => 'The number is 72019']),
             $chunk([], 'stop'),
             'data: [DONE]',
-        ]).'
-
-', 200, ['Content-Type' => 'text/event-stream']),
+        ])."\n\n", 200, ['Content-Type' => 'text/event-stream']),
     ])]);
 
-    foreach ((new ProviderOptionsWithToolsAgent)->stream('Generate a number', provider: 'openai-compatible') as $event) {
-        //
-    }
+    iterator_to_array((new ProviderOptionsWithToolsAgent)->stream('Generate a number', provider: 'openai-compatible'));
 
     expect(openAiCompatibleReplayedToolCallMessage()[$field])->toBe('I need a number.');
 })->with(['reasoning_content', 'reasoning']);
