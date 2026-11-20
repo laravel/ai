@@ -6,11 +6,12 @@ use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Http\UploadedFile;
 use InvalidArgumentException;
 use JsonSerializable;
+use Laravel\Ai\Contracts\Files\HasStream;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Files\Concerns\CanBeUploadedToProvider;
 use Laravel\Ai\Files\Concerns\HasLocalContent;
 
-class LocalDocument extends Document implements Arrayable, JsonSerializable, StorableFile
+class LocalDocument extends Document implements Arrayable, HasStream, JsonSerializable, StorableFile
 {
     use CanBeUploadedToProvider;
     use HasLocalContent;
