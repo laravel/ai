@@ -44,46 +44,6 @@ function finalToolResults(AgentResponse|StreamableAgentResponse $response): Coll
         : $response->toolResults;
 }
 
-/**
- * Store a conversation with the given ID and no participant.
- */
-function storeLinkTestConversation(string $id): void
-{
-    DB::table('agent_conversations')->insert([
-        'id' => $id,
-        'participant_type' => null,
-        'participant_id' => null,
-        'title' => $id,
-        'created_at' => now(),
-        'updated_at' => now(),
-    ]);
-}
-
-/**
- * Store a message with the given tool calls in the given conversation.
- *
- * @param  list<array<string, mixed>>  $toolCalls
- */
-function storeLinkTestMessage(string $conversationId, string $role, array $toolCalls = []): void
-{
-    DB::table('agent_conversation_messages')->insert([
-        'id' => (string) str()->uuid7(),
-        'conversation_id' => $conversationId,
-        'participant_type' => null,
-        'participant_id' => null,
-        'agent' => 'Orchestrator',
-        'role' => $role,
-        'content' => '',
-        'attachments' => '[]',
-        'steps' => json_encode([['content' => '', 'tool_calls' => $toolCalls]]),
-        'usage' => '[]',
-        'meta' => '[]',
-        'status' => 'completed',
-        'created_at' => now(),
-        'updated_at' => now(),
-    ]);
-}
-
 test('each delegation is linked from the parent tool call that ran it', function (string $mode): void {
     $user = (object) ['id' => 1];
 
@@ -108,8 +68,7 @@ test('each delegation is linked from the parent tool call that ran it', function
             fn ($call) => $call->toMatchArray(['id' => 'call_1', 'result' => 'First result', 'sub_conversation_id' => $links[0]]),
             fn ($call) => $call->toMatchArray(['id' => 'call_2', 'result' => 'Second result', 'sub_conversation_id' => $links[1]]),
         )
-        ->and(finalToolResults($response)->pluck('subConversationId')->all())->toBe($links)
-        ->and(Conversation::find($response->conversationId)->subConversations()->orderBy('id')->pluck('id')->all())->toBe($links);
+        ->and(finalToolResults($response)->pluck('subConversationId')->all())->toBe($links);
 })->with(['prompt', 'stream']);
 
 test('the link is left out of serialized tool results, steps and stream events', function (string $mode): void {
@@ -333,6 +292,29 @@ test('a delegation approved when the parent resumes is linked', function (string
         ->and(storedMessageContents(conversationContaining('one')))->toBe(['one', 'First result']);
 })->with(['prompt', 'stream']);
 
+test('a delegation denied when the parent resumes is not run or linked', function (string $mode): void {
+    $user = (object) ['id' => 1];
+
+    Http::fake(['api.anthropic.com/*' => Http::sequence()
+        ->pushResponse($mode === 'prompt'
+            ? fakeAnthropicToolUseResponse('RememberingSubAgent', ['task' => 'one'], 'toolu_1')
+            : fakeAnthropicStreamToolUseResponse('RememberingSubAgent', ['task' => 'one'], 'toolu_1'))
+        ->pushResponse($mode === 'prompt' ? fakeAnthropicResponse('Done.') : fakeAnthropicStreamResponse('Done.')),
+    ]);
+
+    $orchestrator = fn () => new RememberingOrchestratingAgent([
+        (new AgentTool((new RememberingSubAgent)->forUser($user)))->requireApproval('Check the task first.'),
+    ]);
+
+    $paused = promptOrStream($orchestrator()->forUser($user), $mode, 'Delegate');
+
+    promptOrStream($orchestrator()->continue($paused->conversationId, $user), $mode, Decisions::from(['toolu_1' => false]));
+
+    expect(storedToolCalls($paused->conversationId))->toHaveCount(1)
+        ->and(storedToolCalls($paused->conversationId)[0])->not->toHaveKey('sub_conversation_id')
+        ->and(DB::table('agent_conversations')->pluck('id')->all())->toBe([$paused->conversationId]);
+})->with(['prompt', 'stream']);
+
 test('a delegation run alongside a paused tool call keeps its link when the parent resumes', function (): void {
     $user = (object) ['id' => 1];
 
@@ -368,45 +350,4 @@ test('a delegation run alongside a paused tool call keeps its link when the pare
 
     expect($calls['toolu_1'])->toMatchArray(['result' => 'First result', 'sub_conversation_id' => $link])
         ->and($calls['toolu_2'])->toMatchArray(['result' => '72019'])->not->toHaveKey('sub_conversation_id');
-});
-
-test('a conversation returns the sub-conversations linked from its tool calls', function (): void {
-    foreach (['parent', 'sub-1', 'sub-2', 'unrelated'] as $id) {
-        storeLinkTestConversation($id);
-    }
-
-    storeLinkTestMessage('parent', 'user');
-    storeLinkTestMessage('parent', 'assistant', [
-        ['id' => 'call_1', 'name' => 'ResearchAgent', 'arguments' => [], 'result' => 'one', 'sub_conversation_id' => 'sub-1'],
-        ['id' => 'call_2', 'name' => 'lookup', 'arguments' => [], 'result' => 'plain tool'],
-    ]);
-    storeLinkTestMessage('parent', 'assistant', [
-        ['id' => 'call_3', 'name' => 'ResearchAgent', 'arguments' => [], 'result' => 'two', 'sub_conversation_id' => 'sub-2'],
-    ]);
-    storeLinkTestMessage('unrelated', 'assistant', [
-        ['id' => 'call_4', 'name' => 'ResearchAgent', 'arguments' => [], 'result' => 'other', 'sub_conversation_id' => 'parent'],
-    ]);
-
-    expect(Conversation::find('parent')->subConversations()->orderBy('id')->pluck('id')->all())->toBe(['sub-1', 'sub-2']);
-});
-
-test('a conversation without delegations has no sub-conversations', function (): void {
-    storeLinkTestConversation('parent');
-    storeLinkTestMessage('parent', 'user');
-    storeLinkTestMessage('parent', 'assistant', [
-        ['id' => 'call_1', 'name' => 'lookup', 'arguments' => [], 'result' => 'plain tool'],
-    ]);
-
-    expect(Conversation::find('parent')->subConversations()->get())->toBeEmpty();
-});
-
-test('a sub-conversation shared by several delegations is returned once', function (): void {
-    storeLinkTestConversation('parent');
-    storeLinkTestConversation('shared');
-    storeLinkTestMessage('parent', 'assistant', [
-        ['id' => 'call_1', 'name' => 'ResearchAgent', 'arguments' => [], 'result' => 'one', 'sub_conversation_id' => 'shared'],
-        ['id' => 'call_2', 'name' => 'ResearchAgent', 'arguments' => [], 'result' => 'two', 'sub_conversation_id' => 'shared'],
-    ]);
-
-    expect(Conversation::find('parent')->subConversations()->pluck('id')->all())->toBe(['shared']);
 });

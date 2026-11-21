@@ -213,7 +213,11 @@ trait GeneratesText
     {
         return tap(
             new RunContext($invocationId, $prompt->agent, $this, $prompt->model, $this->events),
-            fn (RunContext $context) => $prompt->setRunContext($context),
+            function (RunContext $context) use ($prompt): void {
+                $context->remembersDelegations = $prompt->remembersDelegations;
+
+                $prompt->setRunContext($context);
+            },
         );
     }
 

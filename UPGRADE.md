@@ -17,19 +17,26 @@ public function tools(): iterable
 }
 ```
 
-The sub-agent instance is no longer modified by a delegation, so `$subAgent->currentConversation()` no longer returns the last delegation's conversation ID. The parent's stored tool call records it instead as `sub_conversation_id`, and `Conversation::subConversations()` returns every conversation linked from a conversation's tool calls:
+The sub-agent instance is no longer modified by a delegation, so `$subAgent->currentConversation()` no longer returns the last delegation's conversation ID. For the same reason, in a listener for a delegation's events, `$event->response->conversationId` no longer equals `$event->prompt->agent->currentConversation()`.
+
+When the parent's turn is stored by the database conversation store, its stored tool call records the conversation the delegation created as `sub_conversation_id`, readable from `$message->tool_calls`:
 
 ```php
-$conversation->subConversations()->get();
+$links = $conversation->messages()->where('role', 'assistant')->get()
+    ->flatMap(fn ($message) => $message->tool_calls)
+    ->pluck('sub_conversation_id')
+    ->filter();
 ```
 
-Delegations no longer generate a conversation title. A sub-agent you continue yourself still shares that conversation across every delegation:
+These links can point to conversations without a participant, for example a sub-agent that paused on a tool approval. Authorize the parent conversation, then accept a sub-agent conversation ID only if the parent links it. An application that authorizes guest conversations with a null participant must not accept one from a guest, since a null participant matches every conversation without one.
+
+Delegations are titled with their task instead of by the title agent, so the title agent's events no longer fire for them. A sub-agent you continue yourself still shares that conversation across every delegation, and that conversation is not linked from the parent:
 
 ```php
 return [(new ResearchAgent)->continue($threadId, as: $this->user)];
 ```
 
-To also store the delegations of sub-agents that do not remember conversations whenever the parent run is remembered, enable the `ai.conversations.remember_delegations` option. These conversations have no participant and are found through the parent.
+To store every delegation of a remembered parent run, including those of sub-agents that do not remember conversations or have no participant, enable the `ai.conversations.remember_delegations` option. These conversations have no participant and are found through the parent.
 
 ## Upgrading To 1.4 From 1.3
 

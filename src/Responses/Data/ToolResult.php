@@ -8,7 +8,9 @@ use JsonSerializable;
 class ToolResult implements Arrayable, JsonSerializable
 {
     /**
-     * The conversation a sub-agent tool call's delegation ran in, kept out of the serialized form so it never reaches a provider or client.
+     * The conversation a sub-agent tool call's delegation created, for the parent's stored tool call; not part of the array or JSON form.
+     *
+     * @internal
      */
     public ?string $subConversationId = null;
 

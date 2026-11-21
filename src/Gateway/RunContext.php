@@ -25,6 +25,13 @@ class RunContext
     /** @var array<int, Step> */
     protected array $steps = [];
 
+    /**
+     * Whether the run's delegations are remembered with it.
+     *
+     * @internal
+     */
+    public bool $remembersDelegations = false;
+
     public function __construct(
         public readonly string $invocationId,
         public readonly Agent $agent,

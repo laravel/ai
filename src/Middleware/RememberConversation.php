@@ -23,21 +23,9 @@ use Throwable;
 class RememberConversation
 {
     /**
-     * The invocation IDs of the runs remembered with their delegations, while they run.
-     *
-     * @var array<string, true>
-     */
-    protected static array $remembered = [];
-
-    /**
      * The agent the run is remembered as: the prompted agent, or the conversation held apart for its delegation.
      */
     protected ?Agent $agent = null;
-
-    /**
-     * The invocation ID the run marked as remembered, until it ends.
-     */
-    protected ?string $remembering = null;
 
     /**
      * Create a new middleware instance.
@@ -57,40 +45,23 @@ class RememberConversation
     }
 
     /**
-     * Determine whether the run with the given invocation ID is remembered with its delegations.
-     *
-     * @internal
-     */
-    public static function remembers(?string $invocationId): bool
-    {
-        return isset(static::$remembered[(string) $invocationId]);
-    }
-
-    /**
-     * Stop remembering delegations with the run with the given invocation ID, once it has ended.
-     *
-     * @internal
-     */
-    public static function forgetRun(string $invocationId): void
-    {
-        unset(static::$remembered[$invocationId]);
-    }
-
-    /**
      * Handle the incoming prompt.
      */
     public function handle(AgentPrompt $prompt, Closure $next)
     {
         /** @var Agent&RemembersConversations $agent */
-        $agent = $this->agent = AgentTool::delegation($prompt->agent, $prompt->parentToolInvocationId) ?? $prompt->agent;
+        $agent = $this->agent = AgentTool::delegation($prompt->agent, $prompt->parentToolInvocationId, $prompt->invocationId) ?? $prompt->agent;
+
+        // Another prompt to a sub-agent while its delegation runs is not remembered with that delegation...
+        if (! static::appliesTo($agent)) {
+            return $next($prompt);
+        }
 
         $pendingConversationId = $agent->currentConversation() === null
             ? (string) Str::uuid7()
             : null;
 
-        if ($prompt->invocationId !== null && config('ai.conversations.remember_delegations', false) && $this->shouldRememberTurn($agent, $prompt)) {
-            static::$remembered[$this->remembering = $prompt->invocationId] = true;
-        }
+        $prompt->remembersDelegations = config('ai.conversations.remember_delegations', false) && $this->shouldRememberTurn($agent, $prompt);
 
         try {
             $response = $next($prompt);
@@ -113,8 +84,6 @@ class RememberConversation
         }
 
         return $response->then(function (AgentResponse $completedResponse) use ($prompt, $agent, $pendingConversationId): void {
-            $this->forget();
-
             if (! $this->shouldRemember($agent, $prompt, $completedResponse)) {
                 if ($pendingConversationId !== null) {
                     $completedResponse->conversationId = null;
@@ -151,8 +120,6 @@ class RememberConversation
      */
     protected function rememberFailedTurn(AgentPrompt $prompt, Throwable $exception, ?string $pendingConversationId, bool $retryable = true): void
     {
-        $this->forget();
-
         /** @var Agent&RemembersConversations $agent */
         $agent = $this->agent ?? $prompt->agent;
 
@@ -218,24 +185,6 @@ class RememberConversation
             $prompt->agent::class,
             new UserMessage($prompt->prompt, $prompt->attachments),
         );
-    }
-
-    /**
-     * Stop remembering the run's delegations with it.
-     */
-    protected function forget(): void
-    {
-        unset(static::$remembered[(string) $this->remembering]);
-
-        $this->remembering = null;
-    }
-
-    /**
-     * Forget the run when it is dropped before it ends, as an abandoned stream is.
-     */
-    public function __destruct()
-    {
-        $this->forget();
     }
 
     /**

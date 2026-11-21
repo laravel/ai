@@ -8,6 +8,7 @@ use Illuminate\Support\Str;
 use Laravel\Ai\Agents\ConversationTitleAgent;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\StreamingAgent;
 use Laravel\Ai\Models\Conversation;
@@ -16,6 +17,7 @@ use Laravel\Ai\Tools\AgentTool;
 use Laravel\Ai\Tools\Request;
 use Tests\Fixtures\Agents\AlwaysRememberedAgent;
 use Tests\Fixtures\Agents\ContractRememberingApprovableAgent;
+use Tests\Fixtures\Agents\LateParticipantSubAgent;
 use Tests\Fixtures\Agents\OrchestratingAgent;
 use Tests\Fixtures\Agents\RememberingApprovableAgent;
 use Tests\Fixtures\Agents\RememberingAssistantAgent;
@@ -80,7 +82,7 @@ test('a sub-agent held across parent runs starts a conversation for each delegat
         ->and($subAgent->currentConversation())->toBeNull();
 })->with(['prompt', 'stream']);
 
-test('a sub-agent already in a conversation shares it with every delegation', function (string $mode, bool $continued): void {
+test('a sub-agent already in a conversation shares it with every delegation, unlinked', function (string $mode, bool $continued): void {
     $user = (object) ['id' => 1];
 
     RememberingSubAgent::fake(['Seeded', 'First result', 'Second result']);
@@ -105,14 +107,14 @@ test('a sub-agent already in a conversation shares it with every delegation', fu
 
     expect(storedMessageContents($conversationId))->toBe(['Seed', 'Seeded', 'one', 'First result', 'two', 'Second result'])
         ->and($subAgent->historySizes)->toBe([2, 4])
-        ->and(array_column(storedToolCalls($response->conversationId), 'sub_conversation_id'))->toBe([$conversationId, $conversationId])
+        ->and(array_column(storedToolCalls($response->conversationId), 'sub_conversation_id'))->toBe([])
         ->and($subAgent->currentConversation())->toBe($conversationId);
 })->with(['prompt', 'stream'])->with([
     'continued by the app' => true,
     'prompted directly before' => false,
 ]);
 
-test('an agent tool that continues a conversation of its own before delegating is honoured', function (string $mode, string $subAgent, array $responses): void {
+test('an agent tool that continues a conversation of its own before delegating is honoured, unlinked', function (string $mode, string $subAgent, array $responses): void {
     $user = (object) ['id' => 1];
     $tool = new ConversationOpeningAgentTool((new $subAgent)->forUser($user));
 
@@ -132,7 +134,7 @@ test('an agent tool that continues a conversation of its own before delegating i
         ->and(conversationContaining('two'))->toBe($tool->opened[1])
         ->and(storedMessageContents($tool->opened[0]))->toHaveCount(2)
         ->and(storedMessageContents($tool->opened[1]))->toHaveCount(2)
-        ->and(array_column(storedToolCalls($response->conversationId), 'sub_conversation_id'))->toBe($tool->opened);
+        ->and(array_column(storedToolCalls($response->conversationId), 'sub_conversation_id'))->toBe([]);
 })->with(['prompt', 'stream'])->with([
     'a text sub-agent' => [RememberingSubAgent::class, ['First result', 'Second result']],
     'a structured sub-agent' => [RememberingStructuredAgent::class, [['symbol' => 'H'], ['symbol' => 'He']]],
@@ -222,6 +224,23 @@ test('an agent delegating to itself keeps its own turn in its own conversation',
         ->and($nested)->not->toBeNull()->not->toBe($response->conversationId)
         ->and(storedToolCalls($response->conversationId)[0]['sub_conversation_id'])->toBe($nested)
         ->and($agent->currentConversation())->toBe($response->conversationId);
+})->with(['prompt', 'stream']);
+
+test('an agent delegating to itself within its own conversation shares it, unlinked', function (string $mode): void {
+    $user = (object) ['id' => 1];
+
+    RememberingOrchestratingAgent::fake(['Seeded', new ToolCall('call_1', 'RememberingOrchestratingAgent', ['task' => 'Nested task']), 'Nested answer', 'Top answer']);
+
+    $conversationId = (new RememberingOrchestratingAgent)->forUser($user)->prompt('Seed')->conversationId;
+
+    $agent = (new RememberingOrchestratingAgent)->continue($conversationId, $user);
+    $agent->tools = [$agent];
+
+    $response = promptOrStream($agent, $mode, 'Top task');
+
+    expect($response->conversationId)->toBe($conversationId)
+        ->and(DB::table('agent_conversations')->pluck('id')->all())->toBe([$conversationId])
+        ->and(array_column(storedToolCalls($conversationId), 'sub_conversation_id'))->toBe([]);
 })->with(['prompt', 'stream']);
 
 test('a delegation paused on an approval is left for its own resume by the next delegation', function (string $subAgent): void {
@@ -406,4 +425,65 @@ test('interleaved parent streams sharing a sub-agent each link their own delegat
         ->and($links['task a'])->toBe(conversationContaining('task a'))
         ->and($links['task b'])->toBe(conversationContaining('task b'))
         ->and($subAgent->currentConversation())->toBeNull();
+});
+
+test('a participant the sub-agent picks while it runs is honoured', function (string $mode): void {
+    RememberingOrchestratingAgent::fake([new ToolCall('call_1', 'LateParticipantSubAgent', ['task' => 'one']), 'Done.']);
+    LateParticipantSubAgent::fake(['First result']);
+
+    $response = promptOrStream((new RememberingOrchestratingAgent([new LateParticipantSubAgent]))->forUser((object) ['id' => 1]), $mode, 'Delegate');
+
+    $link = conversationContaining('one');
+
+    expect((string) Conversation::find($link)->participant_id)->toBe('7')
+        ->and(storedMessageContents($link))->toBe(['one', 'First result'])
+        ->and(storedToolCalls($response->conversationId)[0]['sub_conversation_id'])->toBe($link);
+})->with(['prompt', 'stream']);
+
+test('a sub-agent prompted again while its delegation runs is not that delegation', function (): void {
+    $user = (object) ['id' => 1];
+    $subAgent = (new RememberingSubAgent)->forUser($user);
+
+    RememberingOrchestratingAgent::fake([new ToolCall('call_1', 'RememberingSubAgent', ['task' => 'one']), 'Done.']);
+    RememberingSubAgent::fake(['First result', 'Side result']);
+
+    Event::listen(AgentPrompted::class, function (AgentPrompted $event) use ($subAgent): void {
+        if ($event->prompt->agent === $subAgent && $event->prompt->prompt === 'one') {
+            $subAgent->prompt('side');
+        }
+    });
+
+    $response = (new RememberingOrchestratingAgent([$subAgent]))->forUser($user)->prompt('Delegate');
+
+    $link = storedToolCalls($response->conversationId)[0]['sub_conversation_id'];
+
+    expect(storedMessageContents($link))->toBe(['one', 'First result'])
+        ->and(conversationContaining('side'))->not->toBe($link)
+        ->and(storedMessageContents(conversationContaining('side')))->toBe(['side', 'Side result'])
+        ->and($subAgent->historySizes)->toBe([0, 0]);
+});
+
+test('an agent tool that overrides handle without calling the parent keeps the previous behaviour', function (): void {
+    $user = (object) ['id' => 1];
+
+    $tool = new class((new RememberingSubAgent)->forUser($user)) extends AgentTool
+    {
+        public function handle(Request $request): string
+        {
+            return $this->agent()->prompt((string) $request['task'])->text;
+        }
+    };
+
+    RememberingOrchestratingAgent::fake([
+        new ToolCall('call_1', 'RememberingSubAgent', ['task' => 'one']),
+        new ToolCall('call_2', 'RememberingSubAgent', ['task' => 'two']),
+        'Done.',
+    ]);
+    RememberingSubAgent::fake(['First result', 'Second result']);
+
+    $response = (new RememberingOrchestratingAgent([$tool]))->forUser($user)->prompt('Delegate both tasks');
+
+    expect(conversationContaining('two'))->toBe(conversationContaining('one'))
+        ->and(storedMessageContents(conversationContaining('one')))->toBe(['one', 'First result', 'two', 'Second result'])
+        ->and(array_column(storedToolCalls($response->conversationId), 'sub_conversation_id'))->toBe([]);
 });

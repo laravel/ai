@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Tools;
 
-use Closure;
 use Generator;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\AnonymousAgent;
@@ -25,16 +24,16 @@ class AgentTool implements Approvable, Tool
     use InteractsWithApprovals;
 
     /**
-     * The delegation whose sub-agent is running right now, set only while it runs, like ParentInvocation.
+     * The sub-agent and conversation of each running delegation, keyed by the tool invocation it runs under, with the sub-run that claimed it.
      *
-     * @var array{string, Agent, Agent&RemembersConversations}|null
+     * @var array<string, array{0: Agent, 1: Agent&RemembersConversations, 2?: string}>
      */
-    protected static ?array $delegation = null;
+    protected static array $delegations = [];
 
     /**
      * The conversation each delegation was remembered in, keyed by the parent's tool call ID, until the loop collects it.
      *
-     * @var array<string, string>
+     * @var array<string, ?string>
      */
     protected array $subConversations = [];
 
@@ -74,7 +73,7 @@ class AgentTool implements Approvable, Tool
         $delegation = $this->startDelegation($request);
 
         try {
-            return $this->within($delegation, fn (): string => $this->agent->prompt((string) $request['task'])->text);
+            return $this->agent->prompt((string) $request['task'])->text;
         } finally {
             $this->endDelegation($request, $delegation);
         }
@@ -94,17 +93,9 @@ class AgentTool implements Approvable, Tool
         $delegation = $this->startDelegation($request);
 
         try {
-            $stream = $this->within($delegation, fn () => $this->agent->stream((string) $request['task']));
+            $stream = $this->agent->stream((string) $request['task']);
 
-            /** @var Generator<int, StreamEvent> $events */
-            $events = $stream->getIterator();
-
-            // Advanced by hand so every resumption of the sub-agent, not only the first, runs within its delegation...
-            while ($this->within($delegation, fn (): bool => $events->valid())) {
-                yield $events->current();
-
-                $this->within($delegation, fn () => $events->next());
-            }
+            yield from $stream;
 
             return (string) $stream->text;
         } finally {
@@ -115,9 +106,11 @@ class AgentTool implements Approvable, Tool
     /**
      * Give the delegation a conversation of its own, held apart from the sub-agent and starting from what the app gave it.
      *
-     * @return array{string, Agent, Agent&RemembersConversations}|null
+     * @return (Agent&RemembersConversations)|null
+     *
+     * @internal
      */
-    protected function startDelegation(Request $request): ?array
+    protected function startDelegation(Request $request): ?Agent
     {
         if ($request->toolInvocationId() === null) {
             return null;
@@ -127,73 +120,93 @@ class AgentTool implements Approvable, Tool
         {
             use RemembersConversationsTrait;
 
+            /**
+             * The sub-agent, read while the delegation has no participant of its own, as it may set one during its run.
+             *
+             * @var (Agent&RemembersConversations)|null
+             */
+            public ?Agent $agent = null;
+
             public bool $remembered = false;
 
             public function hasConversationParticipant(): bool
             {
-                return $this->remembered;
+                return $this->remembered
+                    || $this->conversationParticipant() !== null
+                    || $this->agent?->hasConversationParticipant() === true;
+            }
+
+            public function conversationParticipant(): ?object
+            {
+                return $this->conversationUser ?? $this->agent?->conversationParticipant();
             }
         };
+
+        /** @var (Agent&RemembersConversations)|null $agent */
+        $agent = RememberConversation::appliesTo($this->agent) ? $this->agent : null;
+
+        if (($conversationId = $agent?->currentConversation()) !== null) {
+            $conversation->continue($conversationId, $agent->conversationParticipant());
+        }
+
+        $conversation->agent = $agent;
+
+        // Given nothing, the delegation is remembered, with no participant, when its parent run is...
+        $conversation->remembered = ParentInvocation::context()?->remembersDelegations === true;
+
+        static::$delegations[$request->toolInvocationId()] = [$this->agent, $conversation];
+
+        return $conversation;
+    }
+
+    /**
+     * End the delegation, noting the conversation it was remembered in for the parent's tool call.
+     *
+     * @param  (Agent&RemembersConversations)|null  $conversation
+     *
+     * @internal
+     */
+    protected function endDelegation(Request $request, ?Agent $conversation): void
+    {
+        unset(static::$delegations[(string) $request->toolInvocationId()]);
 
         /** @var Agent&RemembersConversations $agent */
         $agent = $this->agent;
 
-        [$conversationId, $participant, $remembered] = RememberConversation::appliesTo($agent)
-            ? [$agent->currentConversation(), $agent->conversationParticipant(), $agent->hasConversationParticipant()]
-            : [null, null, false];
+        $conversationId = $conversation?->currentConversation();
 
-        match (true) {
-            $conversationId !== null => $conversation->continue($conversationId, $participant),
-            $participant !== null => $conversation->forParticipant($participant),
-            default => null,
-        };
-
-        // Given nothing, the delegation is remembered, with no participant, when its parent run is...
-        $conversation->remembered = $remembered || RememberConversation::remembers(ParentInvocation::current()[0]);
-
-        return [$request->toolInvocationId(), $this->agent, $conversation];
-    }
-
-    /**
-     * Run the given callback within the given delegation.
-     */
-    protected function within(?array $delegation, Closure $callback): mixed
-    {
-        $previous = static::$delegation;
-
-        static::$delegation = $delegation;
-
-        try {
-            return $callback();
-        } finally {
-            static::$delegation = $previous;
-        }
-    }
-
-    /**
-     * Note the conversation the delegation was remembered in, for the parent's tool call.
-     */
-    protected function endDelegation(Request $request, ?array $delegation): void
-    {
-        $conversationId = $delegation === null ? null : $delegation[2]->currentConversation();
-
-        if ($conversationId !== null && $request->toolCallId() !== null) {
-            $this->subConversations[$request->toolCallId()] = $conversationId;
+        // Only a conversation the delegation created is linked; one the app gave the sub-agent is shared, and the app knows it...
+        if ($request->toolCallId() !== null) {
+            $this->subConversations[$request->toolCallId()] = RememberConversation::appliesTo($agent) && $conversationId === $agent->currentConversation()
+                ? null
+                : $conversationId;
         }
     }
 
     /**
      * Get the conversation the given sub-agent's running delegation from the given tool invocation is remembered in.
      *
+     * Given the sub-run's invocation ID, the first sub-run claims the delegation, so another prompt to the same sub-agent while it runs is not that delegation.
+     *
      * @return (Agent&RemembersConversations)|null
      *
      * @internal
      */
-    public static function delegation(Agent $agent, ?string $toolInvocationId): ?Agent
+    public static function delegation(Agent $agent, ?string $toolInvocationId, ?string $invocationId = null): ?Agent
     {
-        [$id, $delegated, $conversation] = static::$delegation ?? [null, null, null];
+        $key = (string) $toolInvocationId;
 
-        return $id === $toolInvocationId && $delegated === $agent ? $conversation : null;
+        [$delegated, $conversation] = static::$delegations[$key] ?? [null, null];
+
+        if ($delegated !== $agent) {
+            return null;
+        }
+
+        if ($invocationId !== null && (static::$delegations[$key][2] ??= $invocationId) !== $invocationId) {
+            return null;
+        }
+
+        return $conversation;
     }
 
     /**

@@ -47,7 +47,7 @@ trait InvokesTools
             $context?->toolInvoked($tool, $arguments, $result, $toolInvocationId, $this->elapsedMilliseconds($startedAt));
 
             return (string) $result;
-        });
+        }, $context);
     }
 
     /**

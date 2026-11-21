@@ -47,6 +47,13 @@ class AgentPrompt extends Prompt
     protected ?RunContext $runContext = null;
 
     /**
+     * Whether the run's delegations are remembered with it.
+     *
+     * @internal
+     */
+    public bool $remembersDelegations = false;
+
+    /**
      * @param  bool  $isFinalAttempt  Whether the caller has run out of providers to retry this prompt against.
      */
     public function __construct(
