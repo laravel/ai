@@ -688,7 +688,7 @@ class TextGenerationLoop
                 $toolResult = $this->failedToolResult($toolCall, $exception);
             }
 
-            $toolResults[] = $this->recordedToolResult($this->linkedToolResult($toolResult, $tool), $context);
+            $toolResults[] = $this->recordedToolResult($this->linkedToolResult($toolResult, $context), $context);
         }
 
         return [$toolResults, $pendingApprovals];
@@ -855,17 +855,15 @@ class TextGenerationLoop
             $result = $this->failedToolResult($toolCall, $exception);
         }
 
-        return $this->linkedToolResult($result, $tool);
+        return $this->linkedToolResult($result, $context);
     }
 
     /**
-     * Link a sub-agent tool call's result to the conversation its delegation ran in.
+     * Link an executed tool call's result to the conversation its delegation, if any, ran in.
      */
-    protected function linkedToolResult(ToolResult $result, ?Tool $tool): ToolResult
+    protected function linkedToolResult(ToolResult $result, ?RunContext $context): ToolResult
     {
-        if ($tool instanceof AgentTool) {
-            $result->subConversationId = $tool->pullSubConversation($result->id);
-        }
+        $result->subConversationId = $context?->pullSubConversation($result->id);
 
         return $result;
     }
@@ -1042,7 +1040,7 @@ class TextGenerationLoop
                 $result,
                 $toolCall->resultId,
                 failed: $failed,
-            ), $tool);
+            ), $context);
         }
 
         return [$toolResults, ! $hasBareRejection];

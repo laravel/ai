@@ -30,13 +30,6 @@ class AgentTool implements Approvable, Tool
      */
     protected static array $delegations = [];
 
-    /**
-     * The conversation each delegation was remembered in, keyed by the parent's tool call ID, until the loop collects it.
-     *
-     * @var array<string, ?string>
-     */
-    protected array $subConversations = [];
-
     public function __construct(protected Agent $agent)
     {
         //
@@ -129,10 +122,20 @@ class AgentTool implements Approvable, Tool
 
             public bool $remembered = false;
 
+            /**
+             * Whether the delegation shares the conversation the sub-agent is in, read as the sub-agent runs, as it may change it.
+             */
+            public bool $shared = false;
+
+            public function currentConversation(): ?string
+            {
+                return $this->conversationId ?? ($this->shared ? $this->agent?->currentConversation() : null);
+            }
+
             public function hasConversationParticipant(): bool
             {
                 return $this->remembered
-                    || $this->conversationParticipant() !== null
+                    || $this->conversationUser !== null
                     || $this->agent?->hasConversationParticipant() === true;
             }
 
@@ -145,14 +148,14 @@ class AgentTool implements Approvable, Tool
         /** @var (Agent&RemembersConversations)|null $agent */
         $agent = RememberConversation::appliesTo($this->agent) ? $this->agent : null;
 
-        if (($conversationId = $agent?->currentConversation()) !== null) {
-            $conversation->continue($conversationId, $agent->conversationParticipant());
-        }
-
         $conversation->agent = $agent;
 
+        $conversation->shared = $agent?->currentConversation() !== null;
+
         // Given nothing, the delegation is remembered, with no participant, when its parent run is...
-        $conversation->remembered = ParentInvocation::context()?->remembersDelegations === true;
+        $remembersDelegations = ParentInvocation::context()?->remembersDelegations;
+
+        $conversation->remembered = $remembersDelegations !== null && $remembersDelegations();
 
         static::$delegations[$request->toolInvocationId()] = [$this->agent, $conversation];
 
@@ -160,7 +163,7 @@ class AgentTool implements Approvable, Tool
     }
 
     /**
-     * End the delegation, noting the conversation it was remembered in for the parent's tool call.
+     * End the delegation, noting the conversation it was remembered in on the parent run, for the tool call that ran it.
      *
      * @param  (Agent&RemembersConversations)|null  $conversation
      *
@@ -175,12 +178,16 @@ class AgentTool implements Approvable, Tool
 
         $conversationId = $conversation?->currentConversation();
 
-        // Only a conversation the delegation created is linked; one the app gave the sub-agent is shared, and the app knows it...
-        if ($request->toolCallId() !== null) {
-            $this->subConversations[$request->toolCallId()] = RememberConversation::appliesTo($agent) && $conversationId === $agent->currentConversation()
-                ? null
-                : $conversationId;
+        // Only the run whose tool call this is collects the link, so it lives no longer than that run...
+        if ($request->toolCallId() === null || ParentInvocation::current()[1] !== $request->toolInvocationId()) {
+            return;
         }
+
+        // Only a conversation the delegation created is linked; one the app gave the sub-agent is shared, and the app knows it...
+        ParentInvocation::context()?->linkSubConversation(
+            $request->toolCallId(),
+            RememberConversation::appliesTo($agent) && $conversationId === $agent->currentConversation() ? null : $conversationId,
+        );
     }
 
     /**
@@ -207,20 +214,6 @@ class AgentTool implements Approvable, Tool
         }
 
         return $conversation;
-    }
-
-    /**
-     * Collect the conversation the given tool call's delegation was remembered in.
-     *
-     * @internal
-     */
-    public function pullSubConversation(string $toolCallId): ?string
-    {
-        $conversationId = $this->subConversations[$toolCallId] ?? null;
-
-        unset($this->subConversations[$toolCallId]);
-
-        return $conversationId;
     }
 
     /**

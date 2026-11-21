@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway;
 
+use Closure;
 use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -26,11 +27,20 @@ class RunContext
     protected array $steps = [];
 
     /**
-     * Whether the run's delegations are remembered with it.
+     * Determine whether the run's delegations are remembered with it, asked as each delegation starts.
+     *
+     * @var (Closure(): bool)|null
      *
      * @internal
      */
-    public bool $remembersDelegations = false;
+    public ?Closure $remembersDelegations = null;
+
+    /**
+     * The conversation each delegation run by this run's tool calls was remembered in, keyed by tool call ID, until the loop collects it.
+     *
+     * @var array<string, ?string>
+     */
+    protected array $subConversations = [];
 
     public function __construct(
         public readonly string $invocationId,
@@ -58,6 +68,30 @@ class RunContext
         if ($step !== null) {
             $this->steps[$step]->toolResults[] = $result;
         }
+    }
+
+    /**
+     * Note the conversation the delegation run by the given tool call was remembered in.
+     *
+     * @internal
+     */
+    public function linkSubConversation(string $toolCallId, ?string $conversationId): void
+    {
+        $this->subConversations[$toolCallId] = $conversationId;
+    }
+
+    /**
+     * Collect the conversation the delegation run by the given tool call was remembered in.
+     *
+     * @internal
+     */
+    public function pullSubConversation(string $toolCallId): ?string
+    {
+        $conversationId = $this->subConversations[$toolCallId] ?? null;
+
+        unset($this->subConversations[$toolCallId]);
+
+        return $conversationId;
     }
 
     /**

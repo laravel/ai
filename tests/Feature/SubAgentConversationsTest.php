@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Laravel\Ai\Agents\ConversationTitleAgent;
 use Laravel\Ai\Approvals\Decisions;
+use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\PromptingAgent;
@@ -17,6 +18,7 @@ use Laravel\Ai\Tools\AgentTool;
 use Laravel\Ai\Tools\Request;
 use Tests\Fixtures\Agents\AlwaysRememberedAgent;
 use Tests\Fixtures\Agents\ContractRememberingApprovableAgent;
+use Tests\Fixtures\Agents\IncognitoSubAgent;
 use Tests\Fixtures\Agents\LateParticipantSubAgent;
 use Tests\Fixtures\Agents\OrchestratingAgent;
 use Tests\Fixtures\Agents\RememberingApprovableAgent;
@@ -24,6 +26,7 @@ use Tests\Fixtures\Agents\RememberingAssistantAgent;
 use Tests\Fixtures\Agents\RememberingOrchestratingAgent;
 use Tests\Fixtures\Agents\RememberingStructuredAgent;
 use Tests\Fixtures\Agents\RememberingSubAgent;
+use Tests\Fixtures\Agents\SwitchingSubAgent;
 use Tests\Fixtures\Tools\ApprovableNumberGenerator;
 use Tests\Fixtures\Tools\ConversationOpeningAgentTool;
 
@@ -487,3 +490,53 @@ test('an agent tool that overrides handle without calling the parent keeps the p
         ->and(storedMessageContents(conversationContaining('one')))->toBe(['one', 'First result', 'two', 'Second result'])
         ->and(array_column(storedToolCalls($response->conversationId), 'sub_conversation_id'))->toBe([]);
 });
+
+test('a sub-agent that is not remembered is not stored, although it reports a participant', function (string $mode, bool $givenUser): void {
+    $subAgent = $givenUser ? (new IncognitoSubAgent)->forUser((object) ['id' => 1]) : new IncognitoSubAgent;
+
+    RememberingOrchestratingAgent::fake([new ToolCall('call_1', 'IncognitoSubAgent', ['task' => 'one']), 'Done.']);
+    IncognitoSubAgent::fake(['First result']);
+
+    $response = promptOrStream((new RememberingOrchestratingAgent([$subAgent]))->forUser((object) ['id' => 1]), $mode, 'Delegate');
+
+    expect(conversationContaining('one'))->toBeNull()
+        ->and(DB::table('agent_conversations')->pluck('id')->all())->toBe([$response->conversationId])
+        ->and(storedToolCalls($response->conversationId)[0])->toMatchArray(['result' => 'First result'])
+        ->not->toHaveKey('sub_conversation_id');
+})->with(['prompt', 'stream'])->with([
+    'given a user' => true,
+    'reporting a default participant' => false,
+]);
+
+test('a sub-agent already in a conversation that changes it while it runs is honoured', function (string $mode, string $change): void {
+    $user = (object) ['id' => 1];
+    $store = resolve(ConversationStore::class);
+
+    $seeded = $store->storeConversation(null, null, 'Seeded');
+    $other = $store->storeConversation(null, null, 'Other');
+
+    $subAgent = (new SwitchingSubAgent)->continue($seeded, $user);
+
+    $subAgent->whileRunning = $change === 'user'
+        ? fn (SwitchingSubAgent $agent) => $agent->forUser((object) ['id' => 2])
+        : fn (SwitchingSubAgent $agent) => $agent->continue($other, $user);
+
+    RememberingOrchestratingAgent::fake([new ToolCall('call_1', 'SwitchingSubAgent', ['task' => 'one']), 'Done.']);
+    SwitchingSubAgent::fake(['First result']);
+
+    $response = promptOrStream((new RememberingOrchestratingAgent([$subAgent]))->forUser($user), $mode, 'Delegate');
+
+    $conversation = conversationContaining('one');
+
+    expect(storedMessageContents($seeded))->toBe([]);
+
+    if ($change === 'user') {
+        // A new participant starts a new conversation, which the delegation created, so it is linked...
+        expect($conversation)->not->toBe($other)
+            ->and((string) Conversation::find($conversation)->participant_id)->toBe('2')
+            ->and(storedToolCalls($response->conversationId)[0]['sub_conversation_id'])->toBe($conversation);
+    } else {
+        expect($conversation)->toBe($other)
+            ->and(storedToolCalls($response->conversationId)[0])->not->toHaveKey('sub_conversation_id');
+    }
+})->with(['prompt', 'stream'])->with(['user', 'conversation']);

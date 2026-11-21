@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Prompts;
 
+use Closure;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Approvals\Decisions;
@@ -47,11 +48,13 @@ class AgentPrompt extends Prompt
     protected ?RunContext $runContext = null;
 
     /**
-     * Whether the run's delegations are remembered with it.
+     * Determine whether the run's delegations are remembered with it, asked as each delegation starts.
+     *
+     * @var (Closure(): bool)|null
      *
      * @internal
      */
-    public bool $remembersDelegations = false;
+    public ?Closure $remembersDelegations = null;
 
     /**
      * @param  bool  $isFinalAttempt  Whether the caller has run out of providers to retry this prompt against.
@@ -121,7 +124,7 @@ class AgentPrompt extends Prompt
             $attachments = new Collection($attachments);
         }
 
-        return new self(
+        return tap(new self(
             $this->agent,
             $prompt,
             $attachments ?? $this->attachments,
@@ -135,7 +138,7 @@ class AgentPrompt extends Prompt
             $this->isFinalAttempt,
             $this->messages,
             $this->tools,
-        );
+        ), fn (AgentPrompt $revised) => $revised->remembersDelegations = $this->remembersDelegations);
     }
 
     /**
@@ -149,7 +152,7 @@ class AgentPrompt extends Prompt
             return $this;
         }
 
-        return new self(
+        return tap(new self(
             $this->agent,
             $this->prompt,
             $this->attachments,
@@ -163,7 +166,7 @@ class AgentPrompt extends Prompt
             $this->isFinalAttempt,
             $this->messages,
             [...$tools],
-        );
+        ), fn (AgentPrompt $revised) => $revised->remembersDelegations = $this->remembersDelegations);
     }
 
     /**

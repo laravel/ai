@@ -61,7 +61,10 @@ class RememberConversation
             ? (string) Str::uuid7()
             : null;
 
-        $prompt->remembersDelegations = config('ai.conversations.remember_delegations', false) && $this->shouldRememberTurn($agent, $prompt);
+        // Asked as each delegation starts, since the agent may pick its participant while it runs...
+        $prompt->remembersDelegations = config('ai.conversations.remember_delegations', false)
+            ? fn (): bool => $this->shouldRememberTurn($agent, $prompt)
+            : null;
 
         try {
             $response = $next($prompt);

@@ -22,6 +22,7 @@ use Tests\Fixtures\Agents\RememberingApprovableAgent;
 use Tests\Fixtures\Agents\RememberingOrchestratingAgent;
 use Tests\Fixtures\Agents\RememberingSubAgent;
 use Tests\Fixtures\Agents\RememberingToolUsingAgent;
+use Tests\Fixtures\Agents\ResearchAgent;
 use Tests\Fixtures\Tools\ApprovableNumberGenerator;
 
 beforeEach(function (): void {
@@ -350,4 +351,32 @@ test('a delegation run alongside a paused tool call keeps its link when the pare
 
     expect($calls['toolu_1'])->toMatchArray(['result' => 'First result', 'sub_conversation_id' => $link])
         ->and($calls['toolu_2'])->toMatchArray(['result' => '72019'])->not->toHaveKey('sub_conversation_id');
+});
+
+test('delegations whose calls share an ID in one step each get their own link', function (): void {
+    config(['ai.conversations.remember_delegations' => true]);
+
+    // Providers that omit tool call IDs give every call the same empty ID...
+    Http::fake(['api.anthropic.com/*' => Http::sequence()
+        ->push([
+            'id' => 'msg_1',
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-4-6',
+            'content' => [
+                ['type' => 'tool_use', 'id' => '', 'name' => 'research_agent', 'input' => ['task' => 'one']],
+                ['type' => 'tool_use', 'id' => '', 'name' => 'research_agent', 'input' => ['task' => 'two']],
+            ],
+            'stop_reason' => 'tool_use',
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ])
+        ->pushResponse(fakeAnthropicResponse('First result'))
+        ->pushResponse(fakeAnthropicResponse('Second result'))
+        ->pushResponse(fakeAnthropicResponse('Done.')),
+    ]);
+
+    $response = (new RememberingOrchestratingAgent([new ResearchAgent]))->forUser((object) ['id' => 1])->prompt('Delegate');
+
+    expect($response->toolResults->pluck('subConversationId')->all())
+        ->toBe([conversationContaining('one'), conversationContaining('two')]);
 });

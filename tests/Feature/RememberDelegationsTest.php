@@ -2,12 +2,17 @@
 
 use Illuminate\Broadcasting\AnonymousEvent;
 use Illuminate\Broadcasting\Channel;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Events\AgentFailedOver;
+use Laravel\Ai\Events\AgentPrompted;
 use Laravel\Ai\Events\ToolInvoked;
 use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Models\Conversation;
@@ -17,9 +22,11 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\AgentTool;
+use Laravel\Ai\Tools\Request;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ContractRememberingApprovableAgent;
 use Tests\Fixtures\Agents\FailoverAssistantAgent;
+use Tests\Fixtures\Agents\LateParticipantSubAgent;
 use Tests\Fixtures\Agents\MiddleManagerAgent;
 use Tests\Fixtures\Agents\OrchestratingAgent;
 use Tests\Fixtures\Agents\RememberingOrchestratingAgent;
@@ -510,3 +517,129 @@ test('delegations are stored by a custom conversation store', function (string $
         ->and($conversationOf('one'))->not->toBe($conversationOf('two'))
         ->and($conversationOf('First result'))->toBe($conversationOf('one'));
 })->with(['prompt', 'stream']);
+
+test('a plain sub-agent prompted again while its delegation runs is not stored with it', function (): void {
+    $user = (object) ['id' => 1];
+    $subAgent = new AssistantAgent;
+    $side = null;
+
+    RememberingOrchestratingAgent::fake([new ToolCall('call_1', 'AssistantAgent', ['task' => 'one']), 'Done.']);
+    AssistantAgent::fake(['First result', 'Side result']);
+
+    Event::listen(AgentPrompted::class, function (AgentPrompted $event) use ($subAgent, &$side): void {
+        if ($event->prompt->agent === $subAgent && $event->prompt->prompt === 'one') {
+            $side = $subAgent->prompt('side')->text;
+        }
+    });
+
+    $response = (new RememberingOrchestratingAgent([$subAgent]))->forUser($user)->prompt('Delegate');
+
+    $link = storedToolCalls($response->conversationId)[0]['sub_conversation_id'];
+
+    expect($side)->toBe('Side result')
+        ->and($link)->toBe(conversationContaining('one'))
+        ->and(storedMessageContents($link))->toBe(['one', 'First result'])
+        ->and(conversationContaining('side'))->toBeNull();
+});
+
+test('a sub-agent that picks its participant while it runs stores its own delegations', function (string $mode): void {
+    $subAgent = new class extends LateParticipantSubAgent implements HasTools
+    {
+        public function tools(): iterable
+        {
+            return [new AssistantAgent];
+        }
+    };
+
+    OrchestratingAgent::fake([new ToolCall('call_1', class_basename($subAgent), ['task' => 'one']), 'Done.']);
+    $subAgent::fake([new ToolCall('call_2', 'AssistantAgent', ['task' => 'nested']), 'Sub done.']);
+    AssistantAgent::fake(['Nested result']);
+
+    promptOrStream(new OrchestratingAgent([$subAgent]), $mode, 'Delegate');
+
+    $child = conversationContaining('one');
+
+    expect((string) Conversation::find($child)->participant_id)->toBe('7')
+        ->and(storedToolCalls($child)[0]['sub_conversation_id'])->toBe(conversationContaining('nested'))
+        ->and(storedMessageContents(conversationContaining('nested')))->toBe(['nested', 'Nested result']);
+})->with(['prompt', 'stream']);
+
+test('a delegation run by a tool wrapping an agent tool is linked', function (string $mode): void {
+    $tool = new class(new AgentTool(new ResearchAgent)) implements Tool
+    {
+        public function __construct(public AgentTool $inner) {}
+
+        public function name(): string
+        {
+            return 'research_agent';
+        }
+
+        public function description(): string
+        {
+            return 'Research.';
+        }
+
+        public function schema(JsonSchema $schema): array
+        {
+            return $this->inner->schema($schema);
+        }
+
+        public function handle(Request $request): string
+        {
+            return $this->inner->handle($request);
+        }
+    };
+
+    RememberingOrchestratingAgent::fake([new ToolCall('call_1', 'research_agent', ['task' => 'one']), 'Done.']);
+    ResearchAgent::fake(['First result']);
+
+    $response = promptOrStream((new RememberingOrchestratingAgent([$tool]))->forUser((object) ['id' => 1]), $mode, 'Delegate');
+
+    expect(storedToolCalls($response->conversationId)[0]['sub_conversation_id'])->toBe(conversationContaining('one'))
+        ->and(ownerlessConversations())->toBe([conversationContaining('one')]);
+})->with(['prompt', 'stream']);
+
+test('a call an agent tool answers itself is not linked to a delegation of an earlier run', function (): void {
+    $user = (object) ['id' => 1];
+    $listenerFails = true;
+
+    $tool = new class(new ResearchAgent) extends AgentTool
+    {
+        public function handle(Request $request): string
+        {
+            return $request['task'] === 'cached' ? 'Cached result' : parent::handle($request);
+        }
+    };
+
+    // Providers that omit tool call IDs give every call the same empty ID...
+    RememberingOrchestratingAgent::fake([
+        new ToolCall('', 'research_agent', ['task' => 'one']),
+        new ToolCall('', 'research_agent', ['task' => 'cached']),
+        'Done.',
+    ]);
+    ResearchAgent::fake(['First result']);
+
+    Event::listen(ToolInvoked::class, function () use (&$listenerFails): void {
+        throw_if($listenerFails, new RuntimeException('The listener failed.'));
+    });
+
+    expect(fn () => (new RememberingOrchestratingAgent([$tool]))->forUser($user)->prompt('Delegate'))
+        ->toThrow(RuntimeException::class, 'The listener failed.');
+
+    $listenerFails = false;
+
+    $response = (new RememberingOrchestratingAgent([$tool]))->forUser($user)->prompt('Delegate again');
+
+    expect(storedToolCalls($response->conversationId)[0])->toMatchArray(['result' => 'Cached result'])
+        ->not->toHaveKey('sub_conversation_id');
+});
+
+test('a revised prompt keeps whether its delegations are remembered', function (): void {
+    $prompt = new AgentPrompt(new AssistantAgent, 'Hi', [], Ai::textProviderFor(new AssistantAgent, 'anthropic'), 'claude-sonnet-4-6');
+
+    $prompt->remembersDelegations = $remembers = fn (): bool => true;
+
+    expect($prompt->revise('Other')->remembersDelegations)->toBe($remembers)
+        ->and($prompt->append('More')->remembersDelegations)->toBe($remembers)
+        ->and($prompt->withTools([new AssistantAgent])->remembersDelegations)->toBe($remembers);
+});
