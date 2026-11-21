@@ -3,9 +3,14 @@
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Providers\TypeSafeProvider;
+use Laravel\Ai\Responses\AgentResponse;
+use Laravel\Ai\Responses\StreamableAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\ToolCall;
 use Laravel\Ai\Streaming\Events\ToolInputDelta;
@@ -161,6 +166,64 @@ function fakeGroqToolCallResponse(string $name = 'FixedNumberGenerator', array $
             'completion_tokens' => 5,
         ],
     ]);
+}
+
+function fakeAnthropicResponse(string $text = 'Hello'): PromiseInterface
+{
+    return Http::response([
+        'id' => 'msg_'.Str::random(8),
+        'type' => 'message',
+        'role' => 'assistant',
+        'model' => 'claude-sonnet-4-6',
+        'content' => [['type' => 'text', 'text' => $text]],
+        'stop_reason' => 'end_turn',
+        'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+    ]);
+}
+
+function fakeAnthropicToolUseResponse(string $name, array $input = [], string $id = 'toolu_123'): PromiseInterface
+{
+    return Http::response([
+        'id' => 'msg_'.Str::random(8),
+        'type' => 'message',
+        'role' => 'assistant',
+        'model' => 'claude-sonnet-4-6',
+        'content' => [['type' => 'tool_use', 'id' => $id, 'name' => $name, 'input' => (object) $input]],
+        'stop_reason' => 'tool_use',
+        'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+    ]);
+}
+
+function fakeAnthropicStreamResponse(string $text = 'Hello'): PromiseInterface
+{
+    return fakeAnthropicStream(
+        ['type' => 'text', 'text' => ''],
+        ['type' => 'text_delta', 'text' => $text],
+        'end_turn',
+    );
+}
+
+function fakeAnthropicStreamToolUseResponse(string $name, array $input = [], string $id = 'toolu_123'): PromiseInterface
+{
+    return fakeAnthropicStream(
+        ['type' => 'tool_use', 'id' => $id, 'name' => $name, 'input' => (object) []],
+        ['type' => 'input_json_delta', 'partial_json' => json_encode((object) $input)],
+        'tool_use',
+    );
+}
+
+function fakeAnthropicStream(array $block, array $delta, string $stopReason): PromiseInterface
+{
+    $body = implode("\n\n", array_map(fn (array $event): string => 'data: '.json_encode($event), [
+        ['type' => 'message_start', 'message' => ['id' => 'msg_'.Str::random(8), 'model' => 'claude-sonnet-4-6', 'role' => 'assistant', 'content' => [], 'usage' => ['input_tokens' => 10, 'output_tokens' => 0]]],
+        ['type' => 'content_block_start', 'index' => 0, 'content_block' => $block],
+        ['type' => 'content_block_delta', 'index' => 0, 'delta' => $delta],
+        ['type' => 'content_block_stop', 'index' => 0],
+        ['type' => 'message_delta', 'delta' => ['stop_reason' => $stopReason], 'usage' => ['output_tokens' => 5]],
+        ['type' => 'message_stop'],
+    ]))."\n\n";
+
+    return Http::response($body, 200, ['Content-Type' => 'text/event-stream']);
 }
 
 function fakeOllamaResponse(string $text = 'Hello'): PromiseInterface
@@ -432,4 +495,60 @@ function toolInputEvents(iterable $events): array
         ->filter()
         ->values()
         ->all();
+}
+
+/**
+ * Prompt the agent, or stream it to the end, and return its response.
+ */
+function promptOrStream(Agent $agent, string $mode, mixed $input): AgentResponse|StreamableAgentResponse
+{
+    if ($mode === 'prompt') {
+        return $agent->prompt($input);
+    }
+
+    $response = $agent->stream($input);
+
+    foreach ($response as $event) {
+        //
+    }
+
+    return $response;
+}
+
+/**
+ * Get the tool calls stored with a conversation's assistant turns, in order.
+ */
+function storedToolCalls(string $conversationId): array
+{
+    return DB::table('agent_conversation_messages')
+        ->where('conversation_id', $conversationId)
+        ->where('role', 'assistant')
+        ->orderBy('id')
+        ->pluck('steps')
+        ->flatMap(fn (string $steps): array => array_merge(...array_column(json_decode($steps, true), 'tool_calls')))
+        ->values()
+        ->all();
+}
+
+/**
+ * Get the content of a conversation's stored messages, in order.
+ */
+function storedMessageContents(string $conversationId): array
+{
+    return DB::table('agent_conversation_messages')
+        ->where('conversation_id', $conversationId)
+        ->orderBy('id')
+        ->pluck('content')
+        ->all();
+}
+
+/**
+ * Get the ID of the conversation a user message with the given content was stored in.
+ */
+function conversationContaining(string $message): ?string
+{
+    return DB::table('agent_conversation_messages')
+        ->where('role', 'user')
+        ->where('content', $message)
+        ->value('conversation_id');
 }

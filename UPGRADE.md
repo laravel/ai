@@ -1,5 +1,36 @@
 # Upgrade Guide
 
+## Upgrading To 1.5 From 1.4
+
+### Each Sub-Agent Delegation Is Stored In Its Own Conversation
+
+**Likelihood Of Impact: Low**
+
+This change affects applications whose sub-agents remember conversations, for example a sub-agent returned from `tools()` with `forUser()`. Previously, the first delegation's conversation ID was written back onto the sub-agent instance, so every later delegation in the same run, or across runs when the instance was reused, continued that conversation and replayed its history. Each delegation now runs in isolation, as documented, and is stored in its own conversation:
+
+```php
+public function tools(): iterable
+{
+    // Before... both delegations in one parent run shared one conversation.
+    // After... each delegation is stored in its own conversation, owned by the user.
+    return [(new ResearchAgent)->forUser($this->user)];
+}
+```
+
+The sub-agent instance is no longer modified by a delegation, so `$subAgent->currentConversation()` no longer returns the last delegation's conversation ID. The parent's stored tool call records it instead as `sub_conversation_id`, and `Conversation::subConversations()` returns every conversation linked from a conversation's tool calls:
+
+```php
+$conversation->subConversations()->get();
+```
+
+Delegations no longer generate a conversation title. A sub-agent you continue yourself still shares that conversation across every delegation:
+
+```php
+return [(new ResearchAgent)->continue($threadId, as: $this->user)];
+```
+
+To also store the delegations of sub-agents that do not remember conversations whenever the parent run is remembered, enable the `ai.conversations.remember_delegations` option. These conversations have no participant and are found through the parent.
+
 ## Upgrading To 1.4 From 1.3
 
 ### OpenAI Billing And Quota Errors Throw `InsufficientCreditsException`
