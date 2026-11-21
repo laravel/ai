@@ -19,6 +19,7 @@ use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Events\ToolApprovalRequested;
 use Laravel\Ai\Events\ToolApprovalResolved;
 use Laravel\Ai\Exceptions\ApprovalNotResumableException;
+use Laravel\Ai\Gateway\ParentInvocation;
 use Laravel\Ai\Gateway\RunContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\UserMessage;
@@ -159,7 +160,8 @@ trait GeneratesText
             return $next($prompt);
         }] : [];
 
-        if (RememberConversation::appliesTo($agent)) {
+        // A delegation remembered with its parent is remembered even when its sub-agent cannot remember on its own...
+        if (RememberConversation::appliesTo($agent) || AgentTool::delegation($agent, ParentInvocation::current()[1])?->hasConversationParticipant()) {
             $middleware[] = new RememberConversation(resolve(ConversationStore::class), $this);
         }
 

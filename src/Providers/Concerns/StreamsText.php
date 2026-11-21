@@ -102,6 +102,9 @@ trait StreamsText
                                 $this->recordAgentFailure($invocationId, $prompt, $exception, retryable: ! $streamable->hasYielded());
 
                                 throw $exception;
+                            } finally {
+                                // However the stream ends, abandoned included, its delegations are no longer remembered with it...
+                                RememberConversation::forgetRun($invocationId);
                             }
                         },
                         $meta,

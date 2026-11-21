@@ -683,10 +683,12 @@ class TextGenerationLoop
             try {
                 yield from $this->preliminaryToolResults($events, $toolCall, $invocationId);
 
-                $toolResults[] = $this->recordedToolResult($this->toolResult($toolCall, $events->getReturn()), $context);
+                $toolResult = $this->toolResult($toolCall, $events->getReturn());
             } catch (ToolExecutionException $exception) {
-                $toolResults[] = $this->recordedToolResult($this->failedToolResult($toolCall, $exception), $context);
+                $toolResult = $this->failedToolResult($toolCall, $exception);
             }
+
+            $toolResults[] = $this->recordedToolResult($this->linkedToolResult($toolResult, $tool), $context);
         }
 
         return [$toolResults, $pendingApprovals];
@@ -848,10 +850,24 @@ class TextGenerationLoop
     protected function executedToolResult(ToolCall $toolCall, Tool $tool, ?RunContext $context = null): ToolResult
     {
         try {
-            return $this->toolResult($toolCall, $this->executeTool($tool, $toolCall->arguments, $toolCall->id, $context));
+            $result = $this->toolResult($toolCall, $this->executeTool($tool, $toolCall->arguments, $toolCall->id, $context));
         } catch (ToolExecutionException $exception) {
-            return $this->failedToolResult($toolCall, $exception);
+            $result = $this->failedToolResult($toolCall, $exception);
         }
+
+        return $this->linkedToolResult($result, $tool);
+    }
+
+    /**
+     * Link a sub-agent tool call's result to the conversation its delegation ran in.
+     */
+    protected function linkedToolResult(ToolResult $result, ?Tool $tool): ToolResult
+    {
+        if ($tool instanceof AgentTool) {
+            $result->subConversationId = $tool->pullSubConversation($result->id);
+        }
+
+        return $result;
     }
 
     /**
@@ -1019,14 +1035,14 @@ class TextGenerationLoop
                 $result = 'The tool call failed: '.$exception->getMessage();
             }
 
-            $toolResults[] = new ToolResult(
+            $toolResults[] = $this->linkedToolResult(new ToolResult(
                 $toolCall->id,
                 $toolCall->name,
                 $arguments,
                 $result,
                 $toolCall->resultId,
                 failed: $failed,
-            );
+            ), $tool);
         }
 
         return [$toolResults, ! $hasBareRejection];

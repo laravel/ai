@@ -7,6 +7,11 @@ use JsonSerializable;
 
 class ToolResult implements Arrayable, JsonSerializable
 {
+    /**
+     * The conversation a sub-agent tool call's delegation ran in, kept out of the serialized form so it never reaches a provider or client.
+     */
+    public ?string $subConversationId = null;
+
     public function __construct(
         public string $id,
         public string $name,

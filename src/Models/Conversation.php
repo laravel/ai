@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
@@ -38,6 +39,23 @@ class Conversation extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(ConversationMessage::class, 'conversation_id');
+    }
+
+    /**
+     * Get the conversations its sub-agent delegations were stored in, as linked from its tool calls.
+     *
+     * @return Builder<static>
+     */
+    public function subConversations(): Builder
+    {
+        $ids = $this->messages()->where('role', 'assistant')->get()
+            ->flatMap(fn (ConversationMessage $message): array => $message->tool_calls)
+            ->pluck('sub_conversation_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        return static::query()->whereKey($ids);
     }
 
     /**
