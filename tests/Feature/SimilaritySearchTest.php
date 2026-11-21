@@ -25,18 +25,21 @@ test('search results are returned', function (): void {
     expect(str_contains($results, json_encode($data, JSON_PRETTY_PRINT)))->toBeTrue();
 });
 
-test('the search closure receives the tool request', function (): void {
-    $search = new SimilaritySearch(using: fn (string $query, Request $request): array => [
-        ['query' => $query, 'tags' => $request->array('tags')],
-    ]);
+test('subclasses can override the search using the tool request', function (): void {
+    $search = new class(fn (string $query): array => []) extends SimilaritySearch
+    {
+        protected function search(Request $request): mixed
+        {
+            return [['tags' => $request->array('tags')]];
+        }
+    };
 
     $results = $search->handle(new Request([
         'query' => 'Test query',
         'tags' => ['api_docs'],
     ]));
 
-    expect($results)->toContain('"query": "Test query"')
-        ->toContain('"api_docs"');
+    expect($results)->toContain('"api_docs"');
 });
 
 test('using model rejects blank model class', function (): void {

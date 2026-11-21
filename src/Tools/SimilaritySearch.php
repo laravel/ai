@@ -24,11 +24,6 @@ class SimilaritySearch implements Approvable, Tool
 
     protected ?int $rerankLimit = null;
 
-    /**
-     * Create a new similarity search tool instance.
-     *
-     * @param  Closure(string, Request): mixed  $using
-     */
     public function __construct(
         public Closure $using,
     ) {}
@@ -83,7 +78,7 @@ class SimilaritySearch implements Approvable, Tool
      */
     public function handle(Request $request): string
     {
-        $results = call_user_func($this->using, $request->string('query'), $request);
+        $results = $this->search($request);
 
         $results = match (true) {
             is_array($results) => new Collection($results),
@@ -140,6 +135,14 @@ class SimilaritySearch implements Approvable, Tool
                 ->description('The search query.')
                 ->required(),
         ];
+    }
+
+    /**
+     * Run the similarity search for the given request.
+     */
+    protected function search(Request $request): mixed
+    {
+        return call_user_func($this->using, $request->string('query'));
     }
 
     /**
