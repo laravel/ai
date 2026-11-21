@@ -268,12 +268,12 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
      */
     protected function stepsFor(AgentPrompt $prompt, AgentResponse $response): Collection
     {
-        $reasons = $this->pendingReasonsFor($response);
+        $pending = $this->pendingApprovalsById($response);
 
         if ($response->steps->isNotEmpty()) {
             return $response->steps->values()->map(fn (Step $step): array => [
                 'content' => $step->text,
-                'tool_calls' => $this->toolCallsFor($step->toolCalls, $step->toolResults, $reasons),
+                'tool_calls' => $this->toolCallsFor($step->toolCalls, $step->toolResults, $pending),
                 'reasoning' => $step->reasoning,
                 'replay_blocks' => $response->hasPendingApprovals() ? $step->replayBlocks : [],
                 'provider_tool_calls' => array_map(fn (ProviderToolCall $call): array => $call->toArray(), $step->providerToolCalls),
@@ -286,7 +286,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
             'tool_calls' => $this->toolCallsFor(
                 $response->toolCalls->all(),
                 $prompt->hasApprovalDecisions() ? [] : $response->toolResults->all(),
-                $reasons,
+                $pending,
             ),
             'reasoning' => $response->reasoning,
             'replay_blocks' => [],
@@ -295,18 +295,18 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * Pair a step's tool calls with the results they were answered by, marking those awaiting approval with their reason.
+     * Pair a step's tool calls with the results they were answered by, marking those awaiting approval with their reason and payload.
      *
      * @param  iterable<int, ToolCall>  $toolCalls
      * @param  iterable<int, ToolResult>  $toolResults
-     * @param  Collection<string, string|null>  $reasons
+     * @param  Collection<string, PendingApproval>  $pending
      * @return list<array<string, mixed>>
      */
-    protected function toolCallsFor(iterable $toolCalls, iterable $toolResults, Collection $reasons): array
+    protected function toolCallsFor(iterable $toolCalls, iterable $toolResults, Collection $pending): array
     {
         $results = collect($toolResults)->keyBy(fn (ToolResult $result): string => $result->id);
 
-        return collect($toolCalls)->map(function (ToolCall $toolCall) use ($results, $reasons): array {
+        return collect($toolCalls)->map(function (ToolCall $toolCall) use ($results, $pending): array {
             $result = $results->get($toolCall->id);
 
             $stored = Arr::except($toolCall->toArray(), ['reasoning_id', 'reasoning_summary', 'reasoning_encrypted_content']);
@@ -317,8 +317,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
 
             return [
                 ...$stored,
-                ...$reasons->has($toolCall->id) ? ['approval_reason' => $reasons[$toolCall->id]] : [],
-                ...$result === null ? [] : Arr::only($result->toArray(), ['result', 'denied', 'failed']),
+                ...$pending->has($toolCall->id) ? $this->approvalFields($pending[$toolCall->id]) : [],
+                ...$result === null ? [] : Arr::only($result->toArray(), ['arguments', 'result', 'denied', 'failed', 'data']),
             ];
         })->values()->all();
     }
@@ -373,13 +373,27 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
     }
 
     /**
-     * The reasons a response paused on, keyed by tool call ID.
+     * The approvals a response paused on, keyed by tool call ID.
      *
-     * @return Collection<string, string|null>
+     * @return Collection<string, PendingApproval>
      */
-    protected function pendingReasonsFor(AgentResponse $response): Collection
+    protected function pendingApprovalsById(AgentResponse $response): Collection
     {
-        return $response->pendingApprovals->mapWithKeys(fn (PendingApproval $approval) => [$approval->id => $approval->reason]);
+        return $response->pendingApprovals->keyBy(fn (PendingApproval $approval): string => $approval->id);
+    }
+
+    /**
+     * The fields a stored tool call carries while it awaits a decision.
+     *
+     * @return array<string, mixed>
+     */
+    protected function approvalFields(PendingApproval $approval): array
+    {
+        return [
+            'arguments' => $approval->arguments,
+            'approval_reason' => $approval->reason,
+            ...array_filter(['approval_input_schema' => $approval->inputSchema, 'approval_data' => $approval->data], fn ($value) => $value !== null),
+        ];
     }
 
     /**
@@ -429,6 +443,8 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                 $toolCall['name'],
                 $toolCall['arguments'],
                 $toolCall['approval_reason'],
+                $toolCall['approval_input_schema'] ?? null,
+                $toolCall['approval_data'] ?? null,
             ))->values();
     }
 
@@ -664,7 +680,7 @@ class DatabaseConversationStore implements ConversationStore, PaginatesConversat
                     return $result === null || PendingApproval::isAnswered($toolCall)
                         ? $toolCall
                         // Arguments come along because an edited approval runs the tool with different ones than the call asked for...
-                        : [...$toolCall, ...Arr::only($result->toArray(), ['arguments', 'result', 'denied', 'failed'])];
+                        : [...$toolCall, ...Arr::only($result->toArray(), ['arguments', 'result', 'denied', 'failed', 'data'])];
                 }, $step['tool_calls']);
 
                 return $step;

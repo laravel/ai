@@ -269,7 +269,7 @@ class AgentUserInteractionProtocol extends StreamProtocol
     {
         return $event->pendingApprovals
             ->map(fn (PendingApproval $approval) => AgentUserInteraction::interrupt(
-                $approval->id, $approval->reason, $approval->tool, $approval->arguments,
+                $approval->id, $approval->reason, $approval->tool, $approval->arguments, $approval->inputSchema, $approval->data,
             ))
             ->all();
     }
