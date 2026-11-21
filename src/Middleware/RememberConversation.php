@@ -23,9 +23,14 @@ use Throwable;
 class RememberConversation
 {
     /**
-     * The agent the run is remembered as: the prompted agent, or the conversation held apart for its delegation.
+     * Whether the run is a sub-agent delegation, so a conversation it creates is kept off the agent.
      */
-    protected ?Agent $agent = null;
+    protected bool $delegated = false;
+
+    /**
+     * The conversation the delegation created.
+     */
+    protected ?string $conversationId = null;
 
     /**
      * Create a new middleware instance.
@@ -50,21 +55,13 @@ class RememberConversation
     public function handle(AgentPrompt $prompt, Closure $next)
     {
         /** @var Agent&RemembersConversations $agent */
-        $agent = $this->agent = AgentTool::delegation($prompt->agent, $prompt->parentToolInvocationId, $prompt->invocationId) ?? $prompt->agent;
-
-        // Another prompt to a sub-agent while its delegation runs is not remembered with that delegation...
-        if (! static::appliesTo($agent)) {
-            return $next($prompt);
-        }
+        $agent = $prompt->agent;
 
         $pendingConversationId = $agent->currentConversation() === null
             ? (string) Str::uuid7()
             : null;
 
-        // Asked as each delegation starts, since the agent may pick its participant while it runs...
-        $prompt->remembersDelegations = config('ai.conversations.remember_delegations', false)
-            ? fn (): bool => $this->shouldRememberTurn($agent, $prompt)
-            : null;
+        $this->delegated = AgentTool::delegates($agent, $prompt->parentToolInvocationId, $prompt->invocationId);
 
         try {
             $response = $next($prompt);
@@ -104,7 +101,7 @@ class RememberConversation
 
             // Record assistant message...
             $assistantMessageId = $this->store->storeAssistantMessage(
-                $agent->currentConversation(),
+                $this->conversationOf($agent),
                 $participantType,
                 $participantId,
                 $prompt,
@@ -112,7 +109,7 @@ class RememberConversation
             );
 
             $completedResponse->withinConversation(
-                $agent->currentConversation(),
+                $this->conversationOf($agent),
                 $participant,
             )->withStoredMessages($userMessageId, $assistantMessageId);
         });
@@ -124,7 +121,7 @@ class RememberConversation
     protected function rememberFailedTurn(AgentPrompt $prompt, Throwable $exception, ?string $pendingConversationId, bool $retryable = true): void
     {
         /** @var Agent&RemembersConversations $agent */
-        $agent = $this->agent ?? $prompt->agent;
+        $agent = $prompt->agent;
 
         // A failover retry writes the turn itself, so only the attempt the caller gives up on is recorded...
         if ($retryable && $prompt->willRetry($exception)) {
@@ -151,7 +148,7 @@ class RememberConversation
         [$participantType, $participantId] = $this->participantKeys($agent->conversationParticipant());
 
         $this->store->storeAssistantMessage(
-            $agent->currentConversation(),
+            $this->conversationOf($agent),
             $participantType,
             $participantId,
             $prompt,
@@ -171,23 +168,40 @@ class RememberConversation
 
         [$participantType, $participantId] = $this->participantKeys($participant);
 
-        if ($pendingConversationId !== null || ! $agent->currentConversation()) {
+        if ($this->delegated && ($pendingConversationId !== null || ! $this->conversationOf($agent))) {
+            // A delegation's conversation is kept off the sub-agent, so the next delegation starts its own...
+            $this->conversationId = $this->store->storeConversation(
+                $participantType, $participantId, Str::limit($prompt->prompt, 50, preserveWords: true), $pendingConversationId,
+            );
+
+            AgentTool::delegatedTo((string) $prompt->parentToolInvocationId, $this->conversationId);
+        } elseif (! $this->delegated && ($pendingConversationId !== null || ! $agent->currentConversation())) {
             $agent->continue($this->store->storeConversation(
                 $participantType,
                 $participantId,
-                $agent === $prompt->agent ? $this->generateTitle($prompt) : Str::limit($prompt->prompt, 50, preserveWords: true),
+                $this->generateTitle($prompt),
                 $pendingConversationId,
             ), $participant);
         }
 
         // A resume continues the turn its decisions answer, so it adds no message of its own...
         return $prompt->hasApprovalDecisions() ? null : $this->store->storeUserMessage(
-            $agent->currentConversation(),
+            $this->conversationOf($agent),
             $participantType,
             $participantId,
-            $prompt->agent::class,
+            $agent::class,
             new UserMessage($prompt->prompt, $prompt->attachments),
         );
+    }
+
+    /**
+     * Get the conversation the run is stored in.
+     *
+     * @param  Agent&RemembersConversations  $agent
+     */
+    protected function conversationOf(Agent $agent): ?string
+    {
+        return $this->conversationId ?? $agent->currentConversation();
     }
 
     /**
@@ -221,7 +235,7 @@ class RememberConversation
     protected function shouldRememberTurn(Agent $agent, AgentPrompt $prompt): bool
     {
         return $agent->hasConversationParticipant()
-            || $agent->currentConversation() !== null
+            || $this->conversationOf($agent) !== null
             || $prompt->hasApprovalDecisions();
     }
 

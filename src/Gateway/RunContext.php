@@ -2,7 +2,6 @@
 
 namespace Laravel\Ai\Gateway;
 
-use Closure;
 use Illuminate\Contracts\Events\Dispatcher;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -25,15 +24,6 @@ class RunContext
 {
     /** @var array<int, Step> */
     protected array $steps = [];
-
-    /**
-     * Determine whether the run's delegations are remembered with it, asked as each delegation starts.
-     *
-     * @var (Closure(): bool)|null
-     *
-     * @internal
-     */
-    public ?Closure $remembersDelegations = null;
 
     /**
      * The conversation each delegation run by this run's tool calls was remembered in, keyed by tool call ID, until the loop collects it.
