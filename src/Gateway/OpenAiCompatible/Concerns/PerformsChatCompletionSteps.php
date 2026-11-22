@@ -29,7 +29,7 @@ trait PerformsChatCompletionSteps
 
         $response = $this->withErrorHandling(
             $provider->name(),
-            fn () => $this->client($provider, $timeout)->post('chat/completions', $body),
+            fn () => $this->client($provider, $timeout)->withBody($this->encodeBody($body))->post('chat/completions'),
         );
 
         $data = $response->json();
@@ -66,10 +66,21 @@ trait PerformsChatCompletionSteps
             $provider->name(),
             fn () => $this->client($provider, $timeout)
                 ->withOptions(['stream' => true])
-                ->post('chat/completions', $body),
+                ->withBody($this->encodeBody($body))
+                ->post('chat/completions'),
         );
 
         return yield from $this->processTextStream($invocationId, $provider, $model, $response->getBody());
+    }
+
+    /**
+     * Encode the request body without escaping forward slashes.
+     *
+     * Some providers misread escaped slashes in large base64 data URLs, such as "application\/pdf".
+     */
+    protected function encodeBody(array $body): string
+    {
+        return json_encode($body, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
     }
 
     /**
