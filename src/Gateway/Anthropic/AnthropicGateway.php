@@ -27,6 +27,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesAnthropicClient;
+    use Concerns\FingerprintsThinking;
     use Concerns\HandlesTextStreaming;
     use Concerns\MapsAttachments;
     use Concerns\MapsMessages;
@@ -72,7 +73,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
 
         $this->validateTextResponse($data);
 
-        return $this->parseTextResponse($data, $provider, filled($schema))->withRawResponse($response);
+        return $this->parseTextResponse($data, $provider, filled($schema), $this->thinkingFingerprint($body))->withRawResponse($response);
     }
 
     /**
@@ -117,6 +118,7 @@ class AnthropicGateway implements Gateway, StepTextGateway
             $model,
             $response->getBody(),
             $this->pausedContent($messages),
+            $this->thinkingFingerprint($body),
         );
     }
 

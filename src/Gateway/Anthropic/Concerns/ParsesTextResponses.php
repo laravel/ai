@@ -42,6 +42,7 @@ trait ParsesTextResponses
         array $data,
         Provider $provider,
         bool $structured,
+        ?string $thinkingFingerprint = null,
     ): StepResponse {
         return $this->buildStepResponse(
             $data['content'] ?? [],
@@ -51,6 +52,7 @@ trait ParsesTextResponses
             $this->extractFinishReason($data),
             $structured,
             $data['container']['id'] ?? null,
+            $thinkingFingerprint,
         );
     }
 
@@ -65,6 +67,7 @@ trait ParsesTextResponses
         FinishReason $finishReason,
         bool $structured,
         ?string $container = null,
+        ?string $thinkingFingerprint = null,
     ): StepResponse {
         $text = $this->extractText($content);
         $toolCalls = $this->extractToolCalls($content);
@@ -72,6 +75,11 @@ trait ParsesTextResponses
 
         $realToolCalls = array_values(array_filter($toolCalls, fn (ToolCall $tc): bool => $tc->name !== 'output_structured_data'));
         $hasStructuredToolCall = count($realToolCalls) < count($toolCalls);
+
+        if ($realToolCalls !== [] && $thinkingFingerprint !== null && filled($thinking = $this->leadingThinking($content))) {
+            $realToolCalls[0]->thinkingBlocks = $thinking;
+            $realToolCalls[0]->thinkingFingerprint = $thinkingFingerprint;
+        }
 
         $structuredData = null;
 
@@ -104,8 +112,6 @@ trait ParsesTextResponses
             replayBlocks: $content,
             reasoning: $this->extractReasoning($content),
             providerToolCalls: $this->extractProviderToolCalls($content),
-            // The synthetic structured output call never gets a result, so a later turn can't replay it...
-            replayBlocksOutliveTurn: ! $hasStructuredToolCall,
         );
     }
 
@@ -164,6 +170,20 @@ trait ParsesTextResponses
         $thinkingBlocks = array_filter($content, fn (array $block): bool => ($block['type'] ?? '') === 'thinking');
 
         return static::joinReasoning(array_map(fn (array $block): string => $block['thinking'] ?? '', $thinkingBlocks));
+    }
+
+    /**
+     * Extract the thinking blocks a step opens with, or none when it thinks again later, since a rebuilt step leads with its thinking.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function leadingThinking(array $content): array
+    {
+        $isThinking = fn (array $block): bool => in_array($block['type'] ?? '', ['thinking', 'redacted_thinking'], true);
+
+        $leading = collect($content)->takeWhile($isThinking)->values()->all();
+
+        return count($leading) === count(array_filter($content, $isThinking)) ? $leading : [];
     }
 
     /**

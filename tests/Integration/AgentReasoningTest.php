@@ -2,6 +2,7 @@
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasProviderOptions;
@@ -136,4 +137,43 @@ test('reasoning conversation roundtrips through database storage', function (): 
         );
 
     expect($secondResponse->text)->toContain('72019');
+});
+
+test('anthropic replays a stored turn\'s signed thinking until the instructions change', function (): void {
+    requiresApiKey('ANTHROPIC_API_KEY');
+
+    config([
+        'ai.conversations.generate_title' => false,
+        'ai.providers.anthropic.anthropic_beta' => 'web-fetch-2025-09-10,thinking-binding-controls-2026-08-01',
+    ]);
+
+    Http::record();
+
+    $agent = (new class(['thinking' => ['type' => 'adaptive', 'block_binding' => ['prefix_mismatch_behavior' => 'error']]]) extends RememberingToolAgent implements Conversational
+    {
+        public string $prompt = 'Think about which tool fits, then call the FixedNumberGenerator tool before answering. Answer with one short sentence.';
+
+        public function instructions(): string
+        {
+            return $this->prompt;
+        }
+    })->forUser((object) ['id' => 1]);
+
+    $agent->prompt('Which fixed number is available? Reason step by step before calling the tool.', provider: 'anthropic', model: 'claude-sonnet-5-5');
+
+    $toolCall = json_decode((string) DB::table('agent_conversation_messages')->where('role', 'assistant')->value('steps'), true)[0]['tool_calls'][0];
+
+    expect($toolCall['thinking_blocks'] ?? [])->not->toBeEmpty();
+
+    $sentThinking = fn (string $prompt): bool => str_contains(json_encode(collect(Http::recorded())
+        ->map(fn (array $pair): array => $pair[0]->data())
+        ->first(fn (array $body): bool => (last($body['messages'])['content'][0]['text'] ?? null) === $prompt)['messages']), '"thinking"');
+
+    expect($agent->prompt('Confirm the fixed number again.', provider: 'anthropic', model: 'claude-sonnet-5-5')->text)->toContain('72019')
+        ->and($sentThinking('Confirm the fixed number again.'))->toBeTrue();
+
+    $agent->prompt = 'Call the FixedNumberGenerator tool before answering. Reply in one sentence.';
+
+    expect($agent->prompt('And once more?', provider: 'anthropic', model: 'claude-sonnet-5-5')->text)->toContain('72019')
+        ->and($sentThinking('And once more?'))->toBeFalse();
 });

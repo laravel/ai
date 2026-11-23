@@ -15,6 +15,7 @@ use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Providers\Tools\ProviderTool;
+use Laravel\Ai\Responses\Data\ToolCall;
 
 trait ResumesToolApprovals
 {
@@ -31,7 +32,7 @@ trait ResumesToolApprovals
     }
 
     /**
-     * Replace another provider's raw paused-turn replay state with its generic mapping, since raw blocks are only valid verbatim on the provider that produced them.
+     * Replace another provider's raw replay state and thinking with its generic mapping, since both are only valid verbatim on the provider that produced them.
      *
      * @param  array<int, Message>  $messages
      * @return array<int, Message>
@@ -40,10 +41,16 @@ trait ResumesToolApprovals
     {
         return array_map(function (Message $message): Message {
             if ($message instanceof AssistantMessage
-                && filled($message->replayBlocks)
                 && $message->replayBlocksProvider !== null
-                && $message->replayBlocksProvider !== $this->name()) {
-                return new AssistantMessage($message->content, $message->toolCalls);
+                && $message->replayBlocksProvider !== $this->name()
+                && (filled($message->replayBlocks) || $message->toolCalls->contains(fn (ToolCall $toolCall): bool => $toolCall->thinkingBlocks !== null))) {
+                return new AssistantMessage($message->content, $message->toolCalls->map(function (ToolCall $toolCall): ToolCall {
+                    $toolCall = clone $toolCall;
+
+                    $toolCall->thinkingBlocks = $toolCall->thinkingFingerprint = null;
+
+                    return $toolCall;
+                }));
             }
 
             return $message;

@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
+use HashContext;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\MessageRole;
@@ -13,16 +14,21 @@ trait MapsMessages
     /**
      * Map the given Laravel messages to Anthropic Messages API format.
      */
-    protected function mapMessages(array $messages): array
+    protected function mapMessages(array $messages, ?HashContext $thinkingPrefix = null): array
     {
         $mapped = [];
+        $fingerprinted = 0;
 
         foreach ($messages as $message) {
             $message = Message::tryFrom($message);
 
+            for (; $thinkingPrefix !== null && $fingerprinted < count($mapped); $fingerprinted++) {
+                $this->extendThinkingPrefix($thinkingPrefix, $mapped[$fingerprinted]);
+            }
+
             match ($message->role) {
                 MessageRole::User => $this->mapUserMessage($message, $mapped),
-                MessageRole::Assistant => $this->mapAssistantMessage($message, $mapped),
+                MessageRole::Assistant => $this->mapAssistantMessage($message, $mapped, $thinkingPrefix ? hash_final(hash_copy($thinkingPrefix)) : null),
                 MessageRole::ToolResult => $this->mapToolResultMessage($message, $mapped),
             };
         }
@@ -52,7 +58,7 @@ trait MapsMessages
     /**
      * Map an assistant message to Anthropic format.
      */
-    protected function mapAssistantMessage(AssistantMessage|Message $message, array &$mapped): void
+    protected function mapAssistantMessage(AssistantMessage|Message $message, array &$mapped, ?string $thinkingFingerprint = null): void
     {
         if ($message instanceof AssistantMessage && filled($message->replayBlocks)) {
             $mapped[] = [
@@ -63,9 +69,12 @@ trait MapsMessages
             return;
         }
 
-        // Reasoning a step did not replay verbatim is dropped rather than rebuilt as a thinking block, which Anthropic rejects without the signature it issued...
-        $content = [];
         $hasToolCalls = $message instanceof AssistantMessage && $message->toolCalls->isNotEmpty();
+
+        // Anthropic rejects thinking whose system prompt, tools, or earlier messages changed since it was issued...
+        $content = $hasToolCalls && $thinkingFingerprint !== null && $message->toolCalls->first()->thinkingFingerprint === $thinkingFingerprint
+            ? $message->toolCalls->first()->thinkingBlocks ?? []
+            : [];
 
         if (filled($message->content)) {
             $content[] = [

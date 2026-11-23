@@ -7,6 +7,9 @@ use JsonSerializable;
 
 class ToolCall implements Arrayable, JsonSerializable
 {
+    /**
+     * @param  array<int, array<string, mixed>>|null  $thinkingBlocks
+     */
     public function __construct(
         public string $id,
         public string $name,
@@ -16,6 +19,8 @@ class ToolCall implements Arrayable, JsonSerializable
         public ?array $reasoningSummary = null,
         public ?string $reasoningEncryptedContent = null,
         public ?string $thoughtSignature = null,
+        public ?array $thinkingBlocks = null,
+        public ?string $thinkingFingerprint = null,
     ) {}
 
     /**
@@ -32,6 +37,8 @@ class ToolCall implements Arrayable, JsonSerializable
             reasoningSummary: $data['reasoning_summary'] ?? null,
             reasoningEncryptedContent: $data['reasoning_encrypted_content'] ?? null,
             thoughtSignature: $data['thought_signature'] ?? null,
+            thinkingBlocks: $data['thinking_blocks'] ?? null,
+            thinkingFingerprint: $data['thinking_fingerprint'] ?? null,
         );
     }
 
@@ -49,6 +56,8 @@ class ToolCall implements Arrayable, JsonSerializable
             'reasoning_summary' => $this->reasoningSummary,
             'reasoning_encrypted_content' => $this->reasoningEncryptedContent,
             'thought_signature' => $this->thoughtSignature,
+            'thinking_blocks' => $this->thinkingBlocks,
+            'thinking_fingerprint' => $this->thinkingFingerprint,
         ];
     }
 

@@ -52,6 +52,7 @@ trait HandlesTextStreaming
         string $model,
         $streamBody,
         array $pausedContent = [],
+        ?string $thinkingFingerprint = null,
     ): Generator {
         $messageId = $this->generateEventId();
         $reasoningId = '';
@@ -386,6 +387,7 @@ trait HandlesTextStreaming
             finishReason: $this->extractFinishReason(['stop_reason' => $stopReason]),
             structured: false,
             container: $container,
+            thinkingFingerprint: $thinkingFingerprint,
         );
     }
 

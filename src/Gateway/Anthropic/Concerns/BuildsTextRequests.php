@@ -29,7 +29,7 @@ trait BuildsTextRequests
     ): array {
         $body = [
             'model' => $model,
-            'messages' => $this->mapMessages($messages),
+            'messages' => [],
             'max_tokens' => $options?->maxTokens ?? 64_000,
         ];
 
@@ -77,7 +77,11 @@ trait BuildsTextRequests
             $providerOptions['output_config'] = array_merge($body['output_config'], $providerOptions['output_config']);
         }
 
-        return $this->applyPromptCacheBreakpoints(array_merge($body, $providerOptions), $options);
+        $body = $this->applyPromptCacheBreakpoints(array_merge($body, $providerOptions), $options);
+
+        $body['messages'] = $this->mapMessages($messages, $this->thinkingPrefix($body));
+
+        return $body;
     }
 
     /**
