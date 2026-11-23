@@ -20,7 +20,6 @@ use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\MapsChatCompletionTools;
 use Laravel\Ai\Gateway\OpenAiCompatible\Concerns\PerformsChatCompletionSteps;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
-use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\AudioResponse;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
@@ -52,7 +51,7 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
     /**
      * Determine if the provider honors the "strict" flag on function definitions.
      */
-    protected function supportsStrictTools(Provider $provider): bool
+    protected function supportsStrictTools(): bool
     {
         return true;
     }

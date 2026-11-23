@@ -26,7 +26,7 @@ trait MapsChatCompletionTools
             if ($tool instanceof ProviderTool) {
                 $mapped[] = $this->mapProviderTool($tool, $provider);
             } elseif ($tool instanceof Tool) {
-                $mapped[] = $this->mapTool($tool, $provider);
+                $mapped[] = $this->mapTool($tool);
             }
         }
 
@@ -44,14 +44,14 @@ trait MapsChatCompletionTools
     /**
      * Map a regular tool to a Chat Completions function definition.
      */
-    protected function mapTool(Tool $tool, Provider $provider): array
+    protected function mapTool(Tool $tool): array
     {
-        $strict = Strict::isAppliedTo($tool) && $this->supportsStrictTools($provider);
+        $strict = Strict::isAppliedTo($tool) && $this->supportsStrictTools();
 
         $schema = $tool->schema(new JsonSchemaTypeFactory);
 
         $schemaArray = filled($schema)
-            ? (new ObjectSchema($schema, strict: $strict))->toSchema()
+            ? (new ObjectSchema($schema))->toSchema()
             : [];
 
         $definition = [
@@ -78,7 +78,7 @@ trait MapsChatCompletionTools
     /**
      * Determine if the provider honors the "strict" flag on function definitions.
      */
-    protected function supportsStrictTools(Provider $provider): bool
+    protected function supportsStrictTools(): bool
     {
         return false;
     }

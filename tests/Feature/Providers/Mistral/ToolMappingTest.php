@@ -90,8 +90,20 @@ test('tool with Strict attribute sends strict true', function (): void {
         $function = collect(data_get(json_decode($request->body(), true), 'tools'))
             ->firstWhere('function.name', 'RandomNumberGenerator')['function'];
 
-        return $function['strict'] === true
-            && $function['parameters']['additionalProperties'] === false;
+        return $function === [
+            'name' => 'RandomNumberGenerator',
+            'description' => 'This tool can be used to generate cryptographically secure random numbers.',
+            'parameters' => [
+                'type' => 'object',
+                'properties' => [
+                    'min' => ['description' => 'The minimum value of the random number', 'default' => 1, 'type' => 'integer'],
+                    'max' => ['description' => 'The maximum value of the random number', 'default' => 100, 'type' => 'integer'],
+                ],
+                'required' => ['min', 'max'],
+                'additionalProperties' => false,
+            ],
+            'strict' => true,
+        ];
     });
 });
 
