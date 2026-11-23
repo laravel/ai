@@ -25,7 +25,8 @@ function anthropicThinkingResponse(array $content, string $stopReason): PromiseI
 function fakeAnthropicThinkingTurns(array $firstStep = [
     ['type' => 'thinking', 'thinking' => 'Calling the tool.', 'signature' => 'sig-1'],
     ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'FixedNumberGenerator', 'input' => (object) []],
-]): void {
+]): void
+{
     Http::fake(['api.anthropic.com/*' => Http::sequence([
         anthropicThinkingResponse($firstStep, 'tool_use'),
         anthropicThinkingResponse([
