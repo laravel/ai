@@ -4,6 +4,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
+use Tests\Fixtures\Tools\NonStrictTool;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
 
 use function Laravel\Ai\agent;
@@ -77,5 +78,44 @@ test('tool parameters are not wrapped in schema definition', function (): void {
 
         return ! array_key_exists('schema_definition', $function['parameters']['properties'] ?? [])
             && ! in_array('schema_definition', $function['parameters']['required'] ?? []);
+    });
+});
+
+test('tool with Strict attribute sends strict true', function (): void {
+    Http::fake(['*' => $this->fakeTextResponse('42')]);
+
+    agent(tools: [new RandomNumberGenerator])->prompt('Give me a random number', provider: 'mistral');
+
+    Http::assertSent(function (Request $request): bool {
+        $function = collect(data_get(json_decode($request->body(), true), 'tools'))
+            ->firstWhere('function.name', 'RandomNumberGenerator')['function'];
+
+        return $function === [
+            'name' => 'RandomNumberGenerator',
+            'description' => 'This tool can be used to generate cryptographically secure random numbers.',
+            'parameters' => [
+                'type' => 'object',
+                'properties' => [
+                    'min' => ['description' => 'The minimum value of the random number', 'default' => 1, 'type' => 'integer'],
+                    'max' => ['description' => 'The maximum value of the random number', 'default' => 100, 'type' => 'integer'],
+                ],
+                'required' => ['min', 'max'],
+                'additionalProperties' => false,
+            ],
+            'strict' => true,
+        ];
+    });
+});
+
+test('tool without Strict attribute omits strict', function (): void {
+    Http::fake(['*' => $this->fakeTextResponse('ok')]);
+
+    agent(tools: [new NonStrictTool])->prompt('Hi', provider: 'mistral');
+
+    Http::assertSent(function (Request $request): bool {
+        $function = collect(data_get(json_decode($request->body(), true), 'tools'))
+            ->firstWhere('function.name', 'NonStrictTool')['function'];
+
+        return ! array_key_exists('strict', $function);
     });
 });
