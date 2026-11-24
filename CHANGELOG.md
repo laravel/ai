@@ -1,6 +1,25 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/ai/compare/v1.4.1...1.x)
+## [Unreleased](https://github.com/laravel/ai/compare/v1.4.2...1.x)
+
+## [v1.4.2](https://github.com/laravel/ai/compare/v1.4.1...v1.4.2) - 2026-11-23
+
+### What's Changed
+
+* Flag failed tool results as errors when sending them to Anthropic by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/1250
+* Keep the Anthropic tool definitions cache breakpoint off deferred tools by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/1249
+* Honor the agent tool choice with Anthropic native structured output by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/1251
+* [1.x] Replay reasoning on the OpenAI-compatible provider in tool loops by [@Tarek-yagami](https://github.com/Tarek-yagami) in https://github.com/laravel/ai/pull/1245
+* [1.x] Keep the provider call id when replaying an AG-UI tool result by [@ChrisReid](https://github.com/ChrisReid) in https://github.com/laravel/ai/pull/1241
+* [1.x] Stream tool input as it arrives by [@vinitkadam03](https://github.com/vinitkadam03) in https://github.com/laravel/ai/pull/1239
+* [1.x] Honor the Strict attribute on Mistral and OpenRouter tools by [@medilies](https://github.com/medilies) in https://github.com/laravel/ai/pull/1233
+
+### New Contributors
+
+* [@Tarek-yagami](https://github.com/Tarek-yagami) made their first contribution in https://github.com/laravel/ai/pull/1245
+* [@ChrisReid](https://github.com/ChrisReid) made their first contribution in https://github.com/laravel/ai/pull/1241
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v1.4.1...v1.4.2
 
 ## [v1.4.1](https://github.com/laravel/ai/compare/v1.4.0...v1.4.1) - 2026-11-13
 
