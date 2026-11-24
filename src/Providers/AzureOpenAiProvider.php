@@ -76,7 +76,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
      */
     public function defaultTextModel(): string
     {
-        return $this->config['deployment'] ?? 'gpt-6-sol';
+        return $this->config['deployment'] ?? 'gpt-6.2-sol';
     }
 
     /**
@@ -92,7 +92,7 @@ class AzureOpenAiProvider extends Provider implements EmbeddingProvider, FilePro
      */
     public function smartestTextModel(): string
     {
-        return $this->config['deployment'] ?? 'gpt-6-astra';
+        return $this->config['deployment'] ?? 'gpt-6.2-astra';
     }
 
     /**
