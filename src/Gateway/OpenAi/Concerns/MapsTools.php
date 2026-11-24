@@ -28,6 +28,7 @@ trait MapsTools
     protected function mapTools(array $tools, Provider $provider, bool $stateless = false): array
     {
         $mapped = [];
+        $namespaces = 0;
 
         foreach ($tools as $tool) {
             if ($tool instanceof ToolSearch) {
@@ -37,13 +38,24 @@ trait MapsTools
                     continue;
                 }
 
+                $deferred = array_map(fn ($deferred) => $this->mapTool($deferred, defer: true), $tool->tools);
+
+                if ($this->groupsDeferredToolsInNamespace()) {
+                    $mapped[] = [
+                        'type' => 'namespace',
+                        'name' => 'deferred_tools'.($namespaces++ > 0 ? '_'.$namespaces : ''),
+                        'description' => 'Tools loaded on demand.',
+                        'tools' => $deferred,
+                    ];
+                }
+
                 $mapped[] = [
                     'type' => 'tool_search',
                     ...array_diff_key($tool->providerOptions(Lab::tryFrom($provider->driver()) ?? $provider->driver()), ['type' => true]),
                 ];
 
-                foreach ($tool->tools as $deferred) {
-                    $mapped[] = $this->mapTool($deferred, defer: true);
+                if (! $this->groupsDeferredToolsInNamespace()) {
+                    array_push($mapped, ...$deferred);
                 }
             } elseif ($tool instanceof ProviderTool) {
                 $mapped[] = $this->mapProviderTool($tool, $provider);
@@ -53,6 +65,17 @@ trait MapsTools
         }
 
         return $mapped;
+    }
+
+    /**
+     * Determine if deferred tools should be grouped in a namespace.
+     *
+     * OpenAI answers the continuation that carries a deferred tool's result with a 500
+     * server_error when the deferred functions are sent loose; inside a namespace it passes.
+     */
+    protected function groupsDeferredToolsInNamespace(): bool
+    {
+        return true;
     }
 
     /**
