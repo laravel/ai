@@ -129,7 +129,7 @@ class OpenRouterProvider extends Provider implements AudioProvider, Classificati
      */
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'anthropic/claude-opus-5.5';
+        return $this->config['models']['text']['smartest'] ?? 'anthropic/claude-fable-5.2';
     }
 
     /**
