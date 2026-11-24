@@ -78,7 +78,7 @@ class BedrockProvider extends Provider implements EmbeddingProvider, ImageProvid
      */
     public function cheapestTextModel(): string
     {
-        return $this->config['models']['text']['cheapest'] ?? 'global.anthropic.claude-haiku-4-5-20251001-v1:0';
+        return $this->config['models']['text']['cheapest'] ?? 'global.anthropic.claude-haiku-5-5';
     }
 
     /**
