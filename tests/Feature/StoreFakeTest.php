@@ -283,6 +283,18 @@ describe('listing files', function (): void {
         expect($store->files()->pluck('id')->all())->toBe(['file_2']);
     });
 
+    test('fake store files are read when the collection is iterated', function (): void {
+        Stores::fake();
+
+        $store = Stores::create('My Store');
+
+        $files = $store->files();
+
+        $store->add('file_1');
+
+        expect($files->pluck('id')->all())->toBe(['file_1']);
+    });
+
     test('files are listed per store', function (): void {
         Stores::fake();
 

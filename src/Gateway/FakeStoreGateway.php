@@ -125,7 +125,7 @@ class FakeStoreGateway implements StoreGateway
      */
     public function listFiles(StoreProvider $provider, string $storeId): LazyCollection
     {
-        return LazyCollection::make(array_values($this->documents[$storeId] ?? []));
+        return LazyCollection::make(fn () => array_values($this->documents[$storeId] ?? []));
     }
 
     /**
