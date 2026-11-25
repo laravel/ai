@@ -5,6 +5,8 @@ namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
 use Illuminate\Support\Collection;
 use Laravel\Ai\Concerns\JoinsReasoning;
 use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Gateway\Concerns\DecodesStructuredOutput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
@@ -26,11 +28,23 @@ trait ParsesTextResponses
     protected function validateTextResponse(array $data): void
     {
         if (! $data || isset($data['error'])) {
-            throw new AiException(sprintf(
+            $message = sprintf(
                 'OpenRouter Error: [%s] %s',
                 $data['error']['type'] ?? $data['error']['code'] ?? 'unknown',
                 $data['error']['message'] ?? 'Unknown OpenRouter error.',
-            ));
+            );
+
+            $code = $data['error']['code'] ?? null;
+
+            if ($code === 429) {
+                throw new RateLimitedException($message);
+            }
+
+            if (in_array($code, $this->overloadedStatusCodes(), true)) {
+                throw new ProviderOverloadedException($message);
+            }
+
+            throw new AiException($message);
         }
     }
 
