@@ -104,6 +104,9 @@ test('can add and remove file from store', function (string $provider, string $a
 
     expect($documentId)->not->toBeEmpty();
 
+    // List the documents in the store...
+    expect($store->files()->pluck('id')->all())->toContain($documentId->id());
+
     // Refresh the store to see updated file counts...
     $refreshed = $store->refresh();
 

@@ -4,6 +4,7 @@ namespace Laravel\Ai;
 
 use Closure;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\LazyCollection;
 use Laravel\Ai\Contracts\Files\HasProviderId;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Providers\FileProvider;
@@ -11,6 +12,7 @@ use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Responses\AddedDocumentResponse;
+use Laravel\Ai\Responses\Data\StoreDocument;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
 
 class Store
@@ -52,6 +54,18 @@ class Store
             is_string($file) => $file,
             default => null,
         });
+    }
+
+    /**
+     * List the documents in the store.
+     *
+     * Further pages are fetched from the provider only as the collection is iterated.
+     *
+     * @return LazyCollection<int, StoreDocument>
+     */
+    public function files(): LazyCollection
+    {
+        return $this->provider->listStoreFiles($this->id);
     }
 
     /**

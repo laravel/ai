@@ -6,6 +6,7 @@ use DateInterval;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Collection;
+use Illuminate\Support\LazyCollection;
 use Illuminate\Support\Sleep;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
@@ -14,6 +15,7 @@ use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Gateway\Concerns\EncodesResourceIds;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Responses\Data\StoreDocument;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
 use Laravel\Ai\Store;
 
@@ -140,6 +142,68 @@ class GeminiStoreGateway implements StoreGateway
             is_array($value) => ['key' => $key, 'stringListValue' => ['values' => $value]],
             default => ['key' => $key, 'stringValue' => (string) $value],
         })->values()->all();
+    }
+
+    /**
+     * List the documents in a vector store, fetching further pages as they are needed.
+     *
+     * Gemini does not return the ID of the file a document was imported from, so the file ID is null.
+     *
+     * @return LazyCollection<int, StoreDocument>
+     */
+    public function listFiles(StoreProvider $provider, string $storeId): LazyCollection
+    {
+        return LazyCollection::make(function () use ($provider, $storeId) {
+            $storeId = $this->normalizeStoreId($storeId);
+            $pageToken = null;
+
+            do {
+                $response = $this->withErrorHandling($provider->name(), fn () => $this->client($provider)
+                    ->get($this->baseUrl($provider)."/{$storeId}/documents", array_filter([
+                        'pageSize' => 20,
+                        'pageToken' => $pageToken,
+                    ]))->throw());
+
+                foreach ($response->json('documents') ?? [] as $document) {
+                    yield new StoreDocument(
+                        id: basename($document['name']),
+                        status: $this->documentStatus($document['state'] ?? null),
+                        metadata: $this->parseMetadata($document['customMetadata'] ?? []),
+                    );
+                }
+
+                $pageToken = $response->json('nextPageToken');
+            } while (filled($pageToken));
+        });
+    }
+
+    /**
+     * Map a Gemini document state to a document status.
+     *
+     * @return 'completed'|'pending'|'failed'|null
+     */
+    protected function documentStatus(?string $state): ?string
+    {
+        return match ($state) {
+            'STATE_ACTIVE' => 'completed',
+            'STATE_PENDING' => 'pending',
+            'STATE_FAILED' => 'failed',
+            default => null,
+        };
+    }
+
+    /**
+     * Parse metadata from Gemini's custom_metadata format.
+     *
+     * @return array<string, mixed>
+     */
+    protected function parseMetadata(array $metadata): array
+    {
+        return (new Collection($metadata))->mapWithKeys(fn (array $entry): array => [$entry['key'] => match (true) {
+            isset($entry['numericValue']) => $entry['numericValue'],
+            isset($entry['stringListValue']) => $entry['stringListValue']['values'] ?? [],
+            default => $entry['stringValue'] ?? null,
+        }])->all();
     }
 
     /**

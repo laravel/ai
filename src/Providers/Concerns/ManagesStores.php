@@ -4,6 +4,7 @@ namespace Laravel\Ai\Providers\Concerns;
 
 use DateInterval;
 use Illuminate\Support\Collection;
+use Illuminate\Support\LazyCollection;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\HasProviderId;
@@ -17,6 +18,7 @@ use Laravel\Ai\Events\RemovingFileFromStore;
 use Laravel\Ai\Events\RemovingFileFromStoreFailed;
 use Laravel\Ai\Events\StoreCreated;
 use Laravel\Ai\Events\StoreDeleted;
+use Laravel\Ai\Responses\Data\StoreDocument;
 use Laravel\Ai\Store;
 use Throwable;
 
@@ -86,6 +88,16 @@ trait ManagesStores
                 ));
             }
         );
+    }
+
+    /**
+     * List the documents in a vector store.
+     *
+     * @return LazyCollection<int, StoreDocument>
+     */
+    public function listStoreFiles(string $storeId): LazyCollection
+    {
+        return $this->storeGateway()->listFiles($this, $storeId);
     }
 
     /**

@@ -7,6 +7,7 @@ use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\ProviderDocument;
+use Laravel\Ai\Responses\Data\StoreDocument;
 use Laravel\Ai\Stores;
 
 use function Illuminate\Support\days;
@@ -247,5 +248,73 @@ describe('file assertions', function (): void {
         $store->remove('file_123');
 
         $store->assertNotRemoved(fn ($fileId): bool => $fileId === 'file_456');
+    });
+});
+
+describe('listing files', function (): void {
+    test('files added to a fake store are listed', function (): void {
+        Stores::fake();
+
+        $store = Stores::create('My Store');
+
+        $store->add('file_1', ['company' => 'laravel']);
+        $store->add('file_2');
+
+        $documents = $store->files()->all();
+
+        expect($documents)->toHaveCount(2)
+            ->and($documents[0])->toBeInstanceOf(StoreDocument::class)
+            ->and($documents[0]->id)->toBe('file_1')
+            ->and($documents[0]->fileId)->toBe('file_1')
+            ->and($documents[0]->status)->toBe('completed')
+            ->and($documents[0]->metadata)->toBe(['company' => 'laravel'])
+            ->and($documents[1]->id)->toBe('file_2');
+    });
+
+    test('files removed from a fake store are no longer listed', function (): void {
+        Stores::fake();
+
+        $store = Stores::create('My Store');
+
+        $store->add('file_1');
+        $store->add('file_2');
+        $store->remove('file_1');
+
+        expect($store->files()->pluck('id')->all())->toBe(['file_2']);
+    });
+
+    test('files are listed per store', function (): void {
+        Stores::fake();
+
+        $first = Stores::create('First Store');
+        $second = Stores::create('Second Store');
+
+        $first->add('file_1');
+        $second->add('file_2');
+
+        expect($first->files()->pluck('id')->all())->toBe(['file_1'])
+            ->and($second->files()->pluck('id')->all())->toBe(['file_2']);
+    });
+
+    test('a fake store can be seeded with documents', function (): void {
+        Stores::fake()->withDocuments('vs_1', [
+            'file_1',
+            new StoreDocument('doc_2', status: 'pending'),
+        ]);
+
+        $documents = Stores::get('vs_1')->files()->all();
+
+        expect($documents)->toHaveCount(2)
+            ->and($documents[0]->id)->toBe('file_1')
+            ->and($documents[0]->completed())->toBeTrue()
+            ->and($documents[1]->id)->toBe('doc_2')
+            ->and($documents[1]->fileId)->toBeNull()
+            ->and($documents[1]->completed())->toBeFalse();
+    });
+
+    test('an unknown fake store has no files', function (): void {
+        Stores::fake();
+
+        expect(Stores::get('vs_unknown')->files()->all())->toBe([]);
     });
 });
