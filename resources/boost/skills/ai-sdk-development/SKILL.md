@@ -148,6 +148,18 @@ $conversationId = $response->conversationId;
 $response = (new SalesCoach)->continue($conversationId, as: $user)->prompt('Tell me more.');
 ```
 
+`continue()` does not check that the conversation belongs to the participant. When the conversation ID comes from the frontend, verify it first, or one user can read and write another user's conversation:
+
+```php
+use Laravel\Ai\Contracts\ConversationStore;
+
+abort_unless(resolve(ConversationStore::class)->conversationBelongsTo(
+    $conversationId, $user->getMorphClass(), $user->getKey()
+), 403);
+
+$response = (new SalesCoach)->continue($conversationId, as: $user)->prompt('Tell me more.');
+```
+
 ### Structured Output
 
 ```php
@@ -505,6 +517,10 @@ use Laravel\AI\Agent;
 ### Unsupported Provider Capability
 
 Calling a capability not supported by a provider throws a `LogicException`. Refer to the provider support table below.
+
+### Continuing a Conversation Without Checking Its Owner
+
+`continue($conversationId, as: $user)` loads the conversation's messages by ID alone and appends the new turn to it. It never checks who the conversation belongs to. Before continuing an ID that came from the frontend, or resuming a paused turn with tool approval decisions, authorize it with `conversationBelongsTo()`, as shown in [Conversation Context](#conversation-context).
 
 ## Provider Support
 
