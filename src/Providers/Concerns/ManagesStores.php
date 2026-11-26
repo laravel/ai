@@ -20,6 +20,7 @@ use Laravel\Ai\Events\StoreCreated;
 use Laravel\Ai\Events\StoreDeleted;
 use Laravel\Ai\Responses\Data\StoreDocument;
 use Laravel\Ai\Store;
+use LogicException;
 use Throwable;
 
 trait ManagesStores
@@ -97,7 +98,13 @@ trait ManagesStores
      */
     public function listStoreFiles(string $storeId): LazyCollection
     {
-        return $this->storeGateway()->listFiles($this, $storeId);
+        $gateway = $this->storeGateway();
+
+        if (! method_exists($gateway, 'listFiles')) {
+            throw new LogicException("Provider [{$this->name()}] does not support listing store files.");
+        }
+
+        return $gateway->listFiles($this, $storeId);
     }
 
     /**

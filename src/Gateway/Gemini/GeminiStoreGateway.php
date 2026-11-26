@@ -145,9 +145,7 @@ class GeminiStoreGateway implements StoreGateway
     }
 
     /**
-     * List the documents in a vector store, fetching further pages as they are needed.
-     *
-     * Gemini does not return the ID of the file a document was imported from, so the file ID is null.
+     * List the documents in a vector store, without file IDs, which Gemini does not return.
      *
      * @return LazyCollection<int, StoreDocument>
      */

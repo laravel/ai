@@ -14,6 +14,7 @@ use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Responses\AddedDocumentResponse;
 use Laravel\Ai\Responses\Data\StoreDocument;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
+use LogicException;
 
 class Store
 {
@@ -57,14 +58,16 @@ class Store
     }
 
     /**
-     * List the documents in the store.
-     *
-     * Further pages are fetched from the provider only as the collection is iterated.
+     * List the documents in the store, fetching further pages as the collection is iterated.
      *
      * @return LazyCollection<int, StoreDocument>
      */
     public function files(): LazyCollection
     {
+        if (! method_exists($this->provider, 'listStoreFiles')) {
+            throw new LogicException("Provider [{$this->provider->name()}] does not support listing store files.");
+        }
+
         return $this->provider->listStoreFiles($this->id);
     }
 

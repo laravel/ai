@@ -2,12 +2,18 @@
 
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\StorableFile;
+use Laravel\Ai\Contracts\Gateway\StoreGateway;
+use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\ProviderDocument;
 use Laravel\Ai\Responses\Data\StoreDocument;
+use Laravel\Ai\Responses\Data\StoreFileCounts;
+use Laravel\Ai\Store;
 use Laravel\Ai\Stores;
 
 use function Illuminate\Support\days;
@@ -329,4 +335,17 @@ describe('listing files', function (): void {
 
         expect(Stores::get('vs_unknown')->files()->all())->toBe([]);
     });
+
+    test('listing files throws when the store gateway cannot list them', function (): void {
+        Ai::storeProvider('openai')
+            ->useStoreGateway(Mockery::mock(StoreGateway::class))
+            ->listStoreFiles('vs_1');
+    })->throws(LogicException::class, 'Provider [openai] does not support listing store files.');
+
+    test('listing files throws when the store provider cannot list them', function (): void {
+        $provider = Mockery::mock(FileProvider::class, StoreProvider::class);
+        $provider->allows('name')->andReturn('custom');
+
+        (new Store($provider, 'vs_1', 'Store', new StoreFileCounts(0, 0, 0), true))->files();
+    })->throws(LogicException::class, 'Provider [custom] does not support listing store files.');
 });

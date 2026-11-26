@@ -9,6 +9,9 @@ use Laravel\Ai\Contracts\Providers\StoreProvider;
 use Laravel\Ai\Responses\Data\StoreDocument;
 use Laravel\Ai\Store;
 
+/**
+ * @method LazyCollection<int, StoreDocument> listFiles(StoreProvider $provider, string $storeId)
+ */
 interface StoreGateway
 {
     /**
@@ -39,16 +42,6 @@ interface StoreGateway
         string $fileId,
         array $metadata = [],
     ): string;
-
-    /**
-     * List the documents in a vector store, fetching further pages as they are needed.
-     *
-     * @return LazyCollection<int, StoreDocument>
-     */
-    public function listFiles(
-        StoreProvider $provider,
-        string $storeId,
-    ): LazyCollection;
 
     /**
      * Remove a file from a vector store.

@@ -10,6 +10,9 @@ use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Responses\Data\StoreDocument;
 use Laravel\Ai\Store;
 
+/**
+ * @method LazyCollection<int, StoreDocument> listStoreFiles(string $storeId)
+ */
 interface StoreProvider extends Provider
 {
     /**
@@ -33,13 +36,6 @@ interface StoreProvider extends Provider
      * @param  array<string, mixed>  $metadata
      */
     public function addFileToStore(string $storeId, HasProviderId $file, array $metadata = []): string;
-
-    /**
-     * List the documents in a vector store.
-     *
-     * @return LazyCollection<int, StoreDocument>
-     */
-    public function listStoreFiles(string $storeId): LazyCollection;
 
     /**
      * Remove a file from a vector store.
