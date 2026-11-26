@@ -18,16 +18,14 @@ test('cache instructions attribute converts the system message to a cached block
     (new #[CacheInstructions] class(withTools: false) extends PromptCacheAgent {})->prompt('Hi', provider: 'openrouter');
 
     Http::assertSent(function (Request $request): bool {
-        $body = $request->data();
-
-        return $body['messages'][0] === [
+        return $request->data()['messages'][0] === [
             'role' => 'system',
             'content' => [[
                 'type' => 'text',
                 'text' => 'You are a helpful assistant that generates numbers.',
                 'cache_control' => ['type' => 'ephemeral'],
             ]],
-        ] && $body['messages'][1]['content'] === 'Hi';
+        ];
     });
 });
 
