@@ -122,6 +122,18 @@ test('non gpt-image models send a single image field', function (): void {
     Http::assertSent(fn (Request $request): bool => $request->hasFile('image', 'source-bytes', 'image.png'));
 });
 
+test('chatgpt-image models send the image as a gpt-image edit', function (): void {
+    Http::fake(['*' => fakeOpenAiImageEditResponse()]);
+
+    Image::of('Make it brighter')
+        ->attachments([new Base64Image(base64_encode('source-bytes'), 'image/png')])
+        ->generate(provider: 'openai', model: 'chatgpt-image-latest');
+
+    Http::assertSent(fn (Request $request): bool => $request->hasFile('image[]', 'source-bytes', 'image.png')
+        && collect($request->data())->pluck('contents', 'name')->get('moderation') === 'low'
+        && ! collect($request->data())->pluck('name')->contains('response_format'));
+});
+
 test('gpt-image edits send moderation low by default', function (): void {
     Http::fake(['*' => fakeOpenAiImageEditResponse()]);
 
@@ -152,32 +164,20 @@ test('a mask given as a provider option is sent as the mask file', function (): 
     Image::of('Remove the selected object')
         ->attachments([new Base64Image(base64_encode('source-bytes'), 'image/png')])
         ->withProviderOptions(['mask' => new StoredImage('mask.png', 'images')])
-        ->generate(provider: 'openai', model: 'gpt-image-1');
+        ->generate(provider: 'openai', model: 'gpt-image-2');
 
     Http::assertSent(fn (Request $request): bool => $request->hasFile('image[]', 'source-bytes', 'image.png')
         && $request->hasFile('mask', 'mask-bytes', 'mask.png')
         && collect($request->data())->where('name', 'mask')->count() === 1);
 });
 
-test('a mask can be used with non gpt-image models', function (): void {
-    Http::fake(['*' => fakeOpenAiImageEditResponse()]);
-
-    Image::of('Remove the selected object')
-        ->attachments([new Base64Image(base64_encode('source-bytes'), 'image/png')])
-        ->withProviderOptions(['mask' => new Base64Image(base64_encode('mask-bytes'), 'image/png')])
-        ->generate(provider: 'openai', model: 'dall-e-2');
-
-    Http::assertSent(fn (Request $request): bool => $request->hasFile('image', 'source-bytes')
-        && $request->hasFile('mask', 'mask-bytes', 'mask.png'));
-});
-
-test('a mask must be an image with content', function (): void {
+test('a provider image cannot be used as a mask', function (): void {
     Http::fake(['*' => fakeOpenAiImageEditResponse()]);
 
     Image::of('Remove the selected object')
         ->attachments([new Base64Image(base64_encode('source-bytes'), 'image/png')])
         ->withProviderOptions(['mask' => new ProviderImage('file-123')])
-        ->generate(provider: 'openai', model: 'gpt-image-1');
+        ->generate(provider: 'openai', model: 'gpt-image-2');
 })->throws(InvalidArgumentException::class, 'Unsupported image attachment type');
 
 test('a mask cannot be used without an image to edit', function (): void {
@@ -185,5 +185,5 @@ test('a mask cannot be used without an image to edit', function (): void {
 
     Image::of('Remove the selected object')
         ->withProviderOptions(['mask' => new Base64Image(base64_encode('mask-bytes'), 'image/png')])
-        ->generate(provider: 'openai', model: 'gpt-image-1');
+        ->generate(provider: 'openai', model: 'gpt-image-2');
 })->throws(InvalidArgumentException::class, 'An image mask can only be used when editing an attached image.');
