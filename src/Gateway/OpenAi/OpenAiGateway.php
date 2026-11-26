@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\OpenAi;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
@@ -68,6 +69,10 @@ class OpenAiGateway implements Gateway, StepTextGateway
     ): ImageResponse {
         $hasAttachments = filled($attachments);
 
+        if (! $hasAttachments && isset($providerOptions['mask'])) {
+            throw new InvalidArgumentException('An image mask can only be used when editing an attached image.');
+        }
+
         $response = $this->withErrorHandling(
             $provider->name(),
             fn () => $hasAttachments
@@ -106,7 +111,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
-            ...(str_starts_with($model, 'gpt-image')
+            ...(Str::startsWith($model, ['gpt-image', 'chatgpt-image'])
                 ? ['moderation' => $providerOptions['moderation'] ?? 'low']
                 : ['response_format' => 'b64_json']),
         ]);
@@ -129,17 +134,15 @@ class OpenAiGateway implements Gateway, StepTextGateway
     ) {
         $request = $this->client($provider, $timeout ?? 120);
 
-        $isGptImage = str_starts_with($model, 'gpt-image');
+        $isGptImage = Str::startsWith($model, ['gpt-image', 'chatgpt-image']);
         $field = $isGptImage ? 'image[]' : 'image';
 
         foreach ($attachments as $attachment) {
-            $content = match (true) {
-                $attachment instanceof Image && $attachment instanceof StorableFile => $attachment->content(),
-                $attachment instanceof UploadedFile => $attachment->get(),
-                default => throw new InvalidArgumentException('Unsupported image attachment type ['.get_debug_type($attachment).']'),
-            };
+            $request = $request->attach($field, $this->imageEditContent($attachment), 'image.png');
+        }
 
-            $request = $request->attach($field, $content, 'image.png');
+        if (($mask = Arr::pull($providerOptions, 'mask')) !== null) {
+            $request = $request->attach('mask', $this->imageEditContent($mask), 'mask.png');
         }
 
         return $request->post('images/edits', array_merge($providerOptions, array_filter([
@@ -150,6 +153,18 @@ class OpenAiGateway implements Gateway, StepTextGateway
                 ? ['moderation' => $providerOptions['moderation'] ?? 'low']
                 : ['response_format' => 'b64_json']),
         ])));
+    }
+
+    /**
+     * Get the contents of an image sent to the edits endpoint.
+     */
+    protected function imageEditContent(mixed $image): string
+    {
+        return match (true) {
+            $image instanceof Image && $image instanceof StorableFile => $image->content(),
+            $image instanceof UploadedFile => $image->get(),
+            default => throw new InvalidArgumentException('Unsupported image attachment type ['.get_debug_type($image).']'),
+        };
     }
 
     /**
