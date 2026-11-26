@@ -74,9 +74,7 @@ trait PerformsChatCompletionSteps
     }
 
     /**
-     * Encode the request body without escaping forward slashes.
-     *
-     * Some providers misread escaped slashes in large base64 data URLs, such as "application\/pdf".
+     * Encode the request body without escaping slashes, which OpenRouter misreads in large data URLs.
      */
     protected function encodeBody(array $body): string
     {
