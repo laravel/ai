@@ -59,6 +59,7 @@ trait HandlesTextGeneration
                     $error['message'] ?? 'Unknown error',
                     false,
                     time(),
+                    usage: isset($data['response']['usage']) ? $this->extractUsage($data['response']) : null,
                 ))->withInvocationId($invocationId);
 
                 return null;
