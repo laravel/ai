@@ -63,3 +63,25 @@ test('error in 200 response throws ai exception', function (): void {
 
     (new AssistantAgent)->prompt('Hello', provider: 'openrouter');
 })->throws(AiException::class, 'OpenRouter Error');
+
+test('rate limit error in 200 response throws rate limited exception', function (): void {
+    Http::fake(['openrouter.ai/*' => Http::response([
+        'error' => [
+            'code' => 429,
+            'message' => 'openai/gpt-5-mini is temporarily rate-limited upstream. Please retry shortly.',
+        ],
+    ])]);
+
+    (new AssistantAgent)->prompt('Hello', provider: 'openrouter');
+})->throws(RateLimitedException::class, 'OpenRouter Error: [429]');
+
+test('overloaded error in 200 response throws provider overloaded exception', function (): void {
+    Http::fake(['openrouter.ai/*' => Http::response([
+        'error' => [
+            'code' => 502,
+            'message' => 'Provider returned error',
+        ],
+    ])]);
+
+    (new AssistantAgent)->prompt('Hello', provider: 'openrouter');
+})->throws(ProviderOverloadedException::class, 'OpenRouter Error: [502]');
