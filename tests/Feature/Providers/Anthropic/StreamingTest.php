@@ -629,9 +629,41 @@ describe('error handling', function (): void {
 
         $failed = Event::dispatched(StepFailed::class)->first()[0];
 
-        expect($error->usage)->toBeInstanceOf(TextUsage::class)
-            ->and($error->usage->inputTokens)->toBe(10)
+        expect($error->usage)->toEqual(new TextUsage(10, 0))
+            ->and($error->toArray()['usage'])->toBe([
+                'input_tokens' => 10,
+                'output_tokens' => 0,
+                'cache_read_input_tokens' => null,
+                'cache_write_input_tokens' => null,
+                'reasoning_tokens' => null,
+            ])
             ->and($failed->usage)->toBe($error->usage);
+    });
+
+    test('streaming error after a message delta keeps its cumulative usage', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->messageStart(),
+                    $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                    $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'Partial']),
+                    $this->messageDelta('end_turn', 12),
+                    ['type' => 'error', 'error' => ['type' => 'overloaded_error', 'message' => 'Server overloaded']],
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $error = null;
+
+        try {
+            $this->collectStreamEvents();
+        } catch (StreamErrorException $exception) {
+            $error = $exception->error;
+        }
+
+        expect($error->usage)->toEqual(new TextUsage(10, 12));
     });
 
     test('streaming error before any usage reports none', function (): void {

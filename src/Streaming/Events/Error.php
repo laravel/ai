@@ -42,6 +42,7 @@ class Error extends StreamEvent
             'recoverable' => $this->recoverable,
             'timestamp' => $this->timestamp,
             'metadata' => $this->metadata,
+            'usage' => $this->usage?->toArray(),
         ];
     }
 }

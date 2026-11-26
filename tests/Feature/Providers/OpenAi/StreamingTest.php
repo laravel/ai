@@ -249,9 +249,36 @@ test('streaming failed response keeps its usage', function (): void {
         $error = $exception->error;
     }
 
-    expect($error->usage)->toBeInstanceOf(TextUsage::class)
-        ->and($error->usage->inputTokens)->toBe(42)
-        ->and($error->usage->outputTokens)->toBe(7);
+    expect($error->usage)->toEqual(new TextUsage(42, 7, 0, null, 0));
+});
+
+test('streaming failed response without usage reports none', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->responseCreated(),
+                ['type' => 'response.failed', 'response' => [
+                    'id' => 'resp_1',
+                    'status' => 'failed',
+                    'error' => ['code' => 'server_error', 'message' => 'Server overloaded'],
+                    'usage' => null,
+                ]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $error = null;
+
+    try {
+        $this->collectStreamEvents();
+    } catch (StreamErrorException $exception) {
+        $error = $exception->error;
+    }
+
+    expect($error->message)->toBe('Server overloaded')
+        ->and($error->usage)->toBeNull();
 });
 
 test('streaming without a terminal response throws', function (): void {
