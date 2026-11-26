@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\OpenAi;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Ai\Contracts\Files\StorableFile;
 use Laravel\Ai\Contracts\Files\TranscribableAudio;
@@ -110,7 +111,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
             'model' => $model,
             'prompt' => $prompt,
             ...$provider->defaultImageOptions($size, $quality),
-            ...(str_starts_with($model, 'gpt-image')
+            ...(Str::startsWith($model, ['gpt-image', 'chatgpt-image'])
                 ? ['moderation' => $providerOptions['moderation'] ?? 'low']
                 : ['response_format' => 'b64_json']),
         ]);
@@ -133,7 +134,7 @@ class OpenAiGateway implements Gateway, StepTextGateway
     ) {
         $request = $this->client($provider, $timeout ?? 120);
 
-        $isGptImage = str_starts_with($model, 'gpt-image');
+        $isGptImage = Str::startsWith($model, ['gpt-image', 'chatgpt-image']);
         $field = $isGptImage ? 'image[]' : 'image';
 
         foreach ($attachments as $attachment) {
