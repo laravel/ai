@@ -41,6 +41,7 @@ Determine the right entry point before writing code:
 
 Text generation or chat? → Agent class with `Promptable` trait
 Chat with conversation history? → Agent + `Conversational` interface (manual) or `RemembersConversations` trait (automatic)
+Conversation ID from the client? → Authorize with `conversationBelongsTo()` before `continue()` (see Conversation Context)
 Structured JSON output? → Agent + `HasStructuredOutput` interface
 Image generation? → `Image::of()->generate()`
 Audio synthesis? → `Audio::of()->generate()`
@@ -148,16 +149,10 @@ $conversationId = $response->conversationId;
 $response = (new SalesCoach)->continue($conversationId, as: $user)->prompt('Tell me more.');
 ```
 
-`continue()` does not check that the conversation belongs to the participant. When the conversation ID comes from the frontend, verify it first, or one user can read and write another user's conversation:
+`continue()` and approval resumes never check ownership. Authorize a client-supplied ID first:
 
 ```php
-use Laravel\Ai\Contracts\ConversationStore;
-
-abort_unless(resolve(ConversationStore::class)->conversationBelongsTo(
-    $conversationId, $user->getMorphClass(), $user->getKey()
-), 403);
-
-$response = (new SalesCoach)->continue($conversationId, as: $user)->prompt('Tell me more.');
+abort_unless(resolve(ConversationStore::class)->conversationBelongsTo($conversationId, $user->getMorphClass(), $user->getKey()), 403);
 ```
 
 ### Structured Output
@@ -517,10 +512,6 @@ use Laravel\AI\Agent;
 ### Unsupported Provider Capability
 
 Calling a capability not supported by a provider throws a `LogicException`. Refer to the provider support table below.
-
-### Continuing a Conversation Without Checking Its Owner
-
-`continue($conversationId, as: $user)` loads the conversation's messages by ID alone and appends the new turn to it. It never checks who the conversation belongs to. Before continuing an ID that came from the frontend, or resuming a paused turn with tool approval decisions, authorize it with `conversationBelongsTo()`, as shown in [Conversation Context](#conversation-context).
 
 ## Provider Support
 
