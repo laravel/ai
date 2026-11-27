@@ -3,6 +3,7 @@
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\AiManager;
+use Laravel\Ai\Enums\StoreDocumentStatus;
 use Laravel\Ai\Responses\Data\StoreDocument;
 use Laravel\Ai\Stores;
 
@@ -215,19 +216,19 @@ test('list files returns the documents in the store', function (): void {
         'api.openai.com/*' => Http::response(fakeOpenAiStoreResponse()),
     ]);
 
-    $documents = Stores::get('vs-123', provider: 'openai')->files()->all();
+    $documents = Stores::get('vs-123', provider: 'openai')->documents()->all();
 
     expect($documents)->toHaveCount(4)
         ->and($documents[0])->toBeInstanceOf(StoreDocument::class)
         ->and($documents[0]->id)->toBe('file-1')
         ->and($documents[0]->fileId)->toBe('file-1')
-        ->and($documents[0]->status)->toBe('completed')
+        ->and($documents[0]->status)->toBe(StoreDocumentStatus::Completed)
         ->and($documents[0]->completed())->toBeTrue()
         ->and($documents[0]->metadata)->toBe(['company' => 'laravel'])
-        ->and($documents[1]->status)->toBe('pending')
+        ->and($documents[1]->status)->toBe(StoreDocumentStatus::Pending)
         ->and($documents[1]->metadata)->toBe([])
-        ->and($documents[2]->status)->toBe('failed')
-        ->and($documents[3]->status)->toBe('failed');
+        ->and($documents[2]->status)->toBe(StoreDocumentStatus::Failed)
+        ->and($documents[3]->status)->toBe(StoreDocumentStatus::Failed);
 
     Http::assertSent(fn (Request $request): bool => $request->method() === 'GET'
         && $request->url() === 'https://api.openai.com/v1/vector_stores/vs-123/files?limit=100'

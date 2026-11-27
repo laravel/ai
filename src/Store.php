@@ -62,7 +62,7 @@ class Store
      *
      * @return LazyCollection<int, StoreDocument>
      */
-    public function files(): LazyCollection
+    public function documents(): LazyCollection
     {
         if (! method_exists($this->provider, 'listStoreFiles')) {
             throw new LogicException("Provider [{$this->provider->name()}] does not support listing store files.");

@@ -8,6 +8,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\LazyCollection;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Enums\StoreDocumentStatus;
 use Laravel\Ai\Gateway\Concerns\EncodesResourceIds;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
 use Laravel\Ai\Responses\Data\StoreDocument;
@@ -154,15 +155,13 @@ class OpenAiStoreGateway implements StoreGateway
 
     /**
      * Map an OpenAI vector store file status to a document status.
-     *
-     * @return 'completed'|'pending'|'failed'|null
      */
-    protected function documentStatus(?string $status): ?string
+    protected function documentStatus(?string $status): ?StoreDocumentStatus
     {
         return match ($status) {
-            'completed' => 'completed',
-            'in_progress' => 'pending',
-            'failed', 'cancelled' => 'failed',
+            'completed' => StoreDocumentStatus::Completed,
+            'in_progress' => StoreDocumentStatus::Pending,
+            'failed', 'cancelled' => StoreDocumentStatus::Failed,
             default => null,
         };
     }

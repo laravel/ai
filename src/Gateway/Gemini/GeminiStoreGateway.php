@@ -11,6 +11,7 @@ use Illuminate\Support\Sleep;
 use Illuminate\Support\Str;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Enums\StoreDocumentStatus;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Gateway\Concerns\CreatesClient;
 use Laravel\Ai\Gateway\Concerns\EncodesResourceIds;
@@ -177,15 +178,13 @@ class GeminiStoreGateway implements StoreGateway
 
     /**
      * Map a Gemini document state to a document status.
-     *
-     * @return 'completed'|'pending'|'failed'|null
      */
-    protected function documentStatus(?string $state): ?string
+    protected function documentStatus(?string $state): ?StoreDocumentStatus
     {
         return match ($state) {
-            'STATE_ACTIVE' => 'completed',
-            'STATE_PENDING' => 'pending',
-            'STATE_FAILED' => 'failed',
+            'STATE_ACTIVE' => StoreDocumentStatus::Completed,
+            'STATE_PENDING' => StoreDocumentStatus::Pending,
+            'STATE_FAILED' => StoreDocumentStatus::Failed,
             default => null,
         };
     }

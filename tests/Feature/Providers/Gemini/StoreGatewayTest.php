@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Sleep;
 use Laravel\Ai\AiManager;
+use Laravel\Ai\Enums\StoreDocumentStatus;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Exceptions\InvalidApiKeyException;
 use Laravel\Ai\Stores;
@@ -445,11 +446,11 @@ test('list files returns the documents in the store', function (): void {
     expect($documents)->toHaveCount(4)
         ->and($documents[0]->id)->toBe('doc-1')
         ->and($documents[0]->fileId)->toBeNull()
-        ->and($documents[0]->status)->toBe('completed')
+        ->and($documents[0]->status)->toBe(StoreDocumentStatus::Completed)
         ->and($documents[0]->metadata)->toBe(['company' => 'laravel', 'year' => 2026, 'tags' => ['php', 'framework']])
-        ->and($documents[1]->status)->toBe('pending')
+        ->and($documents[1]->status)->toBe(StoreDocumentStatus::Pending)
         ->and($documents[1]->metadata)->toBe([])
-        ->and($documents[2]->status)->toBe('failed')
+        ->and($documents[2]->status)->toBe(StoreDocumentStatus::Failed)
         ->and($documents[3]->status)->toBeNull();
 
     Http::assertSent(fn ($request): bool => $request->method() === 'GET'

@@ -5,19 +5,19 @@ namespace Laravel\Ai\Responses\Data;
 use Illuminate\Contracts\Support\Arrayable;
 use JsonSerializable;
 use Laravel\Ai\Contracts\Files\HasProviderId;
+use Laravel\Ai\Enums\StoreDocumentStatus;
 
 class StoreDocument implements Arrayable, HasProviderId, JsonSerializable
 {
     /**
      * Create a new store document instance.
      *
-     * @param  'completed'|'pending'|'failed'|null  $status
      * @param  array<string, mixed>  $metadata
      */
     public function __construct(
         public readonly string $id,
         public readonly ?string $fileId = null,
-        public readonly ?string $status = null,
+        public readonly ?StoreDocumentStatus $status = null,
         public readonly array $metadata = [],
     ) {}
 
@@ -42,7 +42,7 @@ class StoreDocument implements Arrayable, HasProviderId, JsonSerializable
      */
     public function completed(): bool
     {
-        return $this->status === 'completed';
+        return $this->status === StoreDocumentStatus::Completed;
     }
 
     /**
@@ -53,7 +53,7 @@ class StoreDocument implements Arrayable, HasProviderId, JsonSerializable
         return [
             'id' => $this->id,
             'file_id' => $this->fileId,
-            'status' => $this->status,
+            'status' => $this->status?->value,
             'metadata' => $this->metadata,
         ];
     }
