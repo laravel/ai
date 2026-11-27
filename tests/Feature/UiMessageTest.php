@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Laravel\Ai\Approvals\ApprovalSignature;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\Base64Video;
@@ -285,7 +286,7 @@ describe('chat input from a useChat request', function () {
         $chat = Vercel::chat([
             ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Delete a.txt']]],
             ['id' => 'm2', 'role' => 'assistant', 'parts' => [
-                ['type' => 'tool-DeleteFile', 'toolCallId' => 'call-1', 'state' => 'approval-requested', 'input' => ['path' => 'a.txt'], 'approval' => ['id' => 'call-1', 'approved' => true]],
+                ['type' => 'tool-DeleteFile', 'toolCallId' => 'call-1', 'state' => 'approval-requested', 'input' => ['path' => 'a.txt'], 'approval' => ['id' => ApprovalSignature::sign('call-1', 'DeleteFile', ['path' => 'a.txt']), 'approved' => true]],
             ]],
         ]);
 
@@ -299,7 +300,7 @@ describe('chat input from a useChat request', function () {
         $chat = Vercel::chat([
             ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Delete a.txt']]],
             ['id' => 'm2', 'role' => 'assistant', 'parts' => [
-                ['type' => 'tool-DeleteFile', 'toolCallId' => 'call-1', 'state' => 'approval-responded', 'input' => ['path' => 'a.txt'], 'approval' => ['id' => 'call-1', 'approved' => true]],
+                ['type' => 'tool-DeleteFile', 'toolCallId' => 'call-1', 'state' => 'approval-responded', 'input' => ['path' => 'a.txt'], 'approval' => ['id' => ApprovalSignature::sign('call-1', 'DeleteFile', ['path' => 'a.txt']), 'approved' => true]],
             ]],
             ['id' => 'm3', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Also delete b.txt']]],
         ]);
@@ -480,7 +481,7 @@ describe('hydrating useChat from stored messages', function () {
         ]);
 
         expect($ui[0]['parts'][0]['state'])->toBe('approval-requested')
-            ->and($ui[0]['parts'][0]['approval'])->toBe(['id' => 'call-1', 'reason' => 'Deletes a file.']);
+            ->and($ui[0]['parts'][0]['approval'])->toBe(['id' => ApprovalSignature::sign('call-1', 'DeleteFile', ['path' => 'a.txt']), 'reason' => 'Deletes a file.']);
     });
 
     test('a denied tool call hydrates as output-denied', function () {
