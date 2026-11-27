@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Files\Document;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
@@ -374,4 +375,17 @@ test('response with no annotations has empty citations collection', function ():
     $response = agent()->prompt('Hi', provider: 'openrouter');
 
     expect($response->meta->citations)->toHaveCount(0);
+});
+
+test('request body does not escape forward slashes', function (): void {
+    Http::fake(['*' => fakeOpenRouterResponse('Hello')]);
+
+    agent()->prompt('Read this', attachments: [
+        Document::fromString('%PDF-1.7', 'application/pdf'),
+    ], provider: 'openrouter');
+
+    Http::assertSent(function (Request $request): bool {
+        return str_contains($request->body(), 'data:application/pdf;base64,')
+            && ! str_contains($request->body(), '\\/');
+    });
 });
