@@ -268,6 +268,32 @@ test('user message with pdf document attachment produces document block', functi
         ->and($formatted['content'][1]['document']['source']['bytes'])->toBe('pdf-bytes');
 });
 
+test('repeated document names are numbered across messages', function (): void {
+    $pdf = fn (?string $name = null) => tap(new Base64Document(base64_encode('pdf-bytes'), 'application/pdf'), fn ($document) => $name && $document->as($name));
+
+    $formatted = textGateway()->callFormatMessages([
+        new UserMessage('first', [$pdf('KYC.pdf'), $pdf('KYC.pdf'), $pdf()]),
+        new AssistantMessage('Got them.'),
+        new UserMessage('second', [$pdf('kyc.pdf'), $pdf(), $pdf('KYC (2).pdf')]),
+    ]);
+
+    $names = fn (array $message): array => array_values(array_filter(array_map(fn (array $block) => $block['document']['name'] ?? null, $message['content'])));
+
+    expect($names($formatted[0]))->toBe(['KYC', 'KYC (3)', 'document'])
+        ->and($names($formatted[2]))->toBe(['kyc (4)', 'document (2)', 'KYC (2)']);
+});
+
+test('unique document names are left alone', function (): void {
+    $formatted = textGateway()->callFormatMessages([
+        new UserMessage('here', [
+            (new Base64Document(base64_encode('a'), 'application/pdf'))->as('passport.pdf'),
+            (new Base64Document(base64_encode('b'), 'application/pdf'))->as('visa.pdf'),
+        ]),
+    ]);
+
+    expect(array_column(array_column(array_slice($formatted[0]['content'], 1), 'document'), 'name'))->toBe(['passport', 'visa']);
+});
+
 test('s3 document attachment is sent as s3Location reference', function (): void {
     $document = (new S3Document('s3://my-bucket/path/report.pdf', null, 'application/pdf'))->as('report');
     $user = new UserMessage('summarize this', [$document]);
