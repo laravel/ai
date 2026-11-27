@@ -26,7 +26,7 @@ test('search results are returned', function (): void {
 });
 
 test('subclasses can override the search using the tool request', function (): void {
-    $search = new class(fn (string $query): array => []) extends SimilaritySearch
+    $search = new class extends SimilaritySearch
     {
         protected function search(Request $request): mixed
         {

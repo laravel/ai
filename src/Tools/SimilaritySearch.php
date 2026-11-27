@@ -25,7 +25,7 @@ class SimilaritySearch implements Approvable, Tool
     protected ?int $rerankLimit = null;
 
     public function __construct(
-        public Closure $using,
+        public ?Closure $using = null,
     ) {}
 
     /**
