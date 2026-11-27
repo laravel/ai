@@ -74,7 +74,7 @@ trait BedrockHelpers
     /**
      * Run a single generation step and return the parameters sent to the Converse API.
      */
-    protected function capturedConverseParameters(?TextGenerationOptions $options = null, array $tools = [], ?string $instructions = 'You are a helpful assistant.'): array
+    protected function capturedConverseParameters(?TextGenerationOptions $options = null, array $tools = [], ?string $instructions = 'You are a helpful assistant.', array $messages = []): array
     {
         $captured = [];
 
@@ -92,6 +92,7 @@ trait BedrockHelpers
             $this->bedrockProvider(),
             'anthropic.claude-opus-4-7-v1:0',
             $instructions,
+            messages: $messages,
             tools: $tools,
             options: $options,
         );

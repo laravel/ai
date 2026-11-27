@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway;
 
+use Laravel\Ai\Attributes\CacheConversation;
 use Laravel\Ai\Attributes\CacheInstructions;
 use Laravel\Ai\Attributes\CacheToolDefinitions;
 use Laravel\Ai\Attributes\MaxSteps;
@@ -26,6 +27,7 @@ class TextGenerationOptions
         public readonly ?CacheInstructions $cacheInstructions = null,
         public readonly ?CacheToolDefinitions $cacheToolDefinitions = null,
         public readonly ?array $providerOptions = null,
+        public readonly ?CacheConversation $cacheConversation = null,
     ) {
         //
     }
@@ -118,6 +120,7 @@ class TextGenerationOptions
             toolChoice: self::resolveToolChoice($agent, $reflection),
             cacheInstructions: self::resolveAttribute($reflection, CacheInstructions::class),
             cacheToolDefinitions: self::resolveAttribute($reflection, CacheToolDefinitions::class),
+            cacheConversation: self::resolveAttribute($reflection, CacheConversation::class),
         );
     }
 
