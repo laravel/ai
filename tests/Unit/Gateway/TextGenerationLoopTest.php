@@ -234,6 +234,7 @@ test('it resumes a paused step running only the still-pending gated call', funct
         ->and($ungated->calls)->toBe(0)
         ->and($response->hasPendingApprovals())->toBeFalse()
         ->and($response->toolResults->pluck('id')->all())->toBe(['call-gated', 'call-ungated'])
+        ->and(collect($gateway->messages[0])->whereInstanceOf(ToolResultMessage::class)->first()->toolResults->pluck('id')->all())->toBe(['call-gated', 'call-ungated'])
         ->and($response->text)->toBe('done');
 });
 
@@ -425,39 +426,6 @@ test('a resumed mixed batch merges its results into the pause turn answering mes
         ->and($toolResultMessages)->toHaveCount(1)
         ->and($toolResultMessages->first()->toolResults)->toHaveCount(2)
         ->and($response->text)->toBe('done');
-});
-
-test('a resumed mixed batch sends its merged results in the order the calls were made', function (): void {
-    $gated = new TextGenerationLoopApprovableTool;
-    $ungated = new TextGenerationLoopCountingTool;
-    $gatedCall = new ToolCall('call-gated', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-gated');
-    $ungatedCall = new ToolCall('call-ungated', TextGenerationLoopCountingTool::class, [], 'call-ungated');
-    $gateway = new TextGenerationLoopFakeGateway([
-        new StepResponse('done', [], FinishReason::Stop, new TextUsage, new Meta('fake', 'model')),
-    ]);
-
-    $response = (new TextGenerationLoop($gateway))->generate(
-        textGenerationLoopProvider(),
-        'model',
-        null,
-        [
-            new AssistantMessage('', collect([$gatedCall, $ungatedCall])),
-            new ToolResultMessage(collect([
-                new ToolResultData('call-ungated', TextGenerationLoopCountingTool::class, [], 'counted', 'call-ungated'),
-            ])),
-        ],
-        [$gated, $ungated],
-        null,
-        new TextGenerationOptions(maxSteps: 2),
-        null,
-        ['call-gated' => Decision::approve()],
-    );
-
-    $sent = collect($gateway->messages[0])->whereInstanceOf(ToolResultMessage::class)->first();
-    $returned = $response->messages->whereInstanceOf(ToolResultMessage::class)->first();
-
-    expect($sent->toolResults->pluck('id')->all())->toBe(['call-gated', 'call-ungated'])
-        ->and($returned->toolResults->pluck('id')->all())->toBe(['call-gated', 'call-ungated']);
 });
 
 test('a plain generation settles abandoned pauses before calling the model, each keeping its own placeholder', function (): void {

@@ -70,7 +70,7 @@ trait HandlesToolApprovals
     }
 
     /**
-     * Order a turn's tool results as its assistant message made the calls, matching the order a stored conversation replays them in.
+     * Order a turn's tool results by its calls, as a stored conversation replays them.
      *
      * @param  Collection<int, ToolResult>  $toolResults
      * @param  Message[]  $messages
@@ -78,17 +78,9 @@ trait HandlesToolApprovals
      */
     protected function inCallOrder(Collection $toolResults, array $messages): Collection
     {
-        $assistant = collect($messages)->whereInstanceOf(AssistantMessage::class)->last();
+        $positions = collect($messages)->whereInstanceOf(AssistantMessage::class)->last()->toolCalls->pluck('id')->flip();
 
-        if (! $assistant instanceof AssistantMessage) {
-            return $toolResults;
-        }
-
-        $positions = $assistant->toolCalls->pluck('id')->flip();
-
-        return $toolResults
-            ->sortBy(fn (ToolResult $result, int $index) => [$positions[$result->id] ?? PHP_INT_MAX, $index])
-            ->values();
+        return $toolResults->sortBy(fn (ToolResult $result) => $positions[$result->id] ?? PHP_INT_MAX)->values();
     }
 
     /**
