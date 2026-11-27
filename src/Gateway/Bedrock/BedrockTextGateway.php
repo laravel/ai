@@ -894,13 +894,13 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
      */
     protected function formatMessages(array $messages): array
     {
-        return (new Collection($messages))->map(fn (\Laravel\Ai\Messages\AssistantMessage|\Laravel\Ai\Messages\ToolResultMessage|\Laravel\Ai\Messages\UserMessage|\Laravel\Ai\Messages\Message|array $message): array => match (true) {
+        return $this->ensureUniqueDocumentNames((new Collection($messages))->map(fn (\Laravel\Ai\Messages\AssistantMessage|\Laravel\Ai\Messages\ToolResultMessage|\Laravel\Ai\Messages\UserMessage|\Laravel\Ai\Messages\Message|array $message): array => match (true) {
             $message instanceof AssistantMessage => $this->formatAssistantMessage($message),
             $message instanceof ToolResultMessage => $this->formatToolResultMessage($message),
             $message instanceof UserMessage => $this->formatUserMessage($message),
             $message instanceof Message => $this->formatGenericMessage($message),
             default => $this->formatArrayMessage($message),
-        })->all();
+        })->all());
     }
 
     /**

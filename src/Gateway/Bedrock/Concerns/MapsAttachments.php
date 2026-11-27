@@ -131,6 +131,57 @@ trait MapsAttachments
     }
 
     /**
+     * Number every repeat of a document name across the formatted messages ("report", "report (2)", "report (3)").
+     *
+     * Bedrock rejects the whole request when two documents share a name, which happens as soon as two files have
+     * the same filename or no name at all. Numbering follows message order, so each document keeps its name on
+     * every later step and the cached prefix stays unchanged.
+     *
+     * @param  array<int, array<string, mixed>>  $messages
+     * @return array<int, array<string, mixed>>
+     */
+    protected function ensureUniqueDocumentNames(array $messages): array
+    {
+        $taken = [];
+
+        foreach ($messages as $message) {
+            foreach ($message['content'] ?? [] as $block) {
+                if (isset($block['document']['name'])) {
+                    $taken[strtolower($block['document']['name'])] = true;
+                }
+            }
+        }
+
+        $seen = [];
+
+        foreach ($messages as $m => $message) {
+            foreach ($message['content'] ?? [] as $b => $block) {
+                if (! isset($block['document']['name'])) {
+                    continue;
+                }
+
+                $name = $block['document']['name'];
+                $key = strtolower($name);
+
+                if (! isset($seen[$key])) {
+                    $seen[$key] = 1;
+
+                    continue;
+                }
+
+                do {
+                    $candidate = $name.' ('.++$seen[$key].')';
+                } while (isset($taken[strtolower($candidate)]));
+
+                $taken[strtolower($candidate)] = true;
+                $messages[$m]['content'][$b]['document']['name'] = $candidate;
+            }
+        }
+
+        return $messages;
+    }
+
+    /**
      * Map an Image's MIME type to a Bedrock image format.
      *
      * Bedrock supports JPEG, PNG, GIF, and WebP images.
