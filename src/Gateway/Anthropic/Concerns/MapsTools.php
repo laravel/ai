@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Illuminate\Support\Arr;
 use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Providers\SupportsCodeExecution;
 use Laravel\Ai\Contracts\Providers\SupportsWebFetch;
@@ -82,6 +83,7 @@ trait MapsTools
 
             $inputSchema['properties'] = (object) ($schemaArray['properties'] ?? []);
             $inputSchema['required'] = $schemaArray['required'] ?? [];
+            $inputSchema += Arr::only($schemaArray, ['$defs']);
         }
 
         $definition = [

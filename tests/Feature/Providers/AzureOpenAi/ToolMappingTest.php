@@ -10,6 +10,7 @@ use Tests\Fixtures\Tools\DeferredTool;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
+use Tests\Fixtures\Tools\RecursiveTreeTool;
 
 use function Laravel\Ai\agent;
 
@@ -273,5 +274,20 @@ test('tool search emits a tool_search entry with azure options and defers its ne
 
         return $tools->firstWhere('type', 'tool_search') === ['type' => 'tool_search', 'execution' => 'client']
             && ($tools->firstWhere('name', 'DeferredTool')['defer_loading'] ?? false) === true;
+    });
+});
+
+test('recursive tool schemas send their $defs', function (): void {
+    Http::fake([
+        '*' => fakeAzureResponse('ok'),
+    ]);
+
+    agent(tools: [new RecursiveTreeTool])->prompt('Store a tree', provider: 'azure');
+
+    Http::assertSent(function ($request): bool {
+        $parameters = collect($request->data()['tools'])->firstWhere('name', 'RecursiveTreeTool')['parameters'];
+
+        return $parameters['properties']['tree'] === ['$ref' => '#/$defs/node']
+            && $parameters['$defs']['node']['properties']['children']['items'] === ['$ref' => '#/$defs/node'];
     });
 });

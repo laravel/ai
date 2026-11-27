@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\AzureOpenAi;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Illuminate\Support\Arr;
 use Laravel\Ai\Contracts\Gateway\EmbeddingGateway;
 use Laravel\Ai\Contracts\Gateway\ImageGateway;
 use Laravel\Ai\Contracts\Gateway\StepTextGateway;
@@ -137,6 +138,7 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
                 'type' => 'object',
                 'properties' => $schemaArray['properties'] ?? (object) [],
                 'required' => $schemaArray['required'] ?? [],
+                ...Arr::only($schemaArray, ['$defs']),
             ] : null,
         ]);
 

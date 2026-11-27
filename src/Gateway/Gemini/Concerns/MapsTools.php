@@ -59,6 +59,7 @@ trait MapsTools
                 'type' => 'object',
                 'properties' => $schemaArray['properties'] ?? [],
                 'required' => $schemaArray['required'] ?? [],
+                ...Arr::only($schemaArray, ['$defs']),
             ]);
         }
 
@@ -93,6 +94,13 @@ trait MapsTools
 
         if (isset($schema['items']) && is_array($schema['items'])) {
             $schema['items'] = $this->convertNullableTypes($schema['items']);
+        }
+
+        if (isset($schema['$defs']) && is_array($schema['$defs'])) {
+            $schema['$defs'] = Arr::map(
+                $schema['$defs'],
+                fn ($definition) => $this->convertNullableTypes($definition),
+            );
         }
 
         return $schema;

@@ -9,6 +9,7 @@ use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
 use Tests\Fixtures\Tools\NonStrictTool;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
+use Tests\Fixtures\Tools\RecursiveTreeTool;
 
 use function Laravel\Ai\agent;
 
@@ -311,5 +312,21 @@ test('code execution tool provider options may override the container', function
         $tool = collect(data_get($body, 'tools'))->firstWhere('type', 'code_interpreter');
 
         return data_get($tool, 'container.file_ids') === ['file_123'];
+    });
+});
+
+test('recursive tool schemas send their $defs', function (): void {
+    Http::fake([
+        '*' => fakeOpenAiResponse('ok'),
+    ]);
+
+    agent(tools: [new RecursiveTreeTool])->prompt('Store a tree', provider: 'openai');
+
+    Http::assertSent(function ($request): bool {
+        $parameters = collect($request->data()['tools'])->firstWhere('name', 'RecursiveTreeTool')['parameters'];
+
+        return $parameters['properties']['tree'] === ['$ref' => '#/$defs/node']
+            && $parameters['$defs']['node']['properties']['children']['items'] === ['$ref' => '#/$defs/node']
+            && $parameters['$defs']['node']['additionalProperties'] === false;
     });
 });

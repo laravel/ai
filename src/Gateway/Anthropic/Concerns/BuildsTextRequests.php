@@ -237,6 +237,7 @@ trait BuildsTextRequests
                 'type' => 'object',
                 'properties' => (object) ($schemaArray['properties'] ?? []),
                 'required' => $schemaArray['required'] ?? [],
+                ...Arr::only($schemaArray, ['$defs']),
             ],
         ];
     }

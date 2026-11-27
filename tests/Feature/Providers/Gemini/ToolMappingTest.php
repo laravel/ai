@@ -10,6 +10,7 @@ use Tests\Fixtures\Agents\NestedObjectToolAgent;
 use Tests\Fixtures\Agents\NullableToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
+use Tests\Fixtures\Tools\RecursiveTreeTool;
 
 use function Laravel\Ai\agent;
 
@@ -225,4 +226,18 @@ test('code execution tool sends a code_execution definition', function (): void 
     agent(tools: [new CodeExecution])->prompt('Run some code', provider: 'gemini');
 
     expect(sentRequest()->data()['tools'])->toBe([['type' => 'code_execution']]);
+});
+
+test('recursive tool schemas send their $defs', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new RecursiveTreeTool])->prompt('Store a tree', provider: 'gemini');
+
+    $parameters = geminiTool(sentRequest()->data(), 'RecursiveTreeTool')['parameters'];
+
+    expect($parameters['properties']['tree'])->toBe(['$ref' => '#/$defs/node'])
+        ->and($parameters['$defs']['node']['properties']['children']['items'])->toBe(['$ref' => '#/$defs/node'])
+        ->and($parameters['$defs']['node'])->not->toHaveKey('additionalProperties');
 });
