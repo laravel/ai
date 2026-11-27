@@ -44,15 +44,29 @@ test('emits the tool_search entry and defers the tools nested in the ToolSearch 
     );
 
     $search = collect($mapped)->firstWhere('type', 'tool_search');
-    $deferred = collect($mapped)->firstWhere('defer_loading', true);
+    $namespace = collect($mapped)->firstWhere('type', 'namespace');
+    $deferred = $namespace['tools'][0];
     $nonDeferred = collect($mapped)->filter(
         fn ($t) => ($t['type'] ?? null) === 'function' && ! isset($t['defer_loading'])
     );
 
     expect($search)->toBe(['type' => 'tool_search'])
-        ->and($deferred)->not->toBeNull()
+        ->and($namespace['name'])->toBe('deferred_tools')
+        ->and($namespace['tools'])->toHaveCount(1)
+        ->and($deferred['defer_loading'])->toBeTrue()
         ->and($deferred['description'])->toContain('deferred')
-        ->and($nonDeferred)->toHaveCount(1);
+        ->and($nonDeferred)->toHaveCount(1)
+        ->and(collect($mapped)->where('defer_loading', true))->toBeEmpty();
+});
+
+test('gives each ToolSearch tool its own namespace', function () {
+    $mapped = openAiToolSearchMapper()->map(
+        [new ToolSearch(tools: [new DeferredTool]), new ToolSearch(tools: [new NonStrictTool])],
+        openAiToolSearchProvider(),
+    );
+
+    expect(collect($mapped)->where('type', 'namespace')->pluck('name')->all())
+        ->toBe(['deferred_tools', 'deferred_tools_2']);
 });
 
 test('throws for a provider tool OpenAI cannot map instead of emitting an empty entry', function () {

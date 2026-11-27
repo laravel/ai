@@ -119,6 +119,14 @@ class AzureOpenAiGateway implements EmbeddingGateway, ImageGateway, StepTextGate
     }
 
     /**
+     * Keep Azure's deferred tools loose, as its client-executed tool search expects.
+     */
+    protected function groupsDeferredToolsInNamespace(): bool
+    {
+        return false;
+    }
+
+    /**
      * Map a regular tool to an Azure OpenAI function definition.
      */
     protected function mapTool(Tool $tool, bool $defer = false): array

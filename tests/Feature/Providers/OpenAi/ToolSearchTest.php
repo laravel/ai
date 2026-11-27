@@ -25,7 +25,7 @@ test('an agent with a ToolSearch tool emits a tool_search entry and defers its n
     Http::assertSent(function (Request $request) {
         $tools = collect(data_get(json_decode($request->body(), true), 'tools'));
 
-        $deferred = $tools->firstWhere('name', 'DeferredTool');
+        $deferred = collect($tools->firstWhere('type', 'namespace')['tools'] ?? [])->firstWhere('name', 'DeferredTool');
         $plain = $tools->firstWhere('name', 'NonStrictTool');
 
         return $tools->contains(fn ($t) => ($t['type'] ?? null) === 'tool_search')
