@@ -298,6 +298,56 @@ test('a resume after a multi-step pause replays each step with its own signed th
         ->and($signatures)->toBe(['signature-1', 'signature-2']);
 });
 
+test('a second resume replays a mixed batch in the order the first resume sent it', function () {
+    Config::set('ai.conversations.generate_title', false);
+
+    $message = fn (array $content, string $stopReason) => Http::response([
+        'id' => 'msg',
+        'type' => 'message',
+        'role' => 'assistant',
+        'model' => 'claude-sonnet-4-6',
+        'content' => $content,
+        'stop_reason' => $stopReason,
+        'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+    ]);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence([
+            $message([
+                ['type' => 'thinking', 'thinking' => 'Both numbers at once.', 'signature' => 'signature-1'],
+                ['type' => 'tool_use', 'id' => 'toolu_gated', 'name' => 'ApprovableNumberGenerator', 'input' => (object) []],
+                ['type' => 'tool_use', 'id' => 'toolu_fixed', 'name' => 'FixedNumberGenerator', 'input' => (object) []],
+            ], 'tool_use'),
+            $message([
+                ['type' => 'thinking', 'thinking' => 'One more gated number.', 'signature' => 'signature-2'],
+                ['type' => 'tool_use', 'id' => 'toolu_gated_again', 'name' => 'ApprovableNumberGenerator', 'input' => (object) []],
+            ], 'tool_use'),
+            $message([['type' => 'text', 'text' => 'All three are 72019.']], 'end_turn'),
+        ]),
+    ]);
+
+    $user = (object) ['id' => 1];
+
+    $paused = (new RememberingMultiStepApprovableAgent)->forUser($user)->prompt('Generate the numbers', provider: 'anthropic');
+
+    $pausedAgain = (new RememberingMultiStepApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(Decisions::from(['toolu_gated' => true]), provider: 'anthropic');
+
+    (new RememberingMultiStepApprovableAgent)
+        ->continue($paused->conversationId, $user)
+        ->prompt(Decisions::from(['toolu_gated_again' => true]), provider: 'anthropic');
+
+    $resultOrder = fn (int $request) => collect(Http::recorded()[$request][0]->data()['messages'])
+        ->flatMap(fn (array $message) => collect($message['content'])->pluck('tool_use_id')->filter())
+        ->values()
+        ->all();
+
+    expect($pausedAgain->pendingApprovals->pluck('id')->all())->toBe(['toolu_gated_again'])
+        ->and($resultOrder(1))->toBe(['toolu_gated', 'toolu_fixed'])
+        ->and($resultOrder(2))->toBe(['toolu_gated', 'toolu_fixed', 'toolu_gated_again']);
+});
+
 test('a streamed multi-step pause stores every step so the resume replays each one with its own blocks', function () {
     Config::set('ai.conversations.generate_title', false);
 

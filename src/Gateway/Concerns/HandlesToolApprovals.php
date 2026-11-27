@@ -62,11 +62,25 @@ trait HandlesToolApprovals
             $toolResults = [...$last->toolResults->all(), ...$toolResults];
         }
 
-        $answer = new ToolResultMessage(collect($toolResults));
+        $answer = new ToolResultMessage($this->inCallOrder(collect($toolResults), $messages));
 
         $messages[] = $answer;
 
         return [$messages, [$answer]];
+    }
+
+    /**
+     * Order a turn's tool results by its calls, as a stored conversation replays them.
+     *
+     * @param  Collection<int, ToolResult>  $toolResults
+     * @param  Message[]  $messages
+     * @return Collection<int, ToolResult>
+     */
+    protected function inCallOrder(Collection $toolResults, array $messages): Collection
+    {
+        $positions = collect($messages)->whereInstanceOf(AssistantMessage::class)->last()->toolCalls->pluck('id')->flip();
+
+        return $toolResults->sortBy(fn (ToolResult $result) => $positions[$result->id] ?? PHP_INT_MAX)->values();
     }
 
     /**

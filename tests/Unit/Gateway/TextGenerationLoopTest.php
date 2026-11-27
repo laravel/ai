@@ -317,7 +317,8 @@ test('it resumes a paused step running only the still-pending gated call', funct
     expect($gated->calls)->toBe(1)
         ->and($ungated->calls)->toBe(0)
         ->and($response->hasPendingApprovals())->toBeFalse()
-        ->and($response->toolResults->pluck('id')->all())->toBe(['call-ungated', 'call-gated'])
+        ->and($response->toolResults->pluck('id')->all())->toBe(['call-gated', 'call-ungated'])
+        ->and(collect($gateway->messages[0])->whereInstanceOf(ToolResultMessage::class)->first()->toolResults->pluck('id')->all())->toBe(['call-gated', 'call-ungated'])
         ->and($response->text)->toBe('done');
 });
 
