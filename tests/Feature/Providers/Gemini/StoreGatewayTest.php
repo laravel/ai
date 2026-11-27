@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Sleep;
 use Laravel\Ai\AiManager;
+use Laravel\Ai\Enums\StoreDocumentStatus;
 use Laravel\Ai\Exceptions\AiException;
 use Laravel\Ai\Exceptions\InvalidApiKeyException;
 use Laravel\Ai\Stores;
@@ -416,3 +417,96 @@ test('a rejected API key hints at the key', function (): void {
 
     Stores::get('store123', provider: 'gemini');
 })->throws(InvalidApiKeyException::class, 'Missing or invalid API key for AI provider [gemini].');
+
+test('list files returns the documents in the store', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([
+            'documents' => [
+                [
+                    'name' => 'fileSearchStores/store123/documents/doc-1',
+                    'displayName' => 'laravel-roadmap.txt',
+                    'state' => 'STATE_ACTIVE',
+                    'customMetadata' => [
+                        ['key' => 'company', 'stringValue' => 'laravel'],
+                        ['key' => 'year', 'numericValue' => 2026],
+                        ['key' => 'tags', 'stringListValue' => ['values' => ['php', 'framework']]],
+                    ],
+                ],
+                ['name' => 'fileSearchStores/store123/documents/doc-2', 'state' => 'STATE_PENDING'],
+                ['name' => 'fileSearchStores/store123/documents/doc-3', 'state' => 'STATE_FAILED'],
+                ['name' => 'fileSearchStores/store123/documents/doc-4', 'state' => 'STATE_UNSPECIFIED'],
+            ],
+        ]),
+    ]);
+
+    $provider = geminiProvider();
+
+    $documents = $provider->storeGateway()->listFiles($provider, 'store123')->all();
+
+    expect($documents)->toHaveCount(4)
+        ->and($documents[0]->id)->toBe('doc-1')
+        ->and($documents[0]->fileId)->toBeNull()
+        ->and($documents[0]->status)->toBe(StoreDocumentStatus::Completed)
+        ->and($documents[0]->metadata)->toBe(['company' => 'laravel', 'year' => 2026, 'tags' => ['php', 'framework']])
+        ->and($documents[1]->status)->toBe(StoreDocumentStatus::Pending)
+        ->and($documents[1]->metadata)->toBe([])
+        ->and($documents[2]->status)->toBe(StoreDocumentStatus::Failed)
+        ->and($documents[3]->status)->toBeNull();
+
+    Http::assertSent(fn ($request): bool => $request->method() === 'GET'
+        && $request->url() === 'https://generativelanguage.googleapis.com/v1beta/fileSearchStores/store123/documents?pageSize=20'
+        && $request->hasHeader('x-goog-api-key', 'test-gemini-key'));
+});
+
+test('list files follows the page token to the next page', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::sequence()
+            ->push([
+                'documents' => [['name' => 'fileSearchStores/store123/documents/doc-1', 'state' => 'STATE_ACTIVE']],
+                'nextPageToken' => 'page-2',
+            ])
+            ->push([
+                'documents' => [['name' => 'fileSearchStores/store123/documents/doc-2', 'state' => 'STATE_ACTIVE']],
+            ]),
+    ]);
+
+    $provider = geminiProvider();
+
+    $ids = $provider->storeGateway()->listFiles($provider, 'store123')->pluck('id')->all();
+
+    expect($ids)->toBe(['doc-1', 'doc-2']);
+
+    Http::assertSentCount(2);
+
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://generativelanguage.googleapis.com/v1beta/fileSearchStores/store123/documents?pageSize=20&pageToken=page-2');
+});
+
+test('list files normalizes the store id with prefix', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::response([]),
+    ]);
+
+    $provider = geminiProvider();
+
+    expect($provider->storeGateway()->listFiles($provider, 'fileSearchStores/store123')->all())->toBe([]);
+
+    Http::assertSent(fn ($request): bool => str_contains((string) $request->url(), 'v1beta/fileSearchStores/store123/documents?'));
+});
+
+test('listed documents can be removed by their id', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => Http::sequence()
+            ->push(['documents' => [['name' => 'fileSearchStores/store123/documents/doc-1', 'state' => 'STATE_ACTIVE']]])
+            ->push([]),
+    ]);
+
+    $provider = geminiProvider();
+    $gateway = $provider->storeGateway();
+
+    $document = $gateway->listFiles($provider, 'store123')->first();
+
+    $gateway->removeFile($provider, 'store123', $document->id);
+
+    Http::assertSent(fn ($request): bool => $request->method() === 'DELETE'
+        && str_contains((string) $request->url(), 'fileSearchStores/store123/documents/doc-1?force=true'));
+});

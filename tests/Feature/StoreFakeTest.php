@@ -2,11 +2,19 @@
 
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Files\StorableFile;
+use Laravel\Ai\Contracts\Gateway\StoreGateway;
+use Laravel\Ai\Contracts\Providers\FileProvider;
+use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Enums\StoreDocumentStatus;
 use Laravel\Ai\Files;
 use Laravel\Ai\Files\Document;
 use Laravel\Ai\Files\LocalDocument;
 use Laravel\Ai\Files\ProviderDocument;
+use Laravel\Ai\Responses\Data\StoreDocument;
+use Laravel\Ai\Responses\Data\StoreFileCounts;
+use Laravel\Ai\Store;
 use Laravel\Ai\Stores;
 
 use function Illuminate\Support\days;
@@ -248,4 +256,97 @@ describe('file assertions', function (): void {
 
         $store->assertNotRemoved(fn ($fileId): bool => $fileId === 'file_456');
     });
+});
+
+describe('listing documents', function (): void {
+    test('documents added to a fake store are listed', function (): void {
+        Stores::fake();
+
+        $store = Stores::create('My Store');
+
+        $store->add('file_1', ['company' => 'laravel']);
+        $store->add('file_2');
+
+        $documents = $store->documents()->all();
+
+        expect($documents)->toHaveCount(2)
+            ->and($documents[0])->toBeInstanceOf(StoreDocument::class)
+            ->and($documents[0]->id)->toBe('file_1')
+            ->and($documents[0]->fileId)->toBe('file_1')
+            ->and($documents[0]->status)->toBe(StoreDocumentStatus::Completed)
+            ->and($documents[0]->metadata)->toBe(['company' => 'laravel'])
+            ->and($documents[1]->id)->toBe('file_2');
+    });
+
+    test('documents removed from a fake store are no longer listed', function (): void {
+        Stores::fake();
+
+        $store = Stores::create('My Store');
+
+        $store->add('file_1');
+        $store->add('file_2');
+        $store->remove('file_1');
+
+        expect($store->documents()->pluck('id')->all())->toBe(['file_2']);
+    });
+
+    test('fake store documents are read when the collection is iterated', function (): void {
+        Stores::fake();
+
+        $store = Stores::create('My Store');
+
+        $documents = $store->documents();
+
+        $store->add('file_1');
+
+        expect($documents->pluck('id')->all())->toBe(['file_1']);
+    });
+
+    test('documents are listed per store', function (): void {
+        Stores::fake();
+
+        $first = Stores::create('First Store');
+        $second = Stores::create('Second Store');
+
+        $first->add('file_1');
+        $second->add('file_2');
+
+        expect($first->documents()->pluck('id')->all())->toBe(['file_1'])
+            ->and($second->documents()->pluck('id')->all())->toBe(['file_2']);
+    });
+
+    test('a fake store can be seeded with documents', function (): void {
+        Stores::fake()->withDocuments('vs_1', [
+            'file_1',
+            new StoreDocument('doc_2', status: StoreDocumentStatus::Pending),
+        ]);
+
+        $documents = Stores::get('vs_1')->documents()->all();
+
+        expect($documents)->toHaveCount(2)
+            ->and($documents[0]->id)->toBe('file_1')
+            ->and($documents[0]->completed())->toBeTrue()
+            ->and($documents[1]->id)->toBe('doc_2')
+            ->and($documents[1]->fileId)->toBeNull()
+            ->and($documents[1]->completed())->toBeFalse();
+    });
+
+    test('an unknown fake store has no documents', function (): void {
+        Stores::fake();
+
+        expect(Stores::get('vs_unknown')->documents()->all())->toBe([]);
+    });
+
+    test('listing documents throws when the store gateway cannot list them', function (): void {
+        Ai::storeProvider('openai')
+            ->useStoreGateway(Mockery::mock(StoreGateway::class))
+            ->listStoreFiles('vs_1');
+    })->throws(LogicException::class, 'Provider [openai] does not support listing store files.');
+
+    test('listing documents throws when the store provider cannot list them', function (): void {
+        $provider = Mockery::mock(FileProvider::class, StoreProvider::class);
+        $provider->allows('name')->andReturn('custom');
+
+        (new Store($provider, 'vs_1', 'Store', new StoreFileCounts(0, 0, 0), true))->documents();
+    })->throws(LogicException::class, 'Provider [custom] does not support listing store files.');
 });
