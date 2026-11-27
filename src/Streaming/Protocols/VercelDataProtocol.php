@@ -25,6 +25,7 @@ use Laravel\Ai\Streaming\Events\ToolInputDelta;
 use Laravel\Ai\Streaming\Events\ToolInputError;
 use Laravel\Ai\Streaming\Events\ToolInputStart;
 use Laravel\Ai\Streaming\Events\ToolResult;
+use Laravel\Ai\Vercel\Vercel;
 
 /**
  * The Vercel AI SDK data stream protocol.
@@ -84,6 +85,7 @@ class VercelDataProtocol extends StreamProtocol
                         'toolCallId' => $pendingApproval->id,
                         'approvalId' => $pendingApproval->id,
                         'reason' => $pendingApproval->reason,
+                        ...array_filter(['approvalDescriptor' => array_filter(['inputSchema' => $pendingApproval->inputSchema, 'data' => $pendingApproval->data])]),
                     ]);
                 }
 
@@ -103,6 +105,11 @@ class VercelDataProtocol extends StreamProtocol
             }
 
             yield from $this->yieldPart($part);
+
+            // The model reads the tool output, so the data a tool returns for the client travels in its own part...
+            if ($part['type'] === 'tool-output-available' && $event instanceof ToolResult && $event->toolResult->data !== null) {
+                yield from $this->yieldPart(Vercel::toolDataPart($event->toolResult->id, $event->toolResult->data));
+            }
         }
 
         if ($this->started && ! $this->errored) {

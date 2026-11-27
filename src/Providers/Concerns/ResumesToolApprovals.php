@@ -27,7 +27,9 @@ trait ResumesToolApprovals
      */
     protected function resumableApprovalFor(AgentPrompt $prompt, array $messages, array $tools): ?array
     {
-        return $this->resumesApproval($prompt, $messages, $tools) ? $prompt->approvalDecisions->all() : null;
+        return $this->resumesApproval($prompt, $messages, $tools)
+            ? $this->textGenerationLoop()->approvalDecisionsFor($prompt->approvalDecisions->all(), $messages, $tools)
+            : null;
     }
 
     /**

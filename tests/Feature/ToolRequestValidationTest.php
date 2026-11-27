@@ -43,7 +43,7 @@ test('a validation failure is returned to the model as the tool result', functio
 
         public function invoke(Tool $tool, array $arguments, RunContext $context): string
         {
-            return $this->executeTool($tool, $arguments, null, $context);
+            return (string) $this->invokeTool($tool, $arguments, null, $context);
         }
     };
 

@@ -83,6 +83,10 @@ class Vercel
             if ($message instanceof ConversationMessage) {
                 foreach ($message->tool_results ?? [] as $toolResult) {
                     static::applyUiToolOutput($result, $partRefs, $toolResult['id'], $toolResult['result'] ?? null, $toolResult['denied'] ?? false);
+
+                    if (isset($toolResult['data']) && ! ($toolResult['denied'] ?? false) && isset($partRefs[$toolResult['id']])) {
+                        $result[$partRefs[$toolResult['id']][0]]['parts'][] = static::toolDataPart($toolResult['id'], $toolResult['data']);
+                    }
                 }
             }
         }
@@ -133,7 +137,16 @@ class Vercel
                 'state' => $isPending ? 'approval-requested' : 'input-available',
                 'input' => $toolCall['arguments'],
                 ...($isPending
-                    ? ['approval' => ['id' => $toolCall['id'], 'reason' => $toolCall['approval_reason']]]
+                    ? ['approval' => [
+                        'id' => $toolCall['id'],
+                        ...array_filter([
+                            'requestReason' => $toolCall['approval_reason'],
+                            'descriptor' => array_filter([
+                                'inputSchema' => $toolCall['approval_input_schema'] ?? null,
+                                'data' => $toolCall['approval_data'] ?? null,
+                            ]),
+                        ]),
+                    ]]
                     : []),
             ];
         }
@@ -162,6 +175,16 @@ class Vercel
         if (! $denied) {
             $result[$message]['parts'][$part]['output'] = $output;
         }
+    }
+
+    /**
+     * Get the data part that carries what a tool returned for the client, keyed by its tool call id.
+     *
+     * @return array{type: string, id: string, data: mixed}
+     */
+    public static function toolDataPart(string $toolCallId, mixed $data): array
+    {
+        return ['type' => 'data-tool-output', 'id' => $toolCallId, 'data' => $data];
     }
 
     /**
