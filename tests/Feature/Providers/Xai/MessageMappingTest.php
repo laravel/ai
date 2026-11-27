@@ -14,6 +14,7 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
+use Tests\Fixtures\Tools\FileReturningTool;
 
 use function Laravel\Ai\agent;
 
@@ -252,4 +253,20 @@ test('system instructions are in input array', function (): void {
         return $systemMsg !== null
             && str_contains((string) $systemMsg['content'], 'helpful assistant');
     });
+});
+
+test('files a tool returned are sent inside its function call output', function (): void {
+    Http::fake([
+        'api.x.ai/*' => $this->fakeTextResponse(),
+    ]);
+
+    agent('Hi.', toolResultWithFilesHistory(), [new FileReturningTool('')])->prompt('Thanks', provider: 'xai');
+
+    $output = collect(Http::recorded()->first()[0]->data()['input'])->firstWhere('type', 'function_call_output')['output'];
+
+    expect($output)->toHaveCount(3)
+        ->and($output[0])->toBe(['type' => 'input_text', 'text' => 'Here is the chart.'])
+        ->and($output[1]['type'])->toBe('input_image')
+        ->and($output[1]['image_url'])->toStartWith('data:image/png;base64,')
+        ->and($output[2])->toMatchArray(['type' => 'input_file', 'filename' => 'report.pdf']);
 });

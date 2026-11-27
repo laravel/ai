@@ -20,6 +20,7 @@ use Laravel\Ai\Promptable;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Tests\Fixtures\Agents\AssistantAgent;
+use Tests\Fixtures\Tools\FileReturningTool;
 
 use function Laravel\Ai\agent;
 
@@ -358,4 +359,93 @@ test('system instructions are not part of the input steps', function (): void {
 
     expect(array_column(geminiRequestBody()['input'], 'type'))->not->toContain('system')
         ->and(geminiRequestBody())->toHaveKey('system_instruction');
+});
+
+test('files a tool returned are sent inside its function result', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('OK'),
+    ]);
+
+    agent('Hi.', toolResultWithFilesHistory(), [new FileReturningTool('')])->prompt('Thanks', provider: 'gemini');
+
+    $result = collect(geminiRequestBody()['input'])->firstWhere('type', 'function_result')['result'];
+
+    expect($result)->toHaveCount(3)
+        ->and($result[0])->toBe(['type' => 'text', 'text' => 'Here is the chart.'])
+        ->and($result[1])->toMatchArray(['type' => 'image', 'mime_type' => 'image/png'])
+        ->and($result[2])->toMatchArray(['type' => 'document', 'mime_type' => 'application/pdf']);
+});
+
+test('a text document a tool returned is sent to gemini as text', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('OK'),
+    ]);
+
+    $history = toolResultWithFilesHistory();
+    $history[2]->toolResults[0]->attachments = [Files\Document::fromString('Q3: $1.2M', 'text/plain')->as('notes.txt')];
+
+    agent('Hi.', $history, [new FileReturningTool('')])->prompt('Thanks', provider: 'gemini');
+
+    expect(collect(geminiRequestBody()['input'])->firstWhere('type', 'function_result')['result'])->toBe([
+        ['type' => 'text', 'text' => 'Here is the chart.'],
+        ['type' => 'text', 'text' => 'Q3: $1.2M'],
+    ]);
+});
+
+test('a document type gemini function results cannot take is noted', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('OK'),
+    ]);
+
+    $history = toolResultWithFilesHistory();
+    $history[2]->toolResults[0]->attachments = [Files\Document::fromString("PK\0\0", 'application/zip')->as('archive.zip')];
+
+    agent('Hi.', $history, [new FileReturningTool('')])->prompt('Thanks', provider: 'gemini');
+
+    expect(collect(geminiRequestBody()['input'])->firstWhere('type', 'function_result')['result'])->toBe([[
+        'type' => 'text',
+        'text' => "Here is the chart.\n(The tool returned the document [archive.zip], but it could not be sent to this model.)",
+    ]]);
+});
+
+test('a text document that is not utf-8 is noted in a gemini function result', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('OK'),
+    ]);
+
+    $history = toolResultWithFilesHistory();
+    $history[2]->toolResults[0]->attachments = [Files\Document::fromString("caf\xE9", 'text/plain')->as('menu.txt')];
+
+    agent('Hi.', $history, [new FileReturningTool('')])->prompt('Thanks', provider: 'gemini');
+
+    expect(collect(geminiRequestBody()['input'])->firstWhere('type', 'function_result')['result'])->toBe([[
+        'type' => 'text',
+        'text' => "Here is the chart.\n(The tool returned the document [menu.txt], but it could not be sent to this model.)",
+    ]]);
+});
+
+test('a file is only sent to gemini with the exact type its function results take, unless gemini stores it', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeTextResponse('OK'),
+    ]);
+
+    $history = toolResultWithFilesHistory();
+    $history[2]->toolResults[0]->attachments = [
+        Files\Image::fromBase64(base64_encode('png'), 'image/png; charset=binary')->as('a.png'),
+        Files\Image::fromBase64(base64_encode('png'))->as('b.png'),
+        Files\Document::fromString('%PDF-1.4', 'application/pdf; version=1.4')->as('c.pdf'),
+        Files\Document::fromId('files/report'),
+    ];
+
+    agent('Hi.', $history, [new FileReturningTool('')])->prompt('Thanks', provider: 'gemini');
+
+    expect(collect(geminiRequestBody()['input'])->firstWhere('type', 'function_result')['result'])->toBe([
+        ['type' => 'text', 'text' => implode("\n", [
+            'Here is the chart.',
+            '(The tool returned the image [a.png], but it could not be sent to this model.)',
+            '(The tool returned the image [b.png], but it could not be sent to this model.)',
+            '(The tool returned the document [c.pdf], but it could not be sent to this model.)',
+        ])],
+        ['type' => 'document', 'uri' => 'files/report'],
+    ]);
 });

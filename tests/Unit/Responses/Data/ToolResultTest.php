@@ -1,5 +1,7 @@
 <?php
 
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\Image;
 use Laravel\Ai\Responses\Data\ToolResult;
 
 test('tool result stores all properties', function (): void {
@@ -76,4 +78,30 @@ test('tool result text serializes array results without escaping slashes or unic
 test('tool result text passes through strings and casts everything else', function (): void {
     expect((new ToolResult('id', 'name', [], 'https://example.com/report'))->text())->toBe('https://example.com/report')
         ->and((new ToolResult('id', 'name', [], 72))->text())->toBe('72');
+});
+
+test('tool result attachments survive a round trip through its array form', function (): void {
+    $result = new ToolResult('id', 'name', [], 'Here is the chart.', attachments: [
+        Image::fromStorage('charts/q3.png', 's3')->as('q3.png'),
+        Document::fromUrl('https://example.com/report.pdf'),
+    ]);
+
+    $restored = ToolResult::fromArray(json_decode(json_encode($result), true));
+
+    expect($restored->attachments)->toHaveCount(2)
+        ->and($restored->attachments[0]->toArray())->toBe($result->attachments[0]->toArray())
+        ->and($restored->attachments[1]->toArray())->toBe($result->attachments[1]->toArray());
+});
+
+test('tool result text notes each attachment for providers that cannot receive them', function (): void {
+    $result = new ToolResult('id', 'name', [], 'Here is the chart.', attachments: [
+        Image::fromStorage('charts/q3.png')->as('q3.png'),
+    ]);
+
+    expect($result->text())->toBe("Here is the chart.\n(The tool returned the image [q3.png], but it could not be sent to this model.)")
+        ->and($result->resultText())->toBe('Here is the chart.');
+});
+
+test('a tool result without attachments leaves them out of its array form', function (): void {
+    expect((new ToolResult('id', 'name', [], 'val'))->toArray())->not->toHaveKey('attachments');
 });

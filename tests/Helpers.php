@@ -5,9 +5,16 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Files\Document;
+use Laravel\Ai\Files\LocalImage;
+use Laravel\Ai\Messages\AssistantMessage;
+use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Providers\TypeSafeProvider;
+use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Streaming\Events\StreamEvent;
-use Laravel\Ai\Streaming\Events\ToolCall;
+use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 use Laravel\Ai\Streaming\Events\ToolInputDelta;
 use Laravel\Ai\Streaming\Events\ToolInputError;
 use Laravel\Ai\Streaming\Events\ToolInputStart;
@@ -419,6 +426,25 @@ function fakeDeepSeekToolCallResponse(): PromiseInterface
     ]);
 }
 
+/**
+ * A conversation whose tool call returned text, an image and a PDF.
+ */
+function toolResultWithFilesHistory(): array
+{
+    return [
+        new UserMessage('Describe the sales chart'),
+        new AssistantMessage('Let me get it.', collect([
+            new ToolCall('call_chart', 'FileReturningTool', [], 'call_chart'),
+        ])),
+        new ToolResultMessage(collect([
+            new ToolResult('call_chart', 'FileReturningTool', [], 'Here is the chart.', 'call_chart', attachments: [
+                new LocalImage(__DIR__.'/Fixtures/Images/red.png'),
+                Document::fromString('%PDF-1.4 sales', 'application/pdf')->as('report.pdf'),
+            ]),
+        ])),
+    ];
+}
+
 function toolInputEvents(iterable $events): array
 {
     return collect($events)
@@ -426,7 +452,7 @@ function toolInputEvents(iterable $events): array
             $event instanceof ToolInputStart => ['start', $event->toolId, $event->toolName],
             $event instanceof ToolInputDelta => ['delta', $event->toolId, $event->delta],
             $event instanceof ToolInputError => ['error', $event->toolId, $event->input],
-            $event instanceof ToolCall => ['call', $event->toolCall->id, $event->toolCall->arguments],
+            $event instanceof ToolCallEvent => ['call', $event->toolCall->id, $event->toolCall->arguments],
             default => null,
         })
         ->filter()
