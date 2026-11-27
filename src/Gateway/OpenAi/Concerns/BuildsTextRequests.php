@@ -107,7 +107,7 @@ trait BuildsTextRequests
             'top_p' => $options?->topP,
         ]));
 
-        $providerOptions = $options?->providerOptions($provider->driver());
+        $providerOptions = $this->resolveProviderOptions($options, $provider);
 
         if (isset($body['text'], $providerOptions['text'])) {
             $providerOptions['text'] = array_merge($body['text'], $providerOptions['text']);
@@ -129,6 +129,16 @@ trait BuildsTextRequests
         }
 
         return $body;
+    }
+
+    /**
+     * Resolve the provider options the agent and prompt set for this provider.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function resolveProviderOptions(?TextGenerationOptions $options, Provider $provider): ?array
+    {
+        return $options?->providerOptions($provider->driver());
     }
 
     /**

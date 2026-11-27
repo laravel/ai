@@ -55,7 +55,7 @@ trait HandlesTextGeneration
 
                 yield (new Error(
                     $this->generateEventId(),
-                    $error['code'] ?? 'unknown_error',
+                    $error['code'] ?? $error['type'] ?? 'unknown_error',
                     $error['message'] ?? 'Unknown error',
                     false,
                     time(),
@@ -317,6 +317,7 @@ trait HandlesTextGeneration
             meta: new Meta($provider->name(), $responseData['model'] ?? $model),
             continuationToken: $responseId,
             replayBlocks: $this->extractReplayBlocks($responseData['output'] ?? []),
+            reasoning: $this->extractReasoning($responseData['output'] ?? []),
             providerToolCalls: $this->extractProviderToolCalls($responseData['output'] ?? []),
         );
     }

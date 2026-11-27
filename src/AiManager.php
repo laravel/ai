@@ -32,6 +32,7 @@ use Laravel\Ai\Providers\MistralProvider;
 use Laravel\Ai\Providers\OllamaProvider;
 use Laravel\Ai\Providers\OpenAiCompatibleProvider;
 use Laravel\Ai\Providers\OpenAiProvider;
+use Laravel\Ai\Providers\OpenResponsesProvider;
 use Laravel\Ai\Providers\OpenRouterProvider;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\TypeSafeProvider;
@@ -433,6 +434,17 @@ class AiManager extends MultipleInstanceManager
     public function createOpenaiCompatibleDriver(array $config): OpenAiCompatibleProvider
     {
         return new OpenAiCompatibleProvider(
+            $config,
+            $this->app->make(Dispatcher::class)
+        );
+    }
+
+    /**
+     * Create an Open Responses powered instance.
+     */
+    public function createOpenResponsesDriver(array $config): OpenResponsesProvider
+    {
+        return new OpenResponsesProvider(
             $config,
             $this->app->make(Dispatcher::class)
         );

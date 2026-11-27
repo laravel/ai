@@ -140,6 +140,12 @@ return [
             'key' => env('OPENAI_COMPATIBLE_API_KEY'),
         ],
 
+        'open-responses' => [
+            'driver' => 'open-responses',
+            'url' => env('OPEN_RESPONSES_URL'),
+            'key' => env('OPEN_RESPONSES_API_KEY'),
+        ],
+
         'openrouter' => [
             'driver' => 'openrouter',
             'key' => env('OPENROUTER_API_KEY'),

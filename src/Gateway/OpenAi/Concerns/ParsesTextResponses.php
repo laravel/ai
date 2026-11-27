@@ -76,9 +76,12 @@ trait ParsesTextResponses
      */
     protected function extractText(array $output): string
     {
-        $lastOutput = last($output);
-
-        return is_array($lastOutput) ? ($lastOutput['content'][0]['text'] ?? '') : '';
+        return (new Collection($output))
+            ->filter(fn ($item): bool => is_array($item) && ($item['type'] ?? 'message') === 'message')
+            ->flatMap(fn (array $item): array => is_array($item['content'] ?? null) ? $item['content'] : [])
+            ->filter(fn ($part): bool => is_array($part) && ($part['type'] ?? 'output_text') === 'output_text')
+            ->map(fn (array $part): string => (string) ($part['text'] ?? ''))
+            ->implode('');
     }
 
     /**
@@ -197,7 +200,11 @@ trait ParsesTextResponses
             };
         }
 
-        $lastOutput = last($data['output'] ?? []);
+        // Open Responses extension items are typed "slug:name" and say nothing about why the response stopped...
+        $lastOutput = (new Collection($data['output'] ?? []))
+            ->reject(fn ($item): bool => is_array($item) && str_contains((string) ($item['type'] ?? ''), ':'))
+            ->last();
+
         $status = $lastOutput['status'] ?? $data['status'] ?? '';
         $type = $lastOutput['type'] ?? '';
 
