@@ -4,9 +4,14 @@ namespace Laravel\Ai\Contracts\Gateway;
 
 use DateInterval;
 use Illuminate\Support\Collection;
+use Illuminate\Support\LazyCollection;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Responses\Data\StoreDocument;
 use Laravel\Ai\Store;
 
+/**
+ * @method LazyCollection<int, StoreDocument> listFiles(StoreProvider $provider, string $storeId)
+ */
 interface StoreGateway
 {
     /**

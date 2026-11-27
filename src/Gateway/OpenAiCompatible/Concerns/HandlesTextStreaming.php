@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\OpenAiCompatible\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
+use Laravel\Ai\Gateway\Concerns\StreamsToolInput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\FinishReason;
@@ -22,6 +23,8 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 
 trait HandlesTextStreaming
 {
+    use StreamsToolInput;
+
     /**
      * Process a Chat Completions streaming response for a single turn and yield Laravel stream events.
      */
@@ -36,6 +39,8 @@ trait HandlesTextStreaming
         $streamStartEmitted = false;
         $textStartEmitted = false;
         $currentText = '';
+        $currentReasoning = '';
+        $reasoningField = 'reasoning';
         $toolCalls = [];
         $pendingToolCalls = [];
         $usage = null;
@@ -82,6 +87,9 @@ trait HandlesTextStreaming
             $reasoning = $delta['reasoning_content'] ?? $delta['reasoning'] ?? '';
 
             if ($reasoning !== '') {
+                $reasoningField = isset($delta['reasoning_content']) ? 'reasoning_content' : 'reasoning';
+                $currentReasoning .= $reasoning;
+
                 if ($reasoningId === null) {
                     $reasoningId = $this->generateEventId();
 
@@ -141,10 +149,14 @@ trait HandlesTextStreaming
                             'name' => $tcDelta['function']['name'] ?? '',
                             'arguments' => '',
                         ];
+
+                        yield from $this->toolInputStart($invocationId, $pendingToolCalls[$idx]['id'], $pendingToolCalls[$idx]['name']);
                     }
 
                     if (isset($tcDelta['function']['arguments'])) {
                         $pendingToolCalls[$idx]['arguments'] .= $tcDelta['function']['arguments'];
+
+                        yield from $this->toolInputDelta($invocationId, $pendingToolCalls[$idx]['id'], $pendingToolCalls[$idx]['name'], $tcDelta['function']['arguments']);
                     }
                 }
             }
@@ -195,6 +207,7 @@ trait HandlesTextStreaming
                 : $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
             usage: $usage ?? new TextUsage(0, 0),
             meta: new Meta($provider->name(), $responseModel),
+            replayBlocks: $currentReasoning === '' ? [] : [['type' => 'reasoning', $reasoningField => $currentReasoning]],
         );
     }
 

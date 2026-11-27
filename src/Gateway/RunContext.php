@@ -12,6 +12,7 @@ use Laravel\Ai\Events\StepCompleted;
 use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Events\ToolFailed;
 use Laravel\Ai\Events\ToolInvoked;
+use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Responses\AgentResponse;
 use Laravel\Ai\Responses\Data\Meta;
@@ -107,7 +108,7 @@ class RunContext
 
         $this->events->dispatch(new StepFailed(
             $this->invocationId, $step->stepNumber, $this->agent, $this->provider, $model ?? $this->model, $step->isFinalStep,
-            $exception, $time,
+            $exception, $time, $exception instanceof StreamErrorException ? $exception->error?->usage : null,
         ));
     }
 

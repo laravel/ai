@@ -141,6 +141,43 @@ test('streaming tool call loop emits a single accumulated stream end', function 
         ->and($streamEnds[0]->usage->outputTokens)->toBe(15);
 });
 
+test('streaming emits the tool input as it arrives, before the tool call', function (): void {
+    Http::fake([
+        'api.groq.com/*' => Http::sequence([
+            Http::response(
+                body: $this->ssePayload([
+                    $this->chatChunkToolCallStart(0, 'call_1', 'FixedNumberGenerator'),
+                    $this->chatChunkToolCallDelta(0, ''),
+                    $this->chatChunkToolCallDelta(0, '{"sta'),
+                    $this->chatChunkToolCallDelta(0, 'rt":1}'),
+                    $this->chatChunkFinish('tool_calls', ['prompt_tokens' => 10, 'completion_tokens' => 5]),
+                    '[DONE]',
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+            Http::response(
+                body: $this->ssePayload([
+                    $this->chatChunk(['role' => 'assistant', 'content' => 'The number is 72019']),
+                    $this->chatChunkFinish('stop', ['prompt_tokens' => 20, 'completion_tokens' => 10]),
+                    '[DONE]',
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    expect(toolInputEvents($events))->toBe([
+        ['start', 'call_1', 'FixedNumberGenerator'],
+        ['delta', 'call_1', '{"sta'],
+        ['delta', 'call_1', 'rt":1}'],
+        ['call', 'call_1', ['start' => 1]],
+    ]);
+});
+
 test('streaming error event stops stream', function (): void {
     Http::fake([
         'api.groq.com/*' => Http::response(

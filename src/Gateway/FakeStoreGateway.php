@@ -5,8 +5,11 @@ namespace Laravel\Ai\Gateway;
 use Closure;
 use DateInterval;
 use Illuminate\Support\Collection;
+use Illuminate\Support\LazyCollection;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Enums\StoreDocumentStatus;
+use Laravel\Ai\Responses\Data\StoreDocument;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
 use Laravel\Ai\Store;
 use Laravel\Ai\Stores;
@@ -17,6 +20,13 @@ class FakeStoreGateway implements StoreGateway
     protected int $currentResponseIndex = 0;
 
     protected bool $preventStrayOperations = false;
+
+    /**
+     * The documents in each fake vector store, keyed by store ID and then document ID.
+     *
+     * @var array<string, array<string, StoreDocument>>
+     */
+    protected array $documents = [];
 
     public function __construct(
         protected Closure|array $responses = [],
@@ -104,7 +114,19 @@ class FakeStoreGateway implements StoreGateway
      */
     public function addFile(StoreProvider $provider, string $storeId, string $fileId, array $metadata = []): string
     {
+        $this->documents[$storeId][$fileId] = new StoreDocument($fileId, $fileId, StoreDocumentStatus::Completed, $metadata);
+
         return $fileId;
+    }
+
+    /**
+     * List the documents in a vector store.
+     *
+     * @return LazyCollection<int, StoreDocument>
+     */
+    public function listFiles(StoreProvider $provider, string $storeId): LazyCollection
+    {
+        return LazyCollection::make(fn () => array_values($this->documents[$storeId] ?? []));
     }
 
     /**
@@ -112,6 +134,8 @@ class FakeStoreGateway implements StoreGateway
      */
     public function removeFile(StoreProvider $provider, string $storeId, string $documentId): bool
     {
+        unset($this->documents[$storeId][$documentId]);
+
         return true;
     }
 
@@ -120,6 +144,8 @@ class FakeStoreGateway implements StoreGateway
      */
     public function deleteStore(StoreProvider $provider, string $storeId): bool
     {
+        unset($this->documents[$storeId]);
+
         return true;
     }
 
@@ -129,6 +155,22 @@ class FakeStoreGateway implements StoreGateway
     public function preventStrayOperations(bool $prevent = true): self
     {
         $this->preventStrayOperations = $prevent;
+
+        return $this;
+    }
+
+    /**
+     * Seed a fake vector store with the given documents or file IDs.
+     *
+     * @param  array<int, StoreDocument|string>  $documents
+     */
+    public function withDocuments(string $storeId, array $documents): self
+    {
+        foreach ($documents as $document) {
+            $document = is_string($document) ? new StoreDocument($document, $document, StoreDocumentStatus::Completed) : $document;
+
+            $this->documents[$storeId][$document->id] = $document;
+        }
 
         return $this;
     }

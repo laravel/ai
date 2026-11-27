@@ -5,10 +5,13 @@ namespace Laravel\Ai\Gateway\OpenAi;
 use DateInterval;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\LazyCollection;
 use Laravel\Ai\Contracts\Gateway\StoreGateway;
 use Laravel\Ai\Contracts\Providers\StoreProvider;
+use Laravel\Ai\Enums\StoreDocumentStatus;
 use Laravel\Ai\Gateway\Concerns\EncodesResourceIds;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
+use Laravel\Ai\Responses\Data\StoreDocument;
 use Laravel\Ai\Responses\Data\StoreFileCounts;
 use Laravel\Ai\Store;
 
@@ -89,6 +92,40 @@ class OpenAiStoreGateway implements StoreGateway
     }
 
     /**
+     * List the documents in a vector store, fetching further pages as they are needed.
+     *
+     * @return LazyCollection<int, StoreDocument>
+     */
+    public function listFiles(StoreProvider $provider, string $storeId): LazyCollection
+    {
+        return LazyCollection::make(function () use ($provider, $storeId) {
+            $after = null;
+
+            do {
+                $response = $this->withErrorHandling(
+                    $provider->name(),
+                    fn () => $this->client($provider)
+                        ->get("vector_stores/{$this->resourceId($storeId)}/files", array_filter([
+                            'limit' => 100,
+                            'after' => $after,
+                        ]))
+                );
+
+                foreach ($response->json('data') ?? [] as $file) {
+                    yield new StoreDocument(
+                        id: $file['id'],
+                        fileId: $file['id'],
+                        status: $this->documentStatus($file['status'] ?? null),
+                        metadata: $file['attributes'] ?? [],
+                    );
+                }
+
+                $after = $response->json('last_id');
+            } while ($response->json('has_more') === true && filled($after));
+        });
+    }
+
+    /**
      * Remove a file from a vector store.
      */
     public function removeFile(StoreProvider $provider, string $storeId, string $documentId): bool
@@ -114,6 +151,19 @@ class OpenAiStoreGateway implements StoreGateway
         );
 
         return $response->json('deleted', false);
+    }
+
+    /**
+     * Map an OpenAI vector store file status to a document status.
+     */
+    protected function documentStatus(?string $status): ?StoreDocumentStatus
+    {
+        return match ($status) {
+            'completed' => StoreDocumentStatus::Completed,
+            'in_progress' => StoreDocumentStatus::Pending,
+            'failed', 'cancelled' => StoreDocumentStatus::Failed,
+            default => null,
+        };
     }
 
     /**

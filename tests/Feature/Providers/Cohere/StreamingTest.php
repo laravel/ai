@@ -78,6 +78,41 @@ test('streaming accumulates tool call arguments and runs the tool', function ():
     expect(collect($followUp['messages'])->firstWhere('role', 'tool')['tool_call_id'])->toBe('get_number_ejj5xe67w3e1');
 });
 
+test('streaming emits the tool input as it arrives, before the tool call', function (): void {
+    Http::fake([
+        '*' => Http::sequence([
+            $this->fakeStreamResponse($this->streamToolCallEvents('FixedNumberGenerator', 'get_number_ejj5xe67w3e1', ['', '{"sta', 'rt":1}'])),
+            $this->fakeStreamResponse($this->streamTextEvents('The number is 72019')),
+        ]),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    expect(toolInputEvents($events))->toBe([
+        ['start', 'get_number_ejj5xe67w3e1', 'FixedNumberGenerator'],
+        ['delta', 'get_number_ejj5xe67w3e1', '{"sta'],
+        ['delta', 'get_number_ejj5xe67w3e1', 'rt":1}'],
+        ['call', 'get_number_ejj5xe67w3e1', ['start' => 1]],
+    ]);
+});
+
+test('streaming fails a tool call the length limit cut off instead of calling it', function (): void {
+    Http::fake([
+        '*' => $this->fakeStreamResponse([
+            ...array_slice($this->streamToolCallEvents('FixedNumberGenerator', 'call_1', ['{"sta']), 0, -1),
+            ['type' => 'message-end', 'delta' => ['finish_reason' => 'MAX_TOKENS', 'usage' => ['tokens' => ['input_tokens' => 10, 'output_tokens' => 5]]]],
+        ]),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    expect(toolInputEvents($events))->toBe([
+        ['start', 'call_1', 'FixedNumberGenerator'],
+        ['delta', 'call_1', '{"sta'],
+        ['error', 'call_1', '{"sta'],
+    ]);
+});
+
 test('streaming ignores tool plan deltas', function (): void {
     Http::fake([
         '*' => Http::sequence([

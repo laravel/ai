@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\OpenAiCompatible\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Str;
+use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
@@ -45,13 +46,15 @@ trait MapsChatCompletionTools
      */
     protected function mapTool(Tool $tool): array
     {
+        $strict = Strict::isAppliedTo($tool) && $this->supportsStrictTools();
+
         $schema = $tool->schema(new JsonSchemaTypeFactory);
 
         $schemaArray = filled($schema)
             ? (new ObjectSchema($schema))->toSchema()
             : [];
 
-        return [
+        $definition = [
             'type' => 'function',
             'function' => [
                 'name' => ToolNameResolver::resolve($tool),
@@ -64,6 +67,20 @@ trait MapsChatCompletionTools
                 ],
             ],
         ];
+
+        if ($strict) {
+            $definition['function']['strict'] = true;
+        }
+
+        return $definition;
+    }
+
+    /**
+     * Determine if the provider honors the "strict" flag on function definitions.
+     */
+    protected function supportsStrictTools(): bool
+    {
+        return false;
     }
 
     /**

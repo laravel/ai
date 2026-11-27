@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\AgentUserInteraction\AgentUserInteraction;
 use Laravel\Ai\Files\Base64Document;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\LocalImage;
@@ -80,6 +81,36 @@ test('tool result follow up maps assistant and tool result messages', function (
     expect($assistantMsg['tool_calls'][0]['function']['name'])->toBe('FixedNumberGenerator')
         ->and($toolMsg['tool_call_id'])->toBe($assistantMsg['tool_calls'][0]['id'])
         ->and($toolMsg['content'])->not->toBeEmpty();
+});
+
+test('replaying an openai-issued ag-ui tool result pairs the call and the result', function (): void {
+    Http::fake([
+        'api.groq.com/*' => fakeGroqResponse('Yes, that account is in the list.'),
+    ]);
+
+    $chat = AgentUserInteraction::chat([
+        'threadId' => 'thread-1',
+        'runId' => 'run-1',
+        'messages' => [
+            ['id' => 'u1', 'role' => 'user', 'content' => 'Which accounts can I see?'],
+            ['id' => 'fc_1', 'role' => 'assistant', 'toolCalls' => [
+                ['id' => 'fc_1', 'type' => 'function', 'function' => ['name' => 'list_accounts', 'arguments' => '{}']],
+            ]],
+            ['id' => 'call_1', 'role' => 'tool', 'toolCallId' => 'fc_1', 'content' => 'Carloans365'],
+            ['id' => 'u2', 'role' => 'user', 'content' => 'Is Carloans365 one of them?'],
+        ],
+    ]);
+
+    (new AssistantAgent)->withMessages($chat->history())->prompt($chat, provider: 'groq');
+
+    Http::assertSent(function (Request $request): bool {
+        $messages = json_decode($request->body(), true)['messages'] ?? [];
+        $assistant = collect($messages)->first(fn (array $message): bool => ($message['role'] ?? null) === 'assistant' && isset($message['tool_calls']));
+        $tool = collect($messages)->firstWhere('role', 'tool');
+
+        return ($assistant['tool_calls'][0]['id'] ?? null) === 'call_1'
+            && ($tool['tool_call_id'] ?? null) === 'call_1';
+    });
 });
 
 test('image attachment maps to image url content block', function (): void {

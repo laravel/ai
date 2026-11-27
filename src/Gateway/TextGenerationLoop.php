@@ -55,6 +55,9 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Laravel\Ai\Streaming\Events\ToolInputDelta;
+use Laravel\Ai\Streaming\Events\ToolInputError;
+use Laravel\Ai\Streaming\Events\ToolInputStart;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
 use Laravel\Ai\Tools\AgentTool;
 use Laravel\Ai\Tools\Request;
@@ -334,6 +337,7 @@ class TextGenerationLoop
                 }
 
                 $reasoningDeltas = [];
+                $unfinishedToolInputs = [];
 
                 foreach ($stepResult as $event) {
                     yield $event;
@@ -345,10 +349,18 @@ class TextGenerationLoop
                     if ($event instanceof ReasoningDelta) {
                         $reasoningDeltas[] = $event;
                     }
+
+                    $unfinishedToolInputs = $this->unfinishedToolInputs($unfinishedToolInputs, $event);
                 }
 
                 $prepared = $attempt?->step ?? $pending;
                 $result = $stepResult->response();
+
+                if ($result instanceof StepResponse) {
+                    foreach ($this->unfinishedToolInputErrors($unfinishedToolInputs, $invocationId) as $error) {
+                        yield $error;
+                    }
+                }
 
                 if (! $stepResult->streamed() && $result instanceof StepResponse) {
                     yield from $this->eventsFor($invocationId, $provider, $prepared->model, $result);
@@ -682,6 +694,45 @@ class TextGenerationLoop
     }
 
     /**
+     * Get the input of each tool call the step has started streaming but not yet called, updated with the given event.
+     *
+     * @param  array<string, array{name: string, input: string}>  $toolInputs
+     * @return array<string, array{name: string, input: string}>
+     */
+    protected function unfinishedToolInputs(array $toolInputs, StreamEvent $event): array
+    {
+        if ($event instanceof ToolInputStart) {
+            $toolInputs[$event->toolId] = ['name' => $event->toolName, 'input' => ''];
+        } elseif ($event instanceof ToolInputDelta && isset($toolInputs[$event->toolId])) {
+            $toolInputs[$event->toolId]['input'] .= $event->delta;
+        } elseif ($event instanceof ToolCallEvent) {
+            unset($toolInputs[$event->toolCall->id]);
+        }
+
+        return $toolInputs;
+    }
+
+    /**
+     * Get the errors for the tool calls whose input started streaming but that the step never called, such as one cut off by the token limit.
+     *
+     * @param  array<string, array{name: string, input: string}>  $toolInputs
+     * @return Generator<int, ToolInputError>
+     */
+    protected function unfinishedToolInputErrors(array $toolInputs, string $invocationId): Generator
+    {
+        foreach ($toolInputs as $id => $toolInput) {
+            yield (new ToolInputError(
+                $this->generateEventId(),
+                $id,
+                $toolInput['name'],
+                $toolInput['input'],
+                'This tool call was not executed because its input did not complete.',
+                time(),
+            ))->withInvocationId($invocationId);
+        }
+    }
+
+    /**
      * Report the output a still running tool has produced so far.
      *
      * @param  Generator<int, StreamEvent, mixed, string>  $events
@@ -694,6 +745,11 @@ class TextGenerationLoop
         $reportedAt = 0;
 
         foreach ($events as $event) {
+            // A sub-agent writing a tool's input has not changed its output, so there is nothing new to report...
+            if ($event instanceof ToolInputStart || $event instanceof ToolInputDelta || $event instanceof ToolInputError) {
+                continue;
+            }
+
             if ($event instanceof TextDelta) {
                 $deltas[] = $event;
                 $written += strlen($event->delta);

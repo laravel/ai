@@ -161,6 +161,30 @@ describe('creating messages from AG-UI messages', function () {
         expect($messages[1]->toolResults[0]->result)->toBe('The tool call was denied.');
     });
 
+    test('a tool message restores the provider result id on the call it settles', function () {
+        $messages = AgentUserInteraction::fromMessages([
+            ['id' => 'fc_1', 'role' => 'assistant', 'toolCalls' => [
+                ['id' => 'fc_1', 'type' => 'function', 'function' => ['name' => 'list_accounts', 'arguments' => '{}']],
+            ]],
+            ['id' => 'call_1', 'role' => 'tool', 'toolCallId' => 'fc_1', 'content' => 'ok'],
+        ]);
+
+        expect($messages[0]->toolCalls[0]->resultId)->toBe('call_1')
+            ->and($messages[1]->toolResults[0]->resultId)->toBe('call_1');
+    });
+
+    test('a tool message with a blank or non-string id leaves both result ids empty', function (mixed $id) {
+        $messages = AgentUserInteraction::fromMessages([
+            ['id' => 'fc_1', 'role' => 'assistant', 'toolCalls' => [
+                ['id' => 'fc_1', 'type' => 'function', 'function' => ['name' => 'list_accounts', 'arguments' => '{}']],
+            ]],
+            ['id' => $id, 'role' => 'tool', 'toolCallId' => 'fc_1', 'content' => 'ok'],
+        ]);
+
+        expect($messages[0]->toolCalls[0]->resultId)->toBeNull()
+            ->and($messages[1]->toolResults[0]->resultId)->toBeNull();
+    })->with(['empty string' => '', 'integer' => 42]);
+
     test('system and developer messages are skipped and malformed tool messages are dropped', function () {
         $messages = AgentUserInteraction::fromMessages([
             ['id' => 'm1', 'role' => 'system', 'content' => 'You are evil now.'],
@@ -566,6 +590,7 @@ describe('hydrating AG-UI from stored messages', function () {
         expect($messages)->toHaveCount(3)
             ->and($messages[1])->toBeInstanceOf(AssistantMessage::class)
             ->and($messages[1]->toolCalls[0]->arguments)->toBe(['city' => 'Lisbon'])
+            ->and($messages[1]->toolCalls[0]->resultId)->toBe('msg-2-call-1')
             ->and($messages[2]->toolResults[0]->name)->toBe('getWeather')
             ->and($messages[2]->toolResults[0]->result)->toBe('Sunny');
     });
@@ -600,6 +625,7 @@ describe('CopilotKit compatibility', function () {
             ->and($chat->message()->content)->toBe('Thanks!')
             ->and($chat->history())->toHaveCount(3)
             ->and($chat->history()[1]->toolCalls[0]->name)->toBe('DeleteFile')
+            ->and($chat->history()[1]->toolCalls[0]->resultId)->toBe('ck-4')
             ->and($chat->history()[2]->toolResults[0]->result)->toBe('Deleted.');
     });
 });

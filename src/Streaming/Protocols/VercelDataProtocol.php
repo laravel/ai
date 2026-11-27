@@ -21,6 +21,9 @@ use Laravel\Ai\Streaming\Events\TextEnd;
 use Laravel\Ai\Streaming\Events\TextStart;
 use Laravel\Ai\Streaming\Events\ToolApprovalRequest;
 use Laravel\Ai\Streaming\Events\ToolCall;
+use Laravel\Ai\Streaming\Events\ToolInputDelta;
+use Laravel\Ai\Streaming\Events\ToolInputError;
+use Laravel\Ai\Streaming\Events\ToolInputStart;
 use Laravel\Ai\Streaming\Events\ToolResult;
 
 /**
@@ -197,6 +200,23 @@ class VercelDataProtocol extends StreamProtocol
             $event instanceof ReasoningEnd => [
                 'type' => 'reasoning-end',
                 'id' => $event->reasoningId,
+            ],
+            $event instanceof ToolInputStart => [
+                'type' => 'tool-input-start',
+                'toolCallId' => $event->toolId,
+                'toolName' => $event->toolName,
+            ],
+            $event instanceof ToolInputDelta => [
+                'type' => 'tool-input-delta',
+                'toolCallId' => $event->toolId,
+                'inputTextDelta' => $event->delta,
+            ],
+            $event instanceof ToolInputError => [
+                'type' => 'tool-input-error',
+                'toolCallId' => $event->toolId,
+                'toolName' => $event->toolName,
+                'input' => $event->input,
+                'errorText' => $event->error,
             ],
             $event instanceof ToolCall => [
                 'type' => 'tool-input-available',

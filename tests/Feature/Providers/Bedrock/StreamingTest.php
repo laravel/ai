@@ -71,6 +71,71 @@ describe('text streaming', function (): void {
             ->and($textStarts[0]->messageId)->not->toBe($textStarts[1]->messageId);
     });
 
+    test('streaming emits the tool input as it arrives, before the tool call', function (): void {
+        $mock = new MockHandler([
+            new Result(['stream' => [
+                $this->contentBlockStart(0, ['toolUse' => ['toolUseId' => 't1', 'name' => 'FixedNumberGenerator']]),
+                $this->contentBlockDelta(0, ['toolUse' => ['input' => '']]),
+                $this->contentBlockDelta(0, ['toolUse' => ['input' => '{"sta']]),
+                $this->contentBlockDelta(0, ['toolUse' => ['input' => 'rt":1}']]),
+                $this->contentBlockStop(0),
+                $this->messageStop('tool_use'),
+            ]]),
+            new Result(['stream' => [
+                $this->contentBlockStart(0),
+                $this->contentBlockDelta(0, ['text' => 'Done']),
+                $this->contentBlockStop(0),
+                $this->messageStop('end_turn'),
+            ]]),
+        ]);
+
+        $gateway = $this->gatewayWithClient($this->bedrockClient($mock));
+
+        $events = iterator_to_array(
+            (new TextGenerationLoop($gateway))->stream(
+                'inv-1',
+                $this->bedrockProvider(),
+                'anthropic.claude-opus-4-7-v1:0',
+                null,
+                tools: [new FixedNumberGenerator],
+            ),
+            preserve_keys: false,
+        );
+
+        expect(toolInputEvents($events))->toBe([
+            ['start', 't1', 'FixedNumberGenerator'],
+            ['delta', 't1', '{"sta'],
+            ['delta', 't1', 'rt":1}'],
+            ['call', 't1', ['start' => 1]],
+        ]);
+    });
+
+    test('streaming fails a tool call the length limit cut off instead of calling it', function (): void {
+        $client = $this->fakeBedrockStream([
+            $this->contentBlockStart(0, ['toolUse' => ['toolUseId' => 't1', 'name' => 'FixedNumberGenerator']]),
+            $this->contentBlockDelta(0, ['toolUse' => ['input' => '{"sta']]),
+            $this->contentBlockStop(0),
+            $this->messageStop('max_tokens'),
+        ]);
+
+        $events = iterator_to_array(
+            (new TextGenerationLoop($this->gatewayWithClient($client)))->stream(
+                'inv-1',
+                $this->bedrockProvider(),
+                'anthropic.claude-opus-4-7-v1:0',
+                null,
+                tools: [new FixedNumberGenerator],
+            ),
+            preserve_keys: false,
+        );
+
+        expect(toolInputEvents($events))->toBe([
+            ['start', 't1', 'FixedNumberGenerator'],
+            ['delta', 't1', '{"sta'],
+            ['error', 't1', '{"sta'],
+        ]);
+    });
+
     test('streaming round-trips reasoning block on follow-up tool step', function (): void {
         $mock = new MockHandler([
             new Result(['stream' => [

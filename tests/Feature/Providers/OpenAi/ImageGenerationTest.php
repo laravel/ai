@@ -301,3 +301,18 @@ test('image response leaves the image token details null when dalle omits them',
     expect($response->usage->imageInputTokens)->toBeNull()
         ->and($response->usage->imageOutputTokens)->toBeNull();
 });
+
+test('chatgpt-image models are generated as gpt-image models', function (): void {
+    Http::fake([
+        '*' => fakeOpenAiImageResponse(),
+    ]);
+
+    Image::of('A red apple')->generate(provider: 'openai', model: 'chatgpt-image-latest');
+
+    Http::assertSent(function (Request $request): bool {
+        $body = json_decode($request->body(), true);
+
+        return $body['moderation'] === 'low'
+            && ! array_key_exists('response_format', $body);
+    });
+});

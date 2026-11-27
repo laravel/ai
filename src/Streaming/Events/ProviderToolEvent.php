@@ -24,6 +24,7 @@ class ProviderToolEvent extends StreamEvent
     {
         return [
             'id' => $this->id,
+            'invocation_id' => $this->invocationId,
             'item_id' => $this->itemId,
             'type' => $this->type,
             'data' => $this->data,

@@ -4,6 +4,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Attributes\CacheInstructions;
 use Laravel\Ai\Attributes\CacheToolDefinitions;
+use Tests\Fixtures\Agents\AnthropicToolSearchAgent;
 use Tests\Fixtures\Agents\PromptCacheAgent;
 use Tests\Fixtures\Agents\PromptCacheStructuredAgent;
 
@@ -130,6 +131,18 @@ test('breakpoints survive provider options that override the same keys', functio
         ]]
             && Arr::last($body['tools'])['name'] === 'custom'
             && Arr::last($body['tools'])['cache_control'] === ['type' => 'ephemeral'];
+    });
+});
+
+test('the tools breakpoint skips deferred tools', function (): void {
+    (new #[CacheToolDefinitions] class extends AnthropicToolSearchAgent {})->prompt('Hi', provider: 'anthropic');
+
+    Http::assertSent(function ($request): bool {
+        $tools = collect($request->data()['tools'])->keyBy('name');
+
+        return ($tools['tool_search_tool_regex']['cache_control'] ?? null) === ['type' => 'ephemeral']
+            && ! array_key_exists('cache_control', $tools['NonStrictTool'])
+            && ! array_key_exists('cache_control', $tools['DeferredTool']);
     });
 });
 

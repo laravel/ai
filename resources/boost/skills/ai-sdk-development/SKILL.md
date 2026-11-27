@@ -41,6 +41,7 @@ Determine the right entry point before writing code:
 
 Text generation or chat? → Agent class with `Promptable` trait
 Chat with conversation history? → Agent + `Conversational` interface (manual) or `RemembersConversations` trait (automatic)
+Conversation ID from the client? → Authorize with `conversationBelongsTo()` before `continue()` (see Conversation Context)
 Structured JSON output? → Agent + `HasStructuredOutput` interface
 Image generation? → `Image::of()->generate()`
 Audio synthesis? → `Audio::of()->generate()`
@@ -146,6 +147,12 @@ $conversationId = $response->conversationId;
 
 // Continue an existing conversation
 $response = (new SalesCoach)->continue($conversationId, as: $user)->prompt('Tell me more.');
+```
+
+`continue()` and approval resumes never check ownership. Authorize a client-supplied ID first:
+
+```php
+abort_unless(resolve(ConversationStore::class)->conversationBelongsTo($conversationId, $user->getMorphClass(), $user->getKey()), 403);
 ```
 
 ### Structured Output

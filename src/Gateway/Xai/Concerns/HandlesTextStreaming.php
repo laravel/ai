@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Xai\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
+use Laravel\Ai\Gateway\Concerns\StreamsToolInput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
@@ -23,6 +24,8 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 
 trait HandlesTextStreaming
 {
+    use StreamsToolInput;
+
     /**
      * Process an xAI streaming response for a single turn and yield Laravel stream events.
      */
@@ -210,6 +213,8 @@ trait HandlesTextStreaming
 
                 $pendingToolCalls[$index] = $toolCall;
 
+                yield from $this->toolInputStart($invocationId, $toolCall['id'], $toolCall['name']);
+
                 continue;
             }
 
@@ -218,7 +223,11 @@ trait HandlesTextStreaming
 
                 foreach ($pendingToolCalls as &$call) {
                     if (($call['id'] ?? null) === $callId) {
-                        $call['arguments'] .= $data['delta'] ?? '';
+                        $delta = $data['delta'] ?? '';
+                        $call['arguments'] .= $delta;
+
+                        yield from $this->toolInputDelta($invocationId, $callId, $call['name'], $delta);
+
                         break;
                     }
                 }

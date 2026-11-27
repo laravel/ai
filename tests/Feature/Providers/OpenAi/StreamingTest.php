@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
@@ -162,6 +163,86 @@ test('streaming handles tool calls', function (): void {
         ->and($streamEnd->usage->outputTokens)->toBe(15);
 });
 
+test('streaming emits the tool input as it arrives, before the tool call', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::sequence([
+            Http::response(
+                body: $this->ssePayload([
+                    $this->responseCreated(),
+                    $this->outputItemAdded('fc_1', 'call_1', 'FixedNumberGenerator'),
+                    $this->functionCallArgumentsDelta('fc_1', ''),
+                    // A fragment event without a delta is skipped rather than ending the stream...
+                    ['type' => 'response.function_call_arguments.delta', 'item_id' => 'fc_1', 'output_index' => 0],
+                    $this->functionCallArgumentsDelta('fc_1', '{"sta'),
+                    $this->functionCallArgumentsDelta('fc_1', 'rt":1}'),
+                    $this->functionCallArgumentsDone('fc_1', '{"start":1}'),
+                    $this->responseCompleted(10, 5, output: [
+                        [
+                            'type' => 'function_call',
+                            'status' => 'completed',
+                            'id' => 'fc_1',
+                            'call_id' => 'call_1',
+                            'name' => 'FixedNumberGenerator',
+                            'arguments' => '{"start":1}',
+                        ],
+                    ]),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+            Http::response(
+                body: $this->ssePayload([
+                    [
+                        'type' => 'response.created',
+                        'response' => ['id' => 'resp_2', 'model' => 'gpt-5.4', 'status' => 'in_progress', 'output' => []],
+                    ],
+                    $this->outputTextDelta('The number is 72019'),
+                    $this->outputTextDone('The number is 72019'),
+                    $this->responseCompleted(20, 10),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    expect(toolInputEvents($events))->toBe([
+        ['start', 'fc_1', 'FixedNumberGenerator'],
+        ['delta', 'fc_1', '{"sta'],
+        ['delta', 'fc_1', 'rt":1}'],
+        ['call', 'fc_1', ['start' => 1]],
+    ]);
+});
+
+test('streaming fails a tool call the output limit cut off instead of calling it', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->responseCreated(),
+                $this->outputItemAdded('fc_1', 'call_1', 'FixedNumberGenerator'),
+                $this->functionCallArgumentsDelta('fc_1', '{"sta'),
+                $this->responseIncomplete('max_output_tokens', 10, 5, output: [
+                    ['type' => 'function_call', 'status' => 'incomplete', 'id' => 'fc_1', 'call_id' => 'call_1', 'name' => 'FixedNumberGenerator', 'arguments' => '{"sta'],
+                ]),
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+    expect(toolInputEvents($events))->toBe([
+        ['start', 'fc_1', 'FixedNumberGenerator'],
+        ['delta', 'fc_1', '{"sta'],
+        ['error', 'fc_1', '{"sta'],
+    ]);
+
+    Http::assertSentCount(1);
+});
+
 test('streaming handles reasoning events', function (string $eventType): void {
     Http::fake([
         'api.openai.com/*' => Http::response(
@@ -221,6 +302,64 @@ test('streaming error event stops stream', function (array $event): void {
     'nested error event' => [['type' => 'error', 'error' => ['code' => 'server_error', 'message' => 'Server overloaded']]],
     'failed response' => [['type' => 'response.failed', 'response' => ['id' => 'resp_1', 'status' => 'failed', 'error' => ['code' => 'server_error', 'message' => 'Server overloaded']]]],
 ]);
+
+test('streaming failed response keeps its usage', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->responseCreated(),
+                $this->outputTextDelta('Partial'),
+                ['type' => 'response.failed', 'response' => [
+                    'id' => 'resp_1',
+                    'status' => 'failed',
+                    'error' => ['code' => 'server_error', 'message' => 'Server overloaded'],
+                    'usage' => ['input_tokens' => 42, 'output_tokens' => 7, 'input_tokens_details' => ['cached_tokens' => 0], 'output_tokens_details' => ['reasoning_tokens' => 0]],
+                ]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $error = null;
+
+    try {
+        $this->collectStreamEvents();
+    } catch (StreamErrorException $exception) {
+        $error = $exception->error;
+    }
+
+    expect($error->usage)->toEqual(new TextUsage(42, 7, 0, null, 0));
+});
+
+test('streaming failed response without usage reports none', function (): void {
+    Http::fake([
+        'api.openai.com/*' => Http::response(
+            body: $this->ssePayload([
+                $this->responseCreated(),
+                ['type' => 'response.failed', 'response' => [
+                    'id' => 'resp_1',
+                    'status' => 'failed',
+                    'error' => ['code' => 'server_error', 'message' => 'Server overloaded'],
+                    'usage' => null,
+                ]],
+            ]),
+            status: 200,
+            headers: ['Content-Type' => 'text/event-stream'],
+        ),
+    ]);
+
+    $error = null;
+
+    try {
+        $this->collectStreamEvents();
+    } catch (StreamErrorException $exception) {
+        $error = $exception->error;
+    }
+
+    expect($error->message)->toBe('Server overloaded')
+        ->and($error->usage)->toBeNull();
+});
 
 test('streaming without a terminal response throws', function (): void {
     Http::fake([

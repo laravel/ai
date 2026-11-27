@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\OpenRouter\Concerns;
 
 use Illuminate\Support\Arr;
+use Laravel\Ai\Attributes\CacheInstructions;
 use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Gateway\StepContext;
 use Laravel\Ai\Gateway\TextGenerationOptions;
@@ -72,8 +73,34 @@ trait BuildsTextRequests
         $providerOptions = $options?->providerOptions($provider->driver());
 
         if (filled($providerOptions)) {
-            return array_merge($body, $providerOptions);
+            $body = array_merge($body, $providerOptions);
         }
+
+        return $this->applyPromptCacheBreakpoints($body, $options);
+    }
+
+    /**
+     * Stamp the requested instructions cache breakpoint onto the system message.
+     */
+    protected function applyPromptCacheBreakpoints(array $body, ?TextGenerationOptions $options): array
+    {
+        if (! $options?->cacheInstructions instanceof CacheInstructions
+            || ($body['messages'][0]['role'] ?? null) !== 'system') {
+            return $body;
+        }
+
+        $content = $body['messages'][0]['content'];
+
+        $content = is_string($content)
+            ? [['type' => 'text', 'text' => $content]]
+            : $content;
+
+        $content[array_key_last($content)]['cache_control'] = array_filter([
+            'type' => 'ephemeral',
+            'ttl' => $options->cacheInstructions->ttl,
+        ]);
+
+        $body['messages'][0]['content'] = $content;
 
         return $body;
     }

@@ -1,6 +1,55 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/ai/compare/v1.4.0...1.x)
+## [Unreleased](https://github.com/laravel/ai/compare/v1.4.2...1.x)
+
+## [v1.4.2](https://github.com/laravel/ai/compare/v1.4.1...v1.4.2) - 2026-11-23
+
+### What's Changed
+
+* Flag failed tool results as errors when sending them to Anthropic by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/1250
+* Keep the Anthropic tool definitions cache breakpoint off deferred tools by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/1249
+* Honor the agent tool choice with Anthropic native structured output by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/1251
+* [1.x] Replay reasoning on the OpenAI-compatible provider in tool loops by [@Tarek-yagami](https://github.com/Tarek-yagami) in https://github.com/laravel/ai/pull/1245
+* [1.x] Keep the provider call id when replaying an AG-UI tool result by [@ChrisReid](https://github.com/ChrisReid) in https://github.com/laravel/ai/pull/1241
+* [1.x] Stream tool input as it arrives by [@vinitkadam03](https://github.com/vinitkadam03) in https://github.com/laravel/ai/pull/1239
+* [1.x] Honor the Strict attribute on Mistral and OpenRouter tools by [@medilies](https://github.com/medilies) in https://github.com/laravel/ai/pull/1233
+
+### New Contributors
+
+* [@Tarek-yagami](https://github.com/Tarek-yagami) made their first contribution in https://github.com/laravel/ai/pull/1245
+* [@ChrisReid](https://github.com/ChrisReid) made their first contribution in https://github.com/laravel/ai/pull/1241
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v1.4.1...v1.4.2
+
+## [v1.4.1](https://github.com/laravel/ai/compare/v1.4.0...v1.4.1) - 2026-11-13
+
+### What's Changed
+
+* Hint at a missing or invalid API key when a provider returns a 401 by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/1215
+* Surface Anthropic web search results as citations by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/1214
+* Add support for Gemini Decisions API by [@crojasaragonez](https://github.com/crojasaragonez) in https://github.com/laravel/ai/pull/1231
+* Update OpenAI transcription and image models by [@pushpak1300](https://github.com/pushpak1300) in https://github.com/laravel/ai/pull/1217
+* Forward attachment provider options to Anthropic text generation requests by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/1220
+* Honor the Strict attribute on Anthropic tools by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/1219
+* Decode structured output from a code fence with unpaired backticks by [@andreilungeanu](https://github.com/andreilungeanu) in https://github.com/laravel/ai/pull/1216
+* [1.x] Keep the text of every step in a prompted response by [@medilies](https://github.com/medilies) in https://github.com/laravel/ai/pull/1222
+* [1.x] Keep every tool call of a streamed Ollama reply by [@EzzalddeenAli](https://github.com/EzzalddeenAli) in https://github.com/laravel/ai/pull/1218
+* [1.x] Run catch callbacks when a broadcast agent job fails by [@medilies](https://github.com/medilies) in https://github.com/laravel/ai/pull/1223
+* [1.x] Allow overriding OpenAI image moderation through provider options by [@efrain-salas](https://github.com/efrain-salas) in https://github.com/laravel/ai/pull/1226
+* [1.x] Report a sub-agent that throws as a failed tool call by [@medilies](https://github.com/medilies) in https://github.com/laravel/ai/pull/1228
+* Continue stored Gemini interactions with previous_interaction_id by [@muhammetsafak](https://github.com/muhammetsafak) in https://github.com/laravel/ai/pull/1189
+* [1.x] Let apps generate a conversation's title the way the package does by [@medilies](https://github.com/medilies) in https://github.com/laravel/ai/pull/1229
+* Reuse the Anthropic code execution container across tool loop steps by [@sulimanbenhalim](https://github.com/sulimanbenhalim) in https://github.com/laravel/ai/pull/1213
+
+### New Contributors
+
+* [@crojasaragonez](https://github.com/crojasaragonez) made their first contribution in https://github.com/laravel/ai/pull/1231
+* [@andreilungeanu](https://github.com/andreilungeanu) made their first contribution in https://github.com/laravel/ai/pull/1216
+* [@EzzalddeenAli](https://github.com/EzzalddeenAli) made their first contribution in https://github.com/laravel/ai/pull/1218
+* [@efrain-salas](https://github.com/efrain-salas) made their first contribution in https://github.com/laravel/ai/pull/1226
+* [@muhammetsafak](https://github.com/muhammetsafak) made their first contribution in https://github.com/laravel/ai/pull/1189
+
+**Full Changelog**: https://github.com/laravel/ai/compare/v1.4.0...v1.4.1
 
 ## [v1.4.0](https://github.com/laravel/ai/compare/v1.3.0...v1.4.0) - 2026-11-09
 

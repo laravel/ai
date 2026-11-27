@@ -122,6 +122,7 @@ trait MapsMessages
                             return $this->mapAttachments(collect([$file]))[0];
                         },
                     ),
+                ...($toolResult->failed ? ['is_error' => true] : []),
             ];
         }
 

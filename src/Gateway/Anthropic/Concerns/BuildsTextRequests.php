@@ -53,7 +53,7 @@ trait BuildsTextRequests
 
             if (filled($mappedTools)) {
                 $body['tools'] = $mappedTools;
-                $body['tool_choice'] = ['type' => 'auto'];
+                $body['tool_choice'] = $this->resolveToolChoice(null, $tools, $providerOptions, $options?->toolChoice);
             }
         } else {
             if (filled($schema)) {
@@ -99,6 +99,20 @@ trait BuildsTextRequests
     }
 
     /**
+     * Stream each function tool's input as Claude writes it, rather than once each parameter is complete.
+     */
+    protected function withEagerInputStreaming(array $body): array
+    {
+        foreach ($body['tools'] ?? [] as $index => $tool) {
+            if (! isset($tool['type'])) {
+                $body['tools'][$index]['eager_input_streaming'] = true;
+            }
+        }
+
+        return $body;
+    }
+
+    /**
      * Stamp the requested cache breakpoints onto the final request body.
      */
     protected function applyPromptCacheBreakpoints(array $body, ?TextGenerationOptions $options): array
@@ -116,7 +130,9 @@ trait BuildsTextRequests
         }
 
         if (isset($body['tools']) && $options?->cacheToolDefinitions instanceof CacheToolDefinitions) {
-            $body['tools'][array_key_last($body['tools'])]['cache_control'] = $this->cacheControl($options->cacheToolDefinitions->ttl);
+            $index = array_key_last(array_filter($body['tools'], fn (array $tool): bool => ! ($tool['defer_loading'] ?? false)));
+
+            $body['tools'][$index]['cache_control'] = $this->cacheControl($options->cacheToolDefinitions->ttl);
         }
 
         return $body;

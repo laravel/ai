@@ -1,8 +1,11 @@
 <?php
 
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Events\StepFailed;
 use Laravel\Ai\Exceptions\StreamErrorException;
 use Laravel\Ai\Responses\Data\FinishReason;
+use Laravel\Ai\Responses\Data\TextUsage;
 use Laravel\Ai\Streaming\Events\Citation as CitationEvent;
 use Laravel\Ai\Streaming\Events\Error;
 use Laravel\Ai\Streaming\Events\ProviderToolEvent;
@@ -162,6 +165,69 @@ describe('tool calls', function (): void {
 
         expect($toolCallEvents)->not->toBeEmpty()
             ->and($toolCallEvents[0]->toolCall)->name->toBe('FixedNumberGenerator')->id->toBe('toolu_1');
+    });
+
+    test('streaming emits the tool input as it arrives, before the tool call', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence([
+                Http::response(
+                    body: $this->ssePayload([
+                        $this->messageStart(),
+                        $this->contentBlockStart(0, ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'FixedNumberGenerator', 'input' => '']),
+                        // Anthropic opens a tool input with an empty fragment, which carries no delta...
+                        $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => '']),
+                        $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => '{"sta']),
+                        $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => 'rt":1}']),
+                        $this->contentBlockStop(0),
+                        $this->messageDelta('tool_use', 5),
+                    ]),
+                    status: 200,
+                    headers: ['Content-Type' => 'text/event-stream'],
+                ),
+                Http::response([
+                    'id' => 'msg_2',
+                    'type' => 'message',
+                    'role' => 'assistant',
+                    'model' => 'claude-sonnet-4-6',
+                    'content' => [['type' => 'text', 'text' => 'The number is 72019']],
+                    'stop_reason' => 'end_turn',
+                    'usage' => ['input_tokens' => 20, 'output_tokens' => 10],
+                ]),
+            ]),
+        ]);
+
+        $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        expect(toolInputEvents($events))->toBe([
+            ['start', 'toolu_1', 'FixedNumberGenerator'],
+            ['delta', 'toolu_1', '{"sta'],
+            ['delta', 'toolu_1', 'rt":1}'],
+            ['call', 'toolu_1', ['start' => 1]],
+        ]);
+    });
+
+    test('streaming fails a tool call the length limit cut off instead of calling it', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->messageStart(),
+                    $this->contentBlockStart(0, ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'FixedNumberGenerator', 'input' => '']),
+                    $this->contentBlockDelta(0, ['type' => 'input_json_delta', 'partial_json' => '{"sta']),
+                    $this->contentBlockStop(0),
+                    $this->messageDelta('max_tokens', 5),
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $events = $this->collectStreamEvents(agent: new ProviderOptionsWithToolsAgent);
+
+        expect(toolInputEvents($events))->toBe([
+            ['start', 'toolu_1', 'FixedNumberGenerator'],
+            ['delta', 'toolu_1', '{"sta'],
+            ['error', 'toolu_1', '{"sta'],
+        ]);
     });
 
     test('streaming reuses the code execution container on the follow up request', function (): void {
@@ -598,6 +664,91 @@ describe('error handling', function (): void {
         }
 
         expect($error)->toBeInstanceOf(Error::class)->type->toBe('overloaded_error')->message->toBe('Server overloaded');
+    });
+
+    test('streaming error keeps the usage reported before it', function (): void {
+        Event::fake([StepFailed::class]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->messageStart(),
+                    $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                    $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'Partial']),
+                    ['type' => 'error', 'error' => ['type' => 'overloaded_error', 'message' => 'Server overloaded']],
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $error = null;
+
+        try {
+            $this->collectStreamEvents();
+        } catch (StreamErrorException $exception) {
+            $error = $exception->error;
+        }
+
+        $failed = Event::dispatched(StepFailed::class)->first()[0];
+
+        expect($error->usage)->toEqual(new TextUsage(10, 0))
+            ->and($error->toArray()['usage'])->toBe([
+                'input_tokens' => 10,
+                'output_tokens' => 0,
+                'cache_read_input_tokens' => null,
+                'cache_write_input_tokens' => null,
+                'reasoning_tokens' => null,
+            ])
+            ->and($failed->usage)->toBe($error->usage);
+    });
+
+    test('streaming error after a message delta keeps its cumulative usage', function (): void {
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    $this->messageStart(),
+                    $this->contentBlockStart(0, ['type' => 'text', 'text' => '']),
+                    $this->contentBlockDelta(0, ['type' => 'text_delta', 'text' => 'Partial']),
+                    $this->messageDelta('end_turn', 12),
+                    ['type' => 'error', 'error' => ['type' => 'overloaded_error', 'message' => 'Server overloaded']],
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        $error = null;
+
+        try {
+            $this->collectStreamEvents();
+        } catch (StreamErrorException $exception) {
+            $error = $exception->error;
+        }
+
+        expect($error->usage)->toEqual(new TextUsage(10, 12));
+    });
+
+    test('streaming error before any usage reports none', function (): void {
+        Event::fake([StepFailed::class]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(
+                body: $this->ssePayload([
+                    ['type' => 'error', 'error' => ['type' => 'overloaded_error', 'message' => 'Server overloaded']],
+                ]),
+                status: 200,
+                headers: ['Content-Type' => 'text/event-stream'],
+            ),
+        ]);
+
+        try {
+            $this->collectStreamEvents();
+        } catch (StreamErrorException) {
+            //
+        }
+
+        expect(Event::dispatched(StepFailed::class)->first()[0]->usage)->toBeNull();
     });
 });
 

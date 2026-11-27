@@ -5,6 +5,7 @@ namespace Laravel\Ai\Gateway\Gemini\Concerns;
 use Generator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
+use Laravel\Ai\Gateway\Concerns\StreamsToolInput;
 use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\Data\Meta;
@@ -24,6 +25,8 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 
 trait HandlesTextStreaming
 {
+    use StreamsToolInput;
+
     /**
      * Process a Gemini streaming response and yield Laravel stream events.
      *
@@ -82,6 +85,10 @@ trait HandlesTextStreaming
 
             if (isset($data['step']) && is_array($data['step'])) {
                 $steps[$index] = array_merge($steps[$index] ?? [], $data['step']);
+            }
+
+            if ($event === 'step.start' && ($steps[$index]['type'] ?? '') === 'function_call') {
+                yield from $this->toolInputStart($invocationId, $steps[$index]['id'] ?? null, $steps[$index]['name'] ?? null);
             }
 
             $delta = $data['delta'] ?? null;
@@ -162,6 +169,8 @@ trait HandlesTextStreaming
 
                     $steps[$index]['type'] ??= 'function_call';
                     $steps[$index]['arguments'] = $this->decodeArguments($partialArguments[$index]);
+
+                    yield from $this->toolInputDelta($invocationId, $steps[$index]['id'] ?? null, $steps[$index]['name'] ?? null, (string) ($delta['arguments'] ?? ''));
                 }
             }
 
@@ -194,9 +203,13 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
-        $steps = array_values($steps);
+        $finishReason = $this->extractFinishReason($final, []);
 
-        $functionCallSteps = $this->extractFunctionCallSteps($steps);
+        $cutOffSteps = array_filter($partialArguments, fn (string $arguments): bool => $this->wasCutOff($arguments, $finishReason));
+
+        $functionCallSteps = $this->extractFunctionCallSteps(array_values(array_diff_key($steps, $cutOffSteps)));
+
+        $steps = array_values($steps);
         $toolCalls = $this->mapToolCalls($functionCallSteps, $this->thoughtSignature($steps));
 
         foreach ($toolCalls as $toolCall) {

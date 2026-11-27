@@ -4,6 +4,7 @@ namespace Laravel\Ai\Gateway\Anthropic\Concerns;
 
 use Generator;
 use Illuminate\Support\Str;
+use Laravel\Ai\Gateway\Concerns\StreamsToolInput;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Providers\Provider;
@@ -25,6 +26,8 @@ use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
 
 trait HandlesTextStreaming
 {
+    use StreamsToolInput;
+
     /**
      * Get the content of the paused steps the turn being continued is made of.
      *
@@ -67,6 +70,7 @@ trait HandlesTextStreaming
         $currentToolIndex = -1;
         $currentServerToolInput = '';
         $pendingToolCalls = [];
+        $incompleteToolCalls = [];
         $responseContent = [];
         $afterTool = false;
         $lastTextDelta = '';
@@ -143,6 +147,7 @@ trait HandlesTextStreaming
                     $data['error']['message'] ?? 'Unknown error',
                     false,
                     time(),
+                    usage: $usage ?? ($messageUsage === [] ? null : $this->extractUsage(['usage' => $messageUsage])),
                 ))->withInvocationId($invocationId);
 
                 return;
@@ -193,6 +198,8 @@ trait HandlesTextStreaming
                         'name' => $data['content_block']['name'] ?? '',
                         'arguments' => '',
                     ];
+
+                    yield from $this->toolInputStart($invocationId, $pendingToolCalls[$currentToolIndex]['id'], $pendingToolCalls[$currentToolIndex]['name']);
                 } elseif ($blockType === 'server_tool_use') {
                     $currentServerToolInput = '';
 
@@ -287,6 +294,8 @@ trait HandlesTextStreaming
 
                     if ($currentBlockType === 'tool_use' && isset($pendingToolCalls[$currentToolIndex])) {
                         $pendingToolCalls[$currentToolIndex]['arguments'] .= $partial;
+
+                        yield from $this->toolInputDelta($invocationId, $pendingToolCalls[$currentToolIndex]['id'], $pendingToolCalls[$currentToolIndex]['name'], $partial);
                     } elseif ($currentBlockType === 'server_tool_use') {
                         $currentServerToolInput .= $partial;
                     }
@@ -327,7 +336,7 @@ trait HandlesTextStreaming
                         $responseContent[$index]['input'] = $parsedArguments;
                     }
 
-                    yield (new ToolCallEvent(
+                    $toolCallEvent = (new ToolCallEvent(
                         $this->generateEventId(),
                         new ToolCall(
                             $call['id'],
@@ -337,6 +346,12 @@ trait HandlesTextStreaming
                         ),
                         time(),
                     ))->withInvocationId($invocationId);
+
+                    if ($this->isCompleteToolInput($call['arguments'])) {
+                        yield $toolCallEvent;
+                    } else {
+                        $incompleteToolCalls[] = [$toolCallEvent, $call['arguments']];
+                    }
                 } elseif ($currentBlockType === 'server_tool_use') {
                     $index = $data['index'] ?? count($responseContent) - 1;
 
@@ -378,12 +393,20 @@ trait HandlesTextStreaming
             ))->withInvocationId($invocationId);
         }
 
+        $finishReason = $this->extractFinishReason(['stop_reason' => $stopReason]);
+
+        foreach ($incompleteToolCalls as [$toolCallEvent, $input]) {
+            if (! $this->wasCutOff($input, $finishReason)) {
+                yield $toolCallEvent;
+            }
+        }
+
         return $this->buildStepResponse(
             content: array_values($responseContent),
             provider: $provider,
             model: $model,
             usage: $usage ?? new TextUsage(0, 0),
-            finishReason: $this->extractFinishReason(['stop_reason' => $stopReason]),
+            finishReason: $finishReason,
             structured: false,
             container: $container,
         );

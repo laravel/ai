@@ -49,6 +49,14 @@ class MistralGateway implements AudioGateway, EmbeddingGateway, StepTextGateway,
     }
 
     /**
+     * Determine if the provider honors the "strict" flag on function definitions.
+     */
+    protected function supportsStrictTools(): bool
+    {
+        return true;
+    }
+
+    /**
      * Build the request body for the current text generation step.
      */
     protected function buildStepBody(

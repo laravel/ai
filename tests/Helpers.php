@@ -13,6 +13,11 @@ use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Providers\TypeSafeProvider;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
+use Laravel\Ai\Streaming\Events\StreamEvent;
+use Laravel\Ai\Streaming\Events\ToolCall as ToolCallEvent;
+use Laravel\Ai\Streaming\Events\ToolInputDelta;
+use Laravel\Ai\Streaming\Events\ToolInputError;
+use Laravel\Ai\Streaming\Events\ToolInputStart;
 
 function requiresApiKey(string ...$keys): void
 {
@@ -438,4 +443,19 @@ function toolResultWithFilesHistory(): array
             ]),
         ])),
     ];
+}
+
+function toolInputEvents(iterable $events): array
+{
+    return collect($events)
+        ->map(fn (StreamEvent $event): ?array => match (true) {
+            $event instanceof ToolInputStart => ['start', $event->toolId, $event->toolName],
+            $event instanceof ToolInputDelta => ['delta', $event->toolId, $event->delta],
+            $event instanceof ToolInputError => ['error', $event->toolId, $event->input],
+            $event instanceof ToolCallEvent => ['call', $event->toolCall->id, $event->toolCall->arguments],
+            default => null,
+        })
+        ->filter()
+        ->values()
+        ->all();
 }

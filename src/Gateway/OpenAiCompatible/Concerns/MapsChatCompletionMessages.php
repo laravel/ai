@@ -2,6 +2,7 @@
 
 namespace Laravel\Ai\Gateway\OpenAiCompatible\Concerns;
 
+use Illuminate\Support\Arr;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\MessageRole;
@@ -76,9 +77,21 @@ trait MapsChatCompletionMessages
             $msg['tool_calls'] = $message->toolCalls->map(
                 fn (ToolCall $toolCall) => $this->serializeToolCallToChat($toolCall)
             )->all();
+
+            $msg = [...$msg, ...$this->mapReasoningReplay($message)];
         }
 
         $chatMessages[] = $msg;
+    }
+
+    /**
+     * Map the reasoning of a tool call turn back under the field the server returned it in.
+     */
+    protected function mapReasoningReplay(AssistantMessage $message): array
+    {
+        $block = collect($message->replayBlocks)->firstWhere('type', 'reasoning');
+
+        return $block === null ? [] : Arr::except($block, 'type');
     }
 
     /**
