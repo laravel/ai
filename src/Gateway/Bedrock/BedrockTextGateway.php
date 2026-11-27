@@ -8,6 +8,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Laravel\Ai\Attributes\CacheConversation;
 use Laravel\Ai\Attributes\CacheInstructions;
 use Laravel\Ai\Attributes\CacheToolDefinitions;
 use Laravel\Ai\Concerns\JoinsReasoning;
@@ -739,6 +740,10 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
             $parameters['toolConfig']['tools'][] = $this->cachePoint($options->cacheToolDefinitions->ttl);
         }
 
+        if ($options?->cacheConversation instanceof CacheConversation) {
+            $parameters['messages'] = $this->withConversationCachePoint($parameters['messages'], $options->cacheConversation->ttl);
+        }
+
         return $parameters;
     }
 
@@ -747,11 +752,47 @@ class BedrockTextGateway implements EmbeddingGateway, StepTextGateway
      */
     protected function ensureValidPromptCacheOrder(?TextGenerationOptions $options): void
     {
+        if ($options?->cacheConversation?->ttl === '1h'
+            && collect([$options->cacheInstructions, $options->cacheToolDefinitions])
+                ->filter()
+                ->contains(fn (CacheInstructions|CacheToolDefinitions $cache): bool => $cache->ttl !== '1h')) {
+            throw new InvalidArgumentException('A one-hour conversation cache requires the instructions and tool definitions caches to also use a one-hour TTL.');
+        }
+
         if ($options?->cacheInstructions?->ttl === '1h'
             && $options->cacheToolDefinitions instanceof CacheToolDefinitions
             && $options->cacheToolDefinitions->ttl !== '1h') {
             throw new InvalidArgumentException('A one-hour instructions cache requires the tool definitions cache to also use a one-hour TTL.');
         }
+    }
+
+    /**
+     * Add a cache point after the last message, so the next step and the next turn read the history from cache.
+     *
+     * Skipped when a message already carries a cache point, such as one added through provider options.
+     *
+     * @param  array<int, array<string, mixed>>  $messages
+     * @return array<int, array<string, mixed>>
+     */
+    protected function withConversationCachePoint(array $messages, ?string $ttl): array
+    {
+        $last = array_key_last($messages);
+
+        if ($last === null || ! is_array($messages[$last]['content'] ?? null) || $messages[$last]['content'] === []) {
+            return $messages;
+        }
+
+        foreach ($messages as $message) {
+            foreach ($message['content'] ?? [] as $block) {
+                if (is_array($block) && isset($block['cachePoint'])) {
+                    return $messages;
+                }
+            }
+        }
+
+        $messages[$last]['content'][] = $this->cachePoint($ttl);
+
+        return $messages;
     }
 
     /**
