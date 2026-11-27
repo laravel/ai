@@ -11,6 +11,7 @@ use Laravel\Ai\Tools\Request;
 use Tests\Fixtures\Agents\NamedToolAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
 use Tests\Fixtures\Tools\NonStrictTool;
+use Tests\Fixtures\Tools\RecursiveTreeTool;
 
 use function Laravel\Ai\agent;
 
@@ -439,3 +440,19 @@ function anthropicStrictOrderTool(): Tool
         }
     };
 }
+
+test('recursive tool schemas send their $defs', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new RecursiveTreeTool])->prompt('Store a tree', provider: 'anthropic');
+
+    Http::assertSent(function ($request): bool {
+        $parameters = collect(json_decode($request->body(), true)['tools'])->firstWhere('name', 'RecursiveTreeTool')['input_schema'];
+
+        return $parameters['properties']['tree'] === ['$ref' => '#/$defs/node']
+            && $parameters['$defs']['node']['properties']['children']['items'] === ['$ref' => '#/$defs/node']
+            && $parameters['$defs']['node']['additionalProperties'] === false;
+    });
+});

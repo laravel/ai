@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Ollama\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Illuminate\Support\Arr;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Tools\ProviderTool;
@@ -51,6 +52,7 @@ trait MapsTools
                     'type' => 'object',
                     'properties' => $schemaArray['properties'] ?? (object) [],
                     'required' => $schemaArray['required'] ?? [],
+                    ...Arr::only($schemaArray, ['$defs']),
                 ],
             ],
         ];

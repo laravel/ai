@@ -6,6 +6,7 @@ use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
 use Tests\Fixtures\Agents\NestedStructuredAgent;
 use Tests\Fixtures\Agents\NullableStructuredAgent;
+use Tests\Fixtures\Agents\RecursiveStructuredAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\ToolChoiceAgent;
 use Tests\Fixtures\Agents\ToolUsingAgent;
@@ -366,4 +367,17 @@ describe('tool choice', function (): void {
             ],
         ]);
     });
+});
+
+test('recursive structured output sends $defs', function (): void {
+    Http::fake([
+        'generativelanguage.googleapis.com/*' => $this->fakeStructuredResponse(['expression' => ['operation' => null, 'children' => null]]),
+    ]);
+
+    (new RecursiveStructuredAgent)->prompt('Parse a > 1', provider: 'gemini');
+
+    $schema = sentRequest()->data()['response_format']['schema'];
+
+    expect($schema['properties']['expression'])->toBe(['$ref' => '#/$defs/expression'])
+        ->and($schema['$defs']['expression']['properties']['children']['items'])->toBe(['$ref' => '#/$defs/expression']);
 });

@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\NamedTool;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
+use Tests\Fixtures\Tools\RecursiveTreeTool;
 
 use function Laravel\Ai\agent;
 
@@ -79,5 +80,21 @@ test('tool definition includes name and description', function (): void {
 
         return ! empty($function['name'])
             && ! empty($function['description']);
+    });
+});
+
+test('recursive tool schemas send their $defs', function (): void {
+    Http::fake([
+        '*' => $this->fakeTextResponse('ok'),
+    ]);
+
+    agent(tools: [new RecursiveTreeTool])->prompt('Store a tree', provider: 'ollama');
+
+    Http::assertSent(function ($request): bool {
+        $parameters = collect($request->data()['tools'])->firstWhere('function.name', 'RecursiveTreeTool')['function']['parameters'];
+
+        return $parameters['properties']['tree'] === ['$ref' => '#/$defs/node']
+            && $parameters['$defs']['node']['properties']['children']['items'] === ['$ref' => '#/$defs/node']
+            && $parameters['$defs']['node']['additionalProperties'] === false;
     });
 });

@@ -4,6 +4,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Fixtures\Tools\FixedNumberGenerator;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
+use Tests\Fixtures\Tools\RecursiveTreeTool;
 
 use function Laravel\Ai\agent;
 
@@ -69,5 +70,21 @@ test('tool parameters are not wrapped in schema definition', function (): void {
 
         return ! array_key_exists('schema_definition', $function['parameters']['properties'] ?? [])
             && ! in_array('schema_definition', $function['parameters']['required'] ?? []);
+    });
+});
+
+test('recursive tool schemas send their $defs', function (): void {
+    Http::fake([
+        '*' => fakeDeepSeekResponse('ok'),
+    ]);
+
+    agent(tools: [new RecursiveTreeTool])->prompt('Store a tree', provider: 'deepseek');
+
+    Http::assertSent(function ($request): bool {
+        $parameters = collect($request->data()['tools'])->firstWhere('function.name', 'RecursiveTreeTool')['function']['parameters'];
+
+        return $parameters['properties']['tree'] === ['$ref' => '#/$defs/node']
+            && $parameters['$defs']['node']['properties']['children']['items'] === ['$ref' => '#/$defs/node']
+            && $parameters['$defs']['node']['additionalProperties'] === false;
     });
 });

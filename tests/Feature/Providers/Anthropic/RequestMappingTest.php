@@ -11,6 +11,7 @@ use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
 use Tests\Fixtures\Agents\ConstrainedStructuredAgent;
+use Tests\Fixtures\Agents\RecursiveStructuredAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\StructuredWithThinkingAgent;
 use Tests\Fixtures\Agents\ThinkingToolChoiceAgent;
@@ -547,5 +548,21 @@ describe('tool choice', function (): void {
                 InvalidArgumentException::class,
                 'Anthropic cannot force tool use while extended thinking is enabled.',
             );
+    });
+});
+
+test('recursive structured output sends closed $defs', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => $this->fakeStructuredResponse(['expression' => ['operation' => null, 'children' => null]]),
+    ]);
+
+    (new RecursiveStructuredAgent)->prompt('Parse a > 1', provider: 'anthropic');
+
+    Http::assertSent(function ($request): bool {
+        $schema = json_decode($request->body(), true)['output_config']['format']['schema'];
+
+        return $schema['properties']['expression'] === ['$ref' => '#/$defs/expression']
+            && $schema['$defs']['expression']['properties']['children']['anyOf'][0]['items'] === ['$ref' => '#/$defs/expression']
+            && $schema['$defs']['expression']['additionalProperties'] === false;
     });
 });

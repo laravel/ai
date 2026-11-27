@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\OpenAiCompatible\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Tool;
@@ -63,6 +64,7 @@ trait MapsChatCompletionTools
                     'type' => 'object',
                     'properties' => $schemaArray['properties'] ?? (object) [],
                     'required' => $schemaArray['required'] ?? [],
+                    ...Arr::only($schemaArray, ['$defs']),
                     'additionalProperties' => false,
                 ],
             ],

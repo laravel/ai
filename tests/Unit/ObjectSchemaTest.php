@@ -92,3 +92,23 @@ test('nullable nested objects include additional properties false', function ():
     expect($result['additionalProperties'])->toBeFalse()
         ->and($result['properties']['address']['additionalProperties'])->toBeFalse();
 });
+
+test('recursive definitions are hoisted into $defs with additional properties false', function (): void {
+    $schema = new JsonSchemaTypeFactory;
+
+    $result = (new ObjectSchema([
+        'expression' => $schema->object([
+            'operation' => $schema->string()->nullable()->required(),
+            'children' => $schema->array()->items($schema->ref('expression'))->nullable()->required(),
+        ])->define('expression')->required(),
+    ]))->toSchema();
+
+    expect($result['properties']['expression'])->toBe(['$ref' => '#/$defs/expression'])
+        ->and($result['required'])->toBe(['expression'])
+        ->and($result['$defs']['expression']['additionalProperties'])->toBeFalse()
+        ->and($result['$defs']['expression']['required'])->toBe(['operation', 'children'])
+        ->and($result['$defs']['expression']['properties']['children'])->toEqual([
+            'type' => ['array', 'null'],
+            'items' => ['$ref' => '#/$defs/expression'],
+        ]);
+});

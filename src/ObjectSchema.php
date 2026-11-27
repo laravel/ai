@@ -62,6 +62,12 @@ class ObjectSchema extends Schema
             }
         }
 
+        foreach ($schema['$defs'] ?? [] as $name => $definition) {
+            if (is_array($definition)) {
+                $schema['$defs'][$name] = static::disableAdditionalProperties($definition);
+            }
+        }
+
         return $schema;
     }
 

@@ -6,6 +6,7 @@ use Tests\Fixtures\Agents\AssistantAgent;
 use Tests\Fixtures\Agents\AttributeAgent;
 use Tests\Fixtures\Agents\AttributeToolChoiceAgent;
 use Tests\Fixtures\Agents\NestedStructuredAgent;
+use Tests\Fixtures\Agents\RecursiveStructuredAgent;
 use Tests\Fixtures\Agents\StructuredAgent;
 use Tests\Fixtures\Agents\ToolChoiceAgent;
 use Tests\Fixtures\Tools\RandomNumberGenerator;
@@ -379,4 +380,18 @@ test('response usage separates cache reads from cache writes', function (): void
         ->and($response->usage->cacheReadInputTokens)->toBe(8814)
         ->and($response->usage->inputTokens)->toBe(8817)
         ->and($response->usage->uncachedInputTokens())->toBe(3);
+});
+
+test('recursive structured output sends closed $defs', function (): void {
+    Http::fake(['*' => fakeOpenAiResponse('{"expression": {"operation": null, "children": null}}')]);
+
+    (new RecursiveStructuredAgent)->prompt('Parse a > 1', provider: 'openai');
+
+    Http::assertSent(function (Request $request): bool {
+        $schema = data_get(json_decode($request->body(), true), 'text.format.schema');
+
+        return $schema['properties']['expression'] === ['$ref' => '#/$defs/expression']
+            && $schema['$defs']['expression']['properties']['children']['items'] === ['$ref' => '#/$defs/expression']
+            && $schema['$defs']['expression']['additionalProperties'] === false;
+    });
 });

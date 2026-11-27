@@ -3,6 +3,7 @@
 namespace Laravel\Ai\Gateway\Xai\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Illuminate\Support\Arr;
 use Laravel\Ai\Attributes\Strict;
 use Laravel\Ai\Contracts\Providers\SupportsCodeExecution;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
@@ -117,6 +118,7 @@ trait MapsTools
                 'type' => 'object',
                 'properties' => $schemaArray['properties'] ?? (object) [],
                 'required' => $schemaArray['required'] ?? [],
+                ...Arr::only($schemaArray, ['$defs']),
                 'additionalProperties' => false,
             ],
         ];
